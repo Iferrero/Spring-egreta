@@ -24,12 +24,15 @@ public class SecurityConfig {
                     "/persona-resumen.html",
                     "/persona-resumen.js",
                     "/api/awards/**",
-                    "/api/persons/departamentos"
+                    "/otr/api/awards/**",
+                    "/api/persons/departamentos",
+                    "/otr/api/persons/departamentos"
                 ).authenticated()
                 .anyRequest().permitAll()
             )
             .httpBasic(Customizer.withDefaults())
-            .formLogin(form -> form.disable());
+            .formLogin(form -> form.disable())
+            .csrf(csrf -> csrf.disable()); // API REST sin estado — CSRF no aplica con Basic Auth
 
         return http.build();
     }

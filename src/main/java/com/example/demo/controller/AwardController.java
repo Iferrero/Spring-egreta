@@ -14,6 +14,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping({"/api/awards", "/awards", "/otr/api/awards"})
+@CrossOrigin(origins = "*")
 public class AwardController {
 
     private final AwardRepository repository;
