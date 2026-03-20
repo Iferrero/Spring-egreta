@@ -1,0 +1,1095 @@
+{
+  "collection": "StudentTheses",
+  "operation": "getSchema",
+  "sampleSize": 200,
+  "schema": {
+    "pureId": {
+      "types": [
+        "integer"
+      ]
+    },
+    "uuid": {
+      "types": [
+        "string"
+      ]
+    },
+    "createdBy": {
+      "types": [
+        "string"
+      ]
+    },
+    "createdDate": {
+      "types": [
+        "string"
+      ]
+    },
+    "modifiedBy": {
+      "types": [
+        "string"
+      ]
+    },
+    "modifiedDate": {
+      "types": [
+        "string"
+      ]
+    },
+    "portalUrl": {
+      "types": [
+        "string"
+      ]
+    },
+    "prettyUrlIdentifiers": {
+      "types": [
+        "array"
+      ],
+      "items": {
+        "item": {
+          "types": [
+            "string"
+          ]
+        }
+      }
+    },
+    "version": {
+      "types": [
+        "string"
+      ]
+    },
+    "title": {
+      "types": [
+        "object"
+      ],
+      "properties": {
+        "value": {
+          "types": [
+            "string"
+          ]
+        }
+      }
+    },
+    "subTitle": {
+      "types": [
+        "object"
+      ],
+      "properties": {
+        "value": {
+          "types": [
+            "string"
+          ]
+        }
+      }
+    },
+    "language": {
+      "types": [
+        "object"
+      ],
+      "properties": {
+        "uri": {
+          "types": [
+            "string"
+          ]
+        },
+        "term": {
+          "types": [
+            "object"
+          ],
+          "properties": {
+            "en_GB": {
+              "types": [
+                "string"
+              ]
+            },
+            "es_ES": {
+              "types": [
+                "string"
+              ]
+            },
+            "ca_ES": {
+              "types": [
+                "string"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "managingOrganization": {
+      "types": [
+        "object"
+      ],
+      "properties": {
+        "systemName": {
+          "types": [
+            "string"
+          ]
+        },
+        "uuid": {
+          "types": [
+            "string"
+          ]
+        }
+      }
+    },
+    "type": {
+      "types": [
+        "object"
+      ],
+      "properties": {
+        "uri": {
+          "types": [
+            "string"
+          ]
+        },
+        "term": {
+          "types": [
+            "object"
+          ],
+          "properties": {
+            "en_GB": {
+              "types": [
+                "string"
+              ]
+            },
+            "es_ES": {
+              "types": [
+                "string"
+              ]
+            },
+            "ca_ES": {
+              "types": [
+                "string"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "identifiers": {
+      "types": [
+        "array"
+      ],
+      "items": {
+        "item": {
+          "types": [
+            "object"
+          ],
+          "properties": {
+            "typeDiscriminator": {
+              "types": [
+                "string"
+              ]
+            },
+            "idSource": {
+              "types": [
+                "string"
+              ]
+            },
+            "value": {
+              "types": [
+                "string"
+              ]
+            },
+            "pureId": {
+              "types": [
+                "integer"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "organizations": {
+      "types": [
+        "array"
+      ],
+      "items": {
+        "item": {
+          "types": [
+            "object"
+          ],
+          "properties": {
+            "systemName": {
+              "types": [
+                "string"
+              ]
+            },
+            "uuid": {
+              "types": [
+                "string"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "links": {
+      "types": [
+        "array"
+      ],
+      "items": {
+        "item": {
+          "types": [
+            "object"
+          ],
+          "properties": {
+            "pureId": {
+              "types": [
+                "integer"
+              ]
+            },
+            "url": {
+              "types": [
+                "string"
+              ]
+            },
+            "linkType": {
+              "types": [
+                "object"
+              ],
+              "properties": {
+                "uri": {
+                  "types": [
+                    "string"
+                  ]
+                },
+                "term": {
+                  "types": [
+                    "object"
+                  ],
+                  "properties": {
+                    "en_GB": {
+                      "types": [
+                        "string"
+                      ]
+                    },
+                    "es_ES": {
+                      "types": [
+                        "string"
+                      ]
+                    },
+                    "ca_ES": {
+                      "types": [
+                        "string"
+                      ]
+                    }
+                  }
+                }
+              }
+            },
+            "alias": {
+              "types": [
+                "string"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "keywordGroups": {
+      "types": [
+        "array"
+      ],
+      "items": {
+        "item": {
+          "types": [
+            "object"
+          ],
+          "properties": {
+            "typeDiscriminator": {
+              "types": [
+                "string"
+              ]
+            },
+            "pureId": {
+              "types": [
+                "integer"
+              ]
+            },
+            "logicalName": {
+              "types": [
+                "string"
+              ]
+            },
+            "name": {
+              "types": [
+                "object"
+              ],
+              "properties": {
+                "en_GB": {
+                  "types": [
+                    "string"
+                  ]
+                },
+                "es_ES": {
+                  "types": [
+                    "string"
+                  ]
+                },
+                "ca_ES": {
+                  "types": [
+                    "string"
+                  ]
+                }
+              }
+            },
+            "classifications": {
+              "types": [
+                "array"
+              ],
+              "items": {
+                "item": {
+                  "types": [
+                    "object"
+                  ],
+                  "properties": {
+                    "uri": {
+                      "types": [
+                        "string"
+                      ]
+                    },
+                    "term": {
+                      "types": [
+                        "object"
+                      ],
+                      "properties": {
+                        "en_GB": {
+                          "types": [
+                            "string"
+                          ]
+                        },
+                        "es_ES": {
+                          "types": [
+                            "string"
+                          ]
+                        },
+                        "ca_ES": {
+                          "types": [
+                            "string"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "keywords": {
+              "types": [
+                "array"
+              ],
+              "items": {
+                "item": {
+                  "types": [
+                    "object"
+                  ],
+                  "properties": {
+                    "pureId": {
+                      "types": [
+                        "integer"
+                      ]
+                    },
+                    "locale": {
+                      "types": [
+                        "string"
+                      ]
+                    },
+                    "freeKeywords": {
+                      "types": [
+                        "array"
+                      ],
+                      "items": {
+                        "item": {
+                          "types": [
+                            "string"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "visibility": {
+      "types": [
+        "object"
+      ],
+      "properties": {
+        "key": {
+          "types": [
+            "string"
+          ]
+        },
+        "description": {
+          "types": [
+            "object"
+          ],
+          "properties": {
+            "en_GB": {
+              "types": [
+                "string"
+              ]
+            },
+            "es_ES": {
+              "types": [
+                "string"
+              ]
+            },
+            "ca_ES": {
+              "types": [
+                "string"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "contributors": {
+      "types": [
+        "array"
+      ],
+      "items": {
+        "item": {
+          "types": [
+            "object"
+          ],
+          "properties": {
+            "typeDiscriminator": {
+              "types": [
+                "string"
+              ]
+            },
+            "pureId": {
+              "types": [
+                "integer"
+              ]
+            },
+            "name": {
+              "types": [
+                "object"
+              ],
+              "properties": {
+                "firstName": {
+                  "types": [
+                    "string"
+                  ]
+                },
+                "lastName": {
+                  "types": [
+                    "string"
+                  ]
+                }
+              }
+            },
+            "role": {
+              "types": [
+                "object"
+              ],
+              "properties": {
+                "uri": {
+                  "types": [
+                    "string"
+                  ]
+                },
+                "term": {
+                  "types": [
+                    "object"
+                  ],
+                  "properties": {
+                    "en_GB": {
+                      "types": [
+                        "string"
+                      ]
+                    },
+                    "es_ES": {
+                      "types": [
+                        "string"
+                      ]
+                    },
+                    "ca_ES": {
+                      "types": [
+                        "string"
+                      ]
+                    }
+                  }
+                }
+              }
+            },
+            "person": {
+              "types": [
+                "object"
+              ],
+              "properties": {
+                "systemName": {
+                  "types": [
+                    "string"
+                  ]
+                },
+                "uuid": {
+                  "types": [
+                    "string"
+                  ]
+                }
+              }
+            },
+            "externalPerson": {
+              "types": [
+                "object"
+              ],
+              "properties": {
+                "systemName": {
+                  "types": [
+                    "string"
+                  ]
+                },
+                "uuid": {
+                  "types": [
+                    "string"
+                  ]
+                }
+              }
+            },
+            "organizations": {
+              "types": [
+                "array"
+              ],
+              "items": {
+                "item": {
+                  "types": [
+                    "object"
+                  ],
+                  "properties": {
+                    "systemName": {
+                      "types": [
+                        "string"
+                      ]
+                    },
+                    "uuid": {
+                      "types": [
+                        "string"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "customDefinedFields": {
+      "types": [
+        "object"
+      ],
+      "properties": {
+        "european_mention": {
+          "types": [
+            "object"
+          ],
+          "properties": {
+            "typeDiscriminator": {
+              "types": [
+                "string"
+              ]
+            },
+            "value": {
+              "types": [
+                "boolean"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "workflow": {
+      "types": [
+        "object"
+      ],
+      "properties": {
+        "step": {
+          "types": [
+            "string"
+          ]
+        },
+        "description": {
+          "types": [
+            "object"
+          ],
+          "properties": {
+            "en_GB": {
+              "types": [
+                "string"
+              ]
+            },
+            "es_ES": {
+              "types": [
+                "string"
+              ]
+            },
+            "ca_ES": {
+              "types": [
+                "string"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "supervisorOrganizations": {
+      "types": [
+        "array"
+      ],
+      "items": {
+        "item": {
+          "types": [
+            "object"
+          ],
+          "properties": {
+            "systemName": {
+              "types": [
+                "string"
+              ]
+            },
+            "uuid": {
+              "types": [
+                "string"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "supervisors": {
+      "types": [
+        "array"
+      ],
+      "items": {
+        "item": {
+          "types": [
+            "object"
+          ],
+          "properties": {
+            "pureId": {
+              "types": [
+                "integer"
+              ]
+            },
+            "name": {
+              "types": [
+                "object"
+              ],
+              "properties": {
+                "firstName": {
+                  "types": [
+                    "string"
+                  ]
+                },
+                "lastName": {
+                  "types": [
+                    "string"
+                  ]
+                }
+              }
+            },
+            "person": {
+              "types": [
+                "object"
+              ],
+              "properties": {
+                "systemName": {
+                  "types": [
+                    "string"
+                  ]
+                },
+                "uuid": {
+                  "types": [
+                    "string"
+                  ]
+                }
+              }
+            },
+            "organizations": {
+              "types": [
+                "array"
+              ],
+              "items": {
+                "item": {
+                  "types": [
+                    "object"
+                  ],
+                  "properties": {
+                    "systemName": {
+                      "types": [
+                        "string"
+                      ]
+                    },
+                    "uuid": {
+                      "types": [
+                        "string"
+                      ]
+                    }
+                  }
+                }
+              }
+            },
+            "role": {
+              "types": [
+                "object"
+              ],
+              "properties": {
+                "uri": {
+                  "types": [
+                    "string"
+                  ]
+                },
+                "term": {
+                  "types": [
+                    "object"
+                  ],
+                  "properties": {
+                    "en_GB": {
+                      "types": [
+                        "string"
+                      ]
+                    },
+                    "es_ES": {
+                      "types": [
+                        "string"
+                      ]
+                    },
+                    "ca_ES": {
+                      "types": [
+                        "string"
+                      ]
+                    }
+                  }
+                }
+              }
+            },
+            "externalPerson": {
+              "types": [
+                "object"
+              ],
+              "properties": {
+                "systemName": {
+                  "types": [
+                    "string"
+                  ]
+                },
+                "uuid": {
+                  "types": [
+                    "string"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "awardDate": {
+      "types": [
+        "object"
+      ],
+      "properties": {
+        "year": {
+          "types": [
+            "integer"
+          ]
+        },
+        "month": {
+          "types": [
+            "integer"
+          ]
+        },
+        "day": {
+          "types": [
+            "integer"
+          ]
+        }
+      }
+    },
+    "awardingInstitutions": {
+      "types": [
+        "array"
+      ],
+      "items": {
+        "item": {
+          "types": [
+            "object"
+          ],
+          "properties": {
+            "organizationRef": {
+              "types": [
+                "object"
+              ],
+              "properties": {
+                "systemName": {
+                  "types": [
+                    "string"
+                  ]
+                },
+                "uuid": {
+                  "types": [
+                    "string"
+                  ]
+                }
+              }
+            },
+            "externalOrganizationRef": {
+              "types": [
+                "object"
+              ],
+              "properties": {
+                "systemName": {
+                  "types": [
+                    "string"
+                  ]
+                },
+                "uuid": {
+                  "types": [
+                    "string"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "systemName": {
+      "types": [
+        "string"
+      ]
+    },
+    "translatedSubTitle": {
+      "types": [
+        "object"
+      ],
+      "properties": {
+        "ca_ES": {
+          "types": [
+            "string"
+          ]
+        },
+        "es_ES": {
+          "types": [
+            "string"
+          ]
+        },
+        "en_GB": {
+          "types": [
+            "string"
+          ]
+        }
+      }
+    },
+    "translatedTitle": {
+      "types": [
+        "object"
+      ],
+      "properties": {
+        "ca_ES": {
+          "types": [
+            "string"
+          ]
+        },
+        "es_ES": {
+          "types": [
+            "string"
+          ]
+        },
+        "en_GB": {
+          "types": [
+            "string"
+          ]
+        }
+      }
+    },
+    "abstract": {
+      "types": [
+        "object"
+      ],
+      "properties": {
+        "en_GB": {
+          "types": [
+            "string"
+          ]
+        },
+        "es_ES": {
+          "types": [
+            "string"
+          ]
+        },
+        "ca_ES": {
+          "types": [
+            "string"
+          ]
+        }
+      }
+    },
+    "documents": {
+      "types": [
+        "array"
+      ],
+      "items": {
+        "item": {
+          "types": [
+            "object"
+          ],
+          "properties": {
+            "pureId": {
+              "types": [
+                "integer"
+              ]
+            },
+            "fileId": {
+              "types": [
+                "string"
+              ]
+            },
+            "fileName": {
+              "types": [
+                "string"
+              ]
+            },
+            "mimeType": {
+              "types": [
+                "string"
+              ]
+            },
+            "size": {
+              "types": [
+                "integer"
+              ]
+            },
+            "url": {
+              "types": [
+                "string"
+              ]
+            },
+            "fileStoreLocations": {
+              "types": [
+                "object"
+              ],
+              "properties": {}
+            },
+            "title": {
+              "types": [
+                "string"
+              ]
+            },
+            "type": {
+              "types": [
+                "object"
+              ],
+              "properties": {
+                "uri": {
+                  "types": [
+                    "string"
+                  ]
+                },
+                "term": {
+                  "types": [
+                    "object"
+                  ],
+                  "properties": {
+                    "en_GB": {
+                      "types": [
+                        "string"
+                      ]
+                    },
+                    "es_ES": {
+                      "types": [
+                        "string"
+                      ]
+                    },
+                    "ca_ES": {
+                      "types": [
+                        "string"
+                      ]
+                    }
+                  }
+                }
+              }
+            },
+            "visibleOnPortalDate": {
+              "types": [
+                "string"
+              ]
+            },
+            "visibility": {
+              "types": [
+                "object"
+              ],
+              "properties": {
+                "key": {
+                  "types": [
+                    "string"
+                  ]
+                },
+                "description": {
+                  "types": [
+                    "object"
+                  ],
+                  "properties": {
+                    "en_GB": {
+                      "types": [
+                        "string"
+                      ]
+                    },
+                    "es_ES": {
+                      "types": [
+                        "string"
+                      ]
+                    },
+                    "ca_ES": {
+                      "types": [
+                        "string"
+                      ]
+                    }
+                  }
+                }
+              }
+            },
+            "creator": {
+              "types": [
+                "string"
+              ]
+            },
+            "created": {
+              "types": [
+                "string"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "bibliographicalNote": {
+      "types": [
+        "object"
+      ],
+      "properties": {
+        "en_GB": {
+          "types": [
+            "string"
+          ]
+        },
+        "es_ES": {
+          "types": [
+            "string"
+          ]
+        },
+        "ca_ES": {
+          "types": [
+            "string"
+          ]
+        }
+      }
+    }
+  }
+}
