@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Resum per Persona | Awards</title>
+    <script src="config.js"></script>
+    <script src="uab-brand.js" defer></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="uab-theme.css">
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.7.1/nouislider.min.css">
+    <link href="https://unpkg.com/tabulator-tables@6.3.0/dist/css/tabulator.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.7.1/nouislider.min.js"></script>
+    <script src="https://unpkg.com/tabulator-tables@6.3.0/dist/js/tabulator.min.js"></script>
+</head>
+<body class="bg-slate-50 min-h-screen">
+    <div id="loadingOverlay" class="hidden fixed inset-0 z-50 bg-slate-900/20 backdrop-blur-[1px]">
+        <div class="h-full w-full flex items-center justify-center">
+            <div class="bg-white border border-slate-200 rounded-2xl shadow-sm px-5 py-4 inline-flex items-center gap-3 text-sm font-semibold text-indigo-700">
+                <i class="fa-regular fa-clock fa-spin"></i>
+                <span>Recarregant dades...</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="mx-auto px-6 py-8">
+        <header class="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-6">
+            <div>
+                <h1 class="hidden text-3xl font-black text-slate-800">Resum <span class="text-indigo-600">Ajuts / Persona</span></h1>
+                <p class="hidden text-slate-500 text-sm mt-1">Consulta agregada d'awards validats</p>
+            </div>
+           
+        </header>
+
+        <section class="bg-white border border-slate-200 rounded-2xl shadow-sm p-4 mb-6">
+            <div class="grid grid-cols-1 lg:grid-cols-10 gap-3 items-end">
+                <div hidden class="lg:col-span-3">
+                    <label for="personaInput" class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Persona</label>
+                    <input id="personaInput" type="text" placeholder="Cercar persona (nom o cognom)..." class="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm bg-white" />
+                </div>
+                <div class="lg:col-span-3">
+                    <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Departament</label>
+                                        <div class="relative">
+                        <button id="departamentoDropdownBtn" type="button" class="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm bg-white text-left flex items-center justify-between">
+                            <span id="departamentoDropdownLabel">Afegeix departament...</span>
+                            <i class="fa fa-chevron-down ml-2"></i>
+                        </button>
+                        <div id="departamentoDropdownMenu" class="absolute z-10 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-auto hidden"></div>
+                    </div>
+                    <!-- El select original se oculta pero se mantiene para compatibilidad con el backend -->
+                    <select id="departamentoSelect" multiple class="hidden"></select>
+                </div>
+                <div class="lg:col-span-2">
+                    <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Categoria</label>
+                    
+                    <div class="relative">
+                        <button id="categoriaDropdownBtn" type="button" class="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm bg-white text-left flex items-center justify-between">
+                            <span id="categoriaDropdownLabel">Afegeix categoria...</span>
+                            <i class="fa fa-chevron-down ml-2"></i>
+                        </button>
+                        <div id="categoriaDropdownMenu" class="absolute z-10 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-auto hidden"></div>
+                    </div>
+                    
+                    <!-- El select original se oculta pero se mantiene para compatibilidad con el backend -->
+                    <select id="categoriaSelect" multiple class="hidden"></select>
+                </div>
+                <div class="lg:col-span-2">
+                    <label for="modoAnioSelect" class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Criteri temporal</label>
+                    <select id="modoAnioSelect" class="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm bg-white">
+                        <option value="awardDate">Data d'adjudicació de l'ajut</option>
+                        <option value="vigencia">Vigència de l'ajut en el període indicat</option>
+                    </select>
+                </div>
+                <div class="lg:col-span-3">
+                    <div class="flex items-center justify-between mb-1">
+                        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Rang d'anys</label>
+                        <span id="valorRango" class="text-xs font-bold text-indigo-600"></span>
+                    </div>
+                    <div id="sliderAnios"></div>
+                </div>
+            </div>
+
+                
+                
+
+            
+            
+        </section>
+
+        <section class="mt-6">
+            <div id="departamentoChipsContainer" class="flex flex-wrap gap-2 mb-1"></div>
+            <div id="categoriaChipsContainer" class="flex flex-wrap gap-2 mb-1"></div>
+
+            <!-- Tabs -->
+            <div class="mb-4 border-b border-slate-200">
+                <nav class="flex gap-2" aria-label="Tabs">
+                    <button id="tabResumenBtn" class="px-4 py-2 text-sm font-semibold text-indigo-700 border-b-2 border-indigo-600 focus:outline-none" type="button">Resum General</button>
+                    <button id="tabDeptBtn" class="px-4 py-2 text-sm font-semibold text-slate-500 hover:text-indigo-700 border-b-2 border-transparent focus:outline-none" type="button">Anàlisi per Departament</button>
+                </nav>
+            </div>
+
+            <!-- Tab Contents -->
+            <div id="tabResumen" class="">
+                <section class="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
+                    <div id="estado" class="p-4 text-sm text-slate-500">Mou els filtres per executar la consulta.</div>
+                    <div class="overflow-auto">
+                        <div id="tablaResumenTable"></div>
+                    </div>
+                </section>
+            </div>
+            <div id="tabDept" class="hidden">
+                
+                <section id="seccionMatrizLiderazgo" class="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden mt-6">
+                    <div class="p-4 border-b border-slate-100">
+                        <h2 class="text-sm font-bold text-slate-700">Matriu de Lideratge: Posicionament d'investigadors</h2>
+                        <p class="text-xs text-slate-500 mt-1">Eix X: Nombre d'ajuts · Eix Y: Import total captat<br>Quadrants: Líders, Especialistes, Formigues, etc.</p>
+                        <details class="mt-3 bg-slate-50 border border-slate-200 rounded-lg p-3 text-xs text-slate-700 whitespace-pre-line">
+                            <summary class="font-semibold cursor-pointer mb-2">Interpretació dels Quatre Quadrants</summary>
+                            La posició de cada investigador a la matriu permet identificar el seu perfil competitiu segons la naturalesa de la seva activitat:
+                            <br><br>1. <b>Líders Consolidats (Quadrant Superior Dret)</b> Perfil: Investigadors amb un alt volum de fons i una gran quantitat de projectes actius.
+                            <br>Significat: Són el motor financer i científic del departament. Tenen una capacitat provada per mantenir diversos equips i línies de recerca simultànies amb èxit en convocatòries d'alt pressupost.
+                            <br>2. <b>Especialistes d'Alt Impacte (Quadrant Superior Esquerre)</b> Perfil: Pocs projectes, però amb un finançament molt elevat (p. ex. una ERC Grant o un projecte europeu singular).
+                            <br>Significat: Recerca d'altíssima especialització o prestigi. No busquen la quantitat, sinó l'excel·lència en convocatòries extremadament competitives que doten de molts recursos a una sola línia de treball.
+                            <br>3. <b>Dinamitzadors o Perfils Emergents (Quadrant Inferior Dret)</b> Perfil: Moltes ajudes o col·laboracions, però amb pressupostos més modests.
+                            <br>Significat: Investigadors molt actius que actuen com a connectors. Sovint són perfils transversals que participen en molts projectes com a Co-IP o membres d'equip, aportant una activitat constant i diversificada al departament.
+                            <br>4. <b>Investigadors en Fase de Creixement (Quadrant Inferior Esquerre)</b> Perfil: Pocs projectes i de pressupost reduït.
+                            <br>Significat: Sol incloure investigadors que acaben d'arribar, perfils en fase inicial de la seva carrera o aquells que estan reorientant la seva recerca. L'objectiu estratègic aquí és moure's cap a la dreta (més activitat) o cap amunt (més finançament).
+                        </details>
+                    </div>
+                    <div class="overflow-auto">
+                        <div id="chartLiderazgo" class="w-full h-[420px]"></div>
+                    </div>
+                </section>
+                <section id="seccionQuadrantsPersona" class="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden mt-6">
+                    <div class="p-4 border-b border-slate-100">
+                        <h2 class="text-sm font-bold text-slate-700">Matriz de Quadrants per Persona</h2>
+                        <p class="text-xs text-slate-500 mt-1">Cada persona es mostra en el seu quadrant segons el seu posicionament (Líders, Especialistes, Formigues, Altres).</p>
+                        <details class="mt-3 bg-slate-50 border border-slate-200 rounded-lg p-3 text-xs text-slate-700 whitespace-pre-line">
+                            <summary class="font-semibold cursor-pointer mb-2">Interpretació dels Quatre Quadrants</summary>
+                            La posició de cada investigador a la matriu permet identificar el seu perfil competitiu segons la naturalesa de la seva activitat:
+                            <br><br>1. <b>Líders Consolidats (Quadrant Superior Dret)</b> Perfil: Investigadors amb un alt volum de fons i una gran quantitat de projectes actius.
+                            <br>Significat: Són el motor financer i científic del departament. Tenen una capacitat provada per mantenir diversos equips i línies de recerca simultànies amb èxit en convocatòries d'alt pressupost.
+                            <br>2. <b>Especialistes d'Alt Impacte (Quadrant Superior Esquerre)</b> Perfil: Pocs projectes, però amb un finançament molt elevat (p. ex. una ERC Grant o un projecte europeu singular).
+                            <br>Significat: Recerca d'altíssima especialització o prestigi. No busquen la quantitat, sinó l'excel·lència en convocatòries extremadament competitives que doten de molts recursos a una sola línia de treball.
+                            <br>3. <b>Dinamitzadors o Perfils Emergents (Quadrant Inferior Dret)</b> Perfil: Moltes ajudes o col·laboracions, però amb pressupostos més modests.
+                            <br>Significat: Investigadors molt actius que actuen com a connectors. Sovint són perfils transversals que participen en molts projectes com a Co-IP o membres d'equip, aportant una activitat constant i diversificada al departament.
+                            <br>4. <b>Investigadors en Fase de Creixement (Quadrant Inferior Esquerre)</b> Perfil: Pocs projectes i de pressupost reduït.
+                            <br>Significat: Sol incloure investigadors que acaben d'arribar, perfils en fase inicial de la seva carrera o aquells que estan reorientant la seva recerca. L'objectiu estratègic aquí és moure's cap a la dreta (més activitat) o cap amunt (més finançament).
+                        </details>
+                    </div>
+                    <div class="overflow-auto">
+                        <div id="chartQuadrantsPersona" class="w-full h-[420px]"></div>
+                    </div>
+                </section>
+                <section id="seccionPareto" class="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden mt-6">
+                    <div class="p-4 border-b border-slate-100">
+                        <h2 class="text-sm font-bold text-slate-700">Anàlisi de Pareto (80/20)</h2>
+                        <p class="text-xs text-slate-500 mt-1">Mostra quin percentatge del finançament total està concentrat en el percentatge superior d'investigadors. El 80/20 indica que una petita part dels investigadors capta la major part dels fons.</p>
+                        <details class="mt-3 bg-slate-50 border border-slate-200 rounded-lg p-3 text-xs text-slate-700 whitespace-pre-line">
+                            <summary class="font-semibold cursor-pointer mb-2">Què és l'anàlisi de Pareto?</summary>
+                            L'anàlisi de Pareto (regla 80/20) mostra la distribució desigual dels recursos: sovint, el 20% dels investigadors capten el 80% del finançament. Aquest gràfic ens permet visualitzar la distribució del finançament. Mitjançant la Llei del 80/20, identifiquem quins projectes i investigadors constitueixen el motor principal dels recursos del departament. La línia de "Percentatge Acumulat" ens indica ràpidament com es concentren els fons, ajudant a la direcció a entendre la dependència financera i a protegir els actius més estratègics.
+                        </details>
+                    </div>
+                    <div class="overflow-auto">
+                        <div id="chartPareto" class="w-full h-[420px]"></div>
+                    </div>
+                </section>
+                <section id="seccionRankingPercentil" class="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden mt-6">
+                    <div class="p-4 border-b border-slate-100">
+                        <h2 class="text-sm font-bold text-slate-700">Ranking Percentil</h2>
+                        <p class="text-xs text-slate-500 mt-1">Mostra el percentil de cada investigador segons el seu import total ponderat, en relació amb la resta del departament.</p>
+                        <details class="mt-3 bg-slate-50 border border-slate-200 rounded-lg p-3 text-xs text-slate-700 whitespace-pre-line">
+                            <summary class="font-semibold cursor-pointer mb-2">Què és el percentil?</summary>
+                            El percentil indica la posició relativa d'un investigador dins la distribució de finançament: un percentil 90 vol dir que la persona ha captat més fons que el 90% dels seus companys. Permet identificar ràpidament qui són els perfils més destacats i la dispersió de recursos.
+                        </details>
+                    </div>
+                    <div class="overflow-auto">
+                        <div hidden id="chartRankingPercentil" class="w-5/6 mx-auto h-[420px]"></div>
+                        <div id="tablaRankingPercentilTable" class="w-5/6 mx-auto mt-6"></div>
+                    </div>
+                </section>
+                <section id="seccionEvolucionPersonaDept" class="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden mt-6">
+                    <div class="p-4 border-b border-slate-100">
+                        <h2 class="text-sm font-bold text-slate-700">Evolució persona vs departament</h2>
+                        <p class="text-xs text-slate-500 mt-1">Compara l'evolució anual d'una persona seleccionada respecte al total del departament (import ponderat i nombre d'ajuts).</p>
+                    </div>
+                    <div class="overflow-auto">
+                        <div id="chartEvolucionPersonaDept" class="w-full h-[340px] mb-4"></div>
+                        <div hidden id="tablaEvolucionPersonaDeptTable"></div>
+                    </div>
+                </section>
+            </div>
+
+            <section hidden  class="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden mt-6">
+                <div class="p-4 border-b border-slate-100">
+                    <h2 class="text-sm font-bold text-slate-700">Creixement per persona (% ajuts i import)</h2>
+                    <p class="text-xs text-slate-500 mt-1">Compara l'any inicial i final del rang seleccionat</p>
+                </div>
+                <div class="overflow-auto">
+                    <div id="tablaCrecimientoPersonasTable"></div>
+                </div>
+            </section>
+
+            <section class="grid grid-cols-1 gap-4 mt-6">
+                <div id="cardImporteAnio" class="chart-card bg-white border border-slate-100 rounded-2xl shadow-sm p-4 hidden">
+                    <button onclick="abrirPantallaCompleta('cardImporteAnio')" class="absolute top-3 right-3 text-xs font-semibold text-indigo-600 hover:text-indigo-800">
+                        <i class="fa-solid fa-expand mr-1"></i>Pantalla completa
+                    </button>
+                    <h2 id="tituloChartImporteAnio" class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Import total per projectes (sense duplicar)</h2>
+                    <div id="chartImporteAnio" class="w-full h-[360px]"></div>
+                </div>
+
+                <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                    <div id="cardProyectosAnio" class="chart-card bg-white border border-slate-100 rounded-2xl shadow-sm p-4">
+                        <button onclick="abrirPantallaCompleta('cardProyectosAnio')" class="absolute top-3 right-3 text-xs font-semibold text-indigo-600 hover:text-indigo-800">
+                            <i class="fa-solid fa-expand mr-1"></i>Pantalla completa
+                        </button>
+                        <h2 id="tituloChartProyectosAnio" class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Projectes per any</h2>
+                        <div id="chartProyectosAnio" class="w-full h-[360px]"></div>
+                    </div>
+                    <div id="cardTopPersonas" class="chart-card bg-white border border-slate-100 rounded-2xl shadow-sm p-4">
+                        <button onclick="abrirPantallaCompleta('cardTopPersonas')" class="absolute top-3 right-3 text-xs font-semibold text-indigo-600 hover:text-indigo-800">
+                            <i class="fa-solid fa-expand mr-1"></i>Pantalla completa
+                        </button>
+                        <h2 id="tituloChartTopPersonas" class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Top persones per import ponderat (període seleccionat)</h2>
+                        <div id="chartTopPersonas" class="w-full h-[360px]"></div>
+                    </div>
+                </div>
+
+                <section id="seccionAwardsPersona" class="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden hidden">
+                    <div class="p-4 border-b border-slate-100">
+                        <h2 id="tituloAwardsPersona" class="text-sm font-bold text-slate-700">Awards de la persona seleccionada</h2>
+                    </div>
+                    <div class="overflow-auto">
+                        <div id="tablaAwardsTable"></div>
+                    </div>
+                </section>
+
+                <div hidden class="bg-white border border-slate-100 rounded-2xl shadow-sm p-4">
+                    <div class="flex flex-col lg:flex-row lg:items-end gap-3 mb-3">
+                        <div class="w-full lg:w-96">
+                            <label for="compareDepartamentoSelect" class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Comparar ajuts persones de departaments</label>
+                            <select id="compareDepartamentoSelect" class="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm bg-white">
+                                <option value="">Selecciona departament</option>
+                            </select>
+                        </div>
+                        <button id="btnAddDepartamentoCompare" type="button" class="h-10 px-4 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700">
+                            Afegir
+                        </button>
+                    </div>
+                    <div id="compareDepartamentosSeleccionados" class="flex flex-wrap gap-2 mb-3"></div>
+                    <div id="chartComparativaDept" class="w-full h-[360px]"></div>
+                </div>
+            </section>
+        </section>
+    </div>
+
+    <script src="persona-resumen.js"></script>
+</body>
+</html>

@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Matriu Financera | Pure</title>
+    <script src="config.js"></script>
+    <script src="uab-brand.js" defer></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="uab-theme.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.7.1/nouislider.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.7.1/nouislider.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.13.2/themes/base/jquery-ui.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/pivottable/2.23.0/pivot.min.css">
+    <link rel="stylesheet" href="table.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.13.2/jquery-ui.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pivottable/2.23.0/pivot.min.js"></script>
+</head>
+<body class="bg-slate-50 min-h-screen font-sans">
+
+    <div class="max-w-[98%] mx-auto py-6 px-4">
+        
+        <header class="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 mb-8">
+            <div>
+                <div class="flex items-center gap-2 mb-1">
+                    <h1 class="hidden text-xl font-black text-slate-800 tracking-tight">Anàlisi de <span class="text-indigo-600">Finançament</span></h1>
+                </div>
+                <p class="hidden text-slate-500 font-medium text-xs">Distribució per tipus i interval d'anys </p>
+            </div>
+            
+            <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 flex flex-col sm:flex-row items-center gap-8 min-w-[400px]">
+                <div class="flex-1 w-full px-2">
+                    <div class="flex items-center justify-between mb-1">
+                        <span class="text-xxs font-black text-slate-400 uppercase tracking-widest">Rango de años</span>
+                        <span id="valorRango" class="text-xs font-black text-indigo-600"></span>
+                    </div>
+                    <div id="sliderAnios"></div>
+                </div>
+
+                <div class="w-full sm:w-56 px-2">
+                    <label for="modoAnioSelect" class="block text-xxs font-black text-slate-400 uppercase tracking-widest mb-1">Criteri temporal</label>
+                    <select id="modoAnioSelect" class="w-full border border-slate-300 rounded-xl px-3 py-2 text-[11px] bg-white font-semibold text-slate-700">
+                        <option value="awardDate">Data d'adjudicació</option>
+                        <option value="vigencia">Vigència del projecte</option>
+                    </select>
+                </div>
+                
+                <a href="awards.html" title="Volver a awards" class="text-slate-300 hover:text-red-500 transition-colors">
+                    <i class="fa-solid fa-circle-xmark text-xl"></i>
+                </a>
+            </div>
+        </header>
+
+        <div class="bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden">
+            <div id="loading" class="p-20 text-center">
+                <div class="inline-block animate-spin mb-3 text-indigo-500"><i class="fa-solid fa-circle-notch text-2xl"></i></div>
+                <p class="text-slate-400 font-black text-xxs uppercase tracking-widest">Creuant dades validades...</p>
+            </div>
+
+            <div id="wrapper" class="hidden overflow-x-auto">
+                <div id="pivot-container" class="min-h-[560px]"></div>
+            </div>
+        </div>
+
+        <div class="mt-4 flex justify-between items-center px-2">
+            <div id="activeRange" class="text-xxs font-black text-indigo-400 uppercase"></div>
+            <div class="text-xxs font-bold text-slate-300 uppercase italic">
+                Només ajuts en estat "Validated"
+            </div>
+        </div>
+    </div>
+
+    <script src="table.js"></script>
+</body>
+</html>

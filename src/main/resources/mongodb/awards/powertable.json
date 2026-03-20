@@ -1,0 +1,175 @@
+{
+  "collection": "Awards",
+  "pipeline": [
+    {
+      "$match": {
+        "workflow.step": "validated"
+      }
+    },
+    {
+      "$addFields": {
+        "anio": {
+          "$year": "$awardDate"
+        }
+      }
+    },
+    {
+      "$unwind": "$fundings"
+    },
+    {
+      "$unwind": "$fundings.fundingCollaborators"
+    },
+    {
+      "$match": {
+        "fundings.fundingCollaborators.collaborator.uuid": "84443078-1a60-462d-9d0a-b04312afd9eb"
+      }
+    },
+    {
+      "$lookup": {
+        "from": "Organizations",
+        "localField": "managingOrganization.uuid",
+        "foreignField": "uuid",
+        "as": "org_info"
+      }
+    },
+    {
+      "$unwind": {
+        "path": "$org_info",
+        "preserveNullAndEmptyArrays": true
+      }
+    },
+    {
+      "$match": {
+        "$and": [
+          {
+            "type.term.ca_ES": {
+              "$ne": "Grups i Xarxes de Recerca externs a la UAB"
+            }
+          },
+          {
+            "$or": [
+              {
+                "type.term.ca_ES": {
+                  "$ne": "Conveni extern a la UAB"
+                }
+              },
+              {
+                "$and": [
+                  {
+                    "type.term.ca_ES": "Conveni extern a la UAB"
+                  },
+                  {
+                    "org_info.type.term.ca_ES": "Centres de Recerca Participats"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "$addFields": {
+        "importe": {
+          "$convert": {
+            "input": "$fundings.fundingCollaborators.institutionalPart.value",
+            "to": "double",
+            "onError": 0,
+            "onNull": 0
+          }
+        }
+      }
+    },
+    {
+      "$addFields": {
+        "categoria": {
+          "$let": {
+            "vars": {
+              "tipoCa": "$type.term.ca_ES",
+              "tipoEn": "$type.term.en_GB",
+              "candidatas": [
+                "$classification.term.ca_ES",
+                "$classification.term.en_GB",
+                "$classification.ca_ES",
+                "$classification.en_GB",
+                "$classification.0.term.ca_ES",
+                "$classification.0.term.en_GB",
+                "$classification.0.ca_ES",
+                "$classification.0.en_GB",
+                "$categoria"
+              ]
+            },
+            "in": {
+              "$let": {
+                "vars": {
+                  "categoriaRaw": {
+                    "$arrayElemAt": [
+                      {
+                        "$filter": {
+                          "input": "$$candidatas",
+                          "as": "c",
+                          "cond": {
+                            "$and": [
+                              { "$ne": ["$$c", null] },
+                              { "$ne": ["$$c", ""] },
+                              { "$ne": ["$$c", "$$tipoCa"] },
+                              { "$ne": ["$$c", "$$tipoEn"] }
+                            ]
+                          }
+                        }
+                      },
+                      0
+                    ]
+                  }
+                },
+                "in": {
+                  "$ifNull": [
+                    "$$categoriaRaw",
+                    "Sense categoria"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "$group": {
+        "_id": {
+          "anio": "$anio",
+          "tipo": "$type.term.ca_ES",
+          "categoria": "$categoria"
+        },
+        "ajuts": {
+          "$sum": 1
+        },
+        "import": {
+          "$sum": "$importe"
+        }
+      }
+    },
+    {
+      "$project": {
+        "_id": 0,
+        "anio": "$_id.anio",
+        "categoria": "$_id.categoria",
+        "tipo": "$_id.tipo",
+        "ajuts": "$ajuts",
+        "import": {
+          "$round": [
+            "$import",
+            2
+          ]
+        }
+      }
+    },
+    {
+      "$sort": {
+        "anio": 1,
+        "categoria": 1,
+        "tipo": 1
+      }
+    }
+  ]
+}

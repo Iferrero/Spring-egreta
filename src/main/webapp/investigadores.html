@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pure Personnel Manager</title>
+    <script src="config.js"></script>
+    <script src="uab-brand.js" defer></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="uab-theme.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<div class="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
+    <table class="w-full text-left">
+        <thead>
+            <tr class="bg-slate-50 text-slate-400 text-[10px] uppercase font-black tracking-widest">
+                <th class="px-8 py-4">Investigador</th>
+                <th class="px-8 py-4">Categoría Profesional</th>
+                <th class="px-8 py-4 text-center">Nº Proyectos</th>
+            </tr>
+        </thead>
+        <tbody id="lista-investigadores" class="divide-y divide-slate-50">
+            </tbody>
+    </table>
+</div>
+
+<script>
+async function cargarInvestigadores() {
+    const res = await fetch(apiUrl('/persons/with-projects'));
+    const personas = await res.json();
+    
+    const body = document.getElementById('lista-investigadores');
+    body.innerHTML = personas.map(p => {
+        // Extraer categoría de la primera asociación
+        const categoria = (p.staffOrganizationAssociations && p.staffOrganizationAssociations.length > 0)
+            ? (p.staffOrganizationAssociations[0].staffType?.term?.es_ES || "PDI")
+            : "No definida";
+
+        const nombre = `${p.name.lastName}, ${p.name.firstName}`;
+        
+        return `
+        <tr class="hover:bg-slate-50 transition-all">
+            <td class="px-8 py-5">
+                <div class="font-bold text-slate-800">${nombre}</div>
+                <div class="text-[10px] text-slate-400 uppercase">ID: ${p.pureId}</div>
+            </td>
+            <td class="px-8 py-5">
+                <span class="bg-indigo-50 text-indigo-600 px-3 py-1 rounded-full text-xs font-bold">
+                    ${categoria}
+                </span>
+            </td>
+            <td class="px-8 py-5 text-center">
+                <div class="inline-flex items-center justify-center w-10 h-10 rounded-full ${p.totalProyectos > 0 ? 'bg-emerald-50 text-emerald-600 font-black' : 'bg-slate-100 text-slate-400'}">
+                    ${p.totalProyectos}
+                </div>
+            </td>
+        </tr>`;
+    }).join('');
+}
+cargarInvestigadores();
+</script>

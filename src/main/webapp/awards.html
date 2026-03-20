@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Awards Manager | Pure</title>
+    <script src="config.js"></script>
+    <script src="uab-brand.js" defer></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="uab-theme.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body class="bg-slate-50 min-h-screen">
+
+    <div class="mx-auto py-10 px-6">
+        <header class="flex justify-between items-end mb-10">
+            <div>
+                <h1 class="hidden text-4xl font-black text-slate-800 tracking-tight">RESEARCH <span class="text-indigo-600">AWARDS</span></h1>
+                <p class="hidden text-slate-500 mt-2 font-medium">Gestión de proyectos y dotaciones validadas</p>
+            </div>
+            <div class="bg-white px-4 py-2 rounded-2xl shadow-sm border border-slate-200 text-xs font-bold text-slate-400">
+                <i class="fa-solid fa-circle-check text-emerald-500 mr-2"></i> FILTRO: WORKFLOW = VALIDATED
+            </div>
+        </header>
+
+        <div class="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
+            <table class="w-full text-left">
+                <thead>
+                    <tr class="bg-slate-50/50 text-slate-400 text-[11px] uppercase tracking-widest border-b border-slate-100">
+                        <th class="px-8 py-6">Información del Proyecto</th>
+                        <th class="px-8 py-6">Investigador Principal (IP)</th>
+                        <th class="px-8 py-6 text-right">Importe Concedido</th>
+                    </tr>
+                </thead>
+                <tbody id="awards-body" class="divide-y divide-slate-50">
+                    </tbody>
+            </table>
+            
+            <div class="px-8 py-6 flex justify-between items-center bg-slate-50/20">
+                <button onclick="cambiarPagina(-1)" id="btnPrev" class="px-5 py-2 rounded-xl border border-slate-200 text-sm font-bold hover:bg-white transition-all disabled:opacity-30">Anterior</button>
+                <span id="infoPagina" class="text-xs font-black text-slate-400 uppercase tracking-widest font-mono">Página 1</span>
+                <button onclick="cambiarPagina(1)" id="btnNext" class="px-5 py-2 rounded-xl border border-slate-200 text-sm font-bold hover:bg-white transition-all disabled:opacity-30">Siguiente</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let paginaActual = 0;
+
+        async function cargarStats() {
+            try {
+                const res = await fetch(apiUrl('/awards/stats/total'));
+                const data = await res.json();
+                document.getElementById('totalDinero').innerText = 
+                    new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(data.totalDinero || 0);
+                document.getElementById('totalProyectos').innerText = data.totalProyectos || 0;
+            } catch (e) { console.error("Error en stats:", e); }
+        }
+
+        async function cargarAwards() {
+            const body = document.getElementById('awards-body');
+            try {
+                const res = await fetch(apiUrl(`/awards?page=${paginaActual}`));
+                const data = await res.json();
+                
+                if (!data.content || data.content.length === 0) {
+                    body.innerHTML = `<tr><td colspan="3" class="p-20 text-center text-slate-400 italic">No se encontraron awards validados</td></tr>`;
+                    return;
+                }
+
+                body.innerHTML = data.content.map(a => {
+                const titulo = a.title?.es_ES || a.title?.en_GB || "Sin título";
+                const ip = (a.awardHolders && a.awardHolders.length > 0) 
+                    ? `${a.awardHolders[0].name.firstName} ${a.awardHolders[0].name.lastName}` : "N/D";
+
+                // Cálculo del total institucional por Award
+                let totalInstitucional = 0;
+                let moneda = "EUR";
+                
+                if (a.fundings) {
+                    a.fundings.forEach(f => {
+                        if (f.fundingCollaborators) {
+                            f.fundingCollaborators.forEach(col => {
+                                if (col.institutionalPart && col.institutionalPart.value) {
+                                    totalInstitucional += col.institutionalPart.value;
+                                    moneda = col.institutionalPart.currency || "EUR";
+                                }
+                            });
+                        }
+                    });
+                }
+
+                return `
+                <tr class="hover:bg-slate-50 transition-all">
+                    <td class="px-8 py-5">
+                        <div class="text-[10px] font-bold text-indigo-400 uppercase tracking-tighter">ID: ${a.uuid}</div>
+                        <div class="font-bold text-slate-800">${titulo}</div>
+                    </td>
+                    <td class="px-8 py-5 text-sm text-slate-600">${ip}</td>
+                    <td class="px-8 py-5 text-right font-black text-indigo-600">
+                        ${totalInstitucional.toLocaleString('es-ES')} <span class="text-[10px]">${moneda}</span>
+                    </td>
+                </tr>`;
+            }).join('');
+
+                document.getElementById('infoPagina').innerText = `Página ${data.page.number + 1} de ${data.page.totalPages}`;
+                document.getElementById('btnPrev').disabled = (data.page.number === 0);
+                document.getElementById('btnNext').disabled = (data.page.number >= data.page.totalPages - 1);
+
+            } catch (err) {
+                body.innerHTML = `<tr><td colspan="3" class="p-20 text-center text-red-400">Error al conectar con el servidor</td></tr>`;
+            }
+        }
+
+        function cambiarPagina(delta) {
+            paginaActual += delta;
+            cargarAwards();
+        }
+
+        // Carga inicial
+        cargarStats();
+        cargarAwards();
+    </script>
+</body>
+</html>

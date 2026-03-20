@@ -1,0 +1,208 @@
+:root {
+    --uab-campus: #008037;
+    --uab-collserola: #004d21;
+    --uab-pesol: #00cc58;
+    --uab-boreal: #52ff9d;
+    --uab-jade: #d8f3e3;
+    --uab-cala: #004d5e;
+    --uab-abissal: #003a47;
+    --uab-cantalup: #faae57;
+    --uab-ocas: #f88c12;
+    --uab-exosfera: #111111;
+    --uab-pissarra: #2a3037;
+    --uab-ancora: #434b56;
+    --uab-tauro: #596473;
+    --uab-colom: #7e8a9a;
+    --uab-cendra: #a9b1bc;
+    --uab-columna: #d4d8de;
+    --uab-boira: #f1f2f4;
+    --uab-coco: #ffffff;
+}
+
+html,
+body {
+    background-color: var(--uab-boira);
+    color: var(--uab-exosfera);
+    font-family: "Mona Sans", Inter, "Helvetica Neue", Arial, sans-serif;
+}
+
+h1,
+h2,
+h3,
+.font-black,
+.font-extrabold {
+    font-family: "Hubot Sans", "Mona Sans", Inter, "Helvetica Neue", Arial, sans-serif;
+}
+
+.uab-brandbar {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 0.8rem 1.5rem;
+    position: relative;
+    background-color: var(--uab-coco);
+    border-bottom: 1px solid var(--uab-columna);
+    box-shadow: 0 1px 2px rgba(17, 17, 17, 0.04);
+}
+
+.uab-brandbar__link {
+    display: inline-flex;
+    align-items: center;
+}
+
+.uab-brandbar__text {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.1rem;
+    max-width: calc(100% - 220px);
+}
+
+.uab-brandbar__title {
+    display: block;
+    font-size: 0.95rem;
+    font-weight: 700;
+    line-height: 1.2;
+    color: var(--uab-pissarra);
+    letter-spacing: 0.01em;
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.uab-brandbar__subtitle {
+    display: block;
+    font-size: 0.75rem;
+    font-weight: 500;
+    line-height: 1.2;
+    color: var(--uab-tauro);
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.uab-brandbar__logo {
+    height: 42px;
+    width: auto;
+    display: block;
+}
+
+@media (max-width: 640px) {
+    .uab-brandbar {
+        padding: 0.65rem 1rem;
+    }
+
+    .uab-brandbar__logo {
+        height: 30px;
+    }
+
+    .uab-brandbar__text {
+        max-width: calc(100% - 120px);
+    }
+
+    .uab-brandbar__title {
+        font-size: 0.82rem;
+        font-weight: 600;
+    }
+
+    .uab-brandbar__subtitle {
+        font-size: 0.68rem;
+    }
+}
+
+a {
+    color: var(--uab-campus);
+}
+
+a:hover {
+    color: var(--uab-collserola);
+}
+
+.text-indigo-700,
+.text-indigo-600,
+.text-indigo-500 {
+    color: var(--uab-campus);
+}
+
+.bg-indigo-600,
+.bg-indigo-500 {
+    background-color: var(--uab-campus);
+}
+
+.bg-indigo-100,
+.bg-indigo-50 {
+    background-color: var(--uab-jade);
+}
+
+.text-slate-900,
+.text-slate-800 {
+    color: var(--uab-pissarra);
+}
+
+.text-slate-700,
+.text-slate-600,
+.text-slate-500,
+.text-slate-400,
+.text-slate-300 {
+    color: var(--uab-tauro);
+}
+
+.bg-slate-50,
+.bg-slate-50\/50,
+.bg-slate-50\/20 {
+    background-color: var(--uab-boira);
+}
+
+.border-slate-300,
+.border-slate-200,
+.border-slate-100 {
+    border-color: var(--uab-columna);
+}
+
+.divide-slate-100,
+.divide-slate-50 {
+    border-color: var(--uab-columna);
+}
+
+.focus\:ring-indigo-500:focus {
+    --tw-ring-color: var(--uab-collserola);
+}
+
+.noUi-connect {
+    background: var(--uab-campus);
+}
+
+.noUi-handle {
+    border-color: var(--uab-columna);
+}
+
+.tabulator .tabulator-header {
+    background-color: var(--uab-boira);
+    color: var(--uab-pissarra);
+}
+
+.tabulator .tabulator-row.tabulator-selected {
+    background-color: var(--uab-jade);
+}
+
+.chart-card {
+    position: relative;
+}
+
+.chart-card:fullscreen {
+    background: #ffffff;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.chart-card:fullscreen div[id^="chart"] {
+    width: 100% !important;
+    height: 85vh !important;
+}

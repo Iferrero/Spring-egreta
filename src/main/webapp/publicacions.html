@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pure Repository Manager</title>
+    <script src="config.js"></script>
+    <script src="uab-brand.js" defer></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+        <link rel="stylesheet" href="uab-theme.css">
+      <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<div class="max-w-6xl mx-auto py-8">
+    <div class="mb-4 flex justify-end">
+        <a href="tesis-autor-director.html" class="px-4 py-2 rounded-xl border border-slate-300 text-sm font-semibold text-slate-700 hover:bg-white">Tesis mismo autor/director</a>
+    </div>
+    <div class="mb-6">
+        <input type="text" id="busqueda" oninput="resetYBuscar()" 
+               placeholder="🔍 Buscar por título en Pure..." 
+               class="w-full p-4 rounded-xl border-none shadow-md focus:ring-2 focus:ring-indigo-500">
+    </div>
+
+    <div class="bg-white rounded-xl shadow-lg overflow-hidden">
+        <table class="w-full text-left">
+            <thead class="bg-indigo-600 text-white">
+                <tr>
+                    <th class="p-4">Título y Autores</th>
+                    <th class="p-4 w-24">Año</th>
+                </tr>
+            </thead>
+            <tbody id="tabla" class="divide-y divide-gray-100"></tbody>
+        </table>
+        
+        <div class="p-4 bg-gray-50 flex justify-between items-center">
+            <button id="btnPrev" onclick="cambiarPagina(-1)" class="px-4 py-2 bg-white border rounded shadow hover:bg-gray-100 disabled:opacity-50">Anterior</button>
+            <span id="infoPagina" class="text-sm text-gray-600 font-medium">Página 1</span>
+            <button id="btnNext" onclick="cambiarPagina(1)" class="px-4 py-2 bg-white border rounded shadow hover:bg-gray-100 disabled:opacity-50">Siguiente</button>
+        </div>
+    </div>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+    <div class="bg-white p-4 rounded-xl shadow-sm">
+        <canvas id="chartLineAnios"></canvas>
+    </div>
+    <div class="bg-white p-4 rounded-xl shadow-sm">
+        <canvas id="chartPieTipos"></canvas>
+    </div>
+</div>
+<script>
+    let paginaActual = 0;
+    const tamanoPagina = 20;
+
+    async function cargar() {
+        const busqueda = document.getElementById('busqueda').value;
+        const res = await fetch(apiUrl(`/pure?buscar=${busqueda}&page=${paginaActual}&size=${tamanoPagina}`));
+        const data = await res.json(); // Ahora data es un objeto Page de Spring, no una lista
+
+        renderizar(data.content);
+        actualizarControles(data);
+    }
+
+    function renderizar(lista) {
+        document.getElementById('tabla').innerHTML = lista.map(p => `
+            <tr class="hover:bg-indigo-50/50 transition">
+                <td class="p-4">
+                    <div class="font-bold text-gray-800 leading-tight mb-1">${p.fullTitle}</div>
+                    <div class="text-xs text-gray-500 italic">${p.authorsNames}</div>
+                </td>
+                
+                <td class="p-4 text-center text-sm font-mono">${p.submissionYear || '-'}</td>
+                <td class="p-4 text-center">
+                    <button onclick="eliminar('${p.id}')" class="text-red-400 hover:text-red-600"><i class="fas fa-trash"></i></button>
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    function actualizarControles(data) {
+        document.getElementById('infoPagina').innerText = `Página ${data.number + 1} de ${data.totalPages}`;
+        document.getElementById('btnPrev').disabled = data.first;
+        document.getElementById('btnNext').disabled = data.last;
+    }
+
+    function cambiarPagina(delta) {
+        paginaActual += delta;
+        cargar();
+    }
+
+    function resetYBuscar() {
+        paginaActual = 0;
+        cargar();
+    }
+
+    cargar();
+
+    async function cargarGraficos() {
+        // 1. Cargar Años (Line Chart)
+        const resAnios = await fetch(apiUrl('/stats/anios'));
+        const dataAnios = await resAnios.json();
+        
+        new Chart(document.getElementById('chartLineAnios'), {
+            type: 'line',
+            data: {
+                labels: dataAnios.map(d => d.anio),
+                datasets: [{
+                    label: 'Publicaciones por año',
+                    data: dataAnios.map(d => d.total),
+                    borderColor: '#4F46E5',
+                    tension: 0.3
+                }]
+            }
+        });
+
+        // 2. Cargar Tipos (Doughnut)
+        const resTipos = await fetch(apiUrl('/publicaciones/stats/tipos'));
+        const dataTipos = await resTipos.json();
+
+        new Chart(document.getElementById('chartPieTipos'), {
+            type: 'doughnut',
+            data: {
+                labels: dataTipos.map(d => d.tipo),
+                datasets: [{
+                    data: dataTipos.map(d => d.total),
+                    backgroundColor: ['#4F46E5', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6']
+                }]
+            }
+        });
+    }
+
+    cargarGraficos();
+    
+</script>

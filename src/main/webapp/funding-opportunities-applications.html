@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Funding Opportunities - Sol·licituds</title>
+    <script src="config.js"></script>
+    <script src="uab-brand.js" defer></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="uab-theme.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.7.1/nouislider.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.7.1/nouislider.min.js"></script>
+</head>
+<body class="bg-slate-50 min-h-screen font-sans">
+
+<div class="mx-auto py-10 px-4 max-w-7xl">
+    <header class="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 mb-8">
+        <div>
+            <h1 class="hidden text-2xl font-extrabold text-slate-800 tracking-tight">Funding Opportunities <span class="text-indigo-600">vs Applications</span></h1>
+            <p class="hidden text-slate-500 text-sm">Sol·licituds enviades, acceptades i rebutjades per convocatòria</p>
+        </div>
+        <div class="bg-white shadow-sm p-3 rounded-xl flex items-center gap-3 border border-slate-200">
+            <div class="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center">
+                <i class="fa-solid fa-chart-column text-indigo-600"></i>
+            </div>
+            <div>
+                <p class="text-xs text-slate-400 uppercase font-bold">Font</p>
+                <p class="text-sm font-bold text-slate-700">Applications + FundingOpportunities</p>
+            </div>
+        </div>
+    </header>
+
+    <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 mb-6">
+        <div class="grid grid-cols-1 lg:grid-cols-10 gap-4 items-end">
+            <div class="lg:col-span-6 relative">
+            <i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-slate-400"></i>
+            <input id="inputBuscar" type="text" placeholder="Filtrar per títol o tipus de convocatòria..."
+                   class="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500">
+            </div>
+            <div class="lg:col-span-4">
+                <div class="flex items-center justify-between mb-1">
+                    <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Rang d'anys</label>
+                    <span id="valorRango" class="text-xs font-bold text-indigo-600"></span>
+                </div>
+                <p class="text-[11px] text-slate-400 mb-2">Filtre inicial: convocatòries des de 2015</p>
+                <div id="sliderAnios"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+        <table class="w-full text-left border-collapse">
+            <thead>
+            <tr class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider">
+                <th class="px-6 py-4 font-bold">Convocatòria</th>
+                <th class="px-6 py-4 font-bold">Tipus</th>
+                <th class="px-6 py-4 font-bold text-right">Any</th>
+                <th class="px-6 py-4 font-bold text-right">Enviades</th>
+                <th class="px-6 py-4 font-bold text-right text-emerald-700">Acceptades</th>
+                <th class="px-6 py-4 font-bold text-right text-rose-700">Rebutjades</th>
+                <th class="px-6 py-4 font-bold text-right text-amber-700">Pendents</th>
+            </tr>
+            </thead>
+            <tbody id="tabla-body" class="divide-y divide-slate-50"></tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    let datos = [];
+    let rangoAnios = null;
+
+    function obtenerAnio(item) {
+        const anio = Number(item.fundingYear);
+        if (Number.isFinite(anio)) {
+            return anio;
+        }
+
+        const titulo = item?.fundingTitle || '';
+        const match = titulo.match(/(19|20)\d{2}/);
+        if (match) {
+            const parsed = Number(match[0]);
+            return Number.isFinite(parsed) ? parsed : null;
+        }
+
+        return null;
+    }
+
+    function obtenerExtremosAnios(lista) {
+        const anios = (lista || [])
+            .map(obtenerAnio)
+            .filter(anio => anio != null);
+
+        if (anios.length === 0) {
+            const ahora = new Date().getFullYear();
+            return { min: 2010, max: ahora + 1 };
+        }
+
+        return {
+            min: Math.min(...anios),
+            max: Math.max(...anios)
+        };
+    }
+
+    function configurarSliderAnios(lista) {
+        const slider = document.getElementById('sliderAnios');
+        const valorRango = document.getElementById('valorRango');
+        const { max: maxDetectado } = obtenerExtremosAnios(lista);
+        const min = 2015;
+        const max = Math.max(maxDetectado, min);
+        const start = [min, max];
+
+        if (slider.noUiSlider) {
+            slider.noUiSlider.destroy();
+        }
+
+        noUiSlider.create(slider, {
+            start,
+            connect: true,
+            step: 1,
+            range: { min, max },
+            format: {
+                to: value => Math.round(value),
+                from: value => Number(value)
+            }
+        });
+
+        slider.noUiSlider.on('update', (values) => {
+            rangoAnios = {
+                desde: Number(values[0]),
+                hasta: Number(values[1])
+            };
+            valorRango.textContent = `${values[0]} - ${values[1]}`;
+            aplicarFiltro();
+        });
+    }
+
+    function renderTabla(lista) {
+        const body = document.getElementById('tabla-body');
+
+        if (!lista || lista.length === 0) {
+            body.innerHTML = '<tr><td colspan="7" class="px-6 py-12 text-center text-slate-400 italic">No hi ha resultats</td></tr>';
+            return;
+        }
+
+        body.innerHTML = lista.map(item => `
+            <tr class="hover:bg-slate-50/80 transition-colors">
+                <td class="px-6 py-4">
+                    <div class="font-bold text-slate-700 leading-tight">${item.fundingTitle || 'Sin título'}</div>
+                    <div class="text-xs text-slate-400 font-mono mt-1">${item.fundingUuid || '-'}</div>
+                </td>
+                <td class="px-6 py-4 text-sm text-slate-600">${item.fundingType || 'Desconocido'}</td>
+                <td class="px-6 py-4 text-right font-semibold text-slate-700">${obtenerAnio(item) ?? '-'}</td>
+                <td class="px-6 py-4 text-right font-semibold text-slate-700">${item.sent ?? 0}</td>
+                <td class="px-6 py-4 text-right font-bold text-emerald-700">${item.accepted ?? 0}</td>
+                <td class="px-6 py-4 text-right font-bold text-rose-700">${item.rejected ?? 0}</td>
+                <td class="px-6 py-4 text-right font-bold text-amber-700">${item.pending ?? 0}</td>
+            </tr>
+        `).join('');
+    }
+
+    function aplicarFiltro() {
+        const txt = document.getElementById('inputBuscar').value.trim().toLowerCase();
+        const filtrados = datos.filter(item => {
+            const titulo = (item.fundingTitle || '').toLowerCase();
+            const tipo = (item.fundingType || '').toLowerCase();
+            const coincideTexto = !txt || titulo.includes(txt) || tipo.includes(txt);
+
+            const anio = obtenerAnio(item);
+            const coincideAnio = !rangoAnios
+                || anio == null
+                || (anio >= rangoAnios.desde && anio <= rangoAnios.hasta);
+
+            return coincideTexto && coincideAnio;
+        });
+        renderTabla(filtrados);
+    }
+
+    async function cargarDatos() {
+        try {
+            const response = await fetch(apiUrl('/applications/stats/by-funding-opportunity'));
+            datos = await response.json();
+            configurarSliderAnios(datos);
+            aplicarFiltro();
+        } catch (error) {
+            document.getElementById('tabla-body').innerHTML = '<tr><td colspan="7" class="px-6 py-12 text-center text-rose-500">Error carregant dades</td></tr>';
+        }
+    }
+
+    document.getElementById('inputBuscar').addEventListener('input', aplicarFiltro);
+    cargarDatos();
+</script>
+</body>
+</html>

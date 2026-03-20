@@ -1,0 +1,97 @@
+{
+  "collection": "Awards",
+  "pipeline": [
+    {
+      "$match": {
+        "workflow.step": "validated"
+      }
+    },
+    {
+      "$unwind": "$awardHolders"
+    },
+    {
+      "$match": {
+        "awardHolders.person.uuid": "__PERSON_UUID__"
+      }
+    },
+    {
+      "$unwind": {
+        "path": "$fundings",
+        "preserveNullAndEmptyArrays": true
+      }
+    },
+    {
+      "$unwind": {
+        "path": "$fundings.fundingCollaborators",
+        "preserveNullAndEmptyArrays": true
+      }
+    },
+    {
+      "$match": {
+        "fundings.fundingCollaborators.collaborator.uuid": "__COLLABORATOR_UUID__"
+      }
+    },
+    {
+      "$addFields": {
+        "anyo": { "$year": "$awardDate" },
+        "importe_partida": {
+          "$convert": {
+            "input": "$fundings.fundingCollaborators.institutionalPart.value",
+            "to": "double",
+            "onError": 0,
+            "onNull": 0
+          }
+        }
+      }
+    },
+    {
+      "$project": {
+        "_id": 0,
+        "awardUuid": "$uuid",
+        "anyo": 1,
+        "vigenciaInicio": "$actualPeriod.startDate",
+        "vigenciaFin": "$actualPeriod.endDate",
+        "tipoAward": "$type.term.ca_ES",
+        "titulo": {
+          "$ifNull": [
+            "$title.es_ES",
+            { "$ifNull": ["$title.en_GB", "Sin título"] }
+          ]
+        },
+        "rol": "$awardHolders.role.term.es_ES",
+        "importe_partida": 1
+      }
+    },
+    {
+      "$group": {
+        "_id": "$awardUuid",
+        "anyo": { "$first": "$anyo" },
+        "vigenciaInicio": { "$first": "$vigenciaInicio" },
+        "vigenciaFin": { "$first": "$vigenciaFin" },
+        "tipoAward": { "$first": "$tipoAward" },
+        "titulo": { "$first": "$titulo" },
+        "rol": { "$first": "$rol" },
+        "institutionalPart": { "$sum": "$importe_partida" }
+      }
+    },
+    {
+      "$project": {
+        "_id": 0,
+        "awardUuid": "$_id",
+        "anyo": 1,
+        "vigenciaInicio": 1,
+        "vigenciaFin": 1,
+        "tipoAward": 1,
+        "titulo": 1,
+        "rol": 1,
+        "institutionalPart": { "$round": ["$institutionalPart", 2] }
+      }
+    },
+    {
+      "$sort": {
+        "anyo": -1,
+        "titulo": 1
+      }
+    }
+  ]
+}

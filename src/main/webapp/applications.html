@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Applications</title>
+    <script src="config.js"></script>
+    <script src="uab-brand.js" defer></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="uab-theme.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body class="bg-slate-50 min-h-screen font-sans">
+
+<div class="mx-auto py-10 px-4 max-w-7xl">
+    <header class="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 mb-8">
+        <div>
+            <h1 class="hidden text-2xl font-extrabold text-slate-800 tracking-tight">Pure <span class="text-indigo-600">Applications</span></h1>
+            <p class="hidden text-slate-500 text-sm">Consulta i cerca de sol·licituds</p>
+        </div>
+
+        <div class="bg-white shadow-sm p-3 rounded-xl flex items-center gap-3 border border-slate-200">
+            <div class="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center">
+                <i class="fa-solid fa-file-signature text-indigo-600"></i>
+            </div>
+            <div>
+                <p class="text-xs text-slate-400 uppercase font-bold">Colección</p>
+                <p class="text-sm font-bold text-slate-700">Applications</p>
+            </div>
+        </div>
+    </header>
+
+    <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 mb-6">
+        <div class="relative max-w-2xl">
+            <i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-slate-400"></i>
+            <input id="inputBuscar" type="text" placeholder="Cercar per títol..."
+                   class="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500">
+        </div>
+    </div>
+
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+        <table class="w-full text-left border-collapse">
+            <thead>
+            <tr class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider">
+                <th class="px-6 py-4 font-bold">Títol</th>
+                <th class="px-6 py-4 font-bold">Tipus</th>
+                <th class="px-6 py-4 font-bold text-center">Workflow</th>
+                <th class="px-6 py-4 font-bold text-right">UUID</th>
+            </tr>
+            </thead>
+            <tbody id="tabla-body" class="divide-y divide-slate-50"></tbody>
+        </table>
+
+        <div class="px-6 py-4 bg-slate-50/70 flex justify-between items-center">
+            <button id="btnPrev" class="px-4 py-2 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed">Anterior</button>
+            <span id="infoPagina" class="text-sm font-semibold text-slate-600">Pàgina 1 de 1</span>
+            <button id="btnNext" class="px-4 py-2 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed">Següent</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    let paginaActual = 0;
+    const tamanoPagina = 10;
+    let debounceBuscar = null;
+
+    function badgeWorkflow(step) {
+        const value = (step || 'unknown').toLowerCase();
+        if (value === 'validated') return '<span class="px-2 py-1 rounded-full text-[10px] font-bold uppercase bg-emerald-100 text-emerald-700">Validated</span>';
+        if (value === 'draft') return '<span class="px-2 py-1 rounded-full text-[10px] font-bold uppercase bg-amber-100 text-amber-700">Draft</span>';
+        return `<span class="px-2 py-1 rounded-full text-[10px] font-bold uppercase bg-slate-100 text-slate-600">${step || 'N/A'}</span>`;
+    }
+
+    function renderTabla(lista) {
+        const body = document.getElementById('tabla-body');
+
+        if (!lista || lista.length === 0) {
+            body.innerHTML = '<tr><td colspan="4" class="px-6 py-12 text-center text-slate-400 italic">No s\'han trobat aplicacions</td></tr>';
+            return;
+        }
+
+        body.innerHTML = lista.map(item => `
+            <tr class="hover:bg-slate-50/80 transition-colors">
+                <td class="px-6 py-4"><div class="font-bold text-slate-700 leading-tight">${item.fullTitle || 'Sin título'}</div></td>
+                <td class="px-6 py-4 text-sm text-slate-600">${item.typeName || 'Desconocido'}</td>
+                <td class="px-6 py-4 text-center">${badgeWorkflow(item.workflowStep)}</td>
+                <td class="px-6 py-4 text-right text-xs font-mono text-slate-500">${item.uuid || '-'}</td>
+            </tr>
+        `).join('');
+    }
+
+    function actualizarPaginacion(data) {
+        const totalPages = data.totalPages && data.totalPages > 0 ? data.totalPages : 1;
+        const currentPage = (data.number ?? 0) + 1;
+
+        document.getElementById('infoPagina').innerText = `Pàgina ${currentPage} de ${totalPages}`;
+        document.getElementById('btnPrev').disabled = !!data.first;
+        document.getElementById('btnNext').disabled = !!data.last;
+    }
+
+    async function cargarDatos() {
+        const buscar = document.getElementById('inputBuscar').value.trim();
+        try {
+            const response = await fetch(apiUrl(`/applications?buscar=${encodeURIComponent(buscar)}&page=${paginaActual}&size=${tamanoPagina}`));
+            const data = await response.json();
+            renderTabla(data.content || []);
+            actualizarPaginacion(data);
+        } catch (error) {
+            document.getElementById('tabla-body').innerHTML = '<tr><td colspan="4" class="px-6 py-12 text-center text-rose-500">Error carregant dades</td></tr>';
+        }
+    }
+
+    function cambiarPagina(delta) {
+        paginaActual += delta;
+        if (paginaActual < 0) paginaActual = 0;
+        cargarDatos();
+    }
+
+    document.getElementById('btnPrev').addEventListener('click', () => cambiarPagina(-1));
+    document.getElementById('btnNext').addEventListener('click', () => cambiarPagina(1));
+
+    document.getElementById('inputBuscar').addEventListener('input', () => {
+        clearTimeout(debounceBuscar);
+        debounceBuscar = setTimeout(() => {
+            paginaActual = 0;
+            cargarDatos();
+        }, 250);
+    });
+
+    cargarDatos();
+</script>
+</body>
+</html>

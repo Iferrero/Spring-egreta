@@ -1,0 +1,111 @@
+.sticky-col { 
+    position: sticky; left: 0; background: white; z-index: 10; 
+    border-right: 2px solid #f1f5f9; min-width: 260px; width: 260px;
+    white-space: normal; word-wrap: break-word;
+}
+.text-xxs { font-size: 0.65rem; }
+
+#pivot-container {
+    padding: 1rem;
+}
+
+#pivot-container .pvtUi {
+    font-family: inherit;
+    color: #334155;
+    width: 100%;
+}
+
+#pivot-container .pvtAxisContainer,
+#pivot-container .pvtVals,
+#pivot-container .pvtRendererArea {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.75rem;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+#pivot-container .pvtAxisContainer,
+#pivot-container .pvtVals {
+    min-height: 44px;
+    padding: 0.45rem 0.55rem;
+}
+
+#pivot-container .pvtTriangle,
+#pivot-container .pvtUnused,
+#pivot-container .pvtRows,
+#pivot-container .pvtCols {
+    background: transparent;
+}
+
+#pivot-container .pvtAttr {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.6rem;
+    color: #334155;
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 0.25rem 0.55rem;
+    margin: 0.2rem;
+}
+
+#pivot-container select,
+#pivot-container input {
+    border: 1px solid #cbd5e1;
+    border-radius: 0.6rem;
+    background: #fff;
+    color: #334155;
+    font-size: 0.68rem;
+    font-weight: 600;
+    padding: 0.25rem 0.5rem;
+}
+
+#pivot-container .pvtTable {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 0.74rem;
+    overflow: hidden;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.9rem;
+}
+
+#pivot-container .pvtTable thead th {
+    background: #f8fafc;
+    color: #64748b;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    border-bottom: 1px solid #e2e8f0;
+    padding: 0.55rem 0.6rem;
+}
+
+#pivot-container .pvtTable tbody td,
+#pivot-container .pvtTable tbody th,
+#pivot-container .pvtTable tfoot td,
+#pivot-container .pvtTable tfoot th {
+    border-bottom: 1px solid #f1f5f9;
+    border-right: 1px solid #f1f5f9;
+    padding: 0.48rem 0.55rem;
+}
+
+#pivot-container .pvtTable .pvtRowLabel,
+#pivot-container .pvtTable .pvtColLabel {
+    color: #334155;
+    font-weight: 700;
+}
+
+#pivot-container .pvtTable .pvtVal {
+    font-size: 0.67rem;
+    font-weight: 600;
+}
+
+#pivot-container .pvtTable .pvtTotal,
+#pivot-container .pvtTable .pvtGrandTotal {
+    background: #eef2ff !important;
+    color: #4338ca;
+    font-weight: 800;
+    font-size: 0.68rem;
+}
+
+::-webkit-scrollbar { height: 6px; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }

@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pure Personnel Manager</title>
+    <script src="config.js"></script>
+    <script src="uab-brand.js" defer></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="uab-theme.css">
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body class="bg-slate-50 min-h-screen font-sans">
+
+    <div class="mx-auto py-10 px-4">
+        
+        <header class="flex justify-between items-center mb-10">
+            <div>
+                <h1 class="hidden text-3xl font-extrabold text-slate-800 tracking-tight">Investigadors Pure</h1>
+                <p class="hidden text-slate-500">Gestió de personal i visibilitat ORCID</p>
+            </div>
+            <div class="flex gap-4">
+                <div class="bg-white shadow-sm p-3 rounded-xl flex items-center gap-3">
+                    <div class="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                        <i class="fa-solid fa-id-card text-green-600"></i>
+                    </div>
+                    <div>
+                        <p class="text-xs text-slate-400 uppercase font-bold">Base de Dades</p>
+                        <p class="text-sm font-bold text-slate-700">Persons (Mongo)</p>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            
+            <div class="lg:col-span-2 space-y-6">
+                
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-wrap items-center gap-4">
+                    <div class="flex-1 min-w-[250px] relative">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-slate-400"></i>
+                        <input type="text" id="inputApellido" oninput="resetYBuscar()" 
+                               placeholder="Cercar persona (nom o cognom)..." 
+                               class="w-full pl-10 pr-4 py-2 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none">
+                    </div>
+                    <div class="flex-1 min-w-[250px]">
+                    <label class="block text-xs font-bold text-slate-400 uppercase mb-2 ml-1">Departament / Organització</label>
+                    <div class="relative">
+                        <i class="fa-solid fa-sitemap absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                        <select id="selectDepto" onchange="resetYBuscar()" 
+                                class="w-full pl-11 pr-4 py-2 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none appearance-none">
+                            <option value="">Tots els departaments</option>
+                            </select>
+                    </div>
+                </div>
+                    
+                    <label class="flex items-center cursor-pointer group">
+                        <input type="checkbox" id="checkVigentes" checked  onchange="resetYBuscar()" class="sr-only peer">
+                        <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:width-5 after:transition-all peer-checked:bg-indigo-600 relative"></div>
+                        <span class="ml-3 text-sm font-medium text-slate-600 group-hover:text-indigo-600 transition-colors">Només vigents</span>
+                    </label>
+                </div>
+
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-50 text-slate-400 text-xs uppercase tracking-wider">
+                                <th class="px-6 py-4 font-bold">Investigador</th>
+                                <th class="px-6 py-4 font-bold text-center">ORCID</th>
+                                <th class="px-6 py-4 font-bold text-right">Estat</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabla-body" class="divide-y divide-slate-50">
+                            </tbody>
+                    </table>
+
+                    <div class="px-6 py-4 bg-slate-50/50 flex justify-between items-center">
+                        <button id="btnPrev" onclick="cambiarPagina(-1)" title="Pàgina anterior" aria-label="Pàgina anterior" class="p-2 rounded-lg hover:bg-white hover:shadow-sm disabled:opacity-30 transition-all">
+                            <i class="fa-solid fa-chevron-left"></i>
+                        </button>
+                        <span id="infoPagina" class="text-sm font-bold text-slate-500 font-mono">Pàgina 1 de --</span>
+                        <button id="btnNext" onclick="cambiarPagina(1)" title="Pàgina següent" aria-label="Pàgina següent" class="p-2 rounded-lg hover:bg-white hover:shadow-sm disabled:opacity-30 transition-all">
+                            <i class="fa-solid fa-chevron-right"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="space-y-6">
+                <div id="containerEmployment" class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 transition-all duration-300">
+                    <div class="flex justify-between items-center mb-6">
+                        <h3 class="text-sm font-bold text-slate-700 uppercase tracking-wider">Categoria</h3>
+                        <button onclick="toggleExpandirGrafico()" title="Expandir o comprimir gràfic" aria-label="Expandir o comprimir gràfic" class="text-slate-400 hover:text-indigo-600 transition-colors">
+                            <i id="expandIcon" class="fa-solid fa-expand"></i>
+                        </button>
+                    </div>
+                    <div id="chartWrapper" class="h-64 transition-all duration-300">
+                        <div id="chartEmployment" class="w-full h-full"></div>
+                    </div>
+                </div>               
+                <div class="bg-white p-8 rounded-2xl shadow-sm border border-slate-100">
+                    <h3 class="text-sm font-bold text-slate-400 uppercase mb-6 flex items-center gap-2">
+                        <i class="fa-solid fa-chart-pie text-indigo-500"></i> ORCID
+                    </h3>
+                    <div class="relative h-64">
+                        <div id="chartOrcid" class="w-full h-full"></div>
+                    </div>
+                    <div id="statsInfo" class="mt-6 grid grid-cols-2 gap-4 text-center">
+                        </div>
+                </div>
+
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        let paginaActual = 0;
+        let chartInstance = null;
+        let chartEmploymentInstance = null;
+        let filtroOrcid = null; // null: todos, true: con orcid, false: sin orcid
+        let filtroEmployment = null;
+
+        async function cargarDepartamentos() {
+            try {
+                const response = await fetch(apiUrl('/persons/departamentos'));
+                const deptos = await response.json();
+                const select = document.getElementById('selectDepto');
+                
+                deptos.forEach(d => {
+                    const option = document.createElement('option');
+                    option.value = d.uuid;
+                    option.textContent = d.nombre;
+                    select.appendChild(option);
+                });
+            } catch (err) {
+                console.error("Error cargando departamentos:", err);
+            }
+        }
+
+        async function cargarDatos() {
+            const persona = document.getElementById('inputApellido').value;
+            const depto = document.getElementById('selectDepto').value;
+            const vigentes = document.getElementById('checkVigentes').checked;
+            
+            // Si el checkbox está marcado, usamos el endpoint /vigentes
+            const endpoint = vigentes ? '/persons/vigentes' : '/persons';
+            const url = `${endpoint}?persona=${encodeURIComponent(persona)}&deptUuid=${depto}&page=${paginaActual}`;
+
+            try {
+                const res = await fetch(apiUrl(url));
+                const data = await res.json();
+                
+                renderTabla(data.content);
+                actualizarPaginacion(data.page);
+            } catch (err) {
+                console.error("Error cargando personas:", err);
+            }
+        }
+
+        function renderTabla(lista) {
+            const body = document.getElementById('tabla-body');
+            if (lista.length === 0) {
+                body.innerHTML = `<tr><td colspan="3" class="p-10 text-center text-slate-400 italic">No se encontraron investigadores</td></tr>`;
+                return;
+            }
+
+            body.innerHTML = lista.map(p => {
+                // Lógica de vigencia visual (si no tiene fecha de fin, es activo)
+                const esVigente = !p.employeeEndDate || new Date(p.employeeEndDate) >= new Date();
+                
+                return `
+                <tr class="hover:bg-slate-50/80 transition-colors">
+                    <td class="px-6 py-4">
+                        <div class="font-bold text-slate-700">${p.fullName}</div>
+                        <div class="text-xs text-slate-400">ID: ${p.uuid}</div>
+                    </td>
+                    <td class="px-6 py-4 text-center">
+                        ${p.orcid ? `
+                            <a href="https://orcid.org/${p.orcid}" target="_blank" class="inline-flex items-center text-green-600 hover:text-green-700 font-medium">
+                                <img src="https://orcid.org/sites/default/files/images/orcid_16x16.png" class="w-4 h-4 mr-1">
+                                <span class="text-xs">${p.orcid}</span>
+                            </a>
+                        ` : '<span class="text-slate-300 text-[10px] font-bold uppercase italic">Sin identificar</span>'}
+                    </td>
+                    
+                    <td class="px-6 py-4 text-right">
+                        <span class="px-2 py-1 rounded-full text-[10px] font-bold uppercase ${esVigente ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'}">
+                            ${esVigente ? 'Activo' : 'Baja'}
+                        </span>
+                    </td>
+                </tr>`;
+            }).join('');
+        }
+
+        function actualizarPaginacion(pageInfo) {
+            document.getElementById('infoPagina').innerText = `Página ${pageInfo.number + 1} de ${pageInfo.totalPages}`;
+            document.getElementById('btnPrev').disabled = (pageInfo.number === 0);
+            document.getElementById('btnNext').disabled = (pageInfo.number >= pageInfo.totalPages - 1);
+        }
+
+       async function cargarGrafico() {
+            // 1. Capturamos los valores actuales de los filtros
+          const persona = document.getElementById('inputApellido').value;
+            const depto = document.getElementById('selectDepto').value;
+            const vigentes = document.getElementById('checkVigentes').checked;
+            
+            // 2. Construimos la URL con parámetros
+            const url = `/persons/stats/orcid?persona=${encodeURIComponent(persona)}&deptUuid=${depto}&vigente=${vigentes}`;
+
+            try {
+                const res = await fetch(apiUrl(url));
+                const data = await res.json();
+
+                // Actualizar los cuadritos de texto con los nuevos números
+                document.getElementById('statsInfo').innerHTML = `
+                    <div class="bg-slate-50 p-2 rounded-lg">
+                        <div class="text-lg font-bold text-green-600">${data.conOrcid}</div>
+                        <div class="text-[10px] text-slate-400 font-bold uppercase">Con ORCID</div>
+                    </div>
+                    <div class="bg-slate-50 p-2 rounded-lg">
+                        <div class="text-lg font-bold text-slate-400">${data.sinOrcid}</div>
+                        <div class="text-[10px] text-slate-400 font-bold uppercase">Sin ORCID</div>
+                    </div>
+                `;
+
+                // 3. Dibujar o actualizar el gráfico
+                if (chartInstance) chartInstance.dispose();
+                chartInstance = echarts.init(document.getElementById('chartOrcid'));
+                chartInstance.setOption({
+                    tooltip: { trigger: 'item' },
+                    legend: { show: false },
+                    series: [{
+                        name: 'ORCID',
+                        type: 'pie',
+                        radius: ['70%', '100%'],
+                        label: { show: false },
+                        data: [
+                            { value: data.conOrcid, name: 'Con ORCID', itemStyle: { color: '#A6CE39' } },
+                            { value: data.sinOrcid, name: 'Sin ORCID', itemStyle: { color: '#F1F5F9' } }
+                        ]
+                    }]
+                });
+            } catch (err) {
+                console.error("Error al actualizar el gráfico:", err);
+            }
+        }
+
+        async function cargarGraficoEmployment() {
+            const persona = document.getElementById('inputApellido').value;
+            const depto = document.getElementById('selectDepto').value;
+            const vigentes = document.getElementById('checkVigentes').checked;
+
+            const url = `/persons/stats/employment?persona=${encodeURIComponent(persona)}&deptUuid=${depto}&vigentes=${vigentes}`;
+
+            try {
+                const res = await fetch(apiUrl(url));
+                let data = await res.json(); 
+
+                // --- ORDENAR ALFABÉTICAMENTE ---
+                data.sort((a, b) => {
+                    const tipoA = (a.tipo || "Desconocido").toLowerCase();
+                    const tipoB = (b.tipo || "Desconocido").toLowerCase();
+                    return tipoA.localeCompare(tipoB);
+                });
+                // -------------------------------
+
+                const labels = data.map(d => d.tipo || "Desconocido");
+                const values = data.map(d => d.cantidad);
+
+                if (chartEmploymentInstance) chartEmploymentInstance.dispose();
+                chartEmploymentInstance = echarts.init(document.getElementById('chartEmployment'));
+                chartEmploymentInstance.setOption({
+                    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+                    grid: { left: 120, right: 20, top: 10, bottom: 10, containLabel: true },
+                    xAxis: {
+                        type: 'value',
+                        minInterval: 1,
+                        splitLine: { show: false }
+                    },
+                    yAxis: {
+                        type: 'category',
+                        data: labels,
+                        axisLine: { show: false },
+                        axisTick: { show: false }
+                    },
+                    series: [{
+                        name: 'Investigadores',
+                        type: 'bar',
+                        data: values,
+                        itemStyle: { color: '#6366f1', borderRadius: [0, 8, 8, 0] }
+                    }]
+                });
+            } catch (err) {
+                console.error("Error cargando tipos de empleo:", err);
+            }
+        }
+
+        function toggleExpandirGrafico() {
+            const container = document.getElementById('containerEmployment');
+            const wrapper = document.getElementById('chartWrapper');
+            const icon = document.getElementById('expandIcon');
+            const isExpanded = container.classList.contains('fixed');
+
+            if (!isExpanded) {
+                // Modo Expandido: Usamos clases de Tailwind para centrarlo y hacerlo grande
+                container.classList.add('fixed', 'inset-10', 'z-50', 'shadow-2xl', 'flex', 'flex-col');
+                wrapper.classList.replace('h-64', 'flex-1'); // Ocupa todo el espacio disponible
+                icon.classList.replace('fa-expand', 'fa-compress');
+                
+                // Añadir un fondo oscuro detrás (opcional pero recomendado)
+                const overlay = document.createElement('div');
+                overlay.id = 'chartOverlay';
+                overlay.className = 'fixed inset-0 bg-slate-900/50 z-40';
+                overlay.onclick = toggleExpandirGrafico; // Cerrar al hacer click fuera
+                document.body.appendChild(overlay);
+            } else {
+                // Volver al estado normal
+                container.classList.remove('fixed', 'inset-10', 'z-50', 'shadow-2xl', 'flex', 'flex-col');
+                wrapper.classList.replace('flex-1', 'h-64');
+                icon.classList.replace('fa-compress', 'fa-expand');
+                
+                const overlay = document.getElementById('chartOverlay');
+                if (overlay) overlay.remove();
+            }
+
+            // Forzar redimensionado del gráfico para que no se vea borroso o deforme
+            setTimeout(() => {
+                if (chartEmploymentInstance) {
+                    chartEmploymentInstance.resize();
+                }
+            }, 310); // Esperamos a que termine la transición de CSS
+        }
+        function cambiarPagina(delta) {
+            paginaActual += delta;
+            cargarDatos();
+        }
+
+        function resetYBuscar() {
+            paginaActual = 0;
+            cargarDatos();
+            cargarGrafico();
+            cargarGraficoEmployment();
+        }
+
+        // Carga inicial
+        cargarDepartamentos();
+        cargarDatos();
+        cargarGrafico();
+        cargarGraficoEmployment();
+
+        window.addEventListener('resize', () => {
+            if (chartInstance) chartInstance.resize();
+            if (chartEmploymentInstance) chartEmploymentInstance.resize();
+        });
+    </script>
+</body>
+</html>

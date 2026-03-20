@@ -1,0 +1,90 @@
+{
+  "collection": "Awards",
+  "pipeline": [
+    {
+      "$match": {
+        "workflow.step": "validated"
+      }
+    },
+    {
+      "$addFields": {
+        "awardDateReal": {
+          "$convert": {
+            "input": "$awardDate",
+            "to": "date",
+            "onError": null,
+            "onNull": null
+          }
+        }
+      }
+    },
+    {
+      "$addFields": {
+        "anyo": {
+          "$cond": [
+            {
+              "$ne": [
+                "$awardDateReal",
+                null
+              ]
+            },
+            {
+              "$year": "$awardDateReal"
+            },
+            null
+          ]
+        }
+      }
+    },
+    {
+      "$match": {
+        "anyo": {
+          "$ne": null
+        }
+      }
+    },
+    {
+      "$unwind": {
+        "path": "$fundings",
+        "preserveNullAndEmptyArrays": true
+      }
+    },
+    {
+      "$unwind": {
+        "path": "$fundings.fundingCollaborators",
+        "preserveNullAndEmptyArrays": true
+      }
+    },
+    {
+      "$match": {
+        "fundings.fundingCollaborators.collaborator.uuid": "__COLLABORATOR_UUID__"
+      }
+    },
+    {
+      "$addFields": {
+        "importe_partida": {
+          "$convert": {
+            "input": "$fundings.fundingCollaborators.institutionalPart.value",
+            "to": "double",
+            "onError": 0,
+            "onNull": 0
+          }
+        }
+      }
+    },
+    {
+      "$group": {
+        "_id": "$uuid",
+        "anyo": {
+          "$first": "$anyo"
+        },
+        "awardHolders": {
+          "$first": "$awardHolders"
+        },
+        "importe_uab_award": {
+          "$sum": "$importe_partida"
+        }
+      }
+    }
+  ]
+}

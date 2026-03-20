@@ -1,0 +1,236 @@
+{
+    "collection": "Awards",
+    "pipeline": [{
+            "$match": {
+                "workflow.step": "validated"
+            }
+        }, {
+            "$unwind": "$fundings"
+        }, {
+            "$unwind": "$fundings.fundingCollaborators"
+        }, {
+            "$match": {
+                "fundings.fundingCollaborators.collaborator.uuid": "__COLLABORATOR_UUID__"
+            }
+        }, {
+            "$addFields": {
+                "anyo": {
+                    "$year": "$awardDate"
+                },
+                "importe_partida": {
+                    "$convert": {
+                        "input": "$fundings.fundingCollaborators.institutionalPart.value",
+                        "to": "double",
+                        "onError": 0,
+                        "onNull": 0
+                    }
+                }
+            }
+        }, {
+            "$match": {
+                "importe_partida": {
+                    "$gt": 0
+                }
+            }
+        }, {
+            "$group": {
+                "_id": "$uuid",
+                "anyo": {
+                    "$first": "$anyo"
+                },
+                "awardHolders": {
+                    "$first": "$awardHolders"
+                },
+                "importe_uab_award": {
+                    "$sum": "$importe_partida"
+                }
+            }
+        }, {
+            "$unwind": "$awardHolders"
+        }, {
+            "$addFields": {
+                "personUuid": "$awardHolders.person.uuid",
+                "peso": {
+                    "$switch": {
+                        "branches": [{
+                                "case": {
+                                    "$eq": ["$awardHolders.role.term.es_ES", "Investigador/a principal"]
+                                },
+                                "then": 1
+                            }, {
+                                "case": {
+                                    "$eq": ["$awardHolders.role.term.es_ES", "Co-Investigador/a Principal"]
+                                },
+                                "then": 0.5
+                            }
+                        ],
+                        "default": 0.2
+                    }
+                },
+                "proy_ip": {
+                    "$cond": [{
+                            "$eq": ["$awardHolders.role.term.es_ES", "Investigador/a principal"]
+                        }, 1, 0]
+                },
+                "proy_coip": {
+                    "$cond": [{
+                            "$eq": ["$awardHolders.role.term.es_ES", "Co-Investigador/a Principal"]
+                        }, 1, 0]
+                },
+                "proy_miembro": {
+                    "$cond": [{
+                            "$and": [{
+                                    "$ne": ["$awardHolders.role.term.es_ES", "Investigador/a principal"]
+                                }, {
+                                    "$ne": ["$awardHolders.role.term.es_ES", "Co-Investigador/a Principal"]
+                                }
+                            ]
+                        }, 1, 0]
+                }
+            }
+        }, {
+            "$addFields": {
+                "importe_ponderado": {
+                    "$multiply": ["$importe_uab_award", "$peso"]
+                }
+            }
+        }, {
+            "$group": {
+                "_id": {
+                    "personUuid": "$personUuid",
+                    "anyo": "$anyo",
+                    "awardUuid": "$_id"
+                },
+                "importe_uab_award": {
+                    "$first": "$importe_uab_award"
+                },
+                "proy_ip": {
+                    "$max": "$proy_ip"
+                },
+                "proy_coip": {
+                    "$max": "$proy_coip"
+                },
+                "proy_miembro": {
+                    "$max": "$proy_miembro"
+                },
+                "importe_ponderado": {
+                    "$first": "$importe_ponderado"
+                }
+            }
+        }, {
+            "$group": {
+                "_id": {
+                    "personUuid": "$_id.personUuid",
+                    "anyo": "$_id.anyo"
+                },
+                "proyectos_ip": {
+                    "$sum": "$proy_ip"
+                },
+                "proyectos_coip": {
+                    "$sum": "$proy_coip"
+                },
+                "proyectos_miembro": {
+                    "$sum": "$proy_miembro"
+                },
+                "importe_ip": {
+                    "$sum": {
+                        "$cond": [{
+                                "$eq": ["$proy_ip", 1]
+                            }, "$importe_uab_award", 0]
+                    }
+                },
+                "importe_coip": {
+                    "$sum": {
+                        "$cond": [{
+                                "$eq": ["$proy_coip", 1]
+                            }, "$importe_uab_award", 0]
+                    }
+                },
+                "importe_miembro": {
+                    "$sum": {
+                        "$cond": [{
+                                "$eq": ["$proy_miembro", 1]
+                            }, "$importe_uab_award", 0]
+                    }
+                },
+                "importe_ponderado_total": {
+                    "$sum": "$importe_ponderado"
+                }
+            }
+        }, {
+            "$lookup": {
+                "from": "Persons",
+                "localField": "_id.personUuid",
+                "foreignField": "uuid",
+                "as": "persona"
+            }
+        }, {
+            "$unwind": "$persona"
+        }, {
+            "$unwind": "$persona.staffOrganizationAssociations"
+        }, {
+            "$addFields": {
+                "endDateReal": {
+                    "$cond": [{
+                            "$ifNull": ["$persona.staffOrganizationAssociations.period.endDate", false]
+                        }, {
+                            "$toDate": "$persona.staffOrganizationAssociations.period.endDate"
+                        }, null]
+                }
+            }
+        }, {
+            "$match": {
+                "persona.staffOrganizationAssociations.staffType.term.es_ES": "Académico",
+                "$or": [{
+                        "endDateReal": null
+                    }, {
+                        "$expr": {
+                            "$gt": ["$endDateReal", "$$NOW"]
+                        }
+                    }
+                ],
+                "persona.staffOrganizationAssociations.employmentType.term.es_ES": {
+                    "$not": {
+                        "$regex": "Asociado",
+                        "$options": "i"
+                    }
+                }
+            }
+        }, {
+            "$group": {
+                "_id": {
+                    "personUuid": "$_id.personUuid",
+                    "anyo": "$_id.anyo"
+                },
+                "doc": {
+                    "$first": "$$ROOT"
+                }
+            }
+        }, {
+            "$replaceRoot": {
+                "newRoot": "$doc"
+            }
+        }, {
+            "$project": {
+                "_id": 0,
+                "PersonaUuid": "$_id.personUuid",
+                "Año": "$_id.anyo",
+                "Persona": {
+                    "$concat": ["$persona.name.firstName", " ", "$persona.name.lastName"]
+                },
+                "Proyectos_IP": "$proyectos_ip",
+                "Proyectos_CoIP": "$proyectos_coip",
+                "Proyectos_Miembro": "$proyectos_miembro",
+                "Importe_IP (€)": "$importe_ip",
+                "Importe_CoIP (€)": "$importe_coip",
+                "Importe_Miembro (€)": "$importe_miembro",
+                "Importe_Ponderado (€)": "$importe_ponderado_total"
+            }
+        }, {
+            "$sort": {
+                "Año": -1,
+                "Importe_Ponderado (€)": -1
+            }
+        }
+    ]
+}

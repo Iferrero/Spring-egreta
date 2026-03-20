@@ -1,0 +1,26 @@
+{
+  "collection": "Awards",
+  "pipeline": [
+    {
+      "$match": {
+        "workflow.step": "validated"
+      }
+    },
+    {
+      "$group": {
+        "_id": "$type.term.ca_ES"
+      }
+    },
+    {
+      "$project": {
+        "_id": 0,
+        "categoria": "$_id"
+      }
+    },
+    {
+      "$sort": {
+        "categoria": 1
+      }
+    }
+  ]
+}

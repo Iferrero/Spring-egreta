@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KPI NatureType | Ajuts</title>
+    <script src="config.js"></script>
+    <script src="uab-brand.js" defer></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="uab-theme.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.13.2/themes/base/jquery-ui.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/pivottable/2.23.0/pivot.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.13.2/jquery-ui.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pivottable/2.23.0/pivot.min.js"></script>
+</head>
+<body class="bg-slate-50 min-h-screen">
+    <div class="w-full mx-auto px-4 py-10">
+        <header class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
+            <div>
+                <h1 class="hidden text-3xl font-black text-slate-800 tracking-tight">KPI d'Ajuts per <span class="text-indigo-600">naturetype</span></h1>
+                <p class="hidden text-sm text-slate-500 mt-1">Nomes ajuts amb workflow <span class="font-semibold">validated</span></p>
+            </div>
+            <a href="awards.html" class="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-indigo-600 transition-colors">
+                <i class="fa-solid fa-arrow-left"></i>
+                Tornar a Ajuts
+            </a>
+        </header>
+
+        <section class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <article class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-xs uppercase tracking-widest font-black text-slate-400">Amb naturetype</h2>
+                    <i class="fa-solid fa-check-circle text-emerald-500"></i>
+                </div>
+                <p id="kpi-with" class="text-5xl font-black text-slate-800">-</p>
+                <p class="text-xs text-slate-500 mt-2">Ajuts que tenen valor al camp <code>naturetype</code>.</p>
+            </article>
+
+            <article class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-xs uppercase tracking-widest font-black text-slate-400">Sense naturetype</h2>
+                    <i class="fa-solid fa-circle-xmark text-rose-500"></i>
+                </div>
+                <p id="kpi-without" class="text-5xl font-black text-slate-800">-</p>
+                <p class="text-xs text-slate-500 mt-2">Ajuts amb <code>naturetype</code> buit o no informat.</p>
+            </article>
+        </section>
+
+        <section class="mt-6 bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
+            <div class="flex items-center justify-between">
+                <span class="text-xs uppercase tracking-widest font-black text-slate-400">Total analitzat</span>
+                <span id="kpi-total" class="text-lg font-black text-indigo-600">-</span>
+            </div>
+            <p id="error-box" class="hidden mt-3 text-sm text-rose-600"></p>
+        </section>
+
+        <section class="mt-6 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+            <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+                <h3 class="text-sm font-black text-slate-700 uppercase tracking-wider">Desglossament per NatureType</h3>
+                <span id="breakdown-count" class="text-xs text-slate-400 font-semibold">-</span>
+            </div>
+            <div id="naturetype-table" class="w-full min-h-[420px]"></div>
+            <p id="breakdown-error" class="hidden px-5 py-3 text-sm text-rose-600 border-t border-slate-100"></p>
+        </section>
+    </div>
+
+    <script>
+        function normalitzarTextMultillengua(value, fallback) {
+            if (value == null) return fallback;
+            if (typeof value === 'string') {
+                const clean = value.trim();
+                return clean || fallback;
+            }
+            if (typeof value === 'object') {
+                if (typeof value.ca_ES === 'string' && value.ca_ES.trim()) return value.ca_ES.trim();
+                if (typeof value.en_GB === 'string' && value.en_GB.trim()) return value.en_GB.trim();
+                const first = Object.values(value).find((v) => typeof v === 'string' && v.trim());
+                return first ? first.trim() : fallback;
+            }
+            const asText = String(value).trim();
+            return asText || fallback;
+        }
+
+        async function cargarKpiNatureType() {
+            const withEl = document.getElementById('kpi-with');
+            const withoutEl = document.getElementById('kpi-without');
+            const totalEl = document.getElementById('kpi-total');
+            const errorEl = document.getElementById('error-box');
+
+            try {
+                const response = await fetch(apiUrl('/awards/stats/naturetype-kpi'));
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const data = await response.json();
+                withEl.textContent = (data.withNatureType ?? 0).toLocaleString('es-ES');
+                withoutEl.textContent = (data.withoutNatureType ?? 0).toLocaleString('es-ES');
+                totalEl.textContent = (data.total ?? 0).toLocaleString('es-ES');
+            } catch (error) {
+                withEl.textContent = '0';
+                withoutEl.textContent = '0';
+                totalEl.textContent = '0';
+                errorEl.textContent = 'No s\'han pogut carregar els KPI de naturetype.';
+                errorEl.classList.remove('hidden');
+                console.error('Error cargando KPI naturetype:', error);
+            }
+        }
+
+        async function cargarBreakdownNatureTypes() {
+            const counter = document.getElementById('breakdown-count');
+            const errorEl = document.getElementById('breakdown-error');
+            const pivotContainer = $('#naturetype-table');
+            pivotContainer.html('<div class="px-5 py-6 text-sm text-slate-400">Carregant desglossament...</div>');
+
+            try {
+                const response = await fetch(apiUrl('/awards/stats/naturetypes-breakdown'));
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const rows = await response.json();
+                counter.textContent = `${rows.length.toLocaleString('es-ES')} files`;
+
+                const normalizedRows = rows.map((row) => ({
+                    natureType: row.NatureType ?? 'Sense valor',
+                    type: normalitzarTextMultillengua(row.Type, 'Sense tipus'),
+                    totalAwards: Number(row['Total Awards'] ?? 0)
+                }));
+
+                if (!normalizedRows.length) {
+                    pivotContainer.html('<div class="px-5 py-6 text-sm text-slate-400">No hi ha dades de NatureType.</div>');
+                    return;
+                }
+
+                pivotContainer.pivotUI(normalizedRows, {
+                    rows: ['natureType'],
+                    cols: ['type'],
+                    vals: ['totalAwards'],
+                    rendererName: 'Table',
+                    aggregatorName: 'Sum',
+                    menuLimit: 500,
+                    unusedAttrsVertical: false
+                }, true);
+            } catch (error) {
+                errorEl.textContent = 'Error en carregar l\'endpoint de desglossament per naturetype.';
+                errorEl.classList.remove('hidden');
+                counter.textContent = '0 files';
+                pivotContainer.html('<div class="px-5 py-6 text-sm text-slate-400">No s\'ha pogut carregar el desglossament.</div>');
+                console.error('Error cargando breakdown naturetypes:', error);
+            }
+        }
+
+        cargarKpiNatureType();
+        cargarBreakdownNatureTypes();
+    </script>
+</body>
+</html>
