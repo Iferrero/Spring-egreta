@@ -433,17 +433,6 @@ let modoTablaResumenActual = 'awardDate';
 // Variable global para la tabla de evolución persona vs departamento
 let tablaEvolucionPersonaDept = null;
 
-const UAB_COLORS = {
-    campus: '#008037',
-    collserola: '#004d21',
-    cala: '#004D5E',
-    ocas: '#F88C12',
-    pissarra: '#2a3037',
-    tauro: '#596473',
-    columna: '#d4d8de',
-    boira: '#f1f2f4',
-    areaCampus: 'rgba(0,128,55,0.15)'
-};
 
 const UAB_COLORS = {
     campus: '#008037',
@@ -787,17 +776,10 @@ function resumirFilasPorInvestigador(filas, desde, hasta) {
                 'Proyectos_CoIP': 0,
                 'Proyectos_Miembro': 0,
                 'Total_Proyectos': 0,
-<<<<<<< HEAD
                 'Importe_IP (€)': 0,
                 'Importe_CoIP (€)': 0,
                 'Importe_Miembro (€)': 0,
                 'Importe_Ponderado (€)': 0
-=======
-                'Importe_IP_CoIP (€)': 0,
-                'Importe_Miembro (€)': 0,
-                'Importe_Total (€)': 0,
-                '__ayudas': new Map()
->>>>>>> 3da728f7973b34d1c4273b233fc44513add433b7
             });
         }
 
@@ -808,53 +790,14 @@ function resumirFilasPorInvestigador(filas, desde, hasta) {
             item['Proyectos_CoIP'] += Number(fila['Proyectos_CoIP'] || 0);
             item['Proyectos_Miembro'] += Number(fila['Proyectos_Miembro'] || 0);
             item['Total_Proyectos'] += Number(fila['Total_Proyectos'] || 0);
-<<<<<<< HEAD
             item['Importe_IP (€)'] += Number(fila['Importe_IP (€)'] || 0);
             item['Importe_CoIP (€)'] += Number(fila['Importe_CoIP (€)'] || 0);
             item['Importe_Miembro (€)'] += Number(fila['Importe_Miembro (€)'] || 0);
             item['Importe_Ponderado (€)'] += Number(fila['Importe_Ponderado (€)'] || 0);
         
-=======
-            item['Importe_IP_CoIP (€)'] += Number(fila['Importe_IP_CoIP (€)'] || 0);
-            item['Importe_Miembro (€)'] += Number(fila['Importe_Miembro (€)'] || 0);
-            item['Importe_Total (€)'] += Number(fila['Importe_Total (€)'] || 0);
-        }
->>>>>>> 3da728f7973b34d1c4273b233fc44513add433b7
     });
 
 
-<<<<<<< HEAD
-=======
-        let proyectosIp = 0;
-        let proyectosMiembro = 0;
-        let importeTotal = 0;
-        let importeIp = 0;
-        let importeMiembro = 0;
-
-        item['__ayudas'].forEach(ayuda => {
-            const importe = Number(ayuda.importe || 0);
-            const flagIp = Number(ayuda.flagIpCoip || 0);
-            const flagMiembro = Number(ayuda.flagMiembro || 0);
-
-            proyectosIp += flagIp;
-            proyectosMiembro += flagMiembro;
-            importeTotal += importe;
-            if (flagIp === 1) {
-                importeIp += importe;
-            }
-            if (flagMiembro === 1) {
-                importeMiembro += importe;
-            }
-        });
-
-        item['Proyectos_IP_CoIP'] = proyectosIp;
-        item['Proyectos_Miembro'] = proyectosMiembro;
-        item['Total_Proyectos'] = proyectosIp + proyectosMiembro;       
-        item['Importe_IP_CoIP (€)'] = importeIp;
-        item['Importe_Miembro (€)'] = importeMiembro;
-        item['Importe_Total (€)'] = importeTotal;
-    });
->>>>>>> 3da728f7973b34d1c4273b233fc44513add433b7
 
     return Array.from(acumulado.values())
         .map(item => {
@@ -912,7 +855,6 @@ function inicializarTablas() {
                 bottomCalc: (values) => modoTablaResumenActual === 'awardDate' ? sumarValores(values) : ''
             },
             {
-<<<<<<< HEAD
                 title: 'Import IP (€)',
                 field: 'importeIp',
                 sorter: 'number',
@@ -927,10 +869,6 @@ function inicializarTablas() {
             {
                 title: 'Import CoIP (€)',
                 field: 'importeCoip',
-=======
-                title: 'Import IP/CoIP (€)',
-                field: 'importeIpCoip',
->>>>>>> 3da728f7973b34d1c4273b233fc44513add433b7
                 sorter: 'number',
                 hozAlign: 'right',
                 formatter: formatoImporte,
@@ -954,13 +892,8 @@ function inicializarTablas() {
                 }
             },
             {
-<<<<<<< HEAD
                 title: 'Import Ponderat (€)',
                 field: 'importePonderado',
-=======
-                title: 'Import Total (€)',
-                field: 'importeTotal',
->>>>>>> 3da728f7973b34d1c4273b233fc44513add433b7
                 sorter: 'number',
                 hozAlign: 'right',
                 formatter: formatoImporte,
@@ -1033,7 +966,6 @@ function renderTabla(filas, modoAnio = 'awardDate', desde = 0, hasta = 0) {
     modoTablaResumenActual = modoAnio;
     const sourceRows = resumirFilasPorInvestigador(filas, desde, hasta);
     filasResumenTablaActual = sourceRows;
-<<<<<<< HEAD
     console.log('Filas para tabla resumen:', sourceRows);
     const rows = sourceRows.map(f => {
         if (modoAnio === 'vigencia') {
@@ -1074,20 +1006,6 @@ function renderTabla(filas, modoAnio = 'awardDate', desde = 0, hasta = 0) {
             };
         }
     });
-=======
-
-    const rows = sourceRows.map(f => ({
-        anio: f['Año'] ?? '-',
-        personaUuid: f['PersonaUuid'] ?? '',
-        persona: f['Persona'] ?? '-',
-        proyectosIpCoip: Number(f['Proyectos_IP_CoIP'] ?? 0),
-        proyectosMiembro: Number(f['Proyectos_Miembro'] ?? 0),
-        totalProyectos: Number(f['Total_Proyectos'] ?? 0),
-        importeIpCoip: Number(f['Importe_IP_CoIP (€)'] ?? 0),
-        importeMiembro: Number(f['Importe_Miembro (€)'] ?? 0),
-        importeTotal: Number(f['Importe_Total (€)'] ?? 0)
-    }));
->>>>>>> 3da728f7973b34d1c4273b233fc44513add433b7
     tablaResumen.setData(rows);
     tablaResumen.recalc();
     estado.textContent = `Resultats: ${rows.length} files`;
@@ -1359,7 +1277,6 @@ async function cargarAwardsPersona(persona) {
     if (deptUuid) {
         params.set('deptUuid', deptUuid);
     }
-<<<<<<< HEAD
     if (categoria && Array.isArray(categoria) && categoria.length > 0) {
         categoria.forEach(cat => params.append('categoria', cat));
     } else if (categoria) {
@@ -1369,9 +1286,6 @@ async function cargarAwardsPersona(persona) {
     if (modoAwardsDept === 'gestionados') {
         params.set('gestionadosPorDept', 'managed');
     }
-=======
-
->>>>>>> 3da728f7973b34d1c4273b233fc44513add433b7
     const res = await fetch(apiUrl(`/awards/stats/persona-awards?${params.toString()}`));
     if (!res.ok) {
         throw new Error(`HTTP ${res.status}`);
@@ -2130,15 +2044,12 @@ async function actualizarGraficoComparativaDepartamentos() {
             if (persona) {
                 params.set('persona', persona);
             }
-<<<<<<< HEAD
             // Añadir filtro de categoría si aplica
             if (Array.isArray(categoria) && categoria.length > 0) {
                 categoria.forEach(cat => params.append('categoria', cat));
             } else if (typeof categoria === 'string' && categoria) {
                 params.set('categoria', categoria);
             }
-=======
->>>>>>> 3da728f7973b34d1c4273b233fc44513add433b7
             const res = await fetch(apiUrl(`/awards/stats/proyectos-anio?${params.toString()}`));
             if (!res.ok) {
                 return {
@@ -2283,23 +2194,6 @@ async function cargarDatos() {
             data = await resumenRes.json();
             serieProyectos = await serieProyectosRes;
         }
-<<<<<<< HEAD
-=======
-        if (persona) {
-            params.set('persona', persona);
-        }
-
-        const [resumenRes, serieProyectos] = await Promise.all([
-            fetch(apiUrl(`/awards/stats/persona-resumen?${params.toString()}`)),
-            cargarSerieProyectosAnio()
-        ]);
-
-        if (!resumenRes.ok) {
-            throw new Error(`HTTP ${resumenRes.status}`);
-        }
-
-        const data = await resumenRes.json();
->>>>>>> 3da728f7973b34d1c4273b233fc44513add433b7
         filasResumenActual = data;
         personaTopSeleccionada = null;
         const seccionEvol = document.getElementById('seccionEvolucionPersonaDept');
@@ -2348,16 +2242,8 @@ async function cargarDepartamentos() {
     let departamentos = [];
     try {
         const res = await fetch(apiUrl('/persons/departamentos'));
-<<<<<<< HEAD
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         departamentos = await res.json();
-=======
-        if (!res.ok) {
-            throw new Error(`HTTP ${res.status}`);
-        }
-
-        const departamentos = await res.json();
->>>>>>> 3da728f7973b34d1c4273b233fc44513add433b7
         departamentosCatalogo = departamentos;
         // Para comparativa
         const compareSelect = document.getElementById('compareDepartamentoSelect');

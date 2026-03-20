@@ -2,7 +2,7 @@ window.APP_CONFIG = window.APP_CONFIG || {
     apiBaseUrl: '/otr/api',
     apiBaseCandidates: [
         '/otr/api',
-        '/otr/api'
+        '/api'
     ]
 };
 
