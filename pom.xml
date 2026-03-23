@@ -29,6 +29,10 @@
 	</scm>
 	<properties>
 		<java.version>21</java.version>
+		<!-- CVE-2026-24734: Tomcat OCSP verification bypass — fix in 11.0.18+ -->
+		<tomcat.version>11.0.18</tomcat.version>
+		<!-- CVE-2026-24400: AssertJ XXE in isXmlEqualTo — fix in 3.27.7+ -->
+		<assertj.version>3.27.7</assertj.version>
 	</properties>
 	<dependencies>
 		<dependency>
