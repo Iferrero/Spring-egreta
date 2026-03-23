@@ -174,10 +174,26 @@
                         <details class="mt-3 bg-slate-50 border border-slate-200 rounded-lg p-3 text-xs text-slate-700 whitespace-pre-line">
                             <summary class="font-semibold cursor-pointer mb-2">Què és el percentil?</summary>
                             El percentil indica la posició relativa d'un investigador dins la distribució de finançament: un percentil 90 vol dir que la persona ha captat més fons que el 90% dels seus companys. Permet identificar ràpidament qui són els perfils més destacats i la dispersió de recursos.
+                            El percentil respon a la pregunta: "A quin percentatge del departament supero en captació de fons?"
+
+                            Percentil 90: Significa que la teva captació de recursos és superior a la del 90% dels teus companys. Estàs en el top 10% del departament.
+
+                            Percentil 50: Indica que estàs exactament en el punt mitjà: la meitat del departament ha captat més fons que tu, i l'altra meitat n'ha captat menys.
+
+                            Percentil 25: Indica que el teu volum de fons és superior al del 25% dels membres, situant-te en una fase de creixement o consolidació inicial.
                         </details>
                     </div>
                     <div class="overflow-auto">
                         <div hidden id="chartRankingPercentil" class="w-5/6 mx-auto h-[420px]"></div>
+                        <!-- Llegenda de colors percentil -->
+                        <div class="w-5/6 mx-auto mt-4 mb-2">
+                            <div class="flex flex-wrap gap-3 text-xs">
+                                <div class="flex items-center gap-2"><span style="display:inline-block;width:18px;height:18px;background:#f5efcc;border-radius:4px;border:1px solid #e0d9b6;"></span> ≥ 95: Top 5% (excel·lència)</div>
+                                <div class="flex items-center gap-2"><span style="display:inline-block;width:18px;height:18px;background:#d1f4e4;border-radius:4px;border:1px solid #a3e4c7;"></span> ≥ 75: Alt rendiment</div>
+                                <div class="flex items-center gap-2"><span style="display:inline-block;width:18px;height:18px;background:#dfe9f9;border-radius:4px;border:1px solid #b5c9e6;"></span> ≥ 50: Mitjana o superior</div>
+                                <div class="flex items-center gap-2"><span style="display:inline-block;width:18px;height:18px;background:#f8f9fa;border-radius:4px;border:1px solid #e2e3e5;"></span> < 50: Per sota de la mitjana</div>
+                            </div>
+                        </div>
                         <div id="tablaRankingPercentilTable" class="w-5/6 mx-auto mt-6"></div>
                     </div>
                 </section>
