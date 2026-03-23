@@ -1212,7 +1212,7 @@ function renderAwardsPersona(filas, personaNombre) {
             institutionalPart: Number(f.institutionalPart ?? 0),
             awardUuid,
             managingOrganization: f.managingOrganization ?? '-',
-            comanagingOrganization: f.comanagingOrganization ?? '-'
+            comanagingOrganization: f.comanagingOrganization ?? f.coManagingOrganization ?? f.coManagingOrganizations ?? '-'
         };
         if (!current) {
             uniqueByAward.set(awardUuid, candidate);
@@ -1244,8 +1244,8 @@ function renderAwardsPersona(filas, personaNombre) {
         { title: 'Tipo', field: 'tipoAward', widthGrow: 1 },
         { title: 'Rol', field: 'rol', widthGrow: 1 },
         { title: 'Importe (€)', field: 'institutionalPart', hozAlign: 'right', widthGrow: 1 },
-        { title: 'Managing Org.', field: 'managingOrganization', widthGrow: 1 },
-        { title: 'Co-Managing Org.', field: 'comanagingOrganization', widthGrow: 1 }
+        { title: 'Unitat organitzativa de gestió', field: 'managingOrganization', widthGrow: 1 },
+        { title: 'Unitat organitzativa de co-gestió', field: 'comanagingOrganization', widthGrow: 1 }
     ]);
     tablaAwards.setData(rows);
 }
