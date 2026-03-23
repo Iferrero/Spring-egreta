@@ -1212,7 +1212,7 @@ function renderAwardsPersona(filas, personaNombre) {
             institutionalPart: Number(f.institutionalPart ?? 0),
             awardUuid,
             managingOrganization: f.managingOrganization ?? '-',
-            comanagingOrganization: f.comanagingOrganization ?? '-'
+            comanagingOrganization: f.comanagingOrganization ?? f.coManagingOrganization ?? f.coManagingOrganizations ?? '-'
         };
         if (!current) {
             uniqueByAward.set(awardUuid, candidate);
@@ -1237,15 +1237,21 @@ function renderAwardsPersona(filas, personaNombre) {
     });
 
     const rows = Array.from(uniqueByAward.values());
+
+    const fullCellTooltip = (e, cell, onRender) => {
+        const value = cell.getValue();
+        return value == null ? '' : String(value);
+    };
+
     // Add managingOrganization and comanagingOrganization columns if not present
     tablaAwards.setColumns([
-        { title: 'Año', field: 'anyo', width: 70 },
-        { title: 'Título', field: 'titulo', widthGrow: 2 },
-        { title: 'Tipo', field: 'tipoAward', widthGrow: 1 },
-        { title: 'Rol', field: 'rol', widthGrow: 1 },
-        { title: 'Importe (€)', field: 'institutionalPart', hozAlign: 'right', widthGrow: 1 },
-        { title: 'Managing Org.', field: 'managingOrganization', widthGrow: 1 },
-        { title: 'Co-Managing Org.', field: 'comanagingOrganization', widthGrow: 1 }
+        { title: 'Any', field: 'anyo', width: 70, tooltip: fullCellTooltip },
+        { title: 'Títul', field: 'titulo', widthGrow: 2, tooltip: fullCellTooltip },
+        { title: 'Tipus', field: 'tipoAward', widthGrow: 1, tooltip: fullCellTooltip },
+        { title: 'Rol', field: 'rol', widthGrow: 1, tooltip: fullCellTooltip },
+        { title: 'Import (€)', field: 'institutionalPart', hozAlign: 'right', widthGrow: 1, tooltip: fullCellTooltip },
+        { title: 'Unitat organitzativa de gestió', field: 'managingOrganization', widthGrow: 1, tooltip: fullCellTooltip },
+        { title: 'Unitat organitzativa de co-gestió', field: 'comanagingOrganization', widthGrow: 1, tooltip: fullCellTooltip }
     ]);
     tablaAwards.setData(rows);
 }

@@ -33,6 +33,49 @@
     },
     {
       "$addFields": {
+        "managingOrganizationUuid": "$managingOrganization.uuid"
+      }
+    },
+    {
+      "$lookup": {
+        "from": "Organizations",
+        "localField": "managingOrganizationUuid",
+        "foreignField": "uuid",
+        "as": "managing_org_info"
+      }
+    },
+    {
+      "$unwind": {
+        "path": "$managing_org_info",
+        "preserveNullAndEmptyArrays": true
+      }
+    },
+    {
+      "$addFields": {
+        "coManagingUuids": {
+          "$setDifference": [
+            {
+              "$map": {
+                "input": { "$ifNull": ["$coManagingOrganizations", []] },
+                "as": "org",
+                "in": "$$org.uuid"
+              }
+            },
+            ["$managingOrganizationUuid"]
+          ]
+        }
+      }
+    },
+    {
+      "$lookup": {
+        "from": "Organizations",
+        "localField": "coManagingUuids",
+        "foreignField": "uuid",
+        "as": "co_managing_org_info"
+      }
+    },
+    {
+      "$addFields": {
         "anyo": { "$year": "$awardDate" },
         "importe_partida": {
           "$convert": {
@@ -59,7 +102,101 @@
           ]
         },
         "rol": "$awardHolders.role.term.es_ES",
-        "importe_partida": 1
+        "importe_partida": 1,
+        "managingOrganization": {
+          "$ifNull": [
+            "$managing_org_info.name.ca_ES",
+            {
+              "$ifNull": [
+                "$managing_org_info.name.es_ES",
+                {
+                  "$ifNull": [
+                    "$managing_org_info.name.en_GB",
+                    { "$ifNull": ["$managingOrganizationUuid", "-"] }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "comanagingOrganization": {
+          "$let": {
+            "vars": {
+              "coManagingNames": {
+                "$filter": {
+                  "input": {
+                    "$map": {
+                      "input": { "$ifNull": ["$co_managing_org_info", []] },
+                      "as": "org",
+                      "in": {
+                        "$ifNull": [
+                          "$$org.name.ca_ES",
+                          {
+                            "$ifNull": [
+                              "$$org.name.es_ES",
+                              {
+                                "$ifNull": [
+                                  "$$org.name.en_GB",
+                                  ""
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  "as": "name",
+                  "cond": { "$ne": ["$$name", ""] }
+                }
+              },
+              "coManagingUuidsText": {
+                "$reduce": {
+                  "input": {
+                    "$filter": {
+                      "input": { "$ifNull": ["$coManagingUuids", []] },
+                      "as": "u",
+                      "cond": { "$ne": ["$$u", ""] }
+                    }
+                  },
+                  "initialValue": "",
+                  "in": {
+                    "$cond": [
+                      { "$eq": ["$$value", ""] },
+                      "$$this",
+                      { "$concat": ["$$value", ", ", "$$this"] }
+                    ]
+                  }
+                }
+              }
+            },
+            "in": {
+              "$cond": [
+                { "$gt": [{ "$size": "$$coManagingNames" }, 0] },
+                {
+                  "$reduce": {
+                    "input": "$$coManagingNames",
+                    "initialValue": "",
+                    "in": {
+                      "$cond": [
+                        { "$eq": ["$$value", ""] },
+                        "$$this",
+                        { "$concat": ["$$value", ", ", "$$this"] }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "$cond": [
+                    { "$ne": ["$$coManagingUuidsText", ""] },
+                    "$$coManagingUuidsText",
+                    "-"
+                  ]
+                }
+              ]
+            }
+          }
+        }
       }
     },
     {
@@ -71,7 +208,9 @@
         "tipoAward": { "$first": "$tipoAward" },
         "titulo": { "$first": "$titulo" },
         "rol": { "$first": "$rol" },
-        "institutionalPart": { "$sum": "$importe_partida" }
+        "institutionalPart": { "$sum": "$importe_partida" },
+        "managingOrganization": { "$first": "$managingOrganization" },
+        "comanagingOrganization": { "$first": "$comanagingOrganization" }
       }
     },
     {
@@ -84,7 +223,9 @@
         "tipoAward": 1,
         "titulo": 1,
         "rol": 1,
-        "institutionalPart": { "$round": ["$institutionalPart", 2] }
+        "institutionalPart": { "$round": ["$institutionalPart", 2] },
+        "managingOrganization": 1,
+        "comanagingOrganization": 1
       }
     },
     {
