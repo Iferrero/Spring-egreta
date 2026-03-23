@@ -57,6 +57,11 @@ public class AwardController {
         return service.getTipus();
     }
 
+    @GetMapping("/stats/tipus-per-categoria")
+    public List<Document> getTipusPerCategoria() {
+        return service.getTipusPerCategoria();
+    }
+
     @GetMapping("/stats/total")
     public Map<String, Object> getTotalStats() {
         return service.getTotalStats();
@@ -116,7 +121,10 @@ public class AwardController {
             String gestionadosPorDept,
 
             @RequestParam(required = false)
-            List<String> categoria) {
+            List<String> categoria,
+
+            @RequestParam(required = false)
+            List<String> tipus) {
 
         return service.getPersonaResumen(
                 collaboratorUuid,
@@ -126,7 +134,8 @@ public class AwardController {
                 hasta,
                 modoAnio,
                 gestionadosPorDept,
-                categoria);
+                categoria,
+                tipus);
     }
 
     /*
@@ -157,7 +166,10 @@ public class AwardController {
             String modoAnio,
 
             @RequestParam(required = false)
-            List<String> categoria) {
+            List<String> categoria,
+
+            @RequestParam(required = false)
+            List<String> tipus) {
 
         return service.getAwardsByPersona(
                 personUuid,
@@ -166,7 +178,8 @@ public class AwardController {
                 collaboratorUuid,
                 deptUuid,
                 modoAnio,
-                categoria);
+                categoria,
+                tipus);
     }
 
     /*
@@ -198,7 +211,10 @@ public class AwardController {
             String modoAnio,
 
             @RequestParam(required = false)
-            List<String> categoria) {
+            List<String> categoria,
+
+            @RequestParam(required = false)
+            List<String> tipus) {
 
         return service.getProyectosPorAnio(
                 desde,
@@ -207,7 +223,8 @@ public class AwardController {
                 deptUuid,
                 persona,
                 modoAnio,
-                categoria
+                categoria,
+                tipus
                 );
     }
 }

@@ -54,20 +54,19 @@ public class AwardService {
                 null
         ).stream()
 
-        .map(doc -> {
-            Document type = doc.get("type", Document.class);
-            if (type == null) return null;
-
-            Document term = type.get("term", Document.class);
-            if (term == null) return null;
-
-            return term.getString("ca_ES");
-        })
+                .map(doc -> doc.getString("categoria"))
 
         .filter(t -> t != null && !t.isBlank())
 
         .toList();
     }
+
+        public List<Document> getTipusPerCategoria() {
+                return runPipeline(
+                                "mongodb/awards/tipus-per-categoria.json",
+                                null
+                );
+        }
 
     /*
     ===============================
@@ -181,7 +180,8 @@ public class AwardService {
                                             Integer hasta,
                                             String modoAnio,
                                             String gestionadosPorDept,
-                                            List<String> categoria) {
+                                            List<String> categoria,
+                                            List<String> tipus) {
 
         return runPipeline(
                 "mongodb/awards/persona-resumen.json",
@@ -219,6 +219,10 @@ public class AwardService {
                         builder.matchInBeforeFirstGroup("categoria", categoria);
                     }
 
+                                        if (tipus != null && !tipus.isEmpty()) {
+                                                builder.matchInBeforeFirstGroup("type.term.ca_ES", tipus);
+                                        }
+
                 });
     }
 
@@ -234,7 +238,8 @@ public class AwardService {
                                             String collaboratorUuid,
                                             String deptUuid,
                                             String modoAnio,   
-                                            List<String> categoria) {
+                                            List<String> categoria,
+                                            List<String> tipus) {
 
         return runPipeline(
                 "mongodb/awards/persona-awards.json",
@@ -258,6 +263,10 @@ public class AwardService {
                     if (categoria != null && !categoria.isEmpty()) {
                         builder.matchInBeforeFirstProject("categoria", categoria);  
                     }
+
+                                        if (tipus != null && !tipus.isEmpty()) {
+                                                builder.matchInBeforeFirstProject("type.term.ca_ES", tipus);
+                                        }
 
                 });
     }
@@ -330,7 +339,8 @@ public class AwardService {
                                             String deptUuid,
                                             String persona,
                                             String modoAnio,
-                                            List<String> categoria) {
+                                            List<String> categoria,
+                                            List<String> tipus) {
 
         return runPipeline(
                 "mongodb/awards/proyectos-anio.json",
@@ -355,6 +365,10 @@ public class AwardService {
                     if (categoria != null && !categoria.isEmpty()) {
                         builder.matchInBeforeFirstGroup("categoria", categoria);
                     }
+
+                                        if (tipus != null && !tipus.isEmpty()) {
+                                                builder.matchInBeforeFirstGroup("type.term.ca_ES", tipus);
+                                        }
 
                     // filtro por departamento
                     if (deptUuid != null && !deptUuid.isBlank()) {
@@ -413,7 +427,7 @@ private Document loadMongoQuery(String classpathLocation) {
 
                 List<Document> finalPipeline = builder.build();
                 //System.out.println("[Mongo Pipeline] " + jsonPath + ":\n" + finalPipeline);
-                finalPipeline.forEach(stage -> System.out.println(stage.toJson()));
+                //finalPipeline.forEach(stage -> System.out.println(stage.toJson()));
 
                 return mongoTemplate
                                 .getCollection(query.getString("collection"))

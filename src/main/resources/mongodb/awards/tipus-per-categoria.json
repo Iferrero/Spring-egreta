@@ -1,0 +1,50 @@
+{
+  "collection": "Awards",
+  "pipeline": [
+    {
+      "$match": {
+        "workflow.step": "validated"
+      }
+    },
+    {
+      "$project": {
+        "_id": 0,
+        "categoria": "$categoria",
+        "tipus": "$type.term.ca_ES"
+      }
+    },
+    {
+      "$match": {
+        "categoria": {
+          "$ne": null,
+          "$nin": [""]
+        },
+        "tipus": {
+          "$ne": null,
+          "$nin": [""]
+        }
+      }
+    },
+    {
+      "$group": {
+        "_id": {
+          "categoria": "$categoria",
+          "tipus": "$tipus"
+        }
+      }
+    },
+    {
+      "$project": {
+        "_id": 0,
+        "categoria": "$_id.categoria",
+        "tipus": "$_id.tipus"
+      }
+    },
+    {
+      "$sort": {
+        "categoria": 1,
+        "tipus": 1
+      }
+    }
+  ]
+}
