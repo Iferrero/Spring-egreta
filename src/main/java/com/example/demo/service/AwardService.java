@@ -540,7 +540,7 @@ private Document loadMongoQuery(String classpathLocation) {
 
                 List<Document> finalPipeline = builder.build();
                 //System.out.println("[Mongo Pipeline] " + jsonPath + ":\n" + finalPipeline);
-                finalPipeline.forEach(stage -> System.out.println(stage.toJson()));
+                //finalPipeline.forEach(stage -> System.out.println(stage.toJson()));
 
                 return mongoTemplate
                                 .getCollection(query.getString("collection"))
