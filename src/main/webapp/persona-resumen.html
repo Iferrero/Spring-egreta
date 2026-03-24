@@ -29,13 +29,13 @@
         <header class="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-6">
             <div>
                 <h1 class="hidden text-3xl font-black text-slate-800">Resum <span class="text-indigo-600">Ajuts / Persona</span></h1>
-                <p class="hidden text-slate-500 text-sm mt-1">Consulta agregada d'awards validats</p>
+                <p class="hidden text-slate-500 text-sm mt-1">Consulta agregada d'ajuts validats</p>
             </div>
            
         </header>
 
         <section class="bg-white border border-slate-200 rounded-2xl shadow-sm p-4 mb-6">
-            <div class="grid grid-cols-1 lg:grid-cols-10 gap-3 items-end">
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-3 items-end">
                 <div hidden class="lg:col-span-3">
                     <label for="personaInput" class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Persona</label>
                     <input id="personaInput" type="text" placeholder="Cercar persona (nom o cognom)..." class="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm bg-white" />
@@ -67,6 +67,19 @@
                     <select id="categoriaSelect" multiple class="hidden"></select>
                 </div>
                 <div class="lg:col-span-2">
+                    <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Tipus</label>
+
+                    <div class="relative">
+                        <button id="tipusDropdownBtn" type="button" class="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm bg-white text-left flex items-center justify-between">
+                            <span id="tipusDropdownLabel">Afegeix tipus...</span>
+                            <i class="fa fa-chevron-down ml-2"></i>
+                        </button>
+                        <div id="tipusDropdownMenu" class="absolute z-10 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-auto hidden"></div>
+                    </div>
+
+                    <select id="tipusSelect" multiple class="hidden"></select>
+                </div>
+                <div class="lg:col-span-2">
                     <label for="modoAnioSelect" class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Criteri temporal</label>
                     <select id="modoAnioSelect" class="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm bg-white">
                         <option value="awardDate">Data d'adjudicació de l'ajut</option>
@@ -92,6 +105,7 @@
         <section class="mt-6">
             <div id="departamentoChipsContainer" class="flex flex-wrap gap-2 mb-1"></div>
             <div id="categoriaChipsContainer" class="flex flex-wrap gap-2 mb-1"></div>
+            <div id="tipusChipsContainer" class="flex flex-wrap gap-2 mb-1"></div>
 
             <!-- Tabs -->
             <div class="mb-4 border-b border-slate-200">

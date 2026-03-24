@@ -289,6 +289,12 @@ document.getElementById('departamentoDropdownBtn').addEventListener('click', (e)
 let categoriasCatalogo = [];
 /** Estado de categorías seleccionadas (para chips) */
 let categoriasSeleccionadas = [];
+/** Estado de tipos de award cargados */
+let tipusCatalogo = [];
+/** Relación categoria -> tipus disponible */
+let tipusPerCategoriaCatalogo = [];
+/** Estado de tipos seleccionados (para chips) */
+let tipusSeleccionados = [];
 
 /** Carga las categorías y prepara el selector tipo chips. */
 async function cargarCategorias() {
@@ -356,6 +362,9 @@ function renderizarChipsCategorias() {
     } else {
         label.textContent = 'Afegeix més...';
     }
+
+    actualitzarTipusSegonsCategories();
+
     // Dispara el refresco de filtros
     programarRefresco();
 }
@@ -395,6 +404,189 @@ document.getElementById('categoriaDropdownBtn').addEventListener('click', (e) =>
         abrirDropdownCategorias();
     } else {
         cerrarDropdownCategorias();
+    }
+});
+
+/** Carga los tipos de award (en catalán) y prepara el selector tipo chips. */
+async function cargarTipus() {
+    try {
+        const relRes = await fetch(apiUrl('/awards/stats/tipus-per-categoria'));
+        if (relRes.ok) {
+            const relacions = await relRes.json();
+            tipusPerCategoriaCatalogo = Array.isArray(relacions) ? relacions : [];
+            const ordenats = [];
+            const vistos = new Set();
+            tipusPerCategoriaCatalogo.forEach(rel => {
+                const tipus = String(rel.tipus || '').trim();
+                if (!tipus || vistos.has(tipus)) return;
+                vistos.add(tipus);
+                ordenats.push(tipus);
+            });
+            tipusCatalogo = ordenats.sort((a, b) => a.localeCompare(b, 'ca', { sensitivity: 'base' }));
+        }
+
+        if (!tipusCatalogo.length) {
+            const res = await fetch(apiUrl('/awards/stats/tipus'));
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const tipus = await res.json();
+            tipusCatalogo = Array.isArray(tipus)
+                ? [...tipus].sort((a, b) => String(a).localeCompare(String(b), 'ca', { sensitivity: 'base' }))
+                : [];
+            tipusPerCategoriaCatalogo = [];
+        }
+    } catch (error) {
+        const select = document.getElementById('tipusSelect');
+        const dropdownMenu = document.getElementById('tipusDropdownMenu');
+        select.innerHTML = '';
+        dropdownMenu.innerHTML = '';
+        const option = document.createElement('option');
+        option.value = '';
+        option.textContent = 'No s\'han pogut carregar els tipus';
+        select.appendChild(option);
+        dropdownMenu.innerHTML = '<div class="px-3 py-2 text-red-600 text-sm">No s\'han pogut carregar els tipus</div>';
+    }
+
+    renderOpcionsTipus();
+    renderitzarChipsTipus();
+}
+
+function obtenirTipusDisponibles() {
+    if (!tipusPerCategoriaCatalogo.length || categoriasSeleccionadas.length === 0) {
+        return [...tipusCatalogo]
+            .sort((a, b) => String(a).localeCompare(String(b), 'ca', { sensitivity: 'base' }));
+    }
+
+    const categoriesSet = new Set(categoriasSeleccionadas);
+    const disponibles = new Set(
+        tipusPerCategoriaCatalogo
+            .filter(rel => categoriesSet.has(rel.categoria))
+            .map(rel => rel.tipus)
+            .filter(Boolean)
+    );
+
+    return tipusCatalogo
+        .filter(t => disponibles.has(t))
+        .sort((a, b) => String(a).localeCompare(String(b), 'ca', { sensitivity: 'base' }));
+}
+
+function renderOpcionsTipus() {
+    const select = document.getElementById('tipusSelect');
+    const dropdownMenu = document.getElementById('tipusDropdownMenu');
+    select.innerHTML = '';
+    dropdownMenu.innerHTML = '';
+
+    const tipusDisponibles = obtenirTipusDisponibles();
+    if (!tipusDisponibles.length) {
+        dropdownMenu.innerHTML = '<div class="px-3 py-2 text-slate-500 text-sm">No hi ha tipus per la categoria seleccionada</div>';
+        return;
+    }
+
+    tipusDisponibles.forEach(tipusNom => {
+        const option = document.createElement('option');
+        option.value = tipusNom;
+        option.textContent = tipusNom;
+        select.appendChild(option);
+
+        const item = document.createElement('div');
+        item.className = 'px-3 py-2 hover:bg-indigo-50 cursor-pointer text-sm';
+        item.textContent = tipusNom;
+        item.dataset.value = tipusNom;
+        item.addEventListener('click', () => {
+            toggleTipusSeleccionat(tipusNom);
+            tancarDropdownTipus();
+        });
+        dropdownMenu.appendChild(item);
+    });
+}
+
+function actualitzarTipusSegonsCategories() {
+    const disponibles = new Set(obtenirTipusDisponibles());
+    const tipusValids = tipusSeleccionados.filter(t => disponibles.has(t));
+    const hiHaCanvis = tipusValids.length !== tipusSeleccionados.length;
+    tipusSeleccionados = tipusValids;
+
+    renderOpcionsTipus();
+    renderitzarChipsTipus();
+
+    if (!hiHaCanvis) {
+        // Ja hem refrescat les opcions de tipus per coherència visual.
+        window.tipusSeleccionados = [...tipusSeleccionados];
+    }
+}
+
+function renderitzarChipsTipus() {
+    const container = document.getElementById('tipusChipsContainer');
+    const select = document.getElementById('tipusSelect');
+    container.innerHTML = '';
+
+    Array.from(select.options).forEach(opt => {
+        opt.selected = tipusSeleccionados.includes(opt.value);
+    });
+
+    tipusSeleccionados.forEach(tipusNom => {
+        const chip = document.createElement('span');
+        chip.className = 'inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 text-xs font-semibold';
+        chip.innerHTML = `${tipusNom} <button type="button" class="ml-1 text-indigo-500 hover:text-indigo-700" data-remove-tipus="${tipusNom}"><i class="fa-solid fa-xmark"></i></button>`;
+        container.appendChild(chip);
+    });
+
+    container.querySelectorAll('button[data-remove-tipus]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const tipusNom = e.currentTarget.getAttribute('data-remove-tipus');
+            quitarTipusSeleccionat(tipusNom);
+        });
+    });
+
+    const label = document.getElementById('tipusDropdownLabel');
+    if (tipusSeleccionados.length === 0) {
+        label.textContent = 'Afegeix tipus...';
+    } else {
+        label.textContent = 'Afegeix més...';
+    }
+
+    // Compatibilidad con código legado que lee desde window.
+    window.tipusSeleccionados = [...tipusSeleccionados];
+    programarRefresco();
+}
+
+function toggleTipusSeleccionat(tipusNom) {
+    if (tipusSeleccionados.includes(tipusNom)) {
+        quitarTipusSeleccionat(tipusNom);
+    } else {
+        tipusSeleccionados.push(tipusNom);
+        renderitzarChipsTipus();
+    }
+}
+
+function quitarTipusSeleccionat(tipusNom) {
+    tipusSeleccionados = tipusSeleccionados.filter(t => t !== tipusNom);
+    renderitzarChipsTipus();
+}
+
+function obrirDropdownTipus() {
+    document.getElementById('tipusDropdownMenu').classList.remove('hidden');
+}
+
+function tancarDropdownTipus() {
+    document.getElementById('tipusDropdownMenu').classList.add('hidden');
+}
+
+document.addEventListener('click', (e) => {
+    const btn = document.getElementById('tipusDropdownBtn');
+    const menu = document.getElementById('tipusDropdownMenu');
+    if (!btn || !menu) return;
+    if (!btn.contains(e.target) && !menu.contains(e.target)) {
+        tancarDropdownTipus();
+    }
+});
+
+document.getElementById('tipusDropdownBtn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    const menu = document.getElementById('tipusDropdownMenu');
+    if (menu.classList.contains('hidden')) {
+        obrirDropdownTipus();
+    } else {
+        tancarDropdownTipus();
     }
 });
 /**
@@ -749,7 +941,8 @@ function obtenerFiltrosActuales() {
     const modoAnio = document.getElementById('modoAnioSelect').value || 'awardDate';
     // Devuelve todas las categorías seleccionadas como array (o string vacío si ninguna)
     const categoria = categoriasSeleccionadas.length > 0 ? categoriasSeleccionadas : '';
-    return { desde, hasta, deptUuid, persona, modoAnio, categoria };
+    const tipus = tipusSeleccionados.length > 0 ? tipusSeleccionados : '';
+    return { desde, hasta, deptUuid, persona, modoAnio, categoria, tipus };
 }
 
 /**
@@ -822,7 +1015,7 @@ function inicializarTablas() {
                 field: 'anio',
                 sorter: 'string',
                 hozAlign: 'left',
-                bottomCalc: () => modoTablaResumenActual === 'awardDate' ? 'TOTAL' : ''
+                bottomCalc: () => 'TOTAL'
             },
             { title: 'Persona', field: 'persona', sorter: 'string', headerFilter: 'input', headerFilterPlaceholder: 'Buscar persona...' },
             {
@@ -830,14 +1023,14 @@ function inicializarTablas() {
                 field: 'proyectosIp',
                 sorter: 'number',
                 hozAlign: 'right',
-                bottomCalc: (values) => modoTablaResumenActual === 'awardDate' ? sumarValores(values) : ''
+                bottomCalc: (values) => sumarValores(values)
             },
             {
                 title: 'Ajuts CoIP',
                 field: 'proyectosCoip',
                 sorter: 'number',
                 hozAlign: 'right',
-                bottomCalc: (values) => modoTablaResumenActual === 'awardDate' ? sumarValores(values) : ''
+                bottomCalc: (values) => sumarValores(values)
             },
             {
 
@@ -845,14 +1038,14 @@ function inicializarTablas() {
                 field: 'proyectosMiembro',
                 sorter: 'number',
                 hozAlign: 'right',
-                bottomCalc: (values) => modoTablaResumenActual === 'awardDate' ? sumarValores(values) : ''
+                bottomCalc: (values) => sumarValores(values)
             },
             {
                 title: 'Total Ajuts',
                 field: 'totalProyectos',
                 sorter: 'number',
                 hozAlign: 'right',
-                bottomCalc: (values) => modoTablaResumenActual === 'awardDate' ? sumarValores(values) : ''
+                bottomCalc: (values) => sumarValores(values)
             },
             {
                 title: 'Import IP (€)',
@@ -860,7 +1053,7 @@ function inicializarTablas() {
                 sorter: 'number',
                 hozAlign: 'right',
                 formatter: formatoImporte,
-                bottomCalc: (values) => modoTablaResumenActual === 'awardDate' ? sumarValores(values) : '',
+                bottomCalc: (values) => sumarValores(values),
                 bottomCalcFormatter: (cell) => {
                     const value = cell.getValue();
                     return (value === '' || value == null) ? '' : formatearNumero(value);
@@ -872,7 +1065,7 @@ function inicializarTablas() {
                 sorter: 'number',
                 hozAlign: 'right',
                 formatter: formatoImporte,
-                bottomCalc: (values) => modoTablaResumenActual === 'awardDate' ? sumarValores(values) : '',
+                bottomCalc: (values) => sumarValores(values),
                 bottomCalcFormatter: (cell) => {
                     const value = cell.getValue();
                     return (value === '' || value == null) ? '' : formatearNumero(value);
@@ -885,7 +1078,7 @@ function inicializarTablas() {
                 sorter: 'number',
                 hozAlign: 'right',
                 formatter: formatoImporte,
-                bottomCalc: (values) => modoTablaResumenActual === 'awardDate' ? sumarValores(values) : '',
+                bottomCalc: (values) => sumarValores(values),
                 bottomCalcFormatter: (cell) => {
                     const value = cell.getValue();
                     return (value === '' || value == null) ? '' : formatearNumero(value);
@@ -897,7 +1090,7 @@ function inicializarTablas() {
                 sorter: 'number',
                 hozAlign: 'right',
                 formatter: formatoImporte,
-                bottomCalc: (values) => modoTablaResumenActual === 'awardDate' ? sumarValores(values) : '',
+                bottomCalc: (values) => sumarValores(values),
                 bottomCalcFormatter: (cell) => {
                     const value = cell.getValue();
                     return (value === '' || value == null) ? '' : formatearNumero(value);
@@ -1178,7 +1371,7 @@ async function aplicarSeleccionPersona(persona) {
     } catch (error) {
         const seccion = document.getElementById('seccionAwardsPersona');
         const titulo = document.getElementById('tituloAwardsPersona');
-        titulo.textContent = 'Awards de la persona seleccionada';
+        titulo.textContent = 'Ajuts de la persona seleccionada';
         seccion.classList.remove('hidden');
         if (tablaAwards) tablaAwards.clearData();
     }
@@ -1245,13 +1438,13 @@ function renderAwardsPersona(filas, personaNombre) {
 
     // Add managingOrganization and comanagingOrganization columns if not present
     tablaAwards.setColumns([
-        { title: 'Any', field: 'anyo', width: 70, tooltip: fullCellTooltip },
-        { title: 'Títul', field: 'titulo', widthGrow: 2, tooltip: fullCellTooltip },
-        { title: 'Tipus', field: 'tipoAward', widthGrow: 1, tooltip: fullCellTooltip },
-        { title: 'Rol', field: 'rol', widthGrow: 1, tooltip: fullCellTooltip },
-        { title: 'Import (€)', field: 'institutionalPart', hozAlign: 'right', widthGrow: 1, tooltip: fullCellTooltip },
-        { title: 'Unitat organitzativa de gestió', field: 'managingOrganization', widthGrow: 1, tooltip: fullCellTooltip },
-        { title: 'Unitat organitzativa de co-gestió', field: 'comanagingOrganization', widthGrow: 1, tooltip: fullCellTooltip }
+        { title: 'Any', field: 'anyo', width: 70 },
+        { title: 'Títol', field: 'titulo', widthGrow: 2 },
+        { title: 'Tipus', field: 'tipoAward', widthGrow: 1 },
+        { title: 'Rol', field: 'rol', widthGrow: 1 },
+        { title: 'Import (€)', field: 'institutionalPart', hozAlign: 'right', widthGrow: 1 },
+        { title: 'Unitat organitzativa de gestió', field: 'managingOrganization', widthGrow: 1 },
+        { title: 'Unitat organitzativa de cogestió', field: 'comanagingOrganization', widthGrow: 1 }
     ]);
     tablaAwards.setData(rows);
 }
@@ -1266,9 +1459,7 @@ async function cargarAwardsPersona(persona) {
         return;
     }
 
-    const { desde, hasta, deptUuid, modoAnio, categoria } = obtenerFiltrosActuales();
-    // Obtener tipos seleccionados
-    const tipus = window.tipusSeleccionados && Array.isArray(window.tipusSeleccionados) ? window.tipusSeleccionados : [];
+    const { desde, hasta, deptUuid, modoAnio, categoria, tipus } = obtenerFiltrosActuales();
     const modoAwardsDept = document.getElementById('selectAwardsDept')?.value || 'miembros';
     const params = new URLSearchParams({
         personUuid: persona.personaUuid,
@@ -1450,7 +1641,7 @@ function renderGraficos(filas) {
     // Modifica cargarDatos para alternar endpoint
     async function cargarDatos() {
         const estado = document.getElementById('estado');
-        const { desde, hasta, deptUuid, persona, modoAnio, categoria } = obtenerFiltrosActuales();
+        const { desde, hasta, deptUuid, persona, modoAnio, categoria, tipus } = obtenerFiltrosActuales();
         document.getElementById('seccionAwardsPersona').classList.add('hidden');
         if (tablaAwards) tablaAwards.clearData();
         mostrarOverlayCargando();
@@ -1483,6 +1674,11 @@ function renderGraficos(filas) {
                     categoria.forEach(cat => params.append('categoria', cat));
                 } else if (typeof categoria === 'string' && categoria) {
                     params.set('categoria', categoria);
+                }
+                if (Array.isArray(tipus) && tipus.length > 0) {
+                    tipus.forEach(t => params.append('tipus', t));
+                } else if (typeof tipus === 'string' && tipus) {
+                    params.set('tipus', tipus);
                 }
                 if (modoAwardsDept === 'gestionados') {
                     params.set('gestionadosPorDept', 'managed');
@@ -1940,7 +2136,7 @@ function renderGraficos(filas) {
  * @returns {Promise<Array<{anio:number,importeTotal:number}>>}
  */
 async function cargarSerieProyectosAnio() {
-    const { desde, hasta, deptUuid, persona, modoAnio, categoria } = obtenerFiltrosActuales();
+    const { desde, hasta, deptUuid, persona, modoAnio, categoria, tipus } = obtenerFiltrosActuales();
     const params = new URLSearchParams({
         desde: String(desde),
         hasta: String(hasta),
@@ -1958,6 +2154,11 @@ async function cargarSerieProyectosAnio() {
         categoria.forEach(cat => params.append('categoria', cat));
     } else if (typeof categoria === 'string' && categoria) {
         params.set('categoria', categoria);
+    }
+    if (Array.isArray(tipus) && tipus.length > 0) {
+        tipus.forEach(t => params.append('tipus', t));
+    } else if (typeof tipus === 'string' && tipus) {
+        params.set('tipus', tipus);
     }
 
     const res = await fetch(apiUrl(`/awards/stats/proyectos-anio?${params.toString()}`));
@@ -2013,7 +2214,7 @@ async function actualizarGraficoComparativaDepartamentos() {
         chartComparativaDept = echarts.init(document.getElementById('chartComparativaDept'));
     }
 
-    const { desde, hasta, persona, modoAnio, categoria } = obtenerFiltrosActuales();
+    const { desde, hasta, persona, modoAnio, categoria, tipus } = obtenerFiltrosActuales();
     const anios = [];
     for (let year = desde; year <= hasta; year++) {
         anios.push(year);
@@ -2055,6 +2256,11 @@ async function actualizarGraficoComparativaDepartamentos() {
                 categoria.forEach(cat => params.append('categoria', cat));
             } else if (typeof categoria === 'string' && categoria) {
                 params.set('categoria', categoria);
+            }
+            if (Array.isArray(tipus) && tipus.length > 0) {
+                tipus.forEach(t => params.append('tipus', t));
+            } else if (typeof tipus === 'string' && tipus) {
+                params.set('tipus', tipus);
             }
             const res = await fetch(apiUrl(`/awards/stats/proyectos-anio?${params.toString()}`));
             if (!res.ok) {
@@ -2142,7 +2348,7 @@ async function agregarDepartamentoComparativa() {
  */
 async function cargarDatos() {
     const estado = document.getElementById('estado');
-    const { desde, hasta, deptUuid, persona, modoAnio, categoria } = obtenerFiltrosActuales();
+    const { desde, hasta, deptUuid, persona, modoAnio, categoria, tipus } = obtenerFiltrosActuales();
     document.getElementById('seccionAwardsPersona').classList.add('hidden');
     if (tablaAwards) tablaAwards.clearData();
     mostrarOverlayCargando();
@@ -2167,6 +2373,11 @@ async function cargarDatos() {
                 } else if (typeof categoria === 'string' && categoria) {
                     params.set('categoria', categoria);
                 }
+                if (Array.isArray(tipus) && tipus.length > 0) {
+                    tipus.forEach(t => params.append('tipus', t));
+                } else if (typeof tipus === 'string' && tipus) {
+                    params.set('tipus', tipus);
+                }
                 if (modoAwardsDept === 'gestionados') {
                     params.set('gestionadosPorDept', 'managed');
                 }
@@ -2188,6 +2399,11 @@ async function cargarDatos() {
                 categoria.forEach(cat => params.append('categoria', cat));
             } else if (typeof categoria === 'string' && categoria) {
                 params.set('categoria', categoria);
+            }
+            if (Array.isArray(tipus) && tipus.length > 0) {
+                tipus.forEach(t => params.append('tipus', t));
+            } else if (typeof tipus === 'string' && tipus) {
+                params.set('tipus', tipus);
             }
             if (modoAwardsDept === 'gestionados') {
                 params.set('gestionadosPorDept', 'managed');
@@ -2359,6 +2575,7 @@ async function init() {
     configurarSlider();
     await cargarDepartamentos();
     await cargarCategorias();
+    await cargarTipus();
     await actualizarGraficoComparativaDepartamentos();
     
     cargarDatos();
