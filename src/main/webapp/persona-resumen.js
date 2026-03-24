@@ -1405,7 +1405,7 @@ function renderAwardsPersona(filas, personaNombre) {
             institutionalPart: Number(f.institutionalPart ?? 0),
             awardUuid,
             managingOrganization: f.managingOrganization ?? '-',
-            comanagingOrganization: f.comanagingOrganization ?? '-'
+            comanagingOrganization: f.comanagingOrganization ?? f.coManagingOrganization ?? f.coManagingOrganizations ?? '-'
         };
         if (!current) {
             uniqueByAward.set(awardUuid, candidate);
@@ -1430,6 +1430,12 @@ function renderAwardsPersona(filas, personaNombre) {
     });
 
     const rows = Array.from(uniqueByAward.values());
+
+    const fullCellTooltip = (e, cell, onRender) => {
+        const value = cell.getValue();
+        return value == null ? '' : String(value);
+    };
+
     // Add managingOrganization and comanagingOrganization columns if not present
     tablaAwards.setColumns([
         { title: 'Any', field: 'anyo', width: 70 },

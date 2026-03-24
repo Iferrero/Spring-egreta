@@ -241,7 +241,7 @@ public class AwardService {
                                             List<String> categoria,
                                             List<String> tipus) {
 
-        return runPipeline(
+        List<Document> awards = runPipeline(
                 "mongodb/awards/persona-awards.json",
                 builder -> {
 
@@ -269,7 +269,134 @@ public class AwardService {
                                         }
 
                 });
+
+                enrichCoManagingOrganization(awards);
+                return awards;
     }
+
+        private void enrichCoManagingOrganization(List<Document> awards) {
+                if (awards == null || awards.isEmpty()) {
+                        return;
+                }
+
+                Set<String> awardUuids = awards.stream()
+                                .map(doc -> doc.getString("awardUuid"))
+                                .filter(uuid -> uuid != null && !uuid.isBlank())
+                                .collect(Collectors.toSet());
+
+                if (awardUuids.isEmpty()) {
+                        return;
+                }
+
+                List<Document> awardOrgPipeline = List.of(
+                                new Document("$match", new Document("uuid", new Document("$in", awardUuids))),
+                                new Document("$project", new Document("_id", 0)
+                                                .append("uuid", 1)
+                                                .append("managingUuid", "$managingOrganization.uuid")
+                                                .append("coManagingUuids", new Document("$map",
+                                                                new Document("input", new Document("$ifNull", List.of("$coManagingOrganizations", List.of())))
+                                                                                .append("as", "org")
+                                                                                .append("in", "$$org.uuid"))))
+                );
+
+                List<Document> awardOrgDocs = mongoTemplate.getCollection("Awards")
+                                .aggregate(awardOrgPipeline)
+                                .into(new ArrayList<>());
+
+                Map<String, List<String>> coManagingByAward = new HashMap<>();
+                Set<String> allOrgUuids = new HashSet<>();
+
+                for (Document d : awardOrgDocs) {
+                        String awardUuid = d.getString("uuid");
+                        String managingUuid = d.getString("managingUuid");
+                        List<String> uuids = d.getList("coManagingUuids", String.class);
+                        if (awardUuid == null) {
+                                continue;
+                        }
+                        List<String> safe = uuids == null ? new ArrayList<>() : uuids.stream()
+                                        .filter(u -> u != null && !u.isBlank())
+                                        .filter(u -> managingUuid == null || !managingUuid.equals(u))
+                                        .distinct()
+                                        .collect(Collectors.toList());
+                        coManagingByAward.put(awardUuid, safe);
+                        allOrgUuids.addAll(safe);
+                }
+
+                Map<String, String> orgNameByUuid = new HashMap<>();
+                if (!allOrgUuids.isEmpty()) {
+                        List<Document> orgs = mongoTemplate.getCollection("Organizations")
+                                        .aggregate(List.of(
+                                                        new Document("$match", new Document("uuid", new Document("$in", allOrgUuids))),
+                                                        new Document("$project", new Document("_id", 0).append("uuid", 1).append("name", 1))
+                                        ))
+                                        .into(new ArrayList<>());
+
+                        for (Document org : orgs) {
+                                String uuid = org.getString("uuid");
+                                Document name = org.get("name", Document.class);
+                                if (uuid == null || name == null) {
+                                        continue;
+                                }
+                                String display = firstNonBlank(
+                                                name.getString("ca_ES"),
+                                                name.getString("es_ES"),
+                                                name.getString("en_GB")
+                                );
+                                if (display != null) {
+                                        orgNameByUuid.put(uuid, display);
+                                }
+                        }
+                }
+
+                for (Document award : awards) {
+                        String current = asString(award.get("comanagingOrganization"));
+                        String managingName = asString(award.get("managingOrganization"));
+                        String awardUuid = award.getString("awardUuid");
+
+                        if ((isBlankOrDash(current) || (managingName != null && managingName.equals(current))) && awardUuid != null) {
+                                List<String> coUuids = coManagingByAward.getOrDefault(awardUuid, List.of());
+                                String resolved = coUuids.stream()
+                                                .map(uuid -> orgNameByUuid.getOrDefault(uuid, uuid))
+                                                .filter(name -> managingName == null || !managingName.equals(name))
+                                                .filter(v -> v != null && !v.isBlank())
+                                                .distinct()
+                                                .collect(Collectors.joining(", "));
+                                if (!resolved.isBlank()) {
+                                        current = resolved;
+                                }
+                        }
+
+                        if (current == null || current.isBlank()) {
+                                current = "-";
+                        }
+
+                        award.put("comanagingOrganization", current);
+                        award.put("coManagingOrganization", current);
+                }
+        }
+
+        private String asString(Object value) {
+                if (value == null) {
+                        return null;
+                }
+                if (value instanceof String s) {
+                        return s;
+                }
+                return String.valueOf(value);
+        }
+
+        private boolean isBlankOrDash(String value) {
+                return value == null || value.isBlank() || "-".equals(value);
+        }
+
+        private String firstNonBlank(String... values) {
+                for (String value : values) {
+                        if (value != null && !value.isBlank()) {
+                                return value;
+                        }
+                }
+                return null;
+        }
 
     private Set<String> getPersonUuidsByFilters(String deptUuid,
                                             String persona) {
