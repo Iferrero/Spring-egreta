@@ -620,6 +620,7 @@ let topPersonasSeleccionables = [];
 let filasResumenActual = [];
 let filasResumenTablaActual = [];
 let personaTopSeleccionada = null;
+let awardsRequestSeq = 0;
 let employmentTypePorPersonaUuid = new Map();
 let employmentTypeSeleccionado = null;
 let employmentTypeSegmentoSeleccionado = null;
@@ -1632,7 +1633,17 @@ function renderGraficoEmploymentTypeConSin(rows, personalDept = []) {
     }
 
     const personalAcademico = personal.filter(p => Boolean(p?.esAcademico));
-    if (!personalAcademico.length) {
+    const personalAcademicoFiltrado = personalAcademico.filter(
+        p => !esTecnicSuportRecerca(p?.employmentType)
+    );
+
+    if (employmentTypeSeleccionado && esTecnicSuportRecerca(employmentTypeSeleccionado)) {
+        employmentTypeSeleccionado = null;
+        employmentTypeSegmentoSeleccionado = null;
+        aplicarFiltroTablaPorEmploymentType();
+    }
+
+    if (!personalAcademicoFiltrado.length) {
         employmentTypeSeleccionado = null;
         employmentTypeSegmentoSeleccionado = null;
         aplicarFiltroTablaPorEmploymentType();
@@ -1657,7 +1668,7 @@ function renderGraficoEmploymentTypeConSin(rows, personalDept = []) {
     });
 
     const porTipo = new Map();
-    personalAcademico.forEach(p => {
+    personalAcademicoFiltrado.forEach(p => {
         const tipo = String(p?.employmentType || 'Sense employmentType').trim() || 'Sense employmentType';
         const uuid = String(p?.personaUuid || '').trim();
         const totalProyectos = uuid ? Number(proyectosPorPersona.get(uuid) || 0) : 0;
@@ -1893,6 +1904,20 @@ function normalizarTexto(valor) {
     return String(valor || '').trim().toLowerCase();
 }
 
+function esTecnicSuportRecerca(employmentType) {
+    const valor = String(employmentType || '')
+        .trim()
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '');
+
+    const esTecnic = valor.includes('tecnic') || valor.includes('tecnico');
+    const esSuport = valor.includes('suport') || valor.includes('soport');
+    const esRecerca = valor.includes('recerca') || valor.includes('investigacion');
+
+    return esTecnic && esSuport && esRecerca;
+}
+
 /**
  * Si hay persona top seleccionada, filtra filas para series vinculadas.
  * @param {Array<object>} filas
@@ -1947,6 +1972,12 @@ function esMismaPersonaSeleccionada(persona) {
 async function aplicarSeleccionPersona(persona) {
     if (!persona) return;
 
+    if (tablaAwards) {
+        tablaAwards.clearData();
+        tablaAwards.setData([]);
+        tablaAwards.redraw(true);
+    }
+
     const identidad = obtenerIdentidadPersona(persona);
     if (!identidad.persona && !identidad.personaUuid) {
         return;
@@ -1975,18 +2006,32 @@ async function aplicarSeleccionPersona(persona) {
 
     if (!personaTopSeleccionada) {
         document.getElementById('seccionAwardsPersona').classList.add('hidden');
-        if (tablaAwards) tablaAwards.clearData();
+        if (tablaAwards) {
+            tablaAwards.clearData();
+            tablaAwards.setData([]);
+            tablaAwards.redraw(true);
+        }
         return;
     }
 
+    // Refresca siempre la tabla de awards al cambiar de persona,
+    // evitando que queden datos de la selección anterior.
+    renderAwardsPersona([], personaTopSeleccionada.persona || 'la persona seleccionada');
+    const requestSeq = ++awardsRequestSeq;
+
     try {
-        await cargarAwardsPersona(personaTopSeleccionada);
+        await cargarAwardsPersona(personaTopSeleccionada, requestSeq);
     } catch (error) {
+        if (requestSeq !== awardsRequestSeq) return;
         const seccion = document.getElementById('seccionAwardsPersona');
         const titulo = document.getElementById('tituloAwardsPersona');
-        titulo.textContent = 'Ajuts de la persona seleccionada';
+        titulo.textContent = `Ajuts de ${personaTopSeleccionada.persona || 'la persona seleccionada'}`;
         seccion.classList.remove('hidden');
-        if (tablaAwards) tablaAwards.clearData();
+        if (tablaAwards) {
+            tablaAwards.clearData();
+            tablaAwards.setData([]);
+            tablaAwards.redraw(true);
+        }
     }
 }
 
@@ -1999,7 +2044,7 @@ function renderAwardsPersona(filas, personaNombre) {
     const seccion = document.getElementById('seccionAwardsPersona');
     const titulo = document.getElementById('tituloAwardsPersona');
 
-    titulo.textContent = `Awards de ${personaNombre}`;
+    titulo.textContent = `Ajuts de ${personaNombre}`;
     seccion.classList.remove('hidden');
 
     if (!tablaAwards) return;
@@ -2060,15 +2105,19 @@ function renderAwardsPersona(filas, personaNombre) {
         { title: 'Unitat organitzativa de cogestió', field: 'comanagingOrganization', widthGrow: 1 }
     ]);
     tablaAwards.setData(rows);
+    tablaAwards.redraw(true);
 }
 
 /**
  * Pide a API el detalle de awards de una persona.
  * @param {{persona:string,personaUuid?:string}} persona
+ * @param {number} requestSeq
  * @returns {Promise<void>}
  */
-async function cargarAwardsPersona(persona) {
+async function cargarAwardsPersona(persona, requestSeq) {
     if (!persona || !persona.personaUuid) {
+        if (requestSeq !== awardsRequestSeq) return;
+        renderAwardsPersona([], persona?.persona || 'la persona seleccionada');
         return;
     }
 
@@ -2097,11 +2146,17 @@ async function cargarAwardsPersona(persona) {
         params.set('gestionadosPorDept', 'managed');
     }
     const res = await fetch(apiUrl(`/awards/stats/persona-awards?${params.toString()}`));
+    if (res.status === 404 || res.status === 204) {
+        if (requestSeq !== awardsRequestSeq) return;
+        renderAwardsPersona([], persona.persona || 'la persona seleccionada');
+        return;
+    }
     if (!res.ok) {
         throw new Error(`HTTP ${res.status}`);
     }
     const awards = await res.json();
-    renderAwardsPersona(awards, persona.persona);
+    if (requestSeq !== awardsRequestSeq) return;
+    renderAwardsPersona(Array.isArray(awards) ? awards : [], persona.persona);
 }
 
 /**
