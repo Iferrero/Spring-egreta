@@ -25,10 +25,14 @@ public class Persona {
     public void setEmploymentType(EmploymentType employmentType) { this.employmentType = employmentType; }
 
     public static class EmploymentType {
-    private LocalizedName term; // Reutiliza la clase LocalizedName que ya tienes
-    public LocalizedName getTerm() { return term; }
-    public void setTerm(LocalizedName term) { this.term = term; }
-}
+        private String uri;
+        private Map<String, String> term;
+
+        public String getUri() { return uri; }
+        public void setUri(String uri) { this.uri = uri; }
+        public Map<String, String> getTerm() { return term; }
+        public void setTerm(Map<String, String> term) { this.term = term; }
+    }
 
     public List<StaffOrganizationAssociation> getStaffOrganizationAssociations() { 
         return staffOrganizationAssociations; 
@@ -70,9 +74,21 @@ public class Persona {
 
     // --- CLASES PARA EL MAPEO ANIDADO ---
 public static class StaffOrganizationAssociation {
+    private Long pureId;
+    private Boolean primaryAssociation;
+    private EmploymentType employmentType;
         private StaffType staffType;
         private OrgDetail organization; // Cambiado el nombre para evitar conflictos
         private Period period;
+
+    public Long getPureId() { return pureId; }
+    public void setPureId(Long pureId) { this.pureId = pureId; }
+
+    public Boolean getPrimaryAssociation() { return primaryAssociation; }
+    public void setPrimaryAssociation(Boolean primaryAssociation) { this.primaryAssociation = primaryAssociation; }
+
+    public EmploymentType getEmploymentType() { return employmentType; }
+    public void setEmploymentType(EmploymentType employmentType) { this.employmentType = employmentType; }
 
         public StaffType getStaffType() { return staffType; }
         public void setStaffType(StaffType staffType) { this.staffType = staffType; }
@@ -92,7 +108,12 @@ public static class StaffOrganizationAssociation {
 }
 
     public static class OrgDetail {
+        private String uuid;
         private LocalizedName name;
+
+        public String getUuid() { return uuid; }
+        public void setUuid(String uuid) { this.uuid = uuid; }
+
         public LocalizedName getName() { return name; }
         public void setName(LocalizedName name) { this.name = name; }
     }
@@ -124,7 +145,12 @@ public static class StaffOrganizationAssociation {
         public void setValue(String value) { this.value = value; }
     }
     public static class Period {
+        private LocalDate startDate;
         private LocalDate endDate;
+
+        public LocalDate getStartDate() { return startDate; }
+        public void setStartDate(LocalDate startDate) { this.startDate = startDate; }
+
         public LocalDate getEndDate() { return endDate; }
         public void setEndDate(LocalDate endDate) { this.endDate = endDate; }
     }

@@ -609,6 +609,8 @@ let chartTopPersonas = null;
 let chartComparativaDept = null;
 let chartLiderazgo = null;
 let chartQuadrantsPersona = null;
+let chartPersonasConSinProyectos = null;
+let chartEmploymentTypeConSin = null;
 
 let chartPareto = null;
 
@@ -618,9 +620,14 @@ let topPersonasSeleccionables = [];
 let filasResumenActual = [];
 let filasResumenTablaActual = [];
 let personaTopSeleccionada = null;
+let awardsRequestSeq = 0;
+let employmentTypePorPersonaUuid = new Map();
+let employmentTypeSeleccionado = null;
+let employmentTypeSegmentoSeleccionado = null;
 let departamentosCatalogo = [];
 let departamentosComparativa = [];
 let departamentosSeleccionados = [];
+let personalDeptCache = new Map();
 let modoTablaResumenActual = 'awardDate';
 // Variable global para la tabla de evolución persona vs departamento
 let tablaEvolucionPersonaDept = null;
@@ -955,10 +962,22 @@ function obtenerFiltrosActuales() {
 function resumirFilasPorInvestigador(filas, desde, hasta) {
     const acumulado = new Map();
 
+    const normalizarNombre = (valor) => String(valor || '')
+        .trim()
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '');
+
+    const construirClavePersona = (uuid, nombre) => {
+        const uuidLimpio = String(uuid || '').trim();
+        if (uuidLimpio) return `uuid:${uuidLimpio}`;
+        return `nom:${normalizarNombre(nombre)}`;
+    };
+
     (filas || []).forEach(fila => {
         const personaUuid = fila['PersonaUuid'] || '';
         const persona = fila['Persona'] || '-';
-        const key = `${personaUuid}||${persona}`;
+        const key = construirClavePersona(personaUuid, persona);
 
         if (!acumulado.has(key)) {
             acumulado.set(key, {
@@ -977,7 +996,6 @@ function resumirFilasPorInvestigador(filas, desde, hasta) {
         }
 
         const item = acumulado.get(key);
-        const ayudas = Array.isArray(fila['Ayudas']) ? fila['Ayudas'] : [];
 
             item['Proyectos_IP'] += Number(fila['Proyectos_IP'] || 0);
             item['Proyectos_CoIP'] += Number(fila['Proyectos_CoIP'] || 0);
@@ -998,6 +1016,205 @@ function resumirFilasPorInvestigador(filas, desde, hasta) {
             return item;
         })
         .sort((a, b) => Number(b['Importe_Ponderado (€)'] || 0) - Number(a['Importe_Ponderado (€)'] || 0));
+}
+
+function obtenerNombrePersonaDesdeCatalogo(persona) {
+    if (!persona || typeof persona !== 'object') return '';
+    if (persona.fullName) return String(persona.fullName).trim();
+
+    const nombre = String(persona.firstName || persona?.name?.firstName || '').trim();
+    const apellido = String(persona.lastName || persona?.name?.lastName || '').trim();
+    if (apellido && nombre) return `${apellido}, ${nombre}`;
+    return apellido || nombre;
+}
+
+function asociacionVigente(assoc) {
+    if (!assoc || typeof assoc !== 'object') return false;
+    const startDateRaw = assoc?.period?.startDate;
+    const endDateRaw = assoc?.period?.endDate;
+
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+
+    if (startDateRaw) {
+        const startDate = new Date(startDateRaw);
+        if (Number.isNaN(startDate.getTime())) return false;
+        if (startDate > hoy) return false;
+    }
+
+    if (!endDateRaw) return true;
+    const endDate = new Date(endDateRaw);
+    if (Number.isNaN(endDate.getTime())) return false;
+    return endDate >= hoy;
+}
+
+function timestampFecha(valor) {
+    if (!valor) return Number.NEGATIVE_INFINITY;
+    const fecha = new Date(valor);
+    if (Number.isNaN(fecha.getTime())) return Number.NEGATIVE_INFINITY;
+    return fecha.getTime();
+}
+
+function seleccionarAsociacionPreferida(asociaciones) {
+    if (!Array.isArray(asociaciones) || asociaciones.length === 0) return null;
+
+    const ordenadas = [...asociaciones].sort((a, b) => {
+        const primA = a?.primaryAssociation ? 1 : 0;
+        const primB = b?.primaryAssociation ? 1 : 0;
+        if (primA !== primB) return primB - primA;
+
+        const startA = timestampFecha(a?.period?.startDate);
+        const startB = timestampFecha(b?.period?.startDate);
+        if (startA !== startB) return startB - startA;
+
+        const pureA = Number(a?.pureId || 0);
+        const pureB = Number(b?.pureId || 0);
+        return pureB - pureA;
+    });
+
+    return ordenadas[0] || null;
+}
+
+function esAsociacionAcademica(assoc) {
+    if (!assoc || typeof assoc !== 'object') return false;
+    const staffType = assoc?.staffType || {};
+    const candidatos = [
+        staffType?.nombreEs,
+        staffType?.term?.ca_ES,
+        staffType?.term?.es_ES,
+        staffType?.term?.en_GB,
+        staffType?.uri
+    ].filter(Boolean).map(v => String(v).toLowerCase());
+
+    return candidatos.some(v => v.includes('acad'));
+}
+
+function obtenerDatosLaboralesPersona(persona, deptId) {
+    const asociaciones = Array.isArray(persona?.staffOrganizationAssociations)
+        ? persona.staffOrganizationAssociations
+        : [];
+
+    const asociacionesDepto = asociaciones.filter(assoc => {
+        const uuidOrg = String(assoc?.organization?.uuid || '').trim();
+        return !deptId || uuidOrg === String(deptId).trim();
+    });
+
+    const vigentes = asociacionesDepto.filter(asociacionVigente);
+    const base = seleccionarAsociacionPreferida(vigentes)
+        || seleccionarAsociacionPreferida(asociacionesDepto)
+        || seleccionarAsociacionPreferida(asociaciones);
+
+    const term = base?.employmentType?.term || {};
+    const value =
+        term.ca_ES ||
+        term.es_ES ||
+        term.en_GB ||
+        base?.employmentType?.term?.text?.value ||
+        base?.employmentType?.uri ||
+        'Sense employmentType';
+
+    return {
+        employmentType: String(value || 'Sense employmentType').trim() || 'Sense employmentType',
+        esAcademico: esAsociacionAcademica(base)
+    };
+}
+
+async function cargarPersonalDepartamento(deptUuid) {
+    const deptId = Array.isArray(deptUuid) ? (deptUuid[0] || '') : (deptUuid || '');
+    if (!deptId) return [];
+
+    if (personalDeptCache.has(deptId)) {
+        return personalDeptCache.get(deptId);
+    }
+
+    const personas = [];
+    let pagina = 0;
+    let totalPaginas = 1;
+
+    while (pagina < totalPaginas) {
+        const params = new URLSearchParams({
+            deptUuid: String(deptId),
+            page: String(pagina)
+        });
+
+        const res = await fetch(apiUrl(`/persons/vigentes?${params.toString()}`));
+        if (!res.ok) {
+            throw new Error(`HTTP ${res.status}`);
+        }
+
+        const data = await res.json();
+        const content = Array.isArray(data?.content) ? data.content : [];
+        content.forEach(p => {
+            const personaUuid = String(p?.uuid || '').trim();
+            const personaNombre = obtenerNombrePersonaDesdeCatalogo(p);
+            const datosLaborales = obtenerDatosLaboralesPersona(p, deptId);
+            if (!personaUuid && !personaNombre) return;
+            personas.push({
+                personaUuid,
+                persona: personaNombre || '-',
+                employmentType: datosLaborales.employmentType,
+                esAcademico: Boolean(datosLaborales.esAcademico)
+            });
+        });
+
+        const total = Number(data?.page?.totalPages);
+        if (Number.isFinite(total) && total > 0) {
+            totalPaginas = total;
+        } else {
+            totalPaginas = pagina + 1;
+        }
+        pagina += 1;
+    }
+
+    const personasUnicas = [];
+    const seen = new Set();
+    personas.forEach(p => {
+        const key = String(p.personaUuid || '').trim() || `nom:${String(p.persona || '').trim()}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        personasUnicas.push(p);
+    });
+
+    personalDeptCache.set(deptId, personasUnicas);
+    return personasUnicas;
+}
+
+function completarResumenConPersonal(resumenRows, personalDept, desde, hasta) {
+    if (!Array.isArray(personalDept) || personalDept.length === 0) {
+        return resumenRows;
+    }
+
+    const base = Array.isArray(resumenRows) ? [...resumenRows] : [];
+    const existentes = new Set(
+        base.map(item => `${String(item['PersonaUuid'] || '').trim()}||${String(item['Persona'] || '').trim()}`)
+    );
+
+    personalDept.forEach(p => {
+        const personaUuid = String(p?.personaUuid || '').trim();
+        const persona = String(p?.persona || '-').trim() || '-';
+        const key = `${personaUuid}||${persona}`;
+        if (existentes.has(key)) return;
+
+        base.push({
+            'Año': `${desde}-${hasta}`,
+            'PersonaUuid': personaUuid,
+            'Persona': persona,
+            'Proyectos_IP': 0,
+            'Proyectos_CoIP': 0,
+            'Proyectos_Miembro': 0,
+            'Total_Proyectos': 0,
+            'Importe_IP (€)': 0,
+            'Importe_CoIP (€)': 0,
+            'Importe_Miembro (€)': 0,
+            'Importe_Ponderado (€)': 0
+        });
+    });
+
+    return base.sort((a, b) => {
+        const diffImporte = Number(b['Importe_Ponderado (€)'] || 0) - Number(a['Importe_Ponderado (€)'] || 0);
+        if (diffImporte !== 0) return diffImporte;
+        return String(a['Persona'] || '').localeCompare(String(b['Persona'] || ''), 'ca', { sensitivity: 'base' });
+    });
 }
 
 /** Inicializa tablas Tabulator (resumen y detalle awards). */
@@ -1154,10 +1371,11 @@ function inicializarTablas() {
  * @param {number} desde
  * @param {number} hasta
  */
-function renderTabla(filas, modoAnio = 'awardDate', desde = 0, hasta = 0) {
+function renderTabla(filas, modoAnio = 'awardDate', desde = 0, hasta = 0, personalDept = []) {
     if (!tablaResumen) return;
     modoTablaResumenActual = modoAnio;
-    const sourceRows = resumirFilasPorInvestigador(filas, desde, hasta);
+    const resumenRows = resumirFilasPorInvestigador(filas, desde, hasta);
+    const sourceRows = completarResumenConPersonal(resumenRows, personalDept, desde, hasta);
     filasResumenTablaActual = sourceRows;
     console.log('Filas para tabla resumen:', sourceRows);
     const rows = sourceRows.map(f => {
@@ -1199,9 +1417,415 @@ function renderTabla(filas, modoAnio = 'awardDate', desde = 0, hasta = 0) {
             };
         }
     });
-    tablaResumen.setData(rows);
+
+    const personalDeptArray = Array.isArray(personalDept) ? personalDept : [];
+    const personalDeptAcademico = personalDeptArray.filter(p => Boolean(p?.esAcademico));
+    const baseCensoTabla = personalDeptAcademico.length > 0 ? personalDeptAcademico : personalDeptArray;
+    const uuidsPersonalVigente = new Set(
+        baseCensoTabla
+            .map(p => String(p?.personaUuid || '').trim())
+            .filter(Boolean)
+    );
+    const nombresPersonalVigente = new Set(
+        baseCensoTabla
+            .map(p => String(p?.persona || '').trim().toLowerCase())
+            .filter(Boolean)
+    );
+
+    const rowsTablaRaw = uuidsPersonalVigente.size > 0
+        ? rows.filter(r => {
+            const uuid = String(r?.personaUuid || '').trim();
+            if (uuid && uuidsPersonalVigente.has(uuid)) return true;
+            const nombre = String(r?.persona || '').trim().toLowerCase();
+            return !uuid && nombresPersonalVigente.has(nombre);
+        })
+        : rows;
+
+    const rowsTabla = [];
+    const vistosTabla = new Set();
+    rowsTablaRaw.forEach(r => {
+        const uuid = String(r?.personaUuid || '').trim();
+        const nombre = String(r?.persona || '')
+            .trim()
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '');
+        const key = uuid ? `uuid:${uuid}` : `nom:${nombre}`;
+        if (vistosTabla.has(key)) return;
+        vistosTabla.add(key);
+        rowsTabla.push(r);
+    });
+
+    employmentTypePorPersonaUuid = new Map();
+    (Array.isArray(personalDept) ? personalDept : []).forEach(p => {
+        const uuid = String(p?.personaUuid || '').trim();
+        if (!uuid) return;
+        employmentTypePorPersonaUuid.set(uuid, String(p?.employmentType || 'Sense employmentType').trim() || 'Sense employmentType');
+    });
+
+    tablaResumen.setData(rowsTabla);
+    aplicarFiltroTablaPorEmploymentType();
     tablaResumen.recalc();
-    estado.textContent = `Resultats: ${rows.length} files`;
+    renderGraficoDistribucionProyectos(rowsTabla, personalDept);
+    estado.textContent = `Resultats: ${rowsTabla.length} files`;
+}
+
+function aplicarFiltroTablaPorEmploymentType() {
+    if (!tablaResumen) return;
+
+    tablaResumen.clearFilter();
+
+    if (!employmentTypeSeleccionado) {
+        return;
+    }
+
+    tablaResumen.setFilter((data) => {
+        const uuid = String(data?.personaUuid || '').trim();
+        if (!uuid) return false;
+        const tipo = employmentTypePorPersonaUuid.get(uuid);
+        if (tipo !== employmentTypeSeleccionado) return false;
+
+        if (employmentTypeSegmentoSeleccionado === 'con') {
+            return Number(data?.totalProyectos || 0) > 0;
+        }
+
+        if (employmentTypeSegmentoSeleccionado === 'sin') {
+            return Number(data?.totalProyectos || 0) === 0;
+        }
+
+        return true;
+    });
+}
+
+function renderGraficoDistribucionProyectos(rows, personalDept = []) {
+    const container = document.getElementById('chartPersonasConSinProyectos');
+    if (!container || typeof echarts === 'undefined') return;
+
+    if (!chartPersonasConSinProyectos) {
+        chartPersonasConSinProyectos = echarts.init(container);
+    }
+
+    const proyectosPorPersona = new Map();
+    (rows || []).forEach(r => {
+        const key = String(r.personaUuid || '').trim();
+        const total = Number(r.totalProyectos || 0);
+        if (!key) return;
+        proyectosPorPersona.set(key, (proyectosPorPersona.get(key) || 0) + total);
+    });
+
+    const personal = Array.isArray(personalDept) ? personalDept : [];
+    const personalAcademico = personal.filter(p => Boolean(p?.esAcademico));
+
+    const usarPersonalAcademico = personalAcademico.length > 0;
+    const total = usarPersonalAcademico ? personalAcademico.length : (Array.isArray(rows) ? rows.length : 0);
+    const conProyectos = usarPersonalAcademico
+        ? personalAcademico.filter(p => Number(proyectosPorPersona.get(String(p?.personaUuid || '').trim()) || 0) > 0).length
+        : (rows || []).filter(r => Number(r.totalProyectos || 0) > 0).length;
+    const sinProyectos = Math.max(0, total - conProyectos);
+
+    if (total === 0) {
+        chartPersonasConSinProyectos.setOption({
+            title: {
+                text: 'Sense dades per als filtres actuals',
+                left: 'center',
+                top: '45%',
+                textStyle: { color: UAB_COLORS.tauro, fontSize: 13, fontWeight: 600 }
+            },
+            series: []
+        }, true);
+        return;
+    }
+
+    chartPersonasConSinProyectos.setOption({
+        tooltip: {
+            trigger: 'item',
+            formatter: ({ name, value, percent }) => `${name}: <b>${value}</b> (${percent}%)`
+        },
+        legend: {
+            orient: 'horizontal',
+            bottom: 8,
+            data: ['Amb projectes', 'Sense projectes']
+        },
+        graphic: [
+            {
+                type: 'text',
+                left: 'center',
+                top: '44%',
+                style: {
+                    text: `${total}`,
+                    textAlign: 'center',
+                    fill: UAB_COLORS.pissarra,
+                    fontSize: 28,
+                    fontWeight: 700
+                }
+            },
+            {
+                type: 'text',
+                left: 'center',
+                top: '55%',
+                style: {
+                    text: 'Persones',
+                    textAlign: 'center',
+                    fill: UAB_COLORS.tauro,
+                    fontSize: 12,
+                    fontWeight: 600
+                }
+            }
+        ],
+        series: [
+            {
+                name: 'Distribució personal',
+                type: 'pie',
+                radius: ['48%', '72%'],
+                center: ['50%', '45%'],
+                itemStyle: {
+                    borderRadius: 8,
+                    borderColor: '#ffffff',
+                    borderWidth: 2
+                },
+                label: {
+                    formatter: ({ name, percent }) => `${name}\n${percent}%`,
+                    fontSize: 12,
+                    color: UAB_COLORS.pissarra
+                },
+                data: [
+                    {
+                        value: conProyectos,
+                        name: 'Amb projectes',
+                        itemStyle: { color: UAB_COLORS.campus }
+                    },
+                    {
+                        value: sinProyectos,
+                        name: 'Sense projectes',
+                        itemStyle: { color: UAB_COLORS.columna }
+                    }
+                ]
+            }
+        ]
+    }, true);
+
+    renderGraficoEmploymentTypeConSin(rows, personalDept);
+}
+
+function renderGraficoEmploymentTypeConSin(rows, personalDept = []) {
+    const container = document.getElementById('chartEmploymentTypeConSin');
+    if (!container || typeof echarts === 'undefined') return;
+
+    if (!chartEmploymentTypeConSin) {
+        chartEmploymentTypeConSin = echarts.init(container);
+    }
+
+    const personal = Array.isArray(personalDept) ? personalDept : [];
+    if (!personal.length) {
+        employmentTypeSeleccionado = null;
+        employmentTypeSegmentoSeleccionado = null;
+        aplicarFiltroTablaPorEmploymentType();
+        chartEmploymentTypeConSin.setOption({
+            title: {
+                text: 'Selecciona un departament per veure employmentType',
+                left: 'center',
+                top: '45%',
+                textStyle: { color: UAB_COLORS.tauro, fontSize: 12, fontWeight: 600 }
+            },
+            series: []
+        }, true);
+        return;
+    }
+
+    const personalAcademico = personal.filter(p => Boolean(p?.esAcademico));
+    const personalAcademicoFiltrado = personalAcademico.filter(
+        p => !esTecnicSuportRecerca(p?.employmentType)
+    );
+
+    if (employmentTypeSeleccionado && esTecnicSuportRecerca(employmentTypeSeleccionado)) {
+        employmentTypeSeleccionado = null;
+        employmentTypeSegmentoSeleccionado = null;
+        aplicarFiltroTablaPorEmploymentType();
+    }
+
+    if (!personalAcademicoFiltrado.length) {
+        employmentTypeSeleccionado = null;
+        employmentTypeSegmentoSeleccionado = null;
+        aplicarFiltroTablaPorEmploymentType();
+        chartEmploymentTypeConSin.setOption({
+            title: {
+                text: 'No hi ha personal acadèmic amb els filtres actuals',
+                left: 'center',
+                top: '45%',
+                textStyle: { color: UAB_COLORS.tauro, fontSize: 12, fontWeight: 600 }
+            },
+            series: []
+        }, true);
+        return;
+    }
+
+    const proyectosPorPersona = new Map();
+    (rows || []).forEach(r => {
+        const key = String(r.personaUuid || '').trim();
+        const total = Number(r.totalProyectos || 0);
+        if (!key) return;
+        proyectosPorPersona.set(key, (proyectosPorPersona.get(key) || 0) + total);
+    });
+
+    const porTipo = new Map();
+    personalAcademicoFiltrado.forEach(p => {
+        const tipo = String(p?.employmentType || 'Sense employmentType').trim() || 'Sense employmentType';
+        const uuid = String(p?.personaUuid || '').trim();
+        const totalProyectos = uuid ? Number(proyectosPorPersona.get(uuid) || 0) : 0;
+        const tiene = totalProyectos > 0;
+
+        if (!porTipo.has(tipo)) {
+            porTipo.set(tipo, { tipo, total: 0, con: 0, sin: 0 });
+        }
+
+        const item = porTipo.get(tipo);
+        item.total += 1;
+        if (tiene) item.con += 1;
+        else item.sin += 1;
+    });
+
+    const filasTipo = Array.from(porTipo.values())
+        .sort((a, b) => String(b.tipo).localeCompare(String(a.tipo), 'ca', { sensitivity: 'base' }));
+
+    if (!filasTipo.length) {
+        chartEmploymentTypeConSin.setOption({
+            title: {
+                text: 'Sense dades d\'employmentType',
+                left: 'center',
+                top: '45%',
+                textStyle: { color: UAB_COLORS.tauro, fontSize: 12, fontWeight: 600 }
+            },
+            series: []
+        }, true);
+        return;
+    }
+
+    const categorias = filasTipo.map(f => f.tipo);
+    const serieCon = filasTipo.map(f => (f.con / f.total) * 100);
+    const serieSin = filasTipo.map(f => (f.sin / f.total) * 100);
+
+    const dataCon = filasTipo.map((f, idx) => {
+        const selectedTipo = employmentTypeSeleccionado === f.tipo;
+        const selected = selectedTipo && (!employmentTypeSegmentoSeleccionado || employmentTypeSegmentoSeleccionado === 'con');
+        const hasSelection = Boolean(employmentTypeSeleccionado);
+        return {
+            value: serieCon[idx],
+            itemStyle: {
+                color: UAB_COLORS.campus,
+                opacity: !hasSelection ? 1 : (selected ? 1 : 0.25),
+                borderColor: selected ? '#1f2937' : undefined,
+                borderWidth: selected ? 1.5 : 0
+            }
+        };
+    });
+
+    const dataSin = filasTipo.map((f, idx) => {
+        const selectedTipo = employmentTypeSeleccionado === f.tipo;
+        const selected = selectedTipo && (!employmentTypeSegmentoSeleccionado || employmentTypeSegmentoSeleccionado === 'sin');
+        const hasSelection = Boolean(employmentTypeSeleccionado);
+        return {
+            value: serieSin[idx],
+            itemStyle: {
+                color: UAB_COLORS.columna,
+                opacity: !hasSelection ? 1 : (selected ? 1 : 0.25),
+                borderColor: selected ? '#1f2937' : undefined,
+                borderWidth: selected ? 1.5 : 0
+            }
+        };
+    });
+
+    chartEmploymentTypeConSin.setOption({
+        color: [UAB_COLORS.campus, UAB_COLORS.columna],
+        tooltip: {
+            trigger: 'axis',
+            axisPointer: { type: 'shadow' },
+            formatter: params => {
+                const idx = params?.[0]?.dataIndex ?? 0;
+                const row = filasTipo[idx];
+                if (!row) return '';
+                return [
+                    `<b>${row.tipo}</b>`,
+                    `Total: <b>${row.total}</b>`,
+                    `Amb projectes: <b>${row.con}</b> (${serieCon[idx].toFixed(1)}%)`,
+                    `Sense projectes: <b>${row.sin}</b> (${serieSin[idx].toFixed(1)}%)`
+                ].join('<br>');
+            }
+        },
+        legend: {
+            bottom: 0,
+            data: ['Amb projectes', 'Sense projectes']
+        },
+        grid: { left: 20, right: 20, top: 20, bottom: 45, containLabel: true },
+        xAxis: {
+            type: 'value',
+            min: 0,
+            max: 100,
+            axisLabel: { formatter: '{value}%' },
+            splitLine: { lineStyle: { color: UAB_COLORS.columna } }
+        },
+        yAxis: {
+            type: 'category',
+            data: categorias,
+            axisLabel: {
+                color: UAB_COLORS.pissarra,
+                fontSize: 11,
+                interval: 0,
+                formatter: value => String(value || '')
+            }
+        },
+        series: [
+            {
+                name: 'Amb projectes',
+                type: 'bar',
+                stack: 'total',
+                data: dataCon,
+                label: {
+                    show: true,
+                    position: 'inside',
+                    formatter: ({ value }) => (value >= 8 ? `${Number(value).toFixed(0)}%` : ''),
+                    color: '#fff',
+                    fontWeight: 700
+                }
+            },
+            {
+                name: 'Sense projectes',
+                type: 'bar',
+                stack: 'total',
+                data: dataSin,
+                label: {
+                    show: true,
+                    position: 'inside',
+                    formatter: ({ value }) => (value >= 8 ? `${Number(value).toFixed(0)}%` : ''),
+                    color: UAB_COLORS.pissarra,
+                    fontWeight: 700
+                }
+            }
+        ]
+    }, true);
+
+    chartEmploymentTypeConSin.off('click');
+    chartEmploymentTypeConSin.on('click', (params) => {
+        const idx = params?.dataIndex;
+        if (idx == null || idx < 0 || idx >= filasTipo.length) return;
+
+        const tipo = filasTipo[idx].tipo;
+        const segmento = params?.seriesName === 'Amb projectes' ? 'con' : 'sin';
+        const mismoTipo = employmentTypeSeleccionado === tipo;
+        const mismoSegmento = employmentTypeSegmentoSeleccionado === segmento;
+
+        if (mismoTipo && mismoSegmento) {
+            employmentTypeSeleccionado = null;
+            employmentTypeSegmentoSeleccionado = null;
+        } else {
+            employmentTypeSeleccionado = tipo;
+            employmentTypeSegmentoSeleccionado = segmento;
+        }
+
+        aplicarFiltroTablaPorEmploymentType();
+
+        // Repinta para reflejar visualmente la barra seleccionada.
+        renderGraficoEmploymentTypeConSin(rows, personalDept);
+    });
 }
 
 /** Libera instancias de ECharts actuales antes de repintar. */
@@ -1280,6 +1904,20 @@ function normalizarTexto(valor) {
     return String(valor || '').trim().toLowerCase();
 }
 
+function esTecnicSuportRecerca(employmentType) {
+    const valor = String(employmentType || '')
+        .trim()
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '');
+
+    const esTecnic = valor.includes('tecnic') || valor.includes('tecnico');
+    const esSuport = valor.includes('suport') || valor.includes('soport');
+    const esRecerca = valor.includes('recerca') || valor.includes('investigacion');
+
+    return esTecnic && esSuport && esRecerca;
+}
+
 /**
  * Si hay persona top seleccionada, filtra filas para series vinculadas.
  * @param {Array<object>} filas
@@ -1334,6 +1972,12 @@ function esMismaPersonaSeleccionada(persona) {
 async function aplicarSeleccionPersona(persona) {
     if (!persona) return;
 
+    if (tablaAwards) {
+        tablaAwards.clearData();
+        tablaAwards.setData([]);
+        tablaAwards.redraw(true);
+    }
+
     const identidad = obtenerIdentidadPersona(persona);
     if (!identidad.persona && !identidad.personaUuid) {
         return;
@@ -1362,18 +2006,32 @@ async function aplicarSeleccionPersona(persona) {
 
     if (!personaTopSeleccionada) {
         document.getElementById('seccionAwardsPersona').classList.add('hidden');
-        if (tablaAwards) tablaAwards.clearData();
+        if (tablaAwards) {
+            tablaAwards.clearData();
+            tablaAwards.setData([]);
+            tablaAwards.redraw(true);
+        }
         return;
     }
 
+    // Refresca siempre la tabla de awards al cambiar de persona,
+    // evitando que queden datos de la selección anterior.
+    renderAwardsPersona([], personaTopSeleccionada.persona || 'la persona seleccionada');
+    const requestSeq = ++awardsRequestSeq;
+
     try {
-        await cargarAwardsPersona(personaTopSeleccionada);
+        await cargarAwardsPersona(personaTopSeleccionada, requestSeq);
     } catch (error) {
+        if (requestSeq !== awardsRequestSeq) return;
         const seccion = document.getElementById('seccionAwardsPersona');
         const titulo = document.getElementById('tituloAwardsPersona');
-        titulo.textContent = 'Ajuts de la persona seleccionada';
+        titulo.textContent = `Ajuts de ${personaTopSeleccionada.persona || 'la persona seleccionada'}`;
         seccion.classList.remove('hidden');
-        if (tablaAwards) tablaAwards.clearData();
+        if (tablaAwards) {
+            tablaAwards.clearData();
+            tablaAwards.setData([]);
+            tablaAwards.redraw(true);
+        }
     }
 }
 
@@ -1386,7 +2044,7 @@ function renderAwardsPersona(filas, personaNombre) {
     const seccion = document.getElementById('seccionAwardsPersona');
     const titulo = document.getElementById('tituloAwardsPersona');
 
-    titulo.textContent = `Awards de ${personaNombre}`;
+    titulo.textContent = `Ajuts de ${personaNombre}`;
     seccion.classList.remove('hidden');
 
     if (!tablaAwards) return;
@@ -1447,15 +2105,19 @@ function renderAwardsPersona(filas, personaNombre) {
         { title: 'Unitat organitzativa de cogestió', field: 'comanagingOrganization', widthGrow: 1 }
     ]);
     tablaAwards.setData(rows);
+    tablaAwards.redraw(true);
 }
 
 /**
  * Pide a API el detalle de awards de una persona.
  * @param {{persona:string,personaUuid?:string}} persona
+ * @param {number} requestSeq
  * @returns {Promise<void>}
  */
-async function cargarAwardsPersona(persona) {
+async function cargarAwardsPersona(persona, requestSeq) {
     if (!persona || !persona.personaUuid) {
+        if (requestSeq !== awardsRequestSeq) return;
+        renderAwardsPersona([], persona?.persona || 'la persona seleccionada');
         return;
     }
 
@@ -1484,11 +2146,17 @@ async function cargarAwardsPersona(persona) {
         params.set('gestionadosPorDept', 'managed');
     }
     const res = await fetch(apiUrl(`/awards/stats/persona-awards?${params.toString()}`));
+    if (res.status === 404 || res.status === 204) {
+        if (requestSeq !== awardsRequestSeq) return;
+        renderAwardsPersona([], persona.persona || 'la persona seleccionada');
+        return;
+    }
     if (!res.ok) {
         throw new Error(`HTTP ${res.status}`);
     }
     const awards = await res.json();
-    renderAwardsPersona(awards, persona.persona);
+    if (requestSeq !== awardsRequestSeq) return;
+    renderAwardsPersona(Array.isArray(awards) ? awards : [], persona.persona);
 }
 
 /**
@@ -2416,6 +3084,15 @@ async function cargarDatos() {
             data = await resumenRes.json();
             serieProyectos = await serieProyectosRes;
         }
+        let personalDept = [];
+        if (Array.isArray(deptUuid) ? deptUuid.length > 0 : Boolean(deptUuid)) {
+            try {
+                personalDept = await cargarPersonalDepartamento(deptUuid);
+            } catch (e) {
+                console.warn('No s\'ha pogut carregar el personal del departament per completar la taula resum.', e);
+            }
+        }
+
         filasResumenActual = data;
         personaTopSeleccionada = null;
         const seccionEvol = document.getElementById('seccionEvolucionPersonaDept');
@@ -2423,7 +3100,7 @@ async function cargarDatos() {
             seccionEvol.classList.add('hidden');
             if (window.tablaEvolucionPersonaDept) window.tablaEvolucionPersonaDept.clearData();
         }
-        renderTabla(data, modoAnio, desde, hasta);
+        renderTabla(data, modoAnio, desde, hasta, personalDept);
         renderTablaCrecimiento(data, desde, hasta);
         renderGraficos(data);
         if (chartImporteAnio) chartImporteAnio.dispose();
@@ -2560,6 +3237,8 @@ document.addEventListener('fullscreenchange', () => {
     if (chartProyectosAnio) chartProyectosAnio.resize();
     if (chartTopPersonas) chartTopPersonas.resize();
     if (chartComparativaDept) chartComparativaDept.resize();
+    if (chartPersonasConSinProyectos) chartPersonasConSinProyectos.resize();
+    if (chartEmploymentTypeConSin) chartEmploymentTypeConSin.resize();
 });
 
 window.addEventListener('resize', () => {
@@ -2567,6 +3246,8 @@ window.addEventListener('resize', () => {
     if (chartProyectosAnio) chartProyectosAnio.resize();
     if (chartTopPersonas) chartTopPersonas.resize();
     if (chartComparativaDept) chartComparativaDept.resize();
+    if (chartPersonasConSinProyectos) chartPersonasConSinProyectos.resize();
+    if (chartEmploymentTypeConSin) chartEmploymentTypeConSin.resize();
 });
 
 async function init() {
