@@ -20,6 +20,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.concurrent.ConcurrentHashMap;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.Date;
@@ -28,10 +29,17 @@ import java.util.Date;
 public class ResearchOutputJournalLinkService {
 
     private static final String RESEARCHOUTPUTS_COLLECTION = "Researchoutputs";
+    private static final long QUARTILES_CACHE_TTL_MS = 600_000;
+    private static final long JOURNAL_UUID_CACHE_TTL_MS = 600_000;
 
     private final MongoTemplate mongoTemplate;
     private final JournalRepository journalRepository;
     private final JournalJcrService journalJcrService;
+    private final Map<String, CacheEntry> quartilesDashboardCache = new ConcurrentHashMap<>();
+    private final Map<String, JournalCacheEntry> journalUuidCache = new ConcurrentHashMap<>();
+
+    private record CacheEntry(Map<String, Object> data, long expiresAtMs) {}
+    private record JournalCacheEntry(Optional<Journal> journal, long expiresAtMs) {}
 
     public ResearchOutputJournalLinkService(
             MongoTemplate mongoTemplate,
@@ -56,8 +64,58 @@ public class ResearchOutputJournalLinkService {
         return linkByPublicationUuid(publicationUuid).map(this::toCompactSummary);
     }
 
-    public List<Map<String, Object>> quartileDistributionByDepartment(String deptUuid, Integer desde, Integer hasta) {
-        List<String> publicationUuids = publicationUuidsByDepartment(deptUuid, desde, hasta);
+    public Map<String, Object> quartilesDashboardByDepartment(String deptUuid, Integer desde, Integer hasta, String filtrePersonal, String personUuid) {
+        long now = System.currentTimeMillis();
+        String cacheKey = buildQuartilesCacheKey(deptUuid, desde, hasta, filtrePersonal, personUuid);
+        CacheEntry cached = quartilesDashboardCache.get(cacheKey);
+        if (cached != null && cached.expiresAtMs() > now) {
+            return cached.data();
+        }
+
+        // Filter by year directly in the Mongo pipeline (indexed) instead of fetching all years.
+        List<String> publicationUuids = publicationUuidsByDepartment(deptUuid, desde, hasta, filtrePersonal, personUuid);
+        if (publicationUuids.isEmpty()) {
+            Map<String, Object> emptyResult = Map.of(
+                    "quartiles", List.of(),
+                    "articles", List.of(),
+                    "evolution", List.of(),
+                    "openAccess", List.of()
+            );
+            quartilesDashboardCache.put(cacheKey, new CacheEntry(emptyResult, now + QUARTILES_CACHE_TTL_MS));
+            return emptyResult;
+        }
+
+        Query publicationsQuery = new Query(Criteria.where("uuid").in(publicationUuids));
+        publicationsQuery.fields()
+                .include("uuid")
+                .include("title.value")
+                .include("publicationDate")
+                .include("submissionYear")
+                .include("contributors.name")
+                .include("contributors.person.uuid")
+                .include("contributors.externalPerson.uuid")
+                .include("journalAssociation")
+                .include("journal")
+                .include("publicationChannel.journal.uuid")
+                .include("issn")
+                .include("eissn")
+                .include("electronicVersions.accessType.term")
+                .include("volume")
+                .include("issue")
+                .include("numberOfPages")
+                .include("pages")
+                .include("articleNumber")
+                .include("journalName")
+                .include("journalTitle");
+        List<Document> publications = mongoTemplate.find(publicationsQuery, Document.class, RESEARCHOUTPUTS_COLLECTION);
+
+        Map<String, Optional<Journal>> journalByUuid = new HashMap<>();
+        Map<String, String> quartileByIssnAndYear = new HashMap<>();
+        Map<String, List<Jcr>> jcrByIssn = new HashMap<>();
+
+        // Pre-batch: resolve all journals and JCR data in 2 queries instead of N per-publication queries.
+        prebatchJournalsAndJcr(publications, journalByUuid, jcrByIssn);
+
         Map<String, Integer> counts = new LinkedHashMap<>();
         counts.put("Q1", 0);
         counts.put("Q2", 0);
@@ -65,121 +123,113 @@ public class ResearchOutputJournalLinkService {
         counts.put("Q4", 0);
         counts.put("Sense Quartil", 0);
 
-        if (publicationUuids.isEmpty()) {
-            return List.of();
-        }
+        int openAccessCount = 0;
+        int notOpenAccessCount = 0;
 
-        Query publicationsQuery = new Query(Criteria.where("uuid").in(publicationUuids));
-        List<Document> publications = mongoTemplate.find(publicationsQuery, Document.class, RESEARCHOUTPUTS_COLLECTION);
+        Map<Integer, Map<String, Object>> byYear = new TreeMap<>();
+        List<Map<String, Object>> articles = new ArrayList<>();
 
-        Map<String, Optional<Journal>> journalByUuid = new HashMap<>();
-        Map<String, String> quartileByIssnAndYear = new HashMap<>();
-        Map<String, List<Jcr>> jcrByIssn = new HashMap<>();
-
-        for (Document publication : publications) {
-            Integer publicationYear = extractYear(publication);
-            String quartile = resolveQuartileForPublication(
-                    publication,
-                    publicationYear,
-                    journalByUuid,
-                    quartileByIssnAndYear,
-                    jcrByIssn
-            );
-
-            if (quartile == null || quartile.isBlank() || !counts.containsKey(quartile)) {
-                counts.put("Sense Quartil", counts.get("Sense Quartil") + 1);
-            } else {
-                counts.put(quartile, counts.get(quartile) + 1);
-            }
-        }
-
-        List<Map<String, Object>> output = new ArrayList<>();
-        for (Map.Entry<String, Integer> entry : counts.entrySet()) {
-            if (entry.getValue() > 0) {
-                output.add(Map.of(
-                        "quartile", entry.getKey(),
-                        "total", entry.getValue()
-                ));
-            }
-        }
-        return output;
-    }
-
-    public List<Map<String, Object>> quartileArticlesByDepartment(String deptUuid, Integer desde, Integer hasta) {
-        List<String> publicationUuids = publicationUuidsByDepartment(deptUuid, desde, hasta);
-        if (publicationUuids.isEmpty()) {
-            return List.of();
-        }
-
-        Query publicationsQuery = new Query(Criteria.where("uuid").in(publicationUuids));
-        List<Document> publications = mongoTemplate.find(publicationsQuery, Document.class, RESEARCHOUTPUTS_COLLECTION);
-
-        Map<String, Optional<Journal>> journalByUuid = new HashMap<>();
-        Map<String, String> quartileByIssnAndYear = new HashMap<>();
-        Map<String, List<Jcr>> jcrByIssn = new HashMap<>();
-
-        List<Map<String, Object>> output = new ArrayList<>();
         for (Document publication : publications) {
             String publicationUuid = asString(publication.get("uuid"));
             String title = nestedString(publication, "title", "value");
             Integer year = extractYear(publication);
             String authors = extractAuthorsApa(publication);
-            String quartile = resolveQuartileForPublication(
-                    publication,
-                    year,
-                    journalByUuid,
-                    quartileByIssnAndYear,
-                    jcrByIssn
-            );
-            String journalUuid = findFirstString(publication,
-                List.of("journalAssociation", "journal", "uuid"),
-                List.of("journal", "uuid"),
-                List.of("publicationChannel", "journal", "uuid")
-            );
 
+            boolean hasJournal = hasJournalAssociation(publication);
+            String quartileResolved = resolveQuartileForPublication(
+                    publication, year, journalByUuid, quartileByIssnAndYear, jcrByIssn
+            );
+            // quartile used for pie/evolution grouping (null means non-journal: excluded)
+            String quartile = hasJournal
+                    ? ((quartileResolved == null || quartileResolved.isBlank()) ? "Sense Quartil" : quartileResolved)
+                    : null;
+            if (quartile != null && !counts.containsKey(quartile)) {
+                quartile = "Sense Quartil";
+            }
+            // display label for the articles table
+            String quartileDisplay = quartile != null ? quartile : "-";
+
+            String journalUuid = findFirstString(publication,
+                    List.of("journalAssociation", "journal", "uuid"),
+                    List.of("journal", "uuid"),
+                    List.of("publicationChannel", "journal", "uuid")
+            );
             Optional<Journal> journalOpt = Optional.empty();
             if (journalUuid != null && !journalUuid.isBlank()) {
-            journalOpt = journalByUuid.computeIfAbsent(journalUuid, key -> journalRepository.findByUuid(key));
+                journalOpt = journalByUuid.computeIfAbsent(journalUuid, key -> findJournalByUuidCached(key));
             }
 
             Integer month = extractDatePart(publication, "month");
             Integer day = extractDatePart(publication, "day");
             String journalTitle = extractJournalTitle(publication, journalOpt);
             String volume = findFirstString(publication,
-                List.of("journalAssociation", "volume"),
-                List.of("journal", "volume"),
-                List.of("volume")
+                    List.of("journalAssociation", "volume"),
+                    List.of("journal", "volume"),
+                    List.of("volume")
             );
             String issue = findFirstString(publication,
-                List.of("journalAssociation", "journalNumber"),
-                List.of("journalAssociation", "issue"),
-                List.of("journal", "issue"),
-                List.of("issue")
+                    List.of("journalAssociation", "journalNumber"),
+                    List.of("journalAssociation", "issue"),
+                    List.of("journal", "issue"),
+                    List.of("issue")
             );
             String pages = findFirstString(publication,
-                List.of("journalAssociation", "pages"),
-                List.of("journal", "pages"),
-                List.of("pages"),
-                List.of("numberOfPages")
+                    List.of("journalAssociation", "pages"),
+                    List.of("journal", "pages"),
+                    List.of("pages"),
+                    List.of("numberOfPages")
             );
             String articleNumber = findFirstString(publication,
-                List.of("journalAssociation", "articleNumber"),
-                List.of("journal", "articleNumber"),
-                List.of("articleNumber")
+                    List.of("journalAssociation", "articleNumber"),
+                    List.of("journal", "articleNumber"),
+                    List.of("articleNumber")
             );
+
+            boolean openAccess = isOpenAccess(publication);
 
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("publicationUuid", publicationUuid);
             row.put("title", title);
             row.put("year", year);
-            row.put("quartile", quartile == null ? "Sense Quartil" : quartile);
+            row.put("quartile", quartileDisplay);
+            row.put("openAccess", openAccess);
             row.put("cita", buildCitationApa(authors, day, month, year, journalTitle, volume, issue, pages, articleNumber, title));
-            output.add(row);
+
+            if (quartile != null) {
+                counts.put(quartile, counts.get(quartile) + 1);
+                if (openAccess) {
+                    openAccessCount++;
+                } else {
+                    notOpenAccessCount++;
+                }
+            }
+
+            if (quartile != null && year != null) {
+                Map<String, Object> rowByYear = byYear.computeIfAbsent(year, y -> {
+                    Map<String, Object> item = new LinkedHashMap<>();
+                    item.put("year", y);
+                    item.put("Q1", 0);
+                    item.put("Q2", 0);
+                    item.put("Q3", 0);
+                    item.put("Q4", 0);
+                    item.put("Sense Quartil", 0);
+                    return item;
+                });
+                int current = rowByYear.get(quartile) instanceof Number n ? n.intValue() : 0;
+                rowByYear.put(quartile, current + 1);
+            }
+
+            articles.add(row);
         }
 
-        output.sort((a, b) -> {
+        articles.sort((a, b) -> {
             String qa = String.valueOf(a.getOrDefault("quartile", "Sense Quartil"));
             String qb = String.valueOf(b.getOrDefault("quartile", "Sense Quartil"));
+            // "-" (non-journal) sorts after all quartile labels
+            boolean aNoJ = "-".equals(qa);
+            boolean bNoJ = "-".equals(qb);
+            if (aNoJ && !bNoJ) return 1;
+            if (!aNoJ && bNoJ) return -1;
             int cmpQ = qa.compareTo(qb);
             if (cmpQ != 0) {
                 return cmpQ;
@@ -189,59 +239,180 @@ public class ResearchOutputJournalLinkService {
             return Integer.compare(yb, ya);
         });
 
-        return output;
+        List<Map<String, Object>> quartiles = new ArrayList<>();
+        for (Map.Entry<String, Integer> entry : counts.entrySet()) {
+            if (entry.getValue() > 0) {
+                quartiles.add(Map.of(
+                        "quartile", entry.getKey(),
+                        "total", entry.getValue()
+                ));
+            }
+        }
+
+        List<Map<String, Object>> openAccessData = new ArrayList<>();
+        if (openAccessCount > 0) openAccessData.add(Map.of("label", "Accés obert", "value", openAccessCount));
+        if (notOpenAccessCount > 0) openAccessData.add(Map.of("label", "Accés tancat", "value", notOpenAccessCount));
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("quartiles", quartiles);
+        result.put("articles", articles);
+        result.put("evolution", new ArrayList<>(byYear.values()));
+        result.put("openAccess", openAccessData);
+
+        quartilesDashboardCache.put(cacheKey, new CacheEntry(result, now + QUARTILES_CACHE_TTL_MS));
+        cleanupExpiredQuartilesCache(now);
+        return result;
     }
 
-    public List<Map<String, Object>> quartileEvolutionByDepartment(String deptUuid, Integer desde, Integer hasta) {
-        List<String> publicationUuids = publicationUuidsByDepartment(deptUuid, desde, hasta);
-        if (publicationUuids.isEmpty()) {
-            return List.of();
-        }
+    /**
+     * Batch-fetches all Journal and JCR data needed for a list of publications using
+     * at most 2 MongoDB queries (one to Journals for UUIDs, one to the JCR Journals for ISSNs),
+     * populating the per-request lookup maps so that the main processing loop has only cache hits.
+     */
+    private void prebatchJournalsAndJcr(
+            List<Document> publications,
+            Map<String, Optional<Journal>> journalByUuid,
+            Map<String, List<Jcr>> jcrByIssn) {
 
-        Query publicationsQuery = new Query(Criteria.where("uuid").in(publicationUuids));
-        List<Document> publications = mongoTemplate.find(publicationsQuery, Document.class, RESEARCHOUTPUTS_COLLECTION);
-
-        Map<String, Optional<Journal>> journalByUuid = new HashMap<>();
-        Map<String, String> quartileByIssnAndYear = new HashMap<>();
-        Map<String, List<Jcr>> jcrByIssn = new HashMap<>();
-
-        Map<Integer, Map<String, Object>> byYear = new TreeMap<>();
-
-        for (Document publication : publications) {
-            Integer publicationYear = extractYear(publication);
-            if (publicationYear == null) {
-                continue;
-            }
-
-            String quartile = resolveQuartileForPublication(
-                    publication,
-                    publicationYear,
-                    journalByUuid,
-                    quartileByIssnAndYear,
-                    jcrByIssn
+        // 1. Collect all journal UUIDs referenced by the publications.
+        Set<String> uuids = new LinkedHashSet<>();
+        for (Document pub : publications) {
+            String uid = findFirstString(pub,
+                    List.of("journalAssociation", "journal", "uuid"),
+                    List.of("journal", "uuid"),
+                    List.of("publicationChannel", "journal", "uuid")
             );
-
-            String bucket = (quartile == null || quartile.isBlank()) ? "Sense Quartil" : quartile;
-            if (!List.of("Q1", "Q2", "Q3", "Q4", "Sense Quartil").contains(bucket)) {
-                bucket = "Sense Quartil";
+            if (uid != null && !uid.isBlank()) {
+                uuids.add(uid);
             }
-
-            Map<String, Object> row = byYear.computeIfAbsent(publicationYear, year -> {
-                Map<String, Object> item = new LinkedHashMap<>();
-                item.put("year", year);
-                item.put("Q1", 0);
-                item.put("Q2", 0);
-                item.put("Q3", 0);
-                item.put("Q4", 0);
-                item.put("Sense Quartil", 0);
-                return item;
-            });
-
-            int current = row.get(bucket) instanceof Number n ? n.intValue() : 0;
-            row.put(bucket, current + 1);
         }
 
-        return new ArrayList<>(byYear.values());
+        // 2. For UUIDs not in the service-level journal cache, batch-fetch from DB.
+        long now = System.currentTimeMillis();
+        Set<String> uncachedUuids = new LinkedHashSet<>();
+        for (String uid : uuids) {
+            JournalCacheEntry cached = journalUuidCache.get(uid);
+            if (cached == null || cached.expiresAtMs() <= now) {
+                uncachedUuids.add(uid);
+            }
+        }
+        if (!uncachedUuids.isEmpty()) {
+            List<Journal> fetched = journalRepository.findByUuidIn(uncachedUuids);
+            Map<String, Journal> byUuidFetched = new LinkedHashMap<>();
+            for (Journal j : fetched) {
+                if (j.getUuid() != null) {
+                    byUuidFetched.put(j.getUuid(), j);
+                }
+            }
+            for (String uid : uncachedUuids) {
+                Optional<Journal> opt = Optional.ofNullable(byUuidFetched.get(uid));
+                journalUuidCache.put(uid, new JournalCacheEntry(opt, now + JOURNAL_UUID_CACHE_TTL_MS));
+            }
+        }
+
+        // Populate the per-request map from the service-level cache.
+        for (String uid : uuids) {
+            JournalCacheEntry ce = journalUuidCache.get(uid);
+            if (ce != null) {
+                journalByUuid.put(uid, ce.journal());
+            }
+        }
+
+        // 3. Collect all raw ISSNs from publications and from the resolved journals.
+        Set<String> allIssns = new LinkedHashSet<>();
+        for (Document pub : publications) {
+            allIssns.addAll(extractPublicationIssns(pub));
+            if (allIssns.isEmpty()) {
+                allIssns.addAll(scanIssnValues(pub));
+            }
+        }
+        for (Optional<Journal> jOpt : journalByUuid.values()) {
+            jOpt.ifPresent(j -> allIssns.addAll(j.getAllIssnsForJoin()));
+        }
+
+        // 4. Batch-warm the JCR cache for all collected ISSNs (single DB query for uncached ones).
+        journalJcrService.warmJcrCacheForIssns(allIssns);
+
+        // 5. Populate the per-request jcrByIssn map from the service-level JCR cache so the loop
+        //    can use it directly without going through journalJcrService again.
+        // (The loop still calls findJcrByIssnCached which will be a cache hit after step 4.)
+    }
+
+    private String buildQuartilesCacheKey(String deptUuid, Integer desde, Integer hasta, String filtrePersonal, String personUuid) {
+        String dep = (deptUuid == null || deptUuid.isBlank()) ? "*" : deptUuid.trim();
+        String from = desde == null ? "*" : String.valueOf(desde);
+        String to = hasta == null ? "*" : String.valueOf(hasta);
+        String mode = (filtrePersonal == null || filtrePersonal.isBlank()) ? "vigent" : filtrePersonal.trim();
+        String person = (personUuid == null || personUuid.isBlank()) ? "*" : personUuid.trim();
+        return dep + "|" + from + "|" + to + "|" + mode + "|" + person;
+    }
+
+    private void cleanupExpiredQuartilesCache(long now) {
+        if (quartilesDashboardCache.size() <= 128) {
+            return;
+        }
+        quartilesDashboardCache.entrySet().removeIf(entry -> entry.getValue().expiresAtMs() <= now);
+    }
+
+    private Optional<Journal> findJournalByUuidCached(String uuid) {
+        long now = System.currentTimeMillis();
+        JournalCacheEntry cached = journalUuidCache.get(uuid);
+        if (cached != null && cached.expiresAtMs() > now) {
+            return cached.journal();
+        }
+        Optional<Journal> result = journalRepository.findByUuid(uuid);
+        journalUuidCache.put(uuid, new JournalCacheEntry(result, now + JOURNAL_UUID_CACHE_TTL_MS));
+        if (journalUuidCache.size() > 4096) {
+            journalUuidCache.entrySet().removeIf(e -> e.getValue().expiresAtMs() <= now);
+        }
+        return result;
+    }
+
+    @SuppressWarnings("unchecked")
+    public List<Map<String, Object>> quartileDistributionByDepartment(String deptUuid, Integer desde, Integer hasta, String filtrePersonal, String personUuid) {
+        return (List<Map<String, Object>>) quartilesDashboardByDepartment(deptUuid, desde, hasta, filtrePersonal, personUuid)
+                .getOrDefault("quartiles", List.of());
+    }
+
+    @SuppressWarnings("unchecked")
+    public List<Map<String, Object>> quartileArticlesByDepartment(String deptUuid, Integer desde, Integer hasta, String filtrePersonal, String personUuid) {
+        return (List<Map<String, Object>>) quartilesDashboardByDepartment(deptUuid, desde, hasta, filtrePersonal, personUuid)
+                .getOrDefault("articles", List.of());
+    }
+
+    @SuppressWarnings("unchecked")
+    public List<Map<String, Object>> quartileEvolutionByDepartment(String deptUuid, Integer desde, Integer hasta, String filtrePersonal, String personUuid) {
+        return (List<Map<String, Object>>) quartilesDashboardByDepartment(deptUuid, desde, hasta, filtrePersonal, personUuid)
+                .getOrDefault("evolution", List.of());
+    }
+
+    /**
+     * Returns true when the publication has at least one electronicVersion whose
+     * accessType term is Open/Abierto/Obert (mirrors the Mongo $facet query).
+     */
+    private static boolean isOpenAccess(Document publication) {
+        Object evObj = publication.get("electronicVersions");
+        if (evObj instanceof List<?> evList) {
+            for (Object item : evList) {
+                if (item instanceof Document ev) {
+                    Object atObj = ev.get("accessType");
+                    if (atObj instanceof Document at) {
+                        Object termObj = at.get("term");
+                        if (termObj instanceof Document term) {
+                            String en = term.getString("en_GB");
+                            String es = term.getString("es_ES");
+                            String ca = term.getString("ca_ES");
+                            if ("Open".equalsIgnoreCase(en)
+                                    || "Abierto".equalsIgnoreCase(es)
+                                    || "Obert".equalsIgnoreCase(ca)) {
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return false;
     }
 
     private String resolveQuartileForPublication(
@@ -258,7 +429,7 @@ public class ResearchOutputJournalLinkService {
 
         Optional<Journal> journalOpt = Optional.empty();
         if (journalUuid != null && !journalUuid.isBlank()) {
-            journalOpt = journalByUuid.computeIfAbsent(journalUuid, key -> journalRepository.findByUuid(key));
+            journalOpt = journalByUuid.computeIfAbsent(journalUuid, key -> findJournalByUuidCached(key));
         }
 
         Set<String> issns = extractPublicationIssns(publication);
@@ -286,6 +457,23 @@ public class ResearchOutputJournalLinkService {
         }
 
         return null;
+    }
+
+    private static boolean hasJournalAssociation(Document publication) {
+        String jUuid = findFirstString(publication,
+                List.of("journalAssociation", "journal", "uuid"),
+                List.of("journal", "uuid"),
+                List.of("publicationChannel", "journal", "uuid")
+        );
+        if (jUuid != null && !jUuid.isBlank()) return true;
+        String issn = findFirstString(publication,
+                List.of("journalAssociation", "issn", "value"),
+                List.of("journal", "issn", "value"),
+                List.of("issn", "value"),
+                List.of("journalAssociation", "electronicIssn", "value"),
+                List.of("journal", "electronicIssn", "value")
+        );
+        return issn != null && !issn.isBlank();
     }
 
     private static Set<String> extractPublicationIssns(Document publication) {
@@ -507,25 +695,122 @@ public class ResearchOutputJournalLinkService {
         return normalized.isBlank() ? null : normalized;
     }
 
-    private List<String> publicationUuidsByDepartment(String deptUuid, Integer desde, Integer hasta) {
+    private static Document buildVigentAssociationCriteria() {
+        LocalDate hoy = LocalDate.now();
+        String hoyIso = hoy.toString();
+        Date hoyDate = Date.from(hoy.atStartOfDay(ZoneId.systemDefault()).toInstant());
+        return new Document("$or", List.of(
+                new Document("period.endDate", null),
+                new Document("period.endDate", new Document("$exists", false)),
+                new Document("$and", List.of(
+                        new Document("period.endDate", new Document("$type", 9)),
+                        new Document("period.endDate", new Document("$gt", hoyDate))
+                )),
+                new Document("$and", List.of(
+                        new Document("period.endDate", new Document("$type", 2)),
+                        new Document("period.endDate", new Document("$gt", hoyIso))
+                ))
+        ));
+    }
+
+    /**
+     * Criteria for associations whose period overlaps [desde, hasta]:
+     *   startDate <= Dec-31-hasta  AND  (endDate missing OR endDate >= Jan-1-desde)
+     * Falls back to vigent criteria when desde/hasta are both null.
+     */
+    private static Document buildPeriodeAssociationCriteria(Integer desde, Integer hasta) {
+        if (desde == null && hasta == null) {
+            return buildVigentAssociationCriteria();
+        }
+
+        List<Document> conditions = new ArrayList<>();
+
+        // endDate >= Jan 1 of desde  (or endDate missing → still active)
+        if (desde != null) {
+            String desdeIso = desde + "-01-01";
+            Date desdeDate = Date.from(LocalDate.of(desde, 1, 1).atStartOfDay(ZoneId.systemDefault()).toInstant());
+            conditions.add(new Document("$or", List.of(
+                    new Document("period.endDate", null),
+                    new Document("period.endDate", new Document("$exists", false)),
+                    new Document("$and", List.of(
+                            new Document("period.endDate", new Document("$type", 9)),
+                            new Document("period.endDate", new Document("$gte", desdeDate))
+                    )),
+                    new Document("$and", List.of(
+                            new Document("period.endDate", new Document("$type", 2)),
+                            new Document("period.endDate", new Document("$gte", desdeIso))
+                    ))
+            )));
+        }
+
+        // startDate <= Dec 31 of hasta  (or startDate missing → joined before any tracking)
+        if (hasta != null) {
+            String hastaIso = hasta + "-12-31";
+            Date hastaDate = Date.from(LocalDate.of(hasta, 12, 31).atStartOfDay(ZoneId.systemDefault()).toInstant());
+            conditions.add(new Document("$or", List.of(
+                    new Document("period.startDate", null),
+                    new Document("period.startDate", new Document("$exists", false)),
+                    new Document("$and", List.of(
+                            new Document("period.startDate", new Document("$type", 9)),
+                            new Document("period.startDate", new Document("$lte", hastaDate))
+                    )),
+                    new Document("$and", List.of(
+                            new Document("period.startDate", new Document("$type", 2)),
+                            new Document("period.startDate", new Document("$lte", hastaIso))
+                    ))
+            )));
+        }
+
+        return conditions.size() == 1 ? conditions.get(0) : new Document("$and", conditions);
+    }
+
+    private static Document buildPublicationYearCriteria(Integer desde, Integer hasta) {
+        if (desde == null && hasta == null) {
+            return null;
+        }
+
+        Document range = new Document();
+        if (desde != null) {
+            range.append("$gte", desde);
+        }
+        if (hasta != null) {
+            range.append("$lte", hasta);
+        }
+
+        // Match directly on source year fields so Mongo can use indexes before heavy stages.
+        return new Document("$or", List.of(
+                new Document("publicationDate.year", new Document(range)),
+                new Document("$and", List.of(
+                        new Document("$or", List.of(
+                                new Document("publicationDate.year", null),
+                                new Document("publicationDate.year", new Document("$exists", false))
+                        )),
+                        new Document("submissionYear", new Document(range))
+                ))
+        ));
+    }
+
+    private List<String> publicationUuidsByDepartment(String deptUuid, Integer desde, Integer hasta, String filtrePersonal, String personUuid) {
+
+        // When a specific person is selected, bypass the contributor-unwind/lookup chain and
+        // query directly. This captures ALL publication types (books, conference papers, etc.)
+        // that get dropped by $unwind when a publication has an empty contributors array.
+        if (personUuid != null && !personUuid.isBlank()) {
+            return publicationUuidsByPerson(personUuid.trim(), desde, hasta);
+        }
+
         List<Document> pipeline = new ArrayList<>();
 
         pipeline.add(new Document("$match", new Document("workflow.step", "approved")));
+        Document yearCriteria = buildPublicationYearCriteria(desde, hasta);
+        if (yearCriteria != null) {
+            pipeline.add(new Document("$match", yearCriteria));
+        }
+
         pipeline.add(new Document("$project", new Document()
                 .append("publicationUuid", "$uuid")
                 .append("publicationYear", new Document("$ifNull", List.of("$publicationDate.year", "$submissionYear")))
                 .append("contributors", new Document("$ifNull", List.of("$contributors", List.of())))));
-
-        List<Document> andFilters = new ArrayList<>();
-        if (desde != null) {
-            andFilters.add(new Document("publicationYear", new Document("$gte", desde)));
-        }
-        if (hasta != null) {
-            andFilters.add(new Document("publicationYear", new Document("$lte", hasta)));
-        }
-        if (!andFilters.isEmpty()) {
-            pipeline.add(new Document("$match", new Document("$and", andFilters)));
-        }
 
         pipeline.add(new Document("$unwind", "$contributors"));
         Document personUuidExpr = new Document("$trim", new Document("input",
@@ -550,22 +835,10 @@ public class ResearchOutputJournalLinkService {
                 .append("path", "$persona_info")
                 .append("preserveNullAndEmptyArrays", false)));
 
-        LocalDate hoy = LocalDate.now();
-        String hoyIso = hoy.toString();
-        Date hoyDate = Date.from(hoy.atStartOfDay(ZoneId.systemDefault()).toInstant());
-
-        Document activeAssociationCriteria = new Document("$or", List.of(
-                new Document("period.endDate", null),
-                new Document("period.endDate", new Document("$exists", false)),
-                new Document("$and", List.of(
-                        new Document("period.endDate", new Document("$type", 9)),
-                        new Document("period.endDate", new Document("$gt", hoyDate))
-                )),
-                new Document("$and", List.of(
-                        new Document("period.endDate", new Document("$type", 2)),
-                        new Document("period.endDate", new Document("$gt", hoyIso))
-                ))
-        ));
+        boolean usePeriode = "periode".equalsIgnoreCase(filtrePersonal);
+        Document activeAssociationCriteria = usePeriode
+                ? buildPeriodeAssociationCriteria(desde, hasta)
+                : buildVigentAssociationCriteria();
 
         if (deptUuid != null && !deptUuid.isBlank()) {
             Document assocCriteria = new Document("$and", List.of(
@@ -585,6 +858,61 @@ public class ResearchOutputJournalLinkService {
 
         pipeline.add(new Document("$group", new Document("_id", "$publicationUuid")));
         pipeline.add(new Document("$project", new Document("_id", 0).append("publicationUuid", "$_id")));
+
+        List<Document> rows = mongoTemplate
+                .getCollection(RESEARCHOUTPUTS_COLLECTION)
+                .aggregate(pipeline)
+                .into(new ArrayList<>());
+
+        return rows.stream()
+                .map(row -> row.getString("publicationUuid"))
+                .filter(value -> value != null && !value.isBlank())
+                .toList();
+    }
+
+    /**
+     * Direct lookup of all approved publications where the given personUuid appears as a
+     * contributor (person or externalPerson). Avoids the $unwind-contributors stage so that
+     * publications with an empty contributors array (books, edited volumes, etc.) are NOT dropped.
+     * Uses $trim on each contributor UUID to match the original pipeline behaviour (some UUIDs
+     * in the database have leading/trailing whitespace).
+     */
+    private List<String> publicationUuidsByPerson(String personUuid, Integer desde, Integer hasta) {
+        List<Document> pipeline = new ArrayList<>();
+
+        // Use $expr + $filter + $trim so that contributor UUIDs with surrounding whitespace
+        // are still matched, consistent with the main publicationUuidsByDepartment pipeline.
+        Document trimmedUuidMatch = new Document("$expr", new Document("$gt", List.of(
+            new Document("$size", new Document("$filter", new Document()
+                .append("input", new Document("$ifNull", List.of("$contributors", List.of())))
+                .append("as", "c")
+                .append("cond", new Document("$or", List.of(
+                    new Document("$eq", List.of(
+                        new Document("$trim", new Document("input",
+                            new Document("$ifNull", List.of("$$c.person.uuid", "")))),
+                        personUuid
+                    )),
+                    new Document("$eq", List.of(
+                        new Document("$trim", new Document("input",
+                            new Document("$ifNull", List.of("$$c.externalPerson.uuid", "")))),
+                        personUuid
+                    ))
+                )))
+            )),
+            0
+        )));
+
+        pipeline.add(new Document("$match", new Document("$and", List.of(
+                new Document("workflow.step", "approved"),
+                trimmedUuidMatch
+        ))));
+
+        Document yearCriteria = buildPublicationYearCriteria(desde, hasta);
+        if (yearCriteria != null) {
+            pipeline.add(new Document("$match", yearCriteria));
+        }
+
+        pipeline.add(new Document("$project", new Document("_id", 0).append("publicationUuid", "$uuid")));
 
         List<Document> rows = mongoTemplate
                 .getCollection(RESEARCHOUTPUTS_COLLECTION)

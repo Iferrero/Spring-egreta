@@ -26,6 +26,9 @@
         const pageTitle = getPageTitle();
         const pageSubtitle = getPageSubtitle();
 
+        const path = window.location.pathname;
+        const isIndexPage = path === '/' || path.endsWith('/index.html') || path.endsWith('/');
+
         const brandBar = document.createElement('div');
         brandBar.className = 'uab-brandbar';
         brandBar.innerHTML = `
@@ -42,6 +45,11 @@
                 <span class="uab-brandbar__title text-2xl font-extrabold text-[#2a3037] tracking-tight" aria-label="Títol de la pàgina">${pageTitle}</span>
                 ${pageSubtitle ? `<span class="uab-brandbar__subtitle" aria-label="Subtítol de la pàgina">${pageSubtitle}</span>` : ''}
             </div>
+            ${!isIndexPage ? `
+            <a class="uab-brandbar__home" href="index.html" aria-label="Tornar a l'inici">
+                <i class="fa-solid fa-house"></i>
+                <span>Inici</span>
+            </a>` : ''}
         `;
 
         body.insertBefore(brandBar, body.firstChild);

@@ -1,8 +1,16 @@
 let refrescoTimer = null;
 let chartQuartiles = null;
 let chartQuartilesEvolution = null;
+let chartOpenAccess = null;
 let departamentosCatalogo = [];
 let departamentosSeleccionados = [];
+let totsElsDepartaments = false;
+let personasCatalogo = [];
+let personaSeleccionadaUuid = '';
+let currentLoadController = null;
+let currentLoadSeq = 0;
+let allArticles = [];
+let openAccessFilter = null; // null | true | false
 
 function mostrarOverlayCargando() {
     const overlay = document.getElementById('loadingOverlay');
@@ -22,7 +30,7 @@ function programarRefresco() {
 }
 
 function hayDepartamentoSeleccionado() {
-    return Array.isArray(departamentosSeleccionados) && departamentosSeleccionados.length > 0;
+    return totsElsDepartaments || (Array.isArray(departamentosSeleccionados) && departamentosSeleccionados.length > 0);
 }
 
 function obtenerFiltrosActuales() {
@@ -30,10 +38,14 @@ function obtenerFiltrosActuales() {
     const [desdeRaw, hastaRaw] = slider.noUiSlider.get();
     const desde = parseInt(desdeRaw, 10);
     const hasta = parseInt(hastaRaw, 10);
+    const filtrePersonalEl = document.querySelector('input[name="filtrePersonal"]:checked');
+    const filtrePersonal = filtrePersonalEl ? filtrePersonalEl.value : 'vigent';
     return {
         desde,
         hasta,
-        deptUuid: departamentosSeleccionados.length > 0 ? departamentosSeleccionados : []
+        filtrePersonal,
+        deptUuid: departamentosSeleccionados.length > 0 ? departamentosSeleccionados : [],
+        personUuid: personaSeleccionadaUuid || null
     };
 }
 
@@ -41,6 +53,20 @@ function renderizarChipsDepartamentos() {
     const container = document.getElementById('departamentoChipsContainer');
     const select = document.getElementById('departamentoSelect');
     container.innerHTML = '';
+
+    const label = document.getElementById('departamentoDropdownLabel');
+
+    if (totsElsDepartaments) {
+        const chip = document.createElement('span');
+        chip.className = 'inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-100 text-slate-600 text-xs font-semibold';
+        chip.textContent = 'Tots els departaments';
+        container.appendChild(chip);
+        label.textContent = 'Tots els departaments';
+        Array.from(select.options).forEach(opt => { opt.selected = false; });
+        resetPersonaDropdown();
+        programarRefresco();
+        return;
+    }
 
     Array.from(select.options).forEach(opt => {
         opt.selected = departamentosSeleccionados.includes(opt.value);
@@ -63,23 +89,24 @@ function renderizarChipsDepartamentos() {
         });
     });
 
-    const label = document.getElementById('departamentoDropdownLabel');
     label.textContent = departamentosSeleccionados.length === 0
         ? 'Afegeix departament...'
         : 'Canvia departament...';
 
     if (hayDepartamentoSeleccionado()) {
+        cargarPersones();
         programarRefresco();
     } else {
+        resetPersonaDropdown();
         updateEstado('Selecciona un departament per carregar dades.', false, false);
     }
 }
 
 function toggleDepartamentoSeleccionado(uuid) {
+    totsElsDepartaments = false;
     if (departamentosSeleccionados.includes(uuid)) {
         quitarDepartamentoSeleccionado(uuid);
     } else {
-        // Mantener un solo departamento para este informe.
         departamentosSeleccionados = [uuid];
         renderizarChipsDepartamentos();
     }
@@ -98,6 +125,100 @@ function cerrarDropdownDepartamentos() {
     document.getElementById('departamentoDropdownMenu').classList.add('hidden');
 }
 
+function resetPersonaDropdown() {
+    personaSeleccionadaUuid = '';
+    document.getElementById('personaSeleccionadaUuid').value = '';
+    const label = document.getElementById('personaDropdownLabel');
+    label.textContent = 'Totes les persones';
+    label.classList.add('text-slate-400');
+    label.classList.remove('text-slate-800');
+    document.getElementById('personaDropdownBtn').disabled = true;
+    document.getElementById('personaDropdownList').innerHTML = '';
+}
+
+function abrirDropdownPersones() {
+    document.getElementById('personaDropdownMenu').classList.remove('hidden');
+}
+
+function cerrarDropdownPersones() {
+    document.getElementById('personaDropdownMenu').classList.add('hidden');
+}
+
+async function cargarPersones() {
+    const { desde, hasta, filtrePersonal, deptUuid } = obtenerFiltrosActuales();
+    if (!deptUuid || deptUuid.length === 0) {
+        resetPersonaDropdown();
+        return;
+    }
+    const uuid = deptUuid[0];
+    const params = new URLSearchParams({
+        deptUuid: uuid,
+        filtrePersonal,
+        desde: String(desde),
+        hasta: String(hasta)
+    });
+
+    const btn = document.getElementById('personaDropdownBtn');
+    const list = document.getElementById('personaDropdownList');
+    btn.disabled = true;
+    list.innerHTML = '<li class="px-3 py-2 text-slate-400 text-sm">Carregant...</li>';
+
+    try {
+        const response = await apiFetch(`/persons/by-dept?${params.toString()}`);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const persons = await response.json();
+        personasCatalogo = Array.isArray(persons) ? persons : [];
+
+        list.innerHTML = '';
+
+        const allItem = document.createElement('li');
+        allItem.className = 'px-3 py-2 hover:bg-indigo-50 cursor-pointer text-sm text-slate-500 italic';
+        allItem.textContent = 'Totes les persones';
+        allItem.addEventListener('click', () => {
+            personaSeleccionadaUuid = '';
+            document.getElementById('personaSeleccionadaUuid').value = '';
+            const lbl = document.getElementById('personaDropdownLabel');
+            lbl.textContent = 'Totes les persones';
+            lbl.classList.add('text-slate-400');
+            lbl.classList.remove('text-slate-800');
+            cerrarDropdownPersones();
+            programarRefresco();
+        });
+        list.appendChild(allItem);
+
+        personasCatalogo.forEach(p => {
+            const item = document.createElement('li');
+            item.className = 'px-3 py-2 hover:bg-indigo-50 cursor-pointer text-sm';
+            const today = new Date().toISOString().slice(0, 10);
+            const isGone = p.endDate && p.endDate < today;
+            const endDateEs = p.endDate ? p.endDate.slice(8, 10) + '/' + p.endDate.slice(5, 7) + '/' + p.endDate.slice(0, 4) : '';
+            if (isGone) {
+                item.innerHTML = `${escapeHtml(p.nombre)} <span class="text-slate-400 text-xs">(fins ${escapeHtml(endDateEs)})</span>`;
+            } else {
+                item.textContent = p.nombre;
+            }
+            item.addEventListener('click', () => {
+                personaSeleccionadaUuid = p.uuid;
+                document.getElementById('personaSeleccionadaUuid').value = p.uuid;
+                const lbl = document.getElementById('personaDropdownLabel');
+                lbl.innerHTML = isGone
+                    ? `${escapeHtml(p.nombre)} <span class="text-slate-400 text-xs">(fins ${escapeHtml(endDateEs)})</span>`
+                    : escapeHtml(p.nombre);
+                lbl.classList.remove('text-slate-400');
+                lbl.classList.add('text-slate-800');
+                cerrarDropdownPersones();
+                programarRefresco();
+            });
+            list.appendChild(item);
+        });
+
+        btn.disabled = false;
+    } catch (_error) {
+        list.innerHTML = '<li class="px-3 py-2 text-red-500 text-sm">Error carregant persones</li>';
+        btn.disabled = false;
+    }
+}
+
 async function cargarDepartamentos() {
     const select = document.getElementById('departamentoSelect');
     const menu = document.getElementById('departamentoDropdownMenu');
@@ -112,6 +233,17 @@ async function cargarDepartamentos() {
 
         const departamentos = await response.json();
         departamentosCatalogo = Array.isArray(departamentos) ? departamentos : [];
+
+        const totsItem = document.createElement('div');
+        totsItem.className = 'px-3 py-2 hover:bg-indigo-50 cursor-pointer text-sm font-semibold text-slate-700 border-b border-slate-100';
+        totsItem.textContent = 'Tots els departaments';
+        totsItem.addEventListener('click', () => {
+            totsElsDepartaments = true;
+            departamentosSeleccionados = [];
+            renderizarChipsDepartamentos();
+            cerrarDropdownDepartamentos();
+        });
+        menu.appendChild(totsItem);
 
         departamentosCatalogo.forEach(dep => {
             const option = document.createElement('option');
@@ -137,6 +269,7 @@ async function cargarDepartamentos() {
         menu.innerHTML = '<div class="px-3 py-2 text-red-600 text-sm">No s\'han pogut carregar els departaments</div>';
     }
 
+    totsElsDepartaments = false;
     renderizarChipsDepartamentos();
 }
 
@@ -163,6 +296,8 @@ function configurarSlider(min, max, defaultDesde = 2021, defaultHasta = 2025) {
 
     slider.noUiSlider.on('set', () => {
         if (hayDepartamentoSeleccionado()) {
+            resetPersonaDropdown();
+            cargarPersones();
             programarRefresco();
         }
     });
@@ -266,22 +401,39 @@ function renderEvolution(data, deptName) {
 
     const rows = Array.isArray(data) ? data : [];
     const years = rows.map(item => String(item.year ?? ''));
-    const quartiles = ['Q1', 'Q2', 'Q3', 'Q4', 'Sense Quartil'];
+    const quartiles = ['Q1', 'Q2', 'Q3', 'Q4'];
+
+    const yearTotals = rows.map(item =>
+        quartiles.reduce((sum, q) => sum + Number(item[q] || 0), 0)
+    );
 
     const series = quartiles.map(q => ({
         name: q,
-        type: 'line',
-        smooth: true,
-        symbol: 'circle',
-        symbolSize: 6,
-        itemStyle: { color: getColorByQuartile(q) },
-        lineStyle: { color: getColorByQuartile(q), width: 2 },
+        type: 'bar',
+        stack: 'total',
+        barMaxWidth: 48,
+        itemStyle: { color: getColorByQuartile(q), borderRadius: q === 'Q4' ? [4, 4, 0, 0] : 0 },
+        emphasis: { focus: 'series' },
+        label: {
+            show: true,
+            position: 'inside',
+            formatter: p => {
+                if (p.value <= 0) return '';
+                const total = yearTotals[p.dataIndex] || 0;
+                const pct = total > 0 ? Math.round(p.value / total * 100) : 0;
+                return `${pct}%`;
+            },
+            fontSize: 11,
+            color: '#fff',
+            lineHeight: 16
+        },
         data: rows.map(item => Number(item[q] || 0))
     }));
 
     chartQuartilesEvolution.setOption({
         tooltip: {
-            trigger: 'axis'
+            trigger: 'axis',
+            axisPointer: { type: 'shadow' }
         },
         legend: {
             top: 0
@@ -303,6 +455,67 @@ function renderEvolution(data, deptName) {
             axisLabel: { color: getUabColor('--uab-tauro', '#596473') }
         },
         series
+    });
+}
+
+function renderOpenAccessPie(data) {
+    const container = document.getElementById('openAccessPie');
+    if (!chartOpenAccess) {
+        chartOpenAccess = echarts.init(container);
+    }
+
+    const rows = Array.isArray(data) ? data : [];
+    const total = rows.reduce((acc, r) => acc + Number(r.value || 0), 0);
+
+    if (rows.length === 0 || total === 0) {
+        chartOpenAccess.setOption({
+            title: { text: 'Accés obert', left: 'center', top: 6, textStyle: { fontSize: 14, fontWeight: 700, color: getUabColor('--uab-pissarra', '#2a3037') } },
+            series: [{ type: 'pie', radius: ['35%', '70%'], data: [], label: { show: true, formatter: 'Sense dades' } }]
+        });
+        return;
+    }
+
+    const colorMap = {
+        'Accés obert': getUabColor('--uab-campus', '#008037'),
+        'Accés tancat': getUabColor('--uab-cendra', '#a9b1bc')
+    };
+
+    const chartData = rows.map(r => ({
+        name: r.label,
+        value: r.value,
+        itemStyle: { color: colorMap[r.label] || getUabColor('--uab-tauro', '#596473') }
+    }));
+
+    chartOpenAccess.setOption({
+        tooltip: {
+            trigger: 'item',
+            formatter: params => `${params.name}: <b>${params.value}</b> (${params.percent}%)`
+        },
+        series: [{
+            name: 'Accés obert',
+            type: 'pie',
+            radius: ['35%', '70%'],
+            center: ['50%', '55%'],
+            cursor: 'pointer',
+            itemStyle: {
+                borderRadius: 8,
+                borderColor: getUabColor('--uab-coco', '#ffffff'),
+                borderWidth: 2
+            },
+            label: { formatter: '{b}: {c}' },
+            data: chartData
+        }],
+        title: {
+            text: '',
+            left: 'center',
+            top: 6,
+            textStyle: { fontSize: 14, fontWeight: 700, color: getUabColor('--uab-pissarra', '#2a3037') }
+        }
+    });
+
+    chartOpenAccess.off('click');
+    chartOpenAccess.on('click', params => {
+        applyOpenAccessFilter(params.name);
     });
 }
 
@@ -328,72 +541,137 @@ function renderArticlesTable(rows) {
         const year = item.year ?? '-';
         const quartile = item.quartile ?? 'Sense Quartil';
         const cita = item.cita ?? '-';
+        const oa = item.openAccess === true;
+        const oaBadge = oa
+            ? '<span class="inline-block ml-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700">OA</span>'
+            : '';
         return `
             <tr class="odd:bg-white even:bg-slate-50 align-top">
                 <td class="px-3 py-2 border-b border-slate-100">${escapeHtml(year)}</td>
-                <td class="px-3 py-2 border-b border-slate-100 font-semibold">${escapeHtml(quartile)}</td>
+                <td class="px-3 py-2 border-b border-slate-100 font-semibold">${escapeHtml(quartile)}${oaBadge}</td>
                 <td class="px-3 py-2 border-b border-slate-100 text-slate-700">${escapeHtml(cita)}</td>
             </tr>`;
     }).join('');
 }
 
-async function cargarDatos() {
-    const { desde, hasta, deptUuid } = obtenerFiltrosActuales();
+function applyOpenAccessFilter(label) {
+    // Toggle: clicking the same segment again clears the filter
+    if (label === 'Accés obert') {
+        openAccessFilter = openAccessFilter === true ? null : true;
+    } else if (label === 'Accés tancat') {
+        openAccessFilter = openAccessFilter === false ? null : false;
+    } else {
+        openAccessFilter = null;
+    }
+    updateOpenAccessFilterBadge();
+    const filtered = openAccessFilter === null
+        ? allArticles
+        : allArticles.filter(a => a.openAccess === openAccessFilter);
+    renderArticlesTable(filtered);
+}
 
-    if (!hayDepartamentoSeleccionado() || !Array.isArray(deptUuid) || deptUuid.length === 0) {
+function updateOpenAccessFilterBadge() {
+    const badge = document.getElementById('openAccessFilterBadge');
+    if (!badge) return;
+    if (openAccessFilter === null) {
+        badge.classList.add('hidden');
+        badge.textContent = '';
+    } else {
+        const label = openAccessFilter ? 'Accés obert' : 'Accés tancat';
+        badge.textContent = `Filtre: ${label} ✕`;
+        badge.classList.remove('hidden');
+    }
+}
+
+async function cargarDatos() {
+    const { desde, hasta, deptUuid, filtrePersonal, personUuid } = obtenerFiltrosActuales();
+
+    if (!hayDepartamentoSeleccionado()) {
+        if (currentLoadController) {
+            currentLoadController.abort();
+            currentLoadController = null;
+        }
+        ocultarOverlayCargando();
         updateEstado('Selecciona un departament per carregar dades.', false, false);
         return;
     }
 
     const params = new URLSearchParams({
         desde: String(desde),
-        hasta: String(hasta)
+        hasta: String(hasta),
+        filtrePersonal
     });
 
-    deptUuid.forEach(dep => params.append('deptUuid', dep));
+    if (personUuid) params.append('personUuid', personUuid);
+    if (!totsElsDepartaments) {
+        deptUuid.forEach(dep => params.append('deptUuid', dep));
+    }
 
-    const deptName = deptUuid.length === 1
-        ? (departamentosCatalogo.find(d => d.uuid === deptUuid[0])?.nombre || '')
-        : '';
+    const deptName = totsElsDepartaments
+        ? 'Tots els departaments'
+        : (deptUuid.length === 1 ? (departamentosCatalogo.find(d => d.uuid === deptUuid[0])?.nombre || '') : '');
+
+    if (currentLoadController) {
+        currentLoadController.abort();
+    }
+    const controller = new AbortController();
+    currentLoadController = controller;
+    const requestSeq = ++currentLoadSeq;
 
     mostrarOverlayCargando();
     updateEstado('Recarregant dades...');
 
     try {
-        const [responsePie, responseTable, responseEvolution] = await Promise.all([
-            apiFetch(`/pure/stats/quartiles?${params.toString()}`),
-            apiFetch(`/pure/stats/quartiles/articles?${params.toString()}`),
-            apiFetch(`/pure/stats/quartiles/evolution?${params.toString()}`)
-        ]);
-
-        if (!responsePie.ok) {
-            throw new Error(`Pie HTTP ${responsePie.status}`);
-        }
-        if (!responseTable.ok) {
-            throw new Error(`Table HTTP ${responseTable.status}`);
-        }
-        if (!responseEvolution.ok) {
-            throw new Error(`Evolution HTTP ${responseEvolution.status}`);
+        const response = await apiFetch(`/pure/stats/quartiles/dashboard?${params.toString()}`, {
+            signal: controller.signal
+        });
+        if (!response.ok) {
+            throw new Error(`Dashboard HTTP ${response.status}`);
         }
 
-        const data = await responsePie.json();
-        const articles = await responseTable.json();
-        const evolution = await responseEvolution.json();
+        const dashboard = await response.json();
+        if (requestSeq !== currentLoadSeq) {
+            return;
+        }
+
+        const data = Array.isArray(dashboard?.quartiles) ? dashboard.quartiles : [];
+        const articles = Array.isArray(dashboard?.articles) ? dashboard.articles : [];
+        const evolution = Array.isArray(dashboard?.evolution) ? dashboard.evolution : [];
+        const openAccess = Array.isArray(dashboard?.openAccess) ? dashboard.openAccess : [];
+
+        allArticles = articles;
+        openAccessFilter = null;
+        updateOpenAccessFilterBadge();
 
         renderPie(Array.isArray(data) ? data : [], deptName);
         renderArticlesTable(articles);
         renderEvolution(evolution, deptName);
+        renderOpenAccessPie(openAccess);
 
         const total = (Array.isArray(data) ? data : [])
             .reduce((acc, item) => acc + Number(item.total || 0), 0);
         updateEstado(`Total d'articles analitzats: ${total}`, false, true);
     } catch (error) {
+        if (error && error.name === 'AbortError') {
+            return;
+        }
+
+        if (requestSeq !== currentLoadSeq) {
+            return;
+        }
+
+        allArticles = [];
+        openAccessFilter = null;
+        updateOpenAccessFilterBadge();
         renderPie([], deptName);
         renderArticlesTable([]);
         renderEvolution([], deptName);
+        renderOpenAccessPie([]);
         updateEstado(`Error carregant el grafic: ${error.message}`, true);
     } finally {
-        ocultarOverlayCargando();
+        if (requestSeq === currentLoadSeq) {
+            ocultarOverlayCargando();
+        }
     }
 }
 
@@ -404,6 +682,13 @@ document.addEventListener('click', (e) => {
     if (!btn.contains(e.target) && !menu.contains(e.target)) {
         cerrarDropdownDepartamentos();
     }
+
+    const pBtn = document.getElementById('personaDropdownBtn');
+    const pMenu = document.getElementById('personaDropdownMenu');
+    if (!pBtn || !pMenu) return;
+    if (!pBtn.contains(e.target) && !pMenu.contains(e.target)) {
+        cerrarDropdownPersones();
+    }
 });
 
 document.getElementById('departamentoDropdownBtn').addEventListener('click', (e) => {
@@ -413,6 +698,16 @@ document.getElementById('departamentoDropdownBtn').addEventListener('click', (e)
         abrirDropdownDepartamentos();
     } else {
         cerrarDropdownDepartamentos();
+    }
+});
+
+document.getElementById('personaDropdownBtn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    const menu = document.getElementById('personaDropdownMenu');
+    if (menu.classList.contains('hidden')) {
+        abrirDropdownPersones();
+    } else {
+        cerrarDropdownPersones();
     }
 });
 
@@ -430,6 +725,16 @@ async function init() {
     const max = 2024;
     configurarSlider(min, max, 2021, 2024);
     await cargarDepartamentos();
+
+    document.querySelectorAll('input[name="filtrePersonal"]').forEach(radio => {
+        radio.addEventListener('change', () => {
+            if (hayDepartamentoSeleccionado()) {
+                resetPersonaDropdown();
+                cargarPersones();
+                programarRefresco();
+            }
+        });
+    });
 }
 
 init();

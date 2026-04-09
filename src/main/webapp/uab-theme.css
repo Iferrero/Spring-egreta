@@ -92,6 +92,25 @@ h3,
     display: block;
 }
 
+.uab-brandbar__home {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--uab-pissarra);
+    text-decoration: none;
+    padding: 0.3rem 0.75rem;
+    border-radius: 0.5rem;
+    transition: background-color 0.15s, color 0.15s;
+}
+
+.uab-brandbar__home:hover {
+    background-color: var(--uab-columna);
+    color: var(--uab-campus);
+}
+
 @media (max-width: 640px) {
     .uab-brandbar {
         padding: 0.65rem 1rem;

@@ -129,24 +129,40 @@ public class PublicacionController {
     public List<Map<String, Object>> getQuartilesByDepartment(
             @RequestParam(required = false) String deptUuid,
             @RequestParam(required = false) Integer desde,
-            @RequestParam(required = false) Integer hasta) {
-        return researchOutputJournalLinkService.quartileDistributionByDepartment(deptUuid, desde, hasta);
+            @RequestParam(required = false) Integer hasta,
+            @RequestParam(required = false) String filtrePersonal,
+            @RequestParam(required = false) String personUuid) {
+        return researchOutputJournalLinkService.quartileDistributionByDepartment(deptUuid, desde, hasta, filtrePersonal, personUuid);
     }
 
     @GetMapping("/stats/quartiles/articles")
     public List<Map<String, Object>> getQuartileArticlesByDepartment(
             @RequestParam(required = false) String deptUuid,
             @RequestParam(required = false) Integer desde,
-            @RequestParam(required = false) Integer hasta) {
-        return researchOutputJournalLinkService.quartileArticlesByDepartment(deptUuid, desde, hasta);
+            @RequestParam(required = false) Integer hasta,
+            @RequestParam(required = false) String filtrePersonal,
+            @RequestParam(required = false) String personUuid) {
+        return researchOutputJournalLinkService.quartileArticlesByDepartment(deptUuid, desde, hasta, filtrePersonal, personUuid);
     }
 
     @GetMapping("/stats/quartiles/evolution")
     public List<Map<String, Object>> getQuartileEvolutionByDepartment(
             @RequestParam(required = false) String deptUuid,
             @RequestParam(required = false) Integer desde,
-            @RequestParam(required = false) Integer hasta) {
-        return researchOutputJournalLinkService.quartileEvolutionByDepartment(deptUuid, desde, hasta);
+            @RequestParam(required = false) Integer hasta,
+            @RequestParam(required = false) String filtrePersonal,
+            @RequestParam(required = false) String personUuid) {
+        return researchOutputJournalLinkService.quartileEvolutionByDepartment(deptUuid, desde, hasta, filtrePersonal, personUuid);
+    }
+
+    @GetMapping("/stats/quartiles/dashboard")
+    public Map<String, Object> getQuartilesDashboardByDepartment(
+            @RequestParam(required = false) String deptUuid,
+            @RequestParam(required = false) Integer desde,
+            @RequestParam(required = false) Integer hasta,
+            @RequestParam(required = false) String filtrePersonal,
+            @RequestParam(required = false) String personUuid) {
+        return researchOutputJournalLinkService.quartilesDashboardByDepartment(deptUuid, desde, hasta, filtrePersonal, personUuid);
     }
     
     // Estadísticas para Gráfico de Líneas (Años)
