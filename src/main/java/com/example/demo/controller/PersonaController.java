@@ -727,15 +727,34 @@ public class PersonaController {
             @RequestParam(required = false) String personalType,
             @RequestParam(required = false) String deptUuid) {
         LocalDate hoy = LocalDate.now();
+        String hoyIso = hoy.toString();
+
+        Criteria activeAssociationCriteria = new Criteria().orOperator(
+            Criteria.where("period.endDate").is(null),
+            Criteria.where("period.endDate").exists(false),
+            new Criteria().andOperator(
+                Criteria.where("period.endDate").type(9),
+                Criteria.where("period.endDate").gt(hoy)
+            ),
+            new Criteria().andOperator(
+                Criteria.where("period.endDate").type(2),
+                Criteria.where("period.endDate").gt(hoyIso)
+            )
+        );
 
         Query query = new Query();
-        query.addCriteria(new Criteria().orOperator(
-            Criteria.where("staffOrganizationAssociations.period.endDate").is(null),
-            Criteria.where("staffOrganizationAssociations.period.endDate").gte(hoy)
-        ));
+        if (deptUuid != null && !deptUuid.isBlank()) {
+            query.addCriteria(Criteria.where("staffOrganizationAssociations").elemMatch(
+                new Criteria().andOperator(
+                    Criteria.where("organization.uuid").is(deptUuid),
+                    activeAssociationCriteria
+                )
+            ));
+        } else {
+            query.addCriteria(Criteria.where("staffOrganizationAssociations").elemMatch(activeAssociationCriteria));
+        }
 
         addPersonalTypeCriteria(query, personalType);
-        addDepartmentCriteria(query, deptUuid);
 
         query.fields()
                 .include("dateOfBirth")
@@ -782,6 +801,178 @@ public class PersonaController {
         }
 
         return buckets;
+    }
+
+    @GetMapping("/stats/sex-distribution")
+    public Map<String, Integer> getSexDistribution(
+            @RequestParam(required = false) String personalType,
+            @RequestParam(required = false) String deptUuid) {
+        LocalDate hoy = LocalDate.now();
+        String hoyIso = hoy.toString();
+
+        Criteria activeAssociationCriteria = new Criteria().orOperator(
+            Criteria.where("period.endDate").is(null),
+            Criteria.where("period.endDate").exists(false),
+            new Criteria().andOperator(
+                Criteria.where("period.endDate").type(9),
+                Criteria.where("period.endDate").gt(hoy)
+            ),
+            new Criteria().andOperator(
+                Criteria.where("period.endDate").type(2),
+                Criteria.where("period.endDate").gt(hoyIso)
+            )
+        );
+
+        Query query = new Query();
+        if (deptUuid != null && !deptUuid.isBlank()) {
+            query.addCriteria(Criteria.where("staffOrganizationAssociations").elemMatch(
+                new Criteria().andOperator(
+                    Criteria.where("organization.uuid").is(deptUuid),
+                    activeAssociationCriteria
+                )
+            ));
+        } else {
+            query.addCriteria(Criteria.where("staffOrganizationAssociations").elemMatch(activeAssociationCriteria));
+        }
+
+        addPersonalTypeCriteria(query, personalType);
+
+        query.fields()
+                .include("gender")
+                .include("sex");
+
+        List<Document> docs = mongoTemplate.find(query, Document.class, "Persons");
+
+        int hombres = 0, mujeres = 0, otros = 0;
+        for (Document doc : docs) {
+            String genero = extractGender(doc);
+            if (isMale(genero)) {
+                hombres++;
+            } else if (isFemale(genero)) {
+                mujeres++;
+            } else {
+                otros++;
+            }
+        }
+
+        Map<String, Integer> result = new LinkedHashMap<>();
+        result.put("hombres", hombres);
+        result.put("mujeres", mujeres);
+        result.put("otros", otros);
+        return result;
+    }
+
+    @GetMapping("/stats/contract-type")
+    public Map<String, Long> getContractTypeStats(
+            @RequestParam(required = false) String personalType,
+            @RequestParam(required = false) String deptUuid) {
+
+        List<AggregationOperation> ops = new ArrayList<>();
+
+        ops.add(Aggregation.unwind("staffOrganizationAssociations"));
+
+        if (deptUuid != null && !deptUuid.isBlank()) {
+            ops.add(Aggregation.match(Criteria.where("staffOrganizationAssociations.organization.uuid").is(deptUuid)));
+        }
+        if (personalType != null && !personalType.isBlank() && !personalType.equals("all")) {
+            if ("academic".equalsIgnoreCase(personalType)) {
+                ops.add(Aggregation.match(new Criteria().orOperator(
+                    Criteria.where("staffOrganizationAssociations.staffType.term.ca_ES").regex("^acadèm", "i"),
+                    Criteria.where("staffOrganizationAssociations.staffType.term.es_ES").regex("^académ", "i"),
+                    Criteria.where("staffOrganizationAssociations.staffType.term.en_GB").regex("^academic", "i")
+                )));
+            } else if ("nonAcademic".equalsIgnoreCase(personalType)) {
+                ops.add(Aggregation.match(new Criteria().orOperator(
+                    Criteria.where("staffOrganizationAssociations.staffType.term.ca_ES").regex("^no acadèm", "i"),
+                    Criteria.where("staffOrganizationAssociations.staffType.term.es_ES").regex("^no académ", "i"),
+                    Criteria.where("staffOrganizationAssociations.staffType.term.en_GB").regex("^non-academic", "i")
+                )));
+            }
+        }
+
+        // Keep only active associations using $toDate + $$NOW
+        ops.add(ctx -> new Document("$addFields", new Document("_endDateReal",
+            new Document("$cond", Arrays.asList(
+                new Document("$ifNull", Arrays.asList("$staffOrganizationAssociations.period.endDate", false)),
+                new Document("$toDate", "$staffOrganizationAssociations.period.endDate"),
+                (Object) null
+            ))
+        )));
+        ops.add(ctx -> new Document("$match", new Document("$or", Arrays.asList(
+            new Document("_endDateReal", null),
+            new Document("$expr", new Document("$gt", Arrays.asList("$_endDateReal", "$$NOW")))
+        ))));
+
+        // Classify: permanent = no endDate, noPermament = has future endDate
+        ops.add(ctx -> new Document("$addFields", new Document("_tipusContracte",
+            new Document("$cond", Arrays.asList(
+                new Document("$eq", Arrays.asList("$_endDateReal", null)),
+                "permanent",
+                "noPermament"
+            ))
+        )));
+
+        // One row per person: if ANY active association is permanent, person = permanent
+        // ("permanent" > "noPermament" alphabetically so $max picks permanent when present)
+        ops.add(ctx -> new Document("$group", new Document("_id", "$uuid")
+            .append("_tipusContracte", new Document("$max", "$_tipusContracte"))));
+
+        // Count per type
+        ops.add(ctx -> new Document("$group", new Document("_id", "$_tipusContracte")
+            .append("total", new Document("$sum", 1))));
+
+        List<Document> result = mongoTemplate.aggregate(
+            Aggregation.newAggregation(ops), Persona.class, Document.class).getMappedResults();
+
+        long permanent = 0, noPermament = 0;
+        for (Document d : result) {
+            String tipus = (String) d.get("_id");
+            long count = ((Number) d.getOrDefault("total", 0)).longValue();
+            if ("permanent".equals(tipus)) permanent = count;
+            else if ("noPermament".equals(tipus)) noPermament = count;
+        }
+        return Map.of("permanent", permanent, "noPermament", noPermament);
+    }
+
+    @GetMapping("/stats/personal-academic")
+    public Map<String, Long> getPersonalAcademicStats(
+            @RequestParam(required = false) String deptUuid) {
+
+        List<AggregationOperation> ops = new ArrayList<>();
+
+        ops.add(Aggregation.unwind("staffOrganizationAssociations"));
+
+        if (deptUuid != null && !deptUuid.isBlank()) {
+            ops.add(Aggregation.match(Criteria.where("staffOrganizationAssociations.organization.uuid").is(deptUuid)));
+        }
+
+        ops.add(Aggregation.match(new Criteria().orOperator(
+            Criteria.where("staffOrganizationAssociations.staffType.term.ca_ES").regex("^acadèm", "i"),
+            Criteria.where("staffOrganizationAssociations.staffType.term.es_ES").regex("^académ", "i"),
+            Criteria.where("staffOrganizationAssociations.staffType.term.en_GB").regex("^academic", "i")
+        )));
+
+        // Normalitza endDate a Date real (com $toDate) i filtra actius amb $$NOW
+        ops.add(ctx -> new Document("$addFields", new Document("_endDateReal",
+            new Document("$cond", Arrays.asList(
+                new Document("$ifNull", Arrays.asList("$staffOrganizationAssociations.period.endDate", false)),
+                new Document("$toDate", "$staffOrganizationAssociations.period.endDate"),
+                (Object) null
+            ))
+        )));
+
+        ops.add(ctx -> new Document("$match", new Document("$or", Arrays.asList(
+            new Document("_endDateReal", null),
+            new Document("$expr", new Document("$gt", Arrays.asList("$_endDateReal", "$$NOW")))
+        ))));
+
+        ops.add(Aggregation.group("_id"));
+        ops.add(Aggregation.count().as("total"));
+
+        List<Document> result = mongoTemplate.aggregate(
+            Aggregation.newAggregation(ops), Persona.class, Document.class).getMappedResults();
+        long total = result.isEmpty() ? 0L : ((Number) result.get(0).get("total")).longValue();
+        return Map.of("total", total);
     }
 
     @GetMapping("/stats/catedraticos")
@@ -1095,6 +1286,43 @@ public class PersonaController {
             .append("ca_ES", "$staffOrganizationAssociations.employmentType.term.ca_ES")
             .append("es_ES", "$staffOrganizationAssociations.employmentType.term.es_ES")
             .append("en_GB", "$staffOrganizationAssociations.employmentType.term.en_GB"))
+            .append("count", new Document("$sum", 1))));
+        ops.add(Aggregation.sort(org.springframework.data.domain.Sort.Direction.DESC, "count"));
+
+        return mongoTemplate.aggregate(Aggregation.newAggregation(ops), Persona.class, Document.class)
+            .getMappedResults()
+            .stream()
+            .map(d -> {
+                Document id = (Document) d.get("_id");
+                Map<String, Object> row = new java.util.LinkedHashMap<>();
+                row.put("ca_ES", id.get("ca_ES"));
+                row.put("es_ES", id.get("es_ES"));
+                row.put("en_GB", id.get("en_GB"));
+                row.put("count", ((Number) d.getOrDefault("count", 0)).longValue());
+                return row;
+            })
+            .toList();
+    }
+
+    @GetMapping("/stats/personal-academic/debug-types")
+    public List<Map<String, Object>> debugAcademicStaffTypes() {
+        List<AggregationOperation> ops = new ArrayList<>();
+        ops.add(Aggregation.unwind("staffOrganizationAssociations"));
+        ops.add(ctx -> new Document("$addFields", new Document("_endDateReal",
+            new Document("$cond", Arrays.asList(
+                new Document("$ifNull", Arrays.asList("$staffOrganizationAssociations.period.endDate", false)),
+                new Document("$toDate", "$staffOrganizationAssociations.period.endDate"),
+                (Object) null
+            ))
+        )));
+        ops.add(ctx -> new Document("$match", new Document("$or", Arrays.asList(
+            new Document("_endDateReal", null),
+            new Document("$expr", new Document("$gt", Arrays.asList("$_endDateReal", "$$NOW")))
+        ))));
+        ops.add(ctx -> new Document("$group", new Document("_id", new Document()
+            .append("ca_ES", "$staffOrganizationAssociations.staffType.term.ca_ES")
+            .append("es_ES", "$staffOrganizationAssociations.staffType.term.es_ES")
+            .append("en_GB", "$staffOrganizationAssociations.staffType.term.en_GB"))
             .append("count", new Document("$sum", 1))));
         ops.add(Aggregation.sort(org.springframework.data.domain.Sort.Direction.DESC, "count"));
 

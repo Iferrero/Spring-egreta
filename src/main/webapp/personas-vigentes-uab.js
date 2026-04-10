@@ -1,5 +1,6 @@
 let chartPiramide = null;
 let chartSexo = null;
+let chartContractType = null;
 const selectorPersonalType = document.getElementById('selectorPersonalType');
 const selectorDepartamento = document.getElementById('selectorDepartamento');
 
@@ -65,6 +66,26 @@ async function cargarPersonasVigentes() {
             ?? (Array.isArray(data?.content) ? data.content.length : 0);
 
         valor.textContent = formatearNumero(total);
+        estado.textContent = '';
+    } catch (e) {
+        valor.textContent = '--';
+        estado.textContent = 'No s\'han pogut carregar les dades.';
+    }
+}
+
+async function cargarPersonalAcademic() {
+    const estado = document.getElementById('estadoPersonalAcademic');
+    const valor = document.getElementById('valorPersonalAcademic');
+
+    estado.textContent = 'Carregant dades...';
+
+    try {
+        const dept = getDeptParam();
+        const url = dept ? `/persons/stats/personal-academic?deptUuid=${encodeURIComponent(dept)}` : '/persons/stats/personal-academic';
+        const res = await fetch(apiUrl(url));
+        if (!res.ok) throw new Error();
+        const data = await res.json();
+        valor.textContent = formatearNumero(Number(data?.total ?? 0));
         estado.textContent = '';
     } catch (e) {
         valor.textContent = '--';
@@ -288,12 +309,25 @@ async function cargarPiramideEdad() {
             ]
         });
 
-        renderPastelSexo(totalHombres, totalMujeres, totalOtros);
-
         estado.textContent = '';
     } catch (e) {
         estado.textContent = 'No s\'ha pogut carregar';
         contenedor.innerHTML = '<div class="h-full flex items-center justify-center text-sm text-rose-500">Error carregant la piràmide d\'edat</div>';
+    }
+}
+
+async function cargarSexDistribution() {
+    const estado = document.getElementById('estadoSexo');
+    const contenedor = document.getElementById('chartSexo');
+    estado.textContent = 'Carregant...';
+    try {
+        const res = await fetch(apiUrl(buildUrl('/persons/stats/sex-distribution', true)));
+        if (!res.ok) throw new Error();
+        const data = await res.json();
+        renderPastelSexo(data.hombres, data.mujeres, data.otros);
+    } catch (e) {
+        estado.textContent = 'No s\'ha pogut carregar';
+        contenedor.innerHTML = '<div class="h-full flex items-center justify-center text-sm text-rose-500">Error carregant el gr\u00e0fic de sexe</div>';
     }
 }
 
@@ -336,6 +370,7 @@ function renderPastelSexo(hombres, mujeres, otros) {
 
 selectorPersonalType.addEventListener('change', () => {
     cargarPersonasVigentes();
+    cargarPersonalAcademic();
     cargarCatedraticos();
     cargarTitulares();
     cargarAgregados();
@@ -346,11 +381,14 @@ selectorPersonalType.addEventListener('change', () => {
     cargarPredoctorals();
     cargarPostdoctorals();
     cargarPiramideEdad();
+    cargarSexDistribution();
+    cargarContractType();
     cargarTooltipSummary();
 });
 
 selectorDepartamento.addEventListener('change', () => {
     cargarPersonasVigentes();
+    cargarPersonalAcademic();
     cargarCatedraticos();
     cargarTitulares();
     cargarAgregados();
@@ -361,12 +399,15 @@ selectorDepartamento.addEventListener('change', () => {
     cargarPredoctorals();
     cargarPostdoctorals();
     cargarPiramideEdad();
+    cargarSexDistribution();
+    cargarContractType();
     cargarTooltipSummary();
 });
 
 window.addEventListener('resize', () => {
     if (chartPiramide) chartPiramide.resize();
     if (chartSexo) chartSexo.resize();
+    if (chartContractType) chartContractType.resize();
 });
 
 async function cargarTooltipSummary() {
@@ -432,6 +473,7 @@ async function cargarPostdoctorals() {
 
 cargarDepartamentos().finally(() => {
     cargarPersonasVigentes();
+    cargarPersonalAcademic();
     cargarCatedraticos();
     cargarTitulares();
     cargarAgregados();
@@ -442,5 +484,46 @@ cargarDepartamentos().finally(() => {
     cargarPredoctorals();
     cargarPostdoctorals();
     cargarPiramideEdad();
+    cargarSexDistribution();
+    cargarContractType();
     cargarTooltipSummary();
 });
+
+async function cargarContractType() {
+    const estado = document.getElementById('estadoContractType');
+    const contenedor = document.getElementById('chartContractType');
+    if (!estado || !contenedor) return;
+    estado.textContent = 'Carregant...';
+    try {
+        const res = await fetch(apiUrl(buildUrl('/persons/stats/contract-type', true)));
+        if (!res.ok) throw new Error();
+        const data = await res.json();
+        const permanent = Number(data?.permanent ?? 0);
+        const noPermament = Number(data?.noPermament ?? 0);
+
+        if (!chartContractType) {
+            chartContractType = echarts.init(contenedor);
+        }
+        chartContractType.setOption({
+            tooltip: {
+                trigger: 'item',
+                formatter: params => `${params.name}: ${params.value} (${params.percent}%)`
+            },
+            legend: { bottom: 0 },
+            series: [{
+                name: 'Tipus de contracte',
+                type: 'pie',
+                radius: ['45%', '70%'],
+                avoidLabelOverlap: true,
+                label: { formatter: '{b}: {d}%' },
+                data: [
+                    { value: permanent,   name: 'Permanent',     itemStyle: { color: '#004D5E' } },
+                    { value: noPermament, name: 'No permanent',  itemStyle: { color: '#F88C12' } }
+                ]
+            }]
+        });
+        estado.textContent = '';
+    } catch (e) {
+        estado.textContent = 'No s\'han pogut carregar les dades.';
+    }
+}
