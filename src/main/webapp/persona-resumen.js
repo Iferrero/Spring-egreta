@@ -601,6 +601,15 @@ document.getElementById('tipusDropdownBtn').addEventListener('click', (e) => {
 
 /** Estado de refresco/debounce. */
 let refrescoTimer = null;
+let currentLoadController = null;
+let currentLoadSeq = 0;
+
+const _requestCache = new Map();
+
+function _cacheKey(params, modo) {
+    const sorted = new URLSearchParams([...params.entries()].sort());
+    return `${modo}|${sorted.toString()}`;
+}
 
 /** Instancias de gráficos ECharts. */
 let chartImporteAnio = null;
@@ -1645,6 +1654,10 @@ function renderGraficos(filas) {
         document.getElementById('seccionAwardsPersona').classList.add('hidden');
         if (tablaAwards) tablaAwards.clearData();
         mostrarOverlayCargando();
+        if (currentLoadController) currentLoadController.abort();
+        const controller = new AbortController();
+        currentLoadController = controller;
+        const requestSeq = ++currentLoadSeq;
 
         try {
             mostrarEstadoCargando();
@@ -1656,11 +1669,15 @@ function renderGraficos(filas) {
                 
                 // Awards gestionados por el departamento
                 const params = new URLSearchParams({ deptUuid, gestionadosPorDept: 'gestionados' });
-                const res = await fetch(apiUrl(`/awards/stats/persona-resumen?${params.toString()}`));
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                data = await res.json();
-                // Adaptar data si es necesario para los gráficos/tablas
-                // (aquí puedes mapear los campos si el formato es diferente)
+                const ckey = _cacheKey(params, modoAwardsDept);
+                if (_requestCache.has(ckey)) {
+                    data = _requestCache.get(ckey).data;
+                } else {
+                    const res = await fetch(apiUrl(`/awards/stats/persona-resumen?${params.toString()}`), { signal: controller.signal });
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                    data = await res.json();
+                    _requestCache.set(ckey, { data });
+                }
             } else {
                 // Awards de miembros (lógica original)
                 const params = new URLSearchParams({
@@ -1683,14 +1700,23 @@ function renderGraficos(filas) {
                 if (modoAwardsDept === 'gestionados') {
                     params.set('gestionadosPorDept', 'managed');
                 }
-                const [resumenRes, serieProyectosRes] = await Promise.all([
-                    fetch(apiUrl(`/awards/stats/persona-resumen?${params.toString()}`)),
-                    cargarSerieProyectosAnio()
-                ]);
-                if (!resumenRes.ok) throw new Error(`HTTP ${resumenRes.status}`);
-                data = await resumenRes.json();
-                serieProyectos = await serieProyectosRes;
+                const ckey = _cacheKey(params, modoAwardsDept);
+                if (_requestCache.has(ckey)) {
+                    const cached = _requestCache.get(ckey);
+                    data = cached.data;
+                    serieProyectos = cached.serieProyectos;
+                } else {
+                    const [resumenRes, serieProyectosRes] = await Promise.all([
+                        fetch(apiUrl(`/awards/stats/persona-resumen?${params.toString()}`), { signal: controller.signal }),
+                        cargarSerieProyectosAnio()
+                    ]);
+                    if (!resumenRes.ok) throw new Error(`HTTP ${resumenRes.status}`);
+                    data = await resumenRes.json();
+                    serieProyectos = await serieProyectosRes;
+                    _requestCache.set(ckey, { data, serieProyectos });
+                }
             }
+            if (requestSeq !== currentLoadSeq) return;
             filasResumenActual = data;
             personaTopSeleccionada = null;
             const seccionEvol = document.getElementById('seccionEvolucionPersonaDept');
@@ -1706,6 +1732,8 @@ function renderGraficos(filas) {
             
             estado.className = 'p-4 text-sm text-emerald-600 font-semibold';
         } catch (error) {
+            if (error && error.name === 'AbortError') return;
+            if (requestSeq !== currentLoadSeq) return;
             estado.textContent = `Error en carregar dades: ${error.message}`;
             estado.className = 'p-4 text-sm text-red-600';
             renderTabla([], modoAnio, desde, hasta);
@@ -1714,7 +1742,7 @@ function renderGraficos(filas) {
             renderGraficos([]);
             renderGraficoImportePorProyecto([]);
         } finally {
-            ocultarOverlayCargando();
+            if (requestSeq === currentLoadSeq) ocultarOverlayCargando();
         }
     }
     // ...existing code...
@@ -2352,6 +2380,10 @@ async function cargarDatos() {
     document.getElementById('seccionAwardsPersona').classList.add('hidden');
     if (tablaAwards) tablaAwards.clearData();
     mostrarOverlayCargando();
+    if (currentLoadController) currentLoadController.abort();
+    const controller = new AbortController();
+    currentLoadController = controller;
+    const requestSeq = ++currentLoadSeq;
 
     try {
         mostrarEstadoCargando();
@@ -2381,11 +2413,15 @@ async function cargarDatos() {
                 if (modoAwardsDept === 'gestionados') {
                     params.set('gestionadosPorDept', 'managed');
                 }
-                const res = await fetch(apiUrl(`/awards/stats/persona-resumen?${params.toString()}`));
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                data = await res.json();
-                // Adaptar data si es necesario para los gráficos/tablas
-                // (aquí puedes mapear los campos si el formato es diferente)
+                const ckey = _cacheKey(params, modoAwardsDept);
+                if (_requestCache.has(ckey)) {
+                    data = _requestCache.get(ckey).data;
+                } else {
+                    const res = await fetch(apiUrl(`/awards/stats/persona-resumen?${params.toString()}`), { signal: controller.signal });
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                    data = await res.json();
+                    _requestCache.set(ckey, { data });
+                }
             } else {
             // Awards de miembros (lógica original)
             const params = new URLSearchParams({
@@ -2408,14 +2444,23 @@ async function cargarDatos() {
             if (modoAwardsDept === 'gestionados') {
                 params.set('gestionadosPorDept', 'managed');
             }
-            const [resumenRes, serieProyectosRes] = await Promise.all([
-                fetch(apiUrl(`/awards/stats/persona-resumen?${params.toString()}`)),
-                cargarSerieProyectosAnio()
-            ]);
-            if (!resumenRes.ok) throw new Error(`HTTP ${resumenRes.status}`);
-            data = await resumenRes.json();
-            serieProyectos = await serieProyectosRes;
+            const ckey = _cacheKey(params, modoAwardsDept);
+            if (_requestCache.has(ckey)) {
+                const cached = _requestCache.get(ckey);
+                data = cached.data;
+                serieProyectos = cached.serieProyectos;
+            } else {
+                const [resumenRes, serieProyectosRes] = await Promise.all([
+                    fetch(apiUrl(`/awards/stats/persona-resumen?${params.toString()}`), { signal: controller.signal }),
+                    cargarSerieProyectosAnio()
+                ]);
+                if (!resumenRes.ok) throw new Error(`HTTP ${resumenRes.status}`);
+                data = await resumenRes.json();
+                serieProyectos = await serieProyectosRes;
+                _requestCache.set(ckey, { data, serieProyectos });
+            }
         }
+        if (requestSeq !== currentLoadSeq) return;
         filasResumenActual = data;
         personaTopSeleccionada = null;
         const seccionEvol = document.getElementById('seccionEvolucionPersonaDept');
@@ -2431,6 +2476,8 @@ async function cargarDatos() {
         //estado.textContent = `Resultats: ${data.length} files`;
         estado.className = 'p-4 text-sm text-emerald-600 font-semibold';
     } catch (error) {
+        if (error && error.name === 'AbortError') return;
+        if (requestSeq !== currentLoadSeq) return;
         estado.textContent = `Error en carregar dades: ${error.message}`;
         estado.className = 'p-4 text-sm text-red-600';
         renderTabla([], modoAnio, desde, hasta);
@@ -2439,7 +2486,7 @@ async function cargarDatos() {
         renderGraficos([]);
         renderGraficoImportePorProyecto([]);
     } finally {
-        ocultarOverlayCargando();
+        if (requestSeq === currentLoadSeq) ocultarOverlayCargando();
     }
 }
 
