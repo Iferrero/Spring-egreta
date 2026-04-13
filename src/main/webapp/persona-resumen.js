@@ -17,10 +17,7 @@ let chartEvolucionPersonaDept = null;
 function renderGraficoEvolucionPersonaDept(rows) {
     const container = document.getElementById('chartEvolucionPersonaDept');
     if (!container) return;
-    if (chartEvolucionPersonaDept && typeof chartEvolucionPersonaDept.dispose === 'function') {
-        chartEvolucionPersonaDept.dispose();
-        chartEvolucionPersonaDept = null;
-    }
+    chartEvolucionPersonaDept?.dispose();
     chartEvolucionPersonaDept = echarts.init(container);
     const anios = rows.map(r => r.anio);
     const personaData = rows.map(r => r.personaImporte);
@@ -85,15 +82,8 @@ function renderGraficoEvolucionPersonaDept(rows) {
 function renderGraficoRankingPercentil(agrupadoPorPersona) {
     const container = document.getElementById('chartRankingPercentil');
     if (!container) return;
-    if (
-        chartRankingPercentil &&
-        typeof chartRankingPercentil.dispose === 'function'
-    ) {
-        chartRankingPercentil.dispose();
-        chartRankingPercentil = null;
-    } else {
-        chartRankingPercentil = null;
-    }
+    if (chartRankingPercentil?.dispose) chartRankingPercentil.dispose();
+    chartRankingPercentil = null;
 
     // 1. Calcular importe ponderado por persona
     const personas = Array.from(agrupadoPorPersona.values()).map(p => ({
@@ -213,38 +203,51 @@ function renderGraficoRankingPercentil(agrupadoPorPersona) {
     }
 }
 // --- Chips y dropdown visual para departamentos ---
-function renderizarChipsDepartamentos() {
-    const container = document.getElementById('departamentoChipsContainer');
-    const select = document.getElementById('departamentoSelect');
+/**
+ * Renderitza un panell de chips genèric.
+ * @param {string} containerId  ID del contenidor de chips
+ * @param {string} selectId     ID del select ocult associat
+ * @param {string[]} items      Valors seleccionats
+ * @param {function(string):string} getLabel  Retorna el text de la chip per a cada valor
+ * @param {string} removeAttr   Nom de l'atribut data- del botó d'eliminar
+ * @param {function(string):void} onRemove   Cridat quan l'usuari elimina un element
+ * @param {string} labelId      ID de l'element de text del botó del desplegable
+ * @param {string} emptyText    Text quan no hi ha selecció
+ * @param {function():void} [onAfter]  Tasca addicional que s'executa al final
+ */
+function renderChipsPanel(containerId, selectId, items, getLabel, removeAttr, onRemove, labelId, emptyText, onAfter) {
+    const container = document.getElementById(containerId);
+    const select = document.getElementById(selectId);
     container.innerHTML = '';
-    // Sincroniza el select oculto
     Array.from(select.options).forEach(opt => {
-        opt.selected = departamentosSeleccionados.includes(opt.value);
+        opt.selected = items.includes(opt.value);
     });
-    departamentosSeleccionados.forEach(uuid => {
-        const dep = departamentosCatalogo.find(d => d.uuid === uuid);
-        if (!dep) return;
+    items.forEach(value => {
+        const label = getLabel(value);
+        if (label == null) return;
         const chip = document.createElement('span');
         chip.className = 'inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 text-xs font-semibold';
-        chip.innerHTML = `${dep.nombre} <button type="button" class="ml-1 text-indigo-500 hover:text-indigo-700" data-remove-dep="${dep.uuid}"><i class="fa-solid fa-xmark"></i></button>`;
+        chip.innerHTML = `${label} <button type="button" class="ml-1 text-indigo-500 hover:text-indigo-700" ${removeAttr}="${value}"><i class="fa-solid fa-xmark"></i></button>`;
         container.appendChild(chip);
     });
-    // Evento para quitar departamento
-    container.querySelectorAll('button[data-remove-dep]').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            const uuid = e.currentTarget.getAttribute('data-remove-dep');
-            quitarDepartamentoSeleccionado(uuid);
-        });
+    container.querySelectorAll(`button[${removeAttr}]`).forEach(btn => {
+        btn.addEventListener('click', e => onRemove(e.currentTarget.getAttribute(removeAttr)));
     });
-    // Actualiza el label del botón
-    const label = document.getElementById('departamentoDropdownLabel');
-    if (departamentosSeleccionados.length === 0) {
-        label.textContent = 'Afegeix departament...';
-    } else {
-        label.textContent = 'Afegeix més...';
-    }
-    // Dispara el refresco de filtros
+    const btnLabel = document.getElementById(labelId);
+    btnLabel.textContent = items.length === 0 ? emptyText : 'Afegeix més...';
+    if (onAfter) onAfter();
     programarRefresco();
+}
+
+function renderizarChipsDepartamentos() {
+    renderChipsPanel(
+        'departamentoChipsContainer', 'departamentoSelect',
+        departamentosSeleccionados,
+        uuid => { const d = departamentosCatalogo.find(x => x.uuid === uuid); return d ? d.nombre : null; },
+        'data-remove-dep',
+        quitarDepartamentoSeleccionado,
+        'departamentoDropdownLabel', 'Afegeix departament...'
+    );
 }
 
 function toggleDepartamentoSeleccionado(uuid) {
@@ -335,38 +338,15 @@ async function cargarCategorias() {
 }
 
 function renderizarChipsCategorias() {
-    const container = document.getElementById('categoriaChipsContainer');
-    const select = document.getElementById('categoriaSelect');
-    container.innerHTML = '';
-    // Sincroniza el select oculto
-    Array.from(select.options).forEach(opt => {
-        opt.selected = categoriasSeleccionadas.includes(opt.value);
-    });
-    categoriasSeleccionadas.forEach(cat => {
-        const chip = document.createElement('span');
-        chip.className = 'inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 text-xs font-semibold';
-        chip.innerHTML = `${cat} <button type="button" class="ml-1 text-indigo-500 hover:text-indigo-700" data-remove-cat="${cat}"><i class="fa-solid fa-xmark"></i></button>`;
-        container.appendChild(chip);
-    });
-    // Evento para quitar categoría
-    container.querySelectorAll('button[data-remove-cat]').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            const cat = e.currentTarget.getAttribute('data-remove-cat');
-            quitarCategoriaSeleccionada(cat);
-        });
-    });
-    // Actualiza el label del botón
-    const label = document.getElementById('categoriaDropdownLabel');
-    if (categoriasSeleccionadas.length === 0) {
-        label.textContent = 'Afegeix categoria...';
-    } else {
-        label.textContent = 'Afegeix més...';
-    }
-
-    actualitzarTipusSegonsCategories();
-
-    // Dispara el refresco de filtros
-    programarRefresco();
+    renderChipsPanel(
+        'categoriaChipsContainer', 'categoriaSelect',
+        categoriasSeleccionadas,
+        cat => cat,
+        'data-remove-cat',
+        quitarCategoriaSeleccionada,
+        'categoriaDropdownLabel', 'Afegeix categoria...',
+        actualitzarTipusSegonsCategories
+    );
 }
 
 function toggleCategoriaSeleccionada(cat) {
@@ -515,38 +495,15 @@ function actualitzarTipusSegonsCategories() {
 }
 
 function renderitzarChipsTipus() {
-    const container = document.getElementById('tipusChipsContainer');
-    const select = document.getElementById('tipusSelect');
-    container.innerHTML = '';
-
-    Array.from(select.options).forEach(opt => {
-        opt.selected = tipusSeleccionados.includes(opt.value);
-    });
-
-    tipusSeleccionados.forEach(tipusNom => {
-        const chip = document.createElement('span');
-        chip.className = 'inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 text-xs font-semibold';
-        chip.innerHTML = `${tipusNom} <button type="button" class="ml-1 text-indigo-500 hover:text-indigo-700" data-remove-tipus="${tipusNom}"><i class="fa-solid fa-xmark"></i></button>`;
-        container.appendChild(chip);
-    });
-
-    container.querySelectorAll('button[data-remove-tipus]').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            const tipusNom = e.currentTarget.getAttribute('data-remove-tipus');
-            quitarTipusSeleccionat(tipusNom);
-        });
-    });
-
-    const label = document.getElementById('tipusDropdownLabel');
-    if (tipusSeleccionados.length === 0) {
-        label.textContent = 'Afegeix tipus...';
-    } else {
-        label.textContent = 'Afegeix més...';
-    }
-
-    // Compatibilidad con código legado que lee desde window.
-    window.tipusSeleccionados = [...tipusSeleccionados];
-    programarRefresco();
+    renderChipsPanel(
+        'tipusChipsContainer', 'tipusSelect',
+        tipusSeleccionados,
+        tipusNom => tipusNom,
+        'data-remove-tipus',
+        quitarTipusSeleccionat,
+        'tipusDropdownLabel', 'Afegeix tipus...',
+        () => { window.tipusSeleccionados = [...tipusSeleccionados]; }
+    );
 }
 
 function toggleTipusSeleccionat(tipusNom) {
@@ -609,6 +566,29 @@ const _requestCache = new Map();
 function _cacheKey(params, modo) {
     const sorted = new URLSearchParams([...params.entries()].sort());
     return `${modo}|${sorted.toString()}`;
+}
+
+/**
+ * Afegeix els filtres de categoria, tipus i deptUuid a un URLSearchParams.
+ * @param {URLSearchParams} params
+ * @param {{categoria?:string|string[], tipus?:string|string[], deptUuid?:string|string[]}} filtres
+ */
+function appendFilterParams(params, { categoria, tipus, deptUuid } = {}) {
+    if (Array.isArray(deptUuid) && deptUuid.length > 0) {
+        deptUuid.forEach(dep => params.append('deptUuid', dep));
+    } else if (typeof deptUuid === 'string' && deptUuid) {
+        params.set('deptUuid', deptUuid);
+    }
+    if (Array.isArray(categoria) && categoria.length > 0) {
+        categoria.forEach(cat => params.append('categoria', cat));
+    } else if (typeof categoria === 'string' && categoria) {
+        params.set('categoria', categoria);
+    }
+    if (Array.isArray(tipus) && tipus.length > 0) {
+        tipus.forEach(t => params.append('tipus', t));
+    } else if (typeof tipus === 'string' && tipus) {
+        params.set('tipus', tipus);
+    }
 }
 
 /** Instancias de gráficos ECharts. */
@@ -862,32 +842,7 @@ function renderTablaEvolucionPersonaDept(filas, personaSel) {
         return row;
     });
     // Renderizar gráfico de líneas doble
-    console.log(rows);
     renderGraficoEvolucionPersonaDept(rows);
-    // Crear o actualizar tabla
-    /*if (!tablaEvolucionPersonaDept) {
-        tablaEvolucionPersonaDept = new Tabulator(tablaDiv, {
-            layout: 'fitDataStretch',
-            maxHeight: '40vh',
-            reactiveData: false,
-            placeholder: 'No hi ha dades per a la comparativa.',
-            columns: [
-                { title: 'Any', field: 'anio', sorter: 'number', hozAlign: 'left' },
-                { title: '€ Investigador (Ponderat)', field: 'personaImporte', sorter: 'number', hozAlign: 'right', formatter: (cell) => formatearNumero(cell.getValue()) },
-                { title: '% Creixement Inv.', field: 'crecimiento', sorter: 'number', hozAlign: 'right', formatter: (cell) => {
-                    const v = cell.getValue();
-                    if (v == null || isNaN(v)) return '-';
-                    const num = Number(v);
-                    const texto = `${num > 0 ? '+' : ''}${num.toLocaleString('ca-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`;
-                    if (num > 0) return `<span style=\"color:${UAB_COLORS.campus};font-weight:700;\">${texto}</span>`;
-                    if (num < 0) return `<span style=\"color:${UAB_COLORS.ocas};font-weight:700;\">${texto}</span>`;
-                    return `<span style=\"color:${UAB_COLORS.pissarra};font-weight:700;\">${texto}</span>`;
-                } },
-                { title: '€ Mitjana Dept.', field: 'deptoMedia', sorter: 'number', hozAlign: 'right', formatter: (cell) => formatearNumero(cell.getValue()) }
-            ]
-        });
-    }
-    tablaEvolucionPersonaDept.setData(rows);*/
 }
 
 /**
@@ -986,7 +941,6 @@ function resumirFilasPorInvestigador(filas, desde, hasta) {
         }
 
         const item = acumulado.get(key);
-        const ayudas = Array.isArray(fila['Ayudas']) ? fila['Ayudas'] : [];
 
             item['Proyectos_IP'] += Number(fila['Proyectos_IP'] || 0);
             item['Proyectos_CoIP'] += Number(fila['Proyectos_CoIP'] || 0);
@@ -1168,45 +1122,23 @@ function renderTabla(filas, modoAnio = 'awardDate', desde = 0, hasta = 0) {
     modoTablaResumenActual = modoAnio;
     const sourceRows = resumirFilasPorInvestigador(filas, desde, hasta);
     filasResumenTablaActual = sourceRows;
-    console.log('Filas para tabla resumen:', sourceRows);
     const rows = sourceRows.map(f => {
-        if (modoAnio === 'vigencia') {
-            // En modo vigencia, los datos vienen de resumirFilasPorInvestigador
-            // Mapear correctamente los importes y el ponderado
-            const proyectosIp = Number(f['Proyectos_IP'] ?? 0);
-            const proyectosCoip = Number(f['Proyectos_CoIP'] ?? 0);
-            const proyectosMiembro = Number(f['Proyectos_Miembro'] ?? 0);
-            return {
-                anio: f['Año'] ?? '-',
-                personaUuid: f['PersonaUuid'] ?? '',
-                persona: f['Persona'] ?? '-',
-                proyectosIp,
-                proyectosCoip,
-                proyectosMiembro,
-                totalProyectos: proyectosIp + proyectosCoip + proyectosMiembro,
-                importeIp: Number(f['Importe_IP (€)'] ?? 0),
-                importeCoip: Number(f['Importe_CoIP (€)'] ?? 0),
-                importeMiembro: Number(f['Importe_Miembro (€)'] ?? 0),
-                importePonderado: Number(f['Importe_Ponderado (€)'] ?? 0)
-            };
-        } else {
-            const proyectosIp = Number(f['Proyectos_IP'] ?? 0);
-            const proyectosCoip = Number(f['Proyectos_CoIP'] ?? 0);
-            const proyectosMiembro = Number(f['Proyectos_Miembro'] ?? 0);
-            return {
-                anio: f['Año'] ?? '-',
-                personaUuid: f['PersonaUuid'] ?? '',
-                persona: f['Persona'] ?? '-',
-                proyectosIp,
-                proyectosCoip,
-                proyectosMiembro,
-                totalProyectos: proyectosIp + proyectosCoip + proyectosMiembro,
-                importeIp: Number(f['Importe_IP (€)'] ?? 0),
-                importeCoip: Number(f['Importe_CoIP (€)'] ?? 0),
-                importeMiembro: Number(f['Importe_Miembro (€)'] ?? 0),
-                importePonderado: Number(f['Importe_Ponderado (€)'] ?? 0)
-            };
-        }
+        const proyectosIp = Number(f['Proyectos_IP'] ?? 0);
+        const proyectosCoip = Number(f['Proyectos_CoIP'] ?? 0);
+        const proyectosMiembro = Number(f['Proyectos_Miembro'] ?? 0);
+        return {
+            anio: f['Año'] ?? '-',
+            personaUuid: f['PersonaUuid'] ?? '',
+            persona: f['Persona'] ?? '-',
+            proyectosIp,
+            proyectosCoip,
+            proyectosMiembro,
+            totalProyectos: proyectosIp + proyectosCoip + proyectosMiembro,
+            importeIp: Number(f['Importe_IP (€)'] ?? 0),
+            importeCoip: Number(f['Importe_CoIP (€)'] ?? 0),
+            importeMiembro: Number(f['Importe_Miembro (€)'] ?? 0),
+            importePonderado: Number(f['Importe_Ponderado (€)'] ?? 0)
+        };
     });
     tablaResumen.setData(rows);
     tablaResumen.recalc();
@@ -1215,12 +1147,12 @@ function renderTabla(filas, modoAnio = 'awardDate', desde = 0, hasta = 0) {
 
 /** Libera instancias de ECharts actuales antes de repintar. */
 function destruirGraficos() {
-    if (chartImporteAnio) { chartImporteAnio.dispose(); chartImporteAnio = null; }
-    if (chartProyectosAnio) { chartProyectosAnio.dispose(); chartProyectosAnio = null; }
-    if (chartTopPersonas) { chartTopPersonas.dispose(); chartTopPersonas = null; }
-    if (chartLiderazgo) { chartLiderazgo.dispose(); chartLiderazgo = null; }
-    if (chartQuadrantsPersona) { chartQuadrantsPersona.dispose(); chartQuadrantsPersona = null; }
-    if (chartPareto) { chartPareto.dispose(); chartPareto = null; }
+    chartImporteAnio?.dispose();    chartImporteAnio = null;
+    chartProyectosAnio?.dispose();  chartProyectosAnio = null;
+    chartTopPersonas?.dispose();    chartTopPersonas = null;
+    chartLiderazgo?.dispose();      chartLiderazgo = null;
+    chartQuadrantsPersona?.dispose(); chartQuadrantsPersona = null;
+    chartPareto?.dispose();         chartPareto = null;
 }
 
 /**
@@ -1440,11 +1372,6 @@ function renderAwardsPersona(filas, personaNombre) {
 
     const rows = Array.from(uniqueByAward.values());
 
-    const fullCellTooltip = (e, cell, onRender) => {
-        const value = cell.getValue();
-        return value == null ? '' : String(value);
-    };
-
     // Add managingOrganization and comanagingOrganization columns if not present
     tablaAwards.setColumns([
         { title: 'Any', field: 'anyo', width: 70 },
@@ -1476,19 +1403,7 @@ async function cargarAwardsPersona(persona) {
         hasta: String(hasta),
         modoAnio
     });
-    // Añadir tipos seleccionados
-    if (tipus && tipus.length > 0) {
-        tipus.forEach(t => params.append('tipus', t));
-    }
-    if (deptUuid) {
-        params.set('deptUuid', deptUuid);
-    }
-    if (categoria && Array.isArray(categoria) && categoria.length > 0) {
-        categoria.forEach(cat => params.append('categoria', cat));
-    } else if (categoria) {
-        params.set('categoria', categoria);
-    }
-    // Añadir el parámetro gestionadosPorDept si el modo es gestionados
+    appendFilterParams(params, { deptUuid, categoria, tipus });
     if (modoAwardsDept === 'gestionados') {
         params.set('gestionadosPorDept', 'managed');
     }
@@ -1668,7 +1583,8 @@ function renderGraficos(filas) {
             if (modoAwardsDept === 'gestionados' && deptUuid) {
                 
                 // Awards gestionados por el departamento
-                const params = new URLSearchParams({ deptUuid, gestionadosPorDept: 'gestionados' });
+                const params = new URLSearchParams({ gestionadosPorDept: 'gestionados' });
+                appendFilterParams(params, { deptUuid });
                 const ckey = _cacheKey(params, modoAwardsDept);
                 if (_requestCache.has(ckey)) {
                     data = _requestCache.get(ckey).data;
@@ -1685,21 +1601,9 @@ function renderGraficos(filas) {
                     hasta: String(hasta),
                     modoAnio
                 });
-                if (deptUuid) params.set('deptUuid', deptUuid);
                 if (persona) params.set('persona', persona);
-                if (Array.isArray(categoria) && categoria.length > 0) {
-                    categoria.forEach(cat => params.append('categoria', cat));
-                } else if (typeof categoria === 'string' && categoria) {
-                    params.set('categoria', categoria);
-                }
-                if (Array.isArray(tipus) && tipus.length > 0) {
-                    tipus.forEach(t => params.append('tipus', t));
-                } else if (typeof tipus === 'string' && tipus) {
-                    params.set('tipus', tipus);
-                }
-                if (modoAwardsDept === 'gestionados') {
-                    params.set('gestionadosPorDept', 'managed');
-                }
+                appendFilterParams(params, { deptUuid, categoria, tipus });
+                if (modoAwardsDept === 'gestionados') params.set('gestionadosPorDept', 'managed');
                 const ckey = _cacheKey(params, modoAwardsDept);
                 if (_requestCache.has(ckey)) {
                     const cached = _requestCache.get(ckey);
@@ -1727,9 +1631,7 @@ function renderGraficos(filas) {
             renderTabla(data, modoAnio, desde, hasta);
             renderTablaCrecimiento(data, desde, hasta);
             renderGraficos(data);
-            if (chartImporteAnio) chartImporteAnio.dispose();
             renderGraficoImportePorProyecto(serieProyectos);
-            
             estado.className = 'p-4 text-sm text-emerald-600 font-semibold';
         } catch (error) {
             if (error && error.name === 'AbortError') return;
@@ -2170,24 +2072,8 @@ async function cargarSerieProyectosAnio() {
         hasta: String(hasta),
         modoAnio
     });
-    if (Array.isArray(deptUuid) && deptUuid.length > 0) {
-        deptUuid.forEach(dep => params.append('deptUuid', dep));
-    } else if (typeof deptUuid === 'string' && deptUuid) {
-        params.set('deptUuid', deptUuid);
-    }
-    if (persona) {
-        params.set('persona', persona);
-    }
-    if (Array.isArray(categoria) && categoria.length > 0) {
-        categoria.forEach(cat => params.append('categoria', cat));
-    } else if (typeof categoria === 'string' && categoria) {
-        params.set('categoria', categoria);
-    }
-    if (Array.isArray(tipus) && tipus.length > 0) {
-        tipus.forEach(t => params.append('tipus', t));
-    } else if (typeof tipus === 'string' && tipus) {
-        params.set('tipus', tipus);
-    }
+    appendFilterParams(params, { deptUuid, categoria, tipus });
+    if (persona) params.set('persona', persona);
 
     const res = await fetch(apiUrl(`/awards/stats/proyectos-anio?${params.toString()}`));
     if (!res.ok) {
@@ -2210,10 +2096,9 @@ function renderGraficoImportePorProyecto(serie) {
     // Mapear los importes por año
     const byYear = new Map((serie || []).map(s => [Number(s.anio), Number(s.importeTotal || 0)]));
     const importes = anios.map(y => byYear.get(y) ?? 0);
-    if (chartImporteAnio) {
-        chartImporteAnio.dispose();
+    if (!chartImporteAnio) {
+        chartImporteAnio = echarts.init(document.getElementById('chartImporteAnio'));
     }
-    chartImporteAnio = echarts.init(document.getElementById('chartImporteAnio'));
     chartImporteAnio.setOption({
         tooltip: { trigger: 'axis' },
         grid: { left: 50, right: 20, top: 20, bottom: 30 },
@@ -2276,20 +2161,8 @@ async function actualizarGraficoComparativaDepartamentos() {
     const seriesData = await Promise.all(
         departamentosComparativa.map(async (dep, index) => {
             const params = new URLSearchParams({ desde: String(desde), hasta: String(hasta), deptUuid: dep.uuid, modoAnio });
-            if (persona) {
-                params.set('persona', persona);
-            }
-            // Añadir filtro de categoría si aplica
-            if (Array.isArray(categoria) && categoria.length > 0) {
-                categoria.forEach(cat => params.append('categoria', cat));
-            } else if (typeof categoria === 'string' && categoria) {
-                params.set('categoria', categoria);
-            }
-            if (Array.isArray(tipus) && tipus.length > 0) {
-                tipus.forEach(t => params.append('tipus', t));
-            } else if (typeof tipus === 'string' && tipus) {
-                params.set('tipus', tipus);
-            }
+            if (persona) params.set('persona', persona);
+            appendFilterParams(params, { categoria, tipus });
             const res = await fetch(apiUrl(`/awards/stats/proyectos-anio?${params.toString()}`));
             if (!res.ok) {
                 return {
@@ -2393,26 +2266,10 @@ async function cargarDatos() {
         const modoAwardsDept = document.getElementById('selectAwardsDept')?.value || 'miembros';
             if (modoAwardsDept === 'gestionados' && deptUuid) {
                 // Awards gestionados por el departamento
-                const params = new URLSearchParams({
-                    desde: String(desde),
-                    hasta: String(hasta),
-                    modoAnio
-                });
-                params.set('deptUuid', deptUuid);
+                const params = new URLSearchParams({ gestionadosPorDept: 'managed' });
+                appendFilterParams(params, { deptUuid });
                 if (persona) params.set('persona', persona);
-                if (Array.isArray(categoria) && categoria.length > 0) {
-                    categoria.forEach(cat => params.append('categoria', cat));
-                } else if (typeof categoria === 'string' && categoria) {
-                    params.set('categoria', categoria);
-                }
-                if (Array.isArray(tipus) && tipus.length > 0) {
-                    tipus.forEach(t => params.append('tipus', t));
-                } else if (typeof tipus === 'string' && tipus) {
-                    params.set('tipus', tipus);
-                }
-                if (modoAwardsDept === 'gestionados') {
-                    params.set('gestionadosPorDept', 'managed');
-                }
+                appendFilterParams(params, { categoria, tipus });
                 const ckey = _cacheKey(params, modoAwardsDept);
                 if (_requestCache.has(ckey)) {
                     data = _requestCache.get(ckey).data;
@@ -2429,21 +2286,9 @@ async function cargarDatos() {
                 hasta: String(hasta),
                 modoAnio
             });
-            if (deptUuid) params.set('deptUuid', deptUuid);
             if (persona) params.set('persona', persona);
-            if (Array.isArray(categoria) && categoria.length > 0) {
-                categoria.forEach(cat => params.append('categoria', cat));
-            } else if (typeof categoria === 'string' && categoria) {
-                params.set('categoria', categoria);
-            }
-            if (Array.isArray(tipus) && tipus.length > 0) {
-                tipus.forEach(t => params.append('tipus', t));
-            } else if (typeof tipus === 'string' && tipus) {
-                params.set('tipus', tipus);
-            }
-            if (modoAwardsDept === 'gestionados') {
-                params.set('gestionadosPorDept', 'managed');
-            }
+            appendFilterParams(params, { deptUuid, categoria, tipus });
+            if (modoAwardsDept === 'gestionados') params.set('gestionadosPorDept', 'managed');
             const ckey = _cacheKey(params, modoAwardsDept);
             if (_requestCache.has(ckey)) {
                 const cached = _requestCache.get(ckey);
@@ -2471,9 +2316,7 @@ async function cargarDatos() {
         renderTabla(data, modoAnio, desde, hasta);
         renderTablaCrecimiento(data, desde, hasta);
         renderGraficos(data);
-        if (chartImporteAnio) chartImporteAnio.dispose();
         renderGraficoImportePorProyecto(serieProyectos);
-        //estado.textContent = `Resultats: ${data.length} files`;
         estado.className = 'p-4 text-sm text-emerald-600 font-semibold';
     } catch (error) {
         if (error && error.name === 'AbortError') return;
