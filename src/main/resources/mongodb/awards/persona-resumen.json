@@ -5,6 +5,10 @@
                 "workflow.step": "validated"
             }
         }, {
+            "$match": {
+                "fundings.fundingCollaborators.collaborator.uuid": "__COLLABORATOR_UUID__"
+            }
+        }, {
             "$unwind": "$fundings"
         }, {
             "$unwind": "$fundings.fundingCollaborators"
@@ -158,66 +162,11 @@
                 }
             }
         }, {
-            "$lookup": {
-                "from": "Persons",
-                "localField": "_id.personUuid",
-                "foreignField": "uuid",
-                "as": "persona"
-            }
-        }, {
-            "$unwind": "$persona"
-        }, {
-            "$unwind": "$persona.staffOrganizationAssociations"
-        }, {
-            "$addFields": {
-                "endDateReal": {
-                    "$cond": [{
-                            "$ifNull": ["$persona.staffOrganizationAssociations.period.endDate", false]
-                        }, {
-                            "$toDate": "$persona.staffOrganizationAssociations.period.endDate"
-                        }, null]
-                }
-            }
-        }, {
-            "$match": {
-                "persona.staffOrganizationAssociations.staffType.term.es_ES": "Académico",
-                "$or": [{
-                        "endDateReal": null
-                    }, {
-                        "$expr": {
-                            "$gt": ["$endDateReal", "$$NOW"]
-                        }
-                    }
-                ],
-                "persona.staffOrganizationAssociations.employmentType.term.es_ES": {
-                    "$not": {
-                        "$regex": "Asociado",
-                        "$options": "i"
-                    }
-                }
-            }
-        }, {
-            "$group": {
-                "_id": {
-                    "personUuid": "$_id.personUuid",
-                    "anyo": "$_id.anyo"
-                },
-                "doc": {
-                    "$first": "$$ROOT"
-                }
-            }
-        }, {
-            "$replaceRoot": {
-                "newRoot": "$doc"
-            }
-        }, {
             "$project": {
                 "_id": 0,
                 "PersonaUuid": "$_id.personUuid",
                 "Año": "$_id.anyo",
-                "Persona": {
-                    "$concat": ["$persona.name.firstName", " ", "$persona.name.lastName"]
-                },
+                "Persona": "",
                 "Proyectos_IP": "$proyectos_ip",
                 "Proyectos_CoIP": "$proyectos_coip",
                 "Proyectos_Miembro": "$proyectos_miembro",

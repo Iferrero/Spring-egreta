@@ -1,6 +1,8 @@
 let chartPiramide = null;
 let chartSexo = null;
 let chartContractType = null;
+let chartNacionalitat = null;
+let _worldGeoJson = null;
 const selectorPersonalType = document.getElementById('selectorPersonalType');
 const selectorDepartamento = document.getElementById('selectorDepartamento');
 
@@ -383,6 +385,7 @@ selectorPersonalType.addEventListener('change', () => {
     cargarPiramideEdad();
     cargarSexDistribution();
     cargarContractType();
+    cargarNacionalitat();
     cargarTooltipSummary();
 });
 
@@ -401,6 +404,7 @@ selectorDepartamento.addEventListener('change', () => {
     cargarPiramideEdad();
     cargarSexDistribution();
     cargarContractType();
+    cargarNacionalitat();
     cargarTooltipSummary();
 });
 
@@ -408,6 +412,7 @@ window.addEventListener('resize', () => {
     if (chartPiramide) chartPiramide.resize();
     if (chartSexo) chartSexo.resize();
     if (chartContractType) chartContractType.resize();
+    if (chartNacionalitat) chartNacionalitat.resize();
 });
 
 async function cargarTooltipSummary() {
@@ -486,6 +491,7 @@ cargarDepartamentos().finally(() => {
     cargarPiramideEdad();
     cargarSexDistribution();
     cargarContractType();
+    cargarNacionalitat();
     cargarTooltipSummary();
 });
 
@@ -525,5 +531,160 @@ async function cargarContractType() {
         estado.textContent = '';
     } catch (e) {
         estado.textContent = 'No s\'han pogut carregar les dades.';
+    }
+}
+
+// ── Origen per nacionalitat ───────────────────────────────────────────────────
+
+async function getWorldGeoJson() {
+    if (_worldGeoJson) return _worldGeoJson;
+    const res = await fetch('https://cdn.jsdelivr.net/npm/echarts@4.9.0/map/json/world.json');
+    if (!res.ok) throw new Error('GeoJSON no disponible');
+    _worldGeoJson = await res.json();
+    echarts.registerMap('world', _worldGeoJson);
+    return _worldGeoJson;
+}
+
+const ISO2_TO_MAP_NAME = {
+    ES: 'Spain', FR: 'France', DE: 'Germany', IT: 'Italy', PT: 'Portugal',
+    GB: 'United Kingdom', NL: 'Netherlands', BE: 'Belgium', CH: 'Switzerland',
+    AT: 'Austria', PL: 'Poland', SE: 'Sweden', NO: 'Norway', DK: 'Denmark',
+    FI: 'Finland', CZ: 'Czech Rep.', HU: 'Hungary', RO: 'Romania', GR: 'Greece',
+    RU: 'Russia', UA: 'Ukraine', TR: 'Turkey', IL: 'Israel',
+    US: 'United States', CA: 'Canada', MX: 'Mexico', BR: 'Brazil',
+    AR: 'Argentina', CL: 'Chile', CO: 'Colombia', VE: 'Venezuela', PE: 'Peru',
+    UY: 'Uruguay', BO: 'Bolivia', EC: 'Ecuador', PY: 'Paraguay', CU: 'Cuba',
+    CN: 'China', JP: 'Japan', KR: 'S. Korea', IN: 'India', AU: 'Australia',
+    ZA: 'South Africa', EG: 'Egypt', MA: 'Morocco', TN: 'Tunisia', NG: 'Nigeria',
+    IR: 'Iran', IQ: 'Iraq', PK: 'Pakistan', BD: 'Bangladesh', TH: 'Thailand',
+    VN: 'Vietnam', PH: 'Philippines', ID: 'Indonesia', MY: 'Malaysia',
+    GT: 'Guatemala', HN: 'Honduras', SV: 'El Salvador', NI: 'Nicaragua',
+    CR: 'Costa Rica', PA: 'Panama', DO: 'Dominican Rep.',
+    CY: 'Cyprus', MT: 'Malta', LU: 'Luxembourg', IE: 'Ireland', SK: 'Slovakia',
+    SI: 'Slovenia', HR: 'Croatia', BA: 'Bosnia and Herz.', RS: 'Serbia',
+    MK: 'Macedonia', AL: 'Albania', BG: 'Bulgaria', LT: 'Lithuania',
+    LV: 'Latvia', EE: 'Estonia', BY: 'Belarus', MD: 'Moldova',
+    GE: 'Georgia', AM: 'Armenia', AZ: 'Azerbaijan', KZ: 'Kazakhstan',
+    UZ: 'Uzbekistan', AF: 'Afghanistan', SY: 'Syria', LB: 'Lebanon',
+    JO: 'Jordan', SA: 'Saudi Arabia', AE: 'United Arab Emirates',
+    QA: 'Qatar', KW: 'Kuwait', BH: 'Bahrain', OM: 'Oman', YE: 'Yemen',
+    LY: 'Libya', DZ: 'Algeria', SD: 'Sudan', ET: 'Ethiopia', KE: 'Kenya',
+    UG: 'Uganda', TZ: 'Tanzania', MZ: 'Mozambique', ZW: 'Zimbabwe',
+    CM: 'Cameroon', CI: "Côte d'Ivoire", SN: 'Senegal', GH: 'Ghana',
+    NZ: 'New Zealand'
+};
+
+const COUNTRY_NAMES_CA = {
+    ES: 'Espanya', FR: 'França', DE: 'Alemanya', IT: 'Itàlia', PT: 'Portugal',
+    GB: 'Regne Unit', NL: 'Països Baixos', BE: 'Bèlgica', CH: 'Suïssa',
+    AT: 'Àustria', PL: 'Polònia', SE: 'Suècia', NO: 'Noruega', DK: 'Dinamarca',
+    FI: 'Finlàndia', CZ: 'Txèquia', HU: 'Hongria', RO: 'Romania', GR: 'Grècia',
+    RU: 'Rússia', UA: 'Ucraïna', TR: 'Turquia', IL: 'Israel',
+    US: 'Estats Units', CA: 'Canadà', MX: 'Mèxic', BR: 'Brasil',
+    AR: 'Argentina', CL: 'Xile', CO: 'Colòmbia', VE: 'Veneçuela', PE: 'Perú',
+    UY: 'Uruguai', BO: 'Bolívia', EC: 'Equador', PY: 'Paraguai', CU: 'Cuba',
+    CN: 'Xina', JP: 'Japó', KR: 'Corea del Sud', IN: 'Índia', AU: 'Austràlia',
+    ZA: 'Sud-àfrica', EG: 'Egipte', MA: 'Marroc', TN: 'Tunísia', NG: 'Nigèria',
+    IR: 'Iran', IQ: 'Iraq', PK: 'Pakistan', BD: 'Bangladesh', TH: 'Tailàndia',
+    VN: 'Vietnam', PH: 'Filipines', ID: 'Indonèsia', MY: 'Malàisia',
+    GT: 'Guatemala', HN: 'Hondures', SV: 'El Salvador', NI: 'Nicaragua',
+    CR: 'Costa Rica', PA: 'Panamà', DO: 'Rep. Dominicana', PR: 'Puerto Rico',
+    CY: 'Xipre', MT: 'Malta', LU: 'Luxemburg', IE: 'Irlanda', SK: 'Eslovàquia',
+    SI: 'Eslovènia', HR: 'Croàcia', BA: 'Bòsnia i Hercegovina', RS: 'Sèrbia',
+    MK: 'Macedònia del Nord', AL: 'Albània', BG: 'Bulgària', LT: 'Lituània',
+    LV: 'Letònia', EE: 'Estònia', BY: 'Bielorússia', MD: 'Moldàvia',
+    GE: 'Geòrgia', AM: 'Armènia', AZ: 'Azerbaidjan', KZ: 'Kazakhstan',
+    UZ: 'Uzbekistan', AF: 'Afganistan', SY: 'Síria', LB: 'Líban',
+    JO: 'Jordània', SA: 'Aràbia Saudita', AE: 'Emirats Àrabs Units',
+    QA: 'Qatar', KW: 'Kuwait', BH: 'Bahrain', OM: 'Oman', YE: 'Iemen',
+    LY: 'Líbia', DZ: 'Algèria', SD: 'Sudan', ET: 'Etiòpia', KE: 'Kenya',
+    UG: 'Uganda', TZ: 'Tanzània', MZ: 'Moçambic', ZW: 'Zimbabwe',
+    CM: 'Camerun', CI: "Costa d'Ivori", SN: 'Senegal', GH: 'Ghana',
+    NZ: 'Nova Zelanda'
+};
+
+function countryName(code) {
+    return COUNTRY_NAMES_CA[code] || code;
+}
+
+async function cargarNacionalitat() {
+    const estado = document.getElementById('estadoNacionalitat');
+    const contenedor = document.getElementById('chartNacionalitat');
+    if (!estado || !contenedor) return;
+    estado.textContent = 'Carregant...';
+
+    try {
+        const [, res] = await Promise.all([
+            getWorldGeoJson(),
+            fetch(apiUrl(buildUrl('/persons/stats/nationality', true)))
+        ]);
+
+        if (!res.ok) throw new Error();
+        const data = await res.json();
+
+        if (!data || data.length === 0) {
+            estado.textContent = 'Sense dades de nacionalitat.';
+            return;
+        }
+
+        const mapData = data
+            .filter(d => ISO2_TO_MAP_NAME[d.country])
+            .map(d => ({
+                name: ISO2_TO_MAP_NAME[d.country],
+                value: Number(d.count),
+                iso2: d.country
+            }));
+
+        if (!chartNacionalitat) {
+            chartNacionalitat = echarts.init(contenedor);
+        }
+
+        chartNacionalitat.setOption({
+            backgroundColor: '#f8f9fb',
+            tooltip: {
+                trigger: 'item',
+                formatter: params => {
+                    if (!params.data) return `<b>${params.name}</b>`;
+                    const label = COUNTRY_NAMES_CA[params.data.iso2] || params.name;
+                    return `<b>${label}</b> (${params.data.iso2}): ${params.value}`;
+                }
+            },
+            visualMap: {
+                type: 'piecewise',
+                pieces: [
+                    { min: 1001,          label: '> 1.000',    color: '#003d1f' },
+                    { min: 201, max: 1000, label: '201 – 1.000', color: '#005c2e' },
+                    { min: 51,  max: 200,  label: '51 – 200',   color: '#008037' },
+                    { min: 11,  max: 50,   label: '11 – 50',    color: '#4aaa6e' },
+                    { min: 1,   max: 10,   label: '1 – 10',     color: '#a8d8b8' }
+                ],
+                outOfRange: { color: '#e4e8ec' },
+                orient: 'vertical',
+                left: 'left',
+                bottom: 20,
+                textStyle: { color: '#333', fontSize: 11 }
+            },
+            series: [{
+                type: 'map',
+                map: 'world',
+                roam: true,
+                zoom: 1.15,
+                data: mapData,
+                itemStyle: {
+                    areaColor: '#e4e8ec',
+                    borderColor: '#ffffff',
+                    borderWidth: 0.5
+                },
+                emphasis: {
+                    label: { show: false },
+                    itemStyle: { areaColor: '#004D5E' }
+                }
+            }]
+        }, true);
+
+        estado.textContent = '';
+    } catch (e) {
+        estado.textContent = 'No s\'han pogut carregar les dades.';
+        if (contenedor) contenedor.innerHTML = '<div class="h-full flex items-center justify-center text-sm text-rose-500">Error carregant les dades de nacionalitat</div>';
     }
 }

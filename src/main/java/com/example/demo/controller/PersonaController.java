@@ -862,6 +862,119 @@ public class PersonaController {
         return result;
     }
 
+    @GetMapping("/stats/nationality")
+    public List<Map<String, Object>> getNationalityStats(
+            @RequestParam(required = false) String personalType,
+            @RequestParam(required = false) String deptUuid) {
+
+        LocalDate hoy = LocalDate.now();
+        String hoyIso = hoy.toString();
+
+        Criteria activeAssociationCriteria = new Criteria().orOperator(
+            Criteria.where("period.endDate").is(null),
+            Criteria.where("period.endDate").exists(false),
+            new Criteria().andOperator(
+                Criteria.where("period.endDate").type(9),
+                Criteria.where("period.endDate").gt(hoy)
+            ),
+            new Criteria().andOperator(
+                Criteria.where("period.endDate").type(2),
+                Criteria.where("period.endDate").gt(hoyIso)
+            )
+        );
+
+        Query query = new Query();
+        if (deptUuid != null && !deptUuid.isBlank()) {
+            query.addCriteria(Criteria.where("staffOrganizationAssociations").elemMatch(
+                new Criteria().andOperator(
+                    Criteria.where("organization.uuid").is(deptUuid),
+                    activeAssociationCriteria
+                )
+            ));
+        } else {
+            query.addCriteria(Criteria.where("staffOrganizationAssociations").elemMatch(activeAssociationCriteria));
+        }
+
+        addPersonalTypeCriteria(query, personalType);
+
+        List<Document> docs = mongoTemplate.find(query, Document.class, "Persons");
+
+        Map<String, Long> countByCountry = new LinkedHashMap<>();
+        for (Document doc : docs) {
+            String code = extractNationalityCode(doc);
+            if (code != null && !code.isBlank()) {
+                countByCountry.merge(code.toUpperCase(), 1L, Long::sum);
+            }
+        }
+
+        return countByCountry.entrySet().stream()
+            .sorted(Map.Entry.<String, Long>comparingByValue().reversed())
+            .map(e -> {
+                Map<String, Object> row = new LinkedHashMap<>();
+                row.put("country", e.getKey());
+                row.put("count", e.getValue());
+                return row;
+            })
+            .collect(java.util.stream.Collectors.toList());
+    }
+
+    private String extractNationalityCode(Document doc) {
+        // 1. nationality.uri  ->  last path segment (ISO-2)  e.g. /dk/atira/pure/core/countries/es
+        String code = codeFromUri(getByPath(doc, "nationality.uri"));
+        if (code != null) return code;
+
+        // 2. nationalityType.uri
+        code = codeFromUri(getByPath(doc, "nationalityType.uri"));
+        if (code != null) return code;
+
+        // 3. nationalityTypes (array) -> first element uri
+        Object nt = doc.get("nationalityTypes");
+        if (nt instanceof List<?> list && !list.isEmpty()) {
+            Object first = list.get(0);
+            if (first instanceof Document d) {
+                code = codeFromUri(d.get("uri"));
+                if (code != null) return code;
+            }
+        }
+
+        // 4. Direct 'nationality' string field
+        Object nat = doc.get("nationality");
+        if (nat instanceof String s && !s.isBlank()) {
+            String v = s.trim();
+            return v.length() == 2 ? v.toUpperCase() : null;
+        }
+
+        return null;
+    }
+
+    private String codeFromUri(Object uriObj) {
+        if (!(uriObj instanceof String uri)) return null;
+        String cleaned = uri.endsWith("/") ? uri.substring(0, uri.length() - 1) : uri;
+        int idx = cleaned.lastIndexOf('/');
+        if (idx < 0) return null;
+        String segment = cleaned.substring(idx + 1);
+        return (segment.length() == 2) ? segment.toUpperCase() : null;
+    }
+
+    @GetMapping("/stats/nationality/debug")
+    public List<Map<String, Object>> debugNationalityFields(
+            @RequestParam(defaultValue = "20") int limit) {
+        int safeLimit = Math.max(1, Math.min(limit, 200));
+        Query query = new Query().limit(safeLimit);
+        List<Document> docs = mongoTemplate.find(query, Document.class, "Persons");
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (Document doc : docs) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("uuid", doc.getString("uuid"));
+            row.put("nationalityType", doc.get("nationalityType"));
+            row.put("nationalityTypes", doc.get("nationalityTypes"));
+            row.put("nationality", doc.get("nationality"));
+            row.put("extractedCode", extractNationalityCode(doc));
+            out.add(row);
+        }
+        return out;
+    }
+
     @GetMapping("/stats/contract-type")
     public Map<String, Long> getContractTypeStats(
             @RequestParam(required = false) String personalType,

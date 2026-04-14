@@ -29,6 +29,7 @@ import java.util.Date;
 public class ResearchOutputJournalLinkService {
 
     private static final String RESEARCHOUTPUTS_COLLECTION = "Researchoutputs";
+    private static final String PERSONS_COLLECTION = "Persons";
     private static final long QUARTILES_CACHE_TTL_MS = 600_000;
     private static final long JOURNAL_UUID_CACHE_TTL_MS = 600_000;
 
@@ -792,81 +793,77 @@ public class ResearchOutputJournalLinkService {
 
     private List<String> publicationUuidsByDepartment(String deptUuid, Integer desde, Integer hasta, String filtrePersonal, String personUuid) {
 
-        // When a specific person is selected, bypass the contributor-unwind/lookup chain and
-        // query directly. This captures ALL publication types (books, conference papers, etc.)
-        // that get dropped by $unwind when a publication has an empty contributors array.
+        // When a specific person is selected, bypass directly.
         if (personUuid != null && !personUuid.isBlank()) {
             return publicationUuidsByPerson(personUuid.trim(), desde, hasta);
         }
 
-        List<Document> pipeline = new ArrayList<>();
+        // Step 1: resolve matching person UUIDs from the Persons collection (one fast query).
+        // This avoids the former $unwind+$lookup-per-contributor chain that hit MongoDB
+        // O(publications × contributors) times.
+        List<String> personUuids = personUuidsByDepartment(deptUuid, desde, hasta, filtrePersonal);
+        if (personUuids.isEmpty()) {
+            return List.of();
+        }
 
-        pipeline.add(new Document("$match", new Document("workflow.step", "approved")));
+        // Step 2: find publications where any contributor matches via $in (index-friendly).
+        List<Document> matchClauses = new ArrayList<>();
+        matchClauses.add(new Document("workflow.step", "approved"));
+
         Document yearCriteria = buildPublicationYearCriteria(desde, hasta);
         if (yearCriteria != null) {
-            pipeline.add(new Document("$match", yearCriteria));
+            matchClauses.add(yearCriteria);
         }
 
-        pipeline.add(new Document("$project", new Document()
-                .append("publicationUuid", "$uuid")
-                .append("publicationYear", new Document("$ifNull", List.of("$publicationDate.year", "$submissionYear")))
-                .append("contributors", new Document("$ifNull", List.of("$contributors", List.of())))));
+        matchClauses.add(new Document("$or", List.of(
+                new Document("contributors.person.uuid", new Document("$in", personUuids)),
+                new Document("contributors.externalPerson.uuid", new Document("$in", personUuids))
+        )));
 
-        pipeline.add(new Document("$unwind", "$contributors"));
-        Document personUuidExpr = new Document("$trim", new Document("input",
-            new Document("$ifNull", List.of(
-                "$contributors.person.uuid",
-                new Document("$ifNull", List.of("$contributors.externalPerson.uuid", ""))
-            ))));
-        pipeline.add(new Document("$project", new Document()
-            .append("publicationUuid", 1)
-            .append("personUuid", personUuidExpr)));
-
-        pipeline.add(new Document("$match", new Document("$expr",
-                new Document("$gt", List.of(new Document("$strLenCP", "$personUuid"), 0)))));
-
-        pipeline.add(new Document("$lookup", new Document()
-                .append("from", "Persons")
-                .append("localField", "personUuid")
-                .append("foreignField", "uuid")
-                .append("as", "persona_info")));
-
-        pipeline.add(new Document("$unwind", new Document()
-                .append("path", "$persona_info")
-                .append("preserveNullAndEmptyArrays", false)));
-
-        boolean usePeriode = "periode".equalsIgnoreCase(filtrePersonal);
-        Document activeAssociationCriteria = usePeriode
-                ? buildPeriodeAssociationCriteria(desde, hasta)
-                : buildVigentAssociationCriteria();
-
-        if (deptUuid != null && !deptUuid.isBlank()) {
-            Document assocCriteria = new Document("$and", List.of(
-                    new Document("organization.uuid", deptUuid),
-                    activeAssociationCriteria
-            ));
-            pipeline.add(new Document("$match", new Document(
-                    "persona_info.staffOrganizationAssociations",
-                    new Document("$elemMatch", assocCriteria)
-            )));
-        } else {
-            pipeline.add(new Document("$match", new Document(
-                    "persona_info.staffOrganizationAssociations",
-                    new Document("$elemMatch", activeAssociationCriteria)
-            )));
-        }
-
-        pipeline.add(new Document("$group", new Document("_id", "$publicationUuid")));
-        pipeline.add(new Document("$project", new Document("_id", 0).append("publicationUuid", "$_id")));
+        Document filter = new Document("$and", matchClauses);
+        Document projection = new Document("uuid", 1).append("_id", 0);
 
         List<Document> rows = mongoTemplate
                 .getCollection(RESEARCHOUTPUTS_COLLECTION)
-                .aggregate(pipeline)
+                .find(filter)
+                .projection(projection)
                 .into(new ArrayList<>());
 
         return rows.stream()
-                .map(row -> row.getString("publicationUuid"))
+                .map(row -> row.getString("uuid"))
                 .filter(value -> value != null && !value.isBlank())
+                .distinct()
+                .toList();
+    }
+
+    /**
+     * Returns trimmed UUIDs of persons with an active (or period-matching) staff association
+     * in the given department. One targeted query on the Persons collection.
+     */
+    private List<String> personUuidsByDepartment(String deptUuid, Integer desde, Integer hasta, String filtrePersonal) {
+        boolean usePeriode = "periode".equalsIgnoreCase(filtrePersonal);
+        Document assocCriteria = usePeriode
+                ? buildPeriodeAssociationCriteria(desde, hasta)
+                : buildVigentAssociationCriteria();
+
+        Document elemMatch = (deptUuid != null && !deptUuid.isBlank())
+                ? new Document("$and", List.of(new Document("organization.uuid", deptUuid), assocCriteria))
+                : assocCriteria;
+
+        Document filter = new Document("staffOrganizationAssociations", new Document("$elemMatch", elemMatch));
+        Document projection = new Document("uuid", 1).append("_id", 0);
+
+        List<Document> rows = mongoTemplate
+                .getCollection(PERSONS_COLLECTION)
+                .find(filter)
+                .projection(projection)
+                .into(new ArrayList<>());
+
+        return rows.stream()
+                .map(d -> d.getString("uuid"))
+                .filter(v -> v != null && !v.isBlank())
+                .map(String::trim)
+                .distinct()
                 .toList();
     }
 
