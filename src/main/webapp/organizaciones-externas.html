@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Organitzacions externes sense vinculació</title>
+    <script src="config.js"></script>
+    <script src="uab-brand.js" defer></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="uab-theme.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body class="bg-slate-50 min-h-screen font-sans">
+
+<div class="mx-auto py-10 px-4 max-w-7xl">
+
+    <!-- Header -->
+    <header class="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 mb-8">
+        <div>
+            <h1 class="text-2xl font-extrabold text-slate-800 tracking-tight">
+                Organitzacions externes <span class="text-rose-600">sense vinculació</span>
+            </h1>
+            <p class="text-slate-500 text-sm mt-1">
+                Registres d'organitzacions externes no referenciats en cap altra col·lecció (publicacions, projectes, persones, etc.)
+            </p>
+        </div>
+
+        <!-- KPI badge -->
+        <div class="bg-white shadow-sm p-3 rounded-xl flex items-center gap-3 border border-slate-200 min-w-[200px]">
+            <div class="w-10 h-10 bg-rose-100 rounded-full flex items-center justify-center shrink-0">
+                <i class="fa-solid fa-link-slash text-rose-600"></i>
+            </div>
+            <div>
+                <p class="text-xs text-slate-400 uppercase font-bold">Sense vinculació</p>
+                <p id="kpiUnlinked" class="text-xl font-black text-slate-700 leading-tight">--</p>
+                <p id="kpiTotal" class="text-xs text-slate-500">de -- totals</p>
+            </div>
+        </div>
+    </header>
+
+    <!-- Search toolbar -->
+    <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 mb-6 flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+        <div class="relative flex-1 max-w-2xl">
+            <i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-slate-400"></i>
+            <input id="inputBuscar" type="text" placeholder="Cercar per nom..."
+                   class="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-rose-400 text-sm">
+        </div>
+        <div id="loadingBadge" class="hidden items-center gap-2 text-xs text-slate-400 italic">
+            <i class="fa-solid fa-rotate fa-spin"></i> Comprovant vinculacions...
+        </div>
+    </div>
+
+    <!-- Table -->
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+        <table class="w-full text-left border-collapse">
+            <thead>
+            <tr class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider">
+                <th class="px-6 py-4 font-bold w-[35%]">Nom</th>
+                <th class="px-6 py-4 font-bold">Tipus</th>
+                <th class="px-6 py-4 font-bold">Naturalesa</th>
+                <th class="px-6 py-4 font-bold">País</th>
+                <th class="px-6 py-4 font-bold">Workflow</th>
+                <th class="px-6 py-4 font-bold text-right">UUID</th>
+            </tr>
+            </thead>
+            <tbody id="tabla-body" class="divide-y divide-slate-100 text-sm"></tbody>
+        </table>
+
+        <!-- Pagination -->
+        <div class="px-6 py-4 bg-slate-50/70 flex justify-between items-center border-t border-slate-100">
+            <button id="btnPrev"
+                    class="px-4 py-2 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed text-sm">
+                ← Anterior
+            </button>
+            <span id="infoPagina" class="text-sm font-semibold text-slate-600">Pàgina 1 de 1</span>
+            <button id="btnNext"
+                    class="px-4 py-2 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed text-sm">
+                Següent →
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+    let paginaActual = 0;
+    const tamanoPagina = 20;
+    let debounceBuscar = null;
+
+    // ----------------------------------------------------------------
+    // Helpers
+    // ----------------------------------------------------------------
+    function badgeWorkflow(step) {
+        const val = (step || '').toLowerCase();
+        if (val === 'approved') return badge('emerald', 'Approved');
+        if (val === 'validated') return badge('emerald', 'Validated');
+        if (val === 'draft') return badge('amber', 'Draft');
+        if (val === 'pendingapproval') return badge('sky', 'Pending');
+        return badge('slate', step || 'N/A');
+    }
+
+    function badge(color, text) {
+        const classes = {
+            emerald: 'bg-emerald-100 text-emerald-700',
+            amber:   'bg-amber-100 text-amber-700',
+            sky:     'bg-sky-100 text-sky-700',
+            slate:   'bg-slate-100 text-slate-600',
+            rose:    'bg-rose-100 text-rose-700',
+        };
+        const cls = classes[color] || classes.slate;
+        return `<span class="px-2 py-1 rounded-full text-[10px] font-bold uppercase ${cls}">${text}</span>`;
+    }
+
+    function esc(str) {
+        if (!str) return '';
+        return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    // ----------------------------------------------------------------
+    // Render
+    // ----------------------------------------------------------------
+    function renderTabla(lista) {
+        const body = document.getElementById('tabla-body');
+        if (!lista || lista.length === 0) {
+            body.innerHTML = `<tr><td colspan="6" class="px-6 py-12 text-center text-slate-400 italic">
+                <i class="fa-solid fa-circle-check text-emerald-400 mr-2"></i>
+                No s'han trobat organitzacions sense vinculació amb els filtres actuals
+            </td></tr>`;
+            return;
+        }
+        body.innerHTML = lista.map(org => {
+            const name     = esc(org.displayName || org.name?.ca_ES || org.name?.en_GB || '—');
+            const typeName = esc(org.typeName || org.type?.term?.ca_ES || org.type?.term?.en_GB || '—');
+            const country  = esc(org.countryName || org.address?.country?.term?.ca_ES || org.address?.country?.term?.en_GB || '—');
+            const nature   = org.natureTypes && org.natureTypes.length > 0
+                ? esc(org.natureTypes[0].term?.ca_ES || org.natureTypes[0].term?.en_GB || '—')
+                : '<span class="text-slate-300">—</span>';
+            const workflow = badgeWorkflow(org.workflow?.step);
+            const uuid     = org.uuid
+                ? `<span class="font-mono text-xs text-slate-400">${esc(org.uuid)}</span>`
+                : '<span class="text-slate-300">—</span>';
+            return `
+            <tr class="hover:bg-rose-50/30 transition-colors">
+                <td class="px-6 py-4 font-semibold text-slate-800 leading-tight">${name}</td>
+                <td class="px-6 py-4 text-slate-600">${typeName}</td>
+                <td class="px-6 py-4 text-slate-500">${nature}</td>
+                <td class="px-6 py-4 text-slate-600">${country}</td>
+                <td class="px-6 py-4">${workflow}</td>
+                <td class="px-6 py-4 text-right">${uuid}</td>
+            </tr>`;
+        }).join('');
+    }
+
+    function actualizarPaginacion(data) {
+        const totalPages   = (data.totalPages != null && data.totalPages > 0) ? data.totalPages : 1;
+        const currentPage  = (data.number ?? 0) + 1;
+        const isFirst = data.first ?? (paginaActual === 0);
+        const isLast  = data.last  ?? (currentPage >= totalPages);
+
+        document.getElementById('infoPagina').textContent = `Pàgina ${currentPage} de ${totalPages}`;
+        document.getElementById('btnPrev').disabled = isFirst;
+        document.getElementById('btnNext').disabled = isLast;
+    }
+
+    // ----------------------------------------------------------------
+    // API calls
+    // ----------------------------------------------------------------
+    async function cargarKpi() {
+        try {
+            const res = await apiFetch('/external-organizations/unlinked/count');
+            if (!res.ok) return;
+            const data = await res.json();
+            document.getElementById('kpiUnlinked').textContent = (data.unlinked ?? '--').toLocaleString('ca-ES');
+            document.getElementById('kpiTotal').textContent    = `de ${(data.total ?? '--').toLocaleString('ca-ES')} totals`;
+        } catch (_) { /* ignore */ }
+    }
+
+    async function cargarDatos() {
+        const loading = document.getElementById('loadingBadge');
+        const body    = document.getElementById('tabla-body');
+        loading.classList.remove('hidden');
+        loading.classList.add('flex');
+        body.innerHTML = `<tr><td colspan="6" class="px-6 py-12 text-center text-slate-400 italic">
+            <i class="fa-solid fa-rotate fa-spin mr-2"></i>Comprovant vinculacions...
+        </td></tr>`;
+
+        const buscar = document.getElementById('inputBuscar').value.trim();
+        const params = new URLSearchParams({
+            page: paginaActual,
+            size: tamanoPagina,
+        });
+        if (buscar) params.set('buscar', buscar);
+
+        try {
+            const res = await apiFetch(`/external-organizations/unlinked?${params}`);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = await res.json();
+            renderTabla(data.content || []);
+            actualizarPaginacion(data);
+        } catch (e) {
+            body.innerHTML = `<tr><td colspan="6" class="px-6 py-12 text-center text-rose-500">
+                <i class="fa-solid fa-triangle-exclamation mr-2"></i>
+                Error carregant dades: ${e.message}
+            </td></tr>`;
+        } finally {
+            loading.classList.add('hidden');
+            loading.classList.remove('flex');
+        }
+    }
+
+    // ----------------------------------------------------------------
+    // Events
+    // ----------------------------------------------------------------
+    document.getElementById('btnPrev').addEventListener('click', () => {
+        if (paginaActual > 0) { paginaActual--; cargarDatos(); }
+    });
+    document.getElementById('btnNext').addEventListener('click', () => {
+        paginaActual++;
+        cargarDatos();
+    });
+    document.getElementById('inputBuscar').addEventListener('input', () => {
+        clearTimeout(debounceBuscar);
+        debounceBuscar = setTimeout(() => { paginaActual = 0; cargarDatos(); }, 300);
+    });
+
+    // Initial load
+    cargarKpi();
+    cargarDatos();
+</script>
+</body>
+</html>

@@ -65,6 +65,26 @@ public class ResearchOutputJournalLinkService {
         return linkByPublicationUuid(publicationUuid).map(this::toCompactSummary);
     }
 
+    /**
+     * Builds an APA citation string for a raw Researchoutputs document.
+     * Used by AwardController to render articles in Word reports.
+     */
+    public String formatApaForDocument(Document publication) {
+        String authors = extractAuthorsApa(publication);
+        Integer year = extractYear(publication);
+        Integer day = extractDatePart(publication, "day");
+        Integer month = extractDatePart(publication, "month");
+        String title = nestedString(publication, "title", "value");
+        String journalTitle = extractJournalTitle(publication, Optional.empty());
+        String volume = findFirstString(publication, List.of("journalAssociation", "volume"), List.of("volume"));
+        String issue = findFirstString(publication, List.of("journalAssociation", "journalNumber"),
+                List.of("journalAssociation", "issue"), List.of("issue"));
+        String pages = findFirstString(publication, List.of("journalAssociation", "pages"), List.of("pages"));
+        String articleNumber = findFirstString(publication, List.of("journalAssociation", "articleNumber"),
+                List.of("articleNumber"));
+        return buildCitationApa(authors, day, month, year, journalTitle, volume, issue, pages, articleNumber, title);
+    }
+
     public Map<String, Object> quartilesDashboardByDepartment(String deptUuid, Integer desde, Integer hasta, String filtrePersonal, String personUuid) {
         long now = System.currentTimeMillis();
         String cacheKey = buildQuartilesCacheKey(deptUuid, desde, hasta, filtrePersonal, personUuid);

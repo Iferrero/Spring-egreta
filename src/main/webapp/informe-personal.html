@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Informe de Personal</title>
+    <script src="config.js"></script>
+    <script src="uab-brand.js" defer></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="uab-theme.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body class="min-h-screen bg-[#f4f6f9]">
+
+<div class="w-full max-w-3xl mx-auto px-6 py-10">
+    <header class="mb-8">
+        <h1 class="text-2xl font-extrabold text-[#2a3037] tracking-tight">
+            Informe de <span class="text-[#008037]">Personal</span>
+        </h1>
+        <p class="text-[#596473] text-sm mt-1">
+            Selecciona un centre, un rang de dates i genera un document Word amb el personal adscrit durant aquell període.
+        </p>
+    </header>
+
+    <div class="bg-white border border-[#d4d8de] rounded-2xl shadow-sm p-6 flex flex-col gap-5">
+
+        <!-- Tipus de centre -->
+        <div>
+            <label class="block text-xs font-bold text-[#596473] uppercase tracking-wider mb-1">
+                Tipus de centre
+            </label>
+            <div class="flex gap-3">
+                <label class="flex items-center gap-2 cursor-pointer">
+                    <input type="radio" name="tipusCentre" value="departaments" checked
+                           class="accent-[#008037]" onchange="onTipusChange()">
+                    <span class="text-sm font-medium text-[#2a3037]">Departament</span>
+                </label>
+                <label class="flex items-center gap-2 cursor-pointer">
+                    <input type="radio" name="tipusCentre" value="instituts"
+                           class="accent-[#008037]" onchange="onTipusChange()">
+                    <span class="text-sm font-medium text-[#2a3037]">Institut de recerca propi</span>
+                </label>
+            </div>
+        </div>
+
+        <!-- Selector de centre -->
+        <div>
+            <label for="selectorCentre" class="block text-xs font-bold text-[#596473] uppercase tracking-wider mb-1">
+                Centre
+            </label>
+            <select id="selectorCentre"
+                    class="w-full rounded-xl border border-[#d4d8de] bg-white px-3 py-2 text-sm text-[#2a3037] focus:outline-none focus:ring-2 focus:ring-[#004d21]">
+                <option value="">Carregant...</option>
+            </select>
+        </div>
+
+        <!-- Rang de dates -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+                <label for="dataInici" class="block text-xs font-bold text-[#596473] uppercase tracking-wider mb-1">
+                    Data d'inici
+                </label>
+                <input type="date" id="dataInici" value="2020-01-01"
+                       class="w-full rounded-xl border border-[#d4d8de] bg-white px-3 py-2 text-sm text-[#2a3037] focus:outline-none focus:ring-2 focus:ring-[#004d21]">
+            </div>
+            <div>
+                <label for="dataFi" class="block text-xs font-bold text-[#596473] uppercase tracking-wider mb-1">
+                    Data de fi
+                </label>
+                <input type="date" id="dataFi"
+                       class="w-full rounded-xl border border-[#d4d8de] bg-white px-3 py-2 text-sm text-[#2a3037] focus:outline-none focus:ring-2 focus:ring-[#004d21]">
+            </div>
+        </div>
+
+        <!-- Botó -->
+        <div class="flex items-center gap-4 mt-2">
+            <button id="btnInforme"
+                    onclick="generarInforme()"
+                    class="flex items-center gap-2 bg-[#008037] hover:bg-[#006029] text-white font-bold px-6 py-2.5 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                <i class="fa-solid fa-file-word"></i>
+                Crear informe
+            </button>
+            <span id="estatText" class="text-sm text-[#596473] hidden">
+                <i class="fa-solid fa-spinner fa-spin"></i> Generant document...
+            </span>
+        </div>
+
+        <!-- Missatge d'error -->
+        <div id="errorBox" class="hidden bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700">
+        </div>
+    </div>
+
+    <!-- Info card -->
+    <div class="mt-6 bg-white border border-[#d4d8de] rounded-2xl shadow-sm p-5">
+        <h2 class="text-sm font-bold text-[#2a3037] mb-2">
+            <i class="fa-solid fa-circle-info text-[#008037] mr-1"></i>
+            Sobre l'informe
+        </h2>
+        <p class="text-xs text-[#596473] leading-relaxed">
+            El document Word inclourà una taula amb totes les persones que han tingut una vinculació activa
+            al centre seleccionat durant el rang de dates indicat. Per a cada persona es mostra el nom,
+            el tipus d'ocupació i les dates d'inici i fi de la vinculació.
+        </p>
+    </div>
+</div>
+
+<script>
+    // Set default end date to today
+    document.getElementById('dataFi').value = new Date().toISOString().slice(0, 10);
+
+    async function carregarCentres(tipus) {
+        const sel = document.getElementById('selectorCentre');
+        sel.innerHTML = '<option value="">Carregant...</option>';
+        sel.disabled = true;
+        try {
+            const endpoint = tipus === 'instituts' ? '/persons/institutos' : '/persons/departamentos';
+            const res = await apiFetch(endpoint);
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            const data = await res.json();
+            sel.innerHTML = '<option value="">-- Selecciona un centre --</option>';
+            data.forEach(d => {
+                const opt = document.createElement('option');
+                opt.value = d.uuid;
+                opt.textContent = d.nombre;
+                sel.appendChild(opt);
+            });
+        } catch (e) {
+            sel.innerHTML = '<option value="">Error carregant centres</option>';
+            mostrarError('No s\'han pogut carregar els centres: ' + e.message);
+        } finally {
+            sel.disabled = false;
+        }
+    }
+
+    function onTipusChange() {
+        netejarError();
+        const tipus = document.querySelector('input[name="tipusCentre"]:checked').value;
+        carregarCentres(tipus);
+    }
+
+    function mostrarError(msg) {
+        const box = document.getElementById('errorBox');
+        box.textContent = msg;
+        box.classList.remove('hidden');
+    }
+
+    function netejarError() {
+        document.getElementById('errorBox').classList.add('hidden');
+    }
+
+    function generarInforme() {
+        netejarError();
+
+        const orgUuid = document.getElementById('selectorCentre').value;
+        const startDate = document.getElementById('dataInici').value;
+        const endDate = document.getElementById('dataFi').value;
+
+        if (!orgUuid) {
+            mostrarError('Has de seleccionar un centre.');
+            return;
+        }
+        if (!startDate || !endDate) {
+            mostrarError('Has d\'indicar les dates d\'inici i fi.');
+            return;
+        }
+        if (startDate > endDate) {
+            mostrarError('La data d\'inici ha de ser anterior o igual a la data de fi.');
+            return;
+        }
+
+        const btn = document.getElementById('btnInforme');
+        const estat = document.getElementById('estatText');
+        btn.disabled = true;
+        estat.classList.remove('hidden');
+
+        const bases = (window.APP_CONFIG && window.APP_CONFIG.apiBaseCandidates)
+            || [window.APP_CONFIG && window.APP_CONFIG.apiBaseUrl || '/api'];
+        const base = Array.from(new Set(bases.filter(Boolean)))[0];
+        const url = base.replace(/\/$/, '') +
+            '/persons/informe-word' +
+            '?orgUuid=' + encodeURIComponent(orgUuid) +
+            '&startDate=' + encodeURIComponent(startDate) +
+            '&endDate=' + encodeURIComponent(endDate);
+
+        // Trigger download via hidden anchor
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = '';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+
+        // Re-enable after a short delay (download is async in the browser)
+        setTimeout(() => {
+            btn.disabled = false;
+            estat.classList.add('hidden');
+        }, 3000);
+    }
+
+    // Initial load
+    carregarCentres('departaments');
+</script>
+</body>
+</html>

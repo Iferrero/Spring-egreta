@@ -2,6 +2,7 @@ let chartPiramide = null;
 let chartSexo = null;
 let chartContractType = null;
 let chartNacionalitat = null;
+let chartCatedraticosBreakdown = null;
 let _worldGeoJson = null;
 const selectorPersonalType = document.getElementById('selectorPersonalType');
 const selectorDepartamento = document.getElementById('selectorDepartamento');
@@ -387,6 +388,7 @@ selectorPersonalType.addEventListener('change', () => {
     cargarContractType();
     cargarNacionalitat();
     cargarTooltipSummary();
+    cargarCatedraticosBreakdown();
 });
 
 selectorDepartamento.addEventListener('change', () => {
@@ -406,6 +408,7 @@ selectorDepartamento.addEventListener('change', () => {
     cargarContractType();
     cargarNacionalitat();
     cargarTooltipSummary();
+    cargarCatedraticosBreakdown();
 });
 
 window.addEventListener('resize', () => {
@@ -413,7 +416,59 @@ window.addEventListener('resize', () => {
     if (chartSexo) chartSexo.resize();
     if (chartContractType) chartContractType.resize();
     if (chartNacionalitat) chartNacionalitat.resize();
+    if (chartCatedraticosBreakdown) chartCatedraticosBreakdown.resize();
 });
+
+async function cargarCatedraticosBreakdown() {
+    const estado = document.getElementById('estadoCatedraticosBreakdown');
+    const contenedor = document.getElementById('chartCatedraticosBreakdown');
+    if (!estado || !contenedor) return;
+    estado.textContent = 'Carregant...';
+    try {
+        const dept = getDeptParam();
+        const url = dept
+            ? `/persons/stats/catedraticos-breakdown?deptUuid=${encodeURIComponent(dept)}`
+            : '/persons/stats/catedraticos-breakdown';
+        const res = await fetch(apiUrl(url));
+        if (!res.ok) throw new Error();
+        const data = await res.json();
+        const sorted = [...data].sort((a, b) => a.count - b.count);
+        const PALETTE = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#84cc16'];
+        if (!chartCatedraticosBreakdown) {
+            chartCatedraticosBreakdown = echarts.init(contenedor);
+        }
+        chartCatedraticosBreakdown.setOption({
+            tooltip: {
+                trigger: 'axis',
+                axisPointer: { type: 'shadow' },
+                formatter: p => `<b>${p[0].name}</b><br/>${p[0].value} persones`
+            },
+            grid: { left: '2%', right: '8%', top: '4%', bottom: '4%', containLabel: true },
+            xAxis: {
+                type: 'value',
+                axisLabel: { color: '#94a3b8' },
+                splitLine: { lineStyle: { color: '#f1f5f9' } }
+            },
+            yAxis: {
+                type: 'category',
+                data: sorted.map(d => d.tipo),
+                axisLabel: { color: '#475569', fontSize: 11, width: 260, overflow: 'truncate' }
+            },
+            series: [{
+                type: 'bar',
+                data: sorted.map((d, i) => ({
+                    value: d.count,
+                    itemStyle: { color: PALETTE[i % PALETTE.length], borderRadius: [0, 4, 4, 0] }
+                })),
+                label: { show: true, position: 'right', color: '#475569', fontSize: 11,
+                         formatter: p => p.value }
+            }]
+        });
+        estado.textContent = '';
+    } catch (e) {
+        estado.textContent = "No s'ha pogut carregar";
+    }
+}
 
 async function cargarTooltipSummary() {
     try {
@@ -493,6 +548,7 @@ cargarDepartamentos().finally(() => {
     cargarContractType();
     cargarNacionalitat();
     cargarTooltipSummary();
+    cargarCatedraticosBreakdown();
 });
 
 async function cargarContractType() {
