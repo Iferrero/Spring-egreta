@@ -42,6 +42,9 @@
                 "anyo": {
                     "$first": "$anyo"
                 },
+                "categoria": {
+                    "$first": {"$ifNull": ["$categoria", "Sense categoria"]}
+                },
                 "awardHolders": {
                     "$first": "$awardHolders"
                 },
@@ -103,7 +106,8 @@
                 "_id": {
                     "personUuid": "$personUuid",
                     "anyo": "$anyo",
-                    "awardUuid": "$_id"
+                    "awardUuid": "$_id",
+                    "categoria": "$categoria"
                 },
                 "importe_uab_award": {
                     "$first": "$importe_uab_award"
@@ -125,7 +129,8 @@
             "$group": {
                 "_id": {
                     "personUuid": "$_id.personUuid",
-                    "anyo": "$_id.anyo"
+                    "anyo": "$_id.anyo",
+                    "categoria": "$_id.categoria"
                 },
                 "proyectos_ip": {
                     "$sum": "$proy_ip"
@@ -166,6 +171,7 @@
                 "_id": 0,
                 "PersonaUuid": "$_id.personUuid",
                 "Año": "$_id.anyo",
+                "Categoria": "$_id.categoria",
                 "Persona": "",
                 "Proyectos_IP": "$proyectos_ip",
                 "Proyectos_CoIP": "$proyectos_coip",

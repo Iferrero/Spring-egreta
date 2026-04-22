@@ -9,6 +9,11 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 // Instancia global para el gráfico de evolución persona vs depto
 let chartEvolucionPersonaDept = null;
+// Instancia global para el gráfico de cuartiles de ingresos
+let chartCuartilesIngresos = null;
+let chartCuartilesPie = null;
+// Instancia global para el ranking percentil
+let chartRankingPercentil = null;
 
 /**
  * Renderiza el gráfico de líneas doble: evolución investigador vs media departamento
@@ -79,6 +84,7 @@ function renderGraficoEvolucionPersonaDept(rows) {
 function renderGraficoRankingPercentil(agrupadoPorPersona) {
     const container = document.getElementById('chartRankingPercentil');
     if (!container) return;
+    container.removeAttribute('hidden');
     if (chartRankingPercentil?.dispose) chartRankingPercentil.dispose();
     chartRankingPercentil = null;
 
@@ -200,6 +206,182 @@ function renderGraficoRankingPercentil(agrupadoPorPersona) {
     }
 }
 // --- Chips y dropdown visual para departamentos ---
+/**
+ * Renderiza el gráfico de distribución por cuartiles de ingresos.
+ * @param {Map} agrupadoPorPersona - Mapa de personas con importePonderado.
+ */
+function renderGraficoCuartilesIngresos(agrupadoPorPersona) {
+    const container = document.getElementById('chartCuartilesIngresos');
+    if (!container) return;
+    chartCuartilesIngresos?.dispose();
+    chartCuartilesIngresos = null;
+
+    // 1. Calcular importe ponderado por persona
+    const personas = Array.from(agrupadoPorPersona.values()).map(p => ({
+        nom: p.nombre ?? p.nom ?? '',
+        uuid: p.uuid,
+        importPonderat: p.importePonderado ?? 0
+    }));
+
+    // 2. Ordenar descendente
+    const sorted = personas.slice().sort((a, b) => b.importPonderat - a.importPonderat);
+    const n = sorted.length;
+
+    // 3. Definir 4 grupos (mismo esquema de colores que el ranking)
+    const grups = [
+        { label: '≥ 95 · Top 5%',        color: '#c9a227', bg: '#f5efcc', border: '#e0d9b6', textColor: '#7a6200', items: [] },
+        { label: '≥ 75 · Alt rendiment',  color: '#1a9e6b', bg: '#d1f4e4', border: '#a3e4c7', textColor: '#0f5132', items: [] },
+        { label: '≥ 50 · Mitjana',        color: '#1a7cff', bg: '#dfe9f9', border: '#b5c9e6', textColor: '#084298', items: [] },
+        { label: '< 50 · Per sota',       color: '#888',    bg: '#f8f9fa', border: '#e2e3e5', textColor: '#6c757d', items: [] }
+    ];
+
+    if (n === 0) {
+        // sin datos: nada que dibujar
+    } else if (n <= 4) {
+        // Con pocos datos los percentiles fijos dejan grupos vacíos.
+        // Usar cuartiles reales: dividir en grupos de tamaño lo más igual posible.
+        const sizes = [Math.ceil(n / 4), 0, 0, 0];
+        sizes[1] = Math.ceil((n - sizes[0]) / 3);
+        sizes[2] = Math.ceil((n - sizes[0] - sizes[1]) / 2);
+        sizes[3] = n - sizes[0] - sizes[1] - sizes[2];
+        let idx = 0;
+        for (let g = 0; g < 4; g++) {
+            for (let k = 0; k < sizes[g] && idx < n; k++, idx++) {
+                grups[g].items.push(sorted[idx]);
+            }
+        }
+    } else {
+        // Percentils clàssics sobre la distribució real de valors
+        sorted.forEach((p, i) => {
+            p.percentil = (1 - i / (n - 1)) * 100;
+        });
+        for (const p of sorted) {
+            if (p.percentil >= 95)      grups[0].items.push(p);
+            else if (p.percentil >= 75) grups[1].items.push(p);
+            else if (p.percentil >= 50) grups[2].items.push(p);
+            else                        grups[3].items.push(p);
+        }
+    }
+
+    // Grupos con datos (para gráficos)
+    const grupsPoblats = grups.filter(g => g.items.length > 0);
+
+    // 4a. Gráfico de pastel: nº de personas por grupo
+    const pieContainer = document.getElementById('chartCuartilesPie');
+    if (pieContainer) {
+        chartCuartilesPie?.dispose();
+        chartCuartilesPie = echarts.init(pieContainer);
+        if (grupsPoblats.length === 0) {
+            chartCuartilesPie.setOption({ title: { text: 'Sense dades', left: 'center', top: 'center', textStyle: { color: '#aaa', fontSize: 13 } } });
+        } else {
+            chartCuartilesPie.setOption({
+                tooltip: {
+                    trigger: 'item',
+                    formatter: params =>
+                        `<b>${params.name}</b><br>Persones: <b>${params.value}</b><br>${params.percent.toFixed(1)}%`
+                },
+                legend: {
+                    orient: 'horizontal',
+                    bottom: 4,
+                    left: 'center',
+                    textStyle: { fontSize: 10 },
+                    itemWidth: 10, itemHeight: 10,
+                    formatter: name => name.split('·')[0].trim()
+                },
+                series: [{
+                    name: 'Quartil',
+                    type: 'pie',
+                    radius: ['35%', '62%'],
+                    center: ['50%', '44%'],
+                    avoidLabelOverlap: true,
+                    label: {
+                        show: true,
+                        formatter: params => params.value > 0 ? `${params.value}` : '',
+                        fontSize: 13,
+                        fontWeight: 700
+                    },
+                    labelLine: { show: true },
+                    data: grupsPoblats.map(g => ({
+                        name: g.label,
+                        value: g.items.length,
+                        itemStyle: { color: g.color }
+                    }))
+                }]
+            });
+        }
+    }
+
+    // 4b. Gráfico de barras horizontales: total ingresos por grupo (solo grupos con datos)
+    chartCuartilesIngresos = echarts.init(container);
+    if (grupsPoblats.length === 0) {
+        chartCuartilesIngresos.setOption({ title: { text: 'Sense dades', left: 'center', top: 'center', textStyle: { color: '#aaa', fontSize: 13 } } });
+    } else {
+        chartCuartilesIngresos.setOption({
+            grid: { containLabel: true, left: 8, right: 16, top: 10, bottom: 10 },
+            tooltip: {
+                trigger: 'axis',
+                formatter: params => {
+                    const g = grupsPoblats[params[0].dataIndex];
+                    const total = g.items.reduce((s, p) => s + p.importPonderat, 0);
+                    return `<b>${g.label}</b><br>Persones: <b>${g.items.length}</b><br>Total ingressos: <b>${formatearNumero(total)} €</b>`;
+                }
+            },
+            xAxis: {
+                type: 'value',
+                axisLabel: { formatter: v => formatearCompactoEje(v) + ' €', fontSize: 10 },
+                splitLine: { lineStyle: { type: 'dashed', color: '#eee' } }
+            },
+            yAxis: {
+                type: 'category',
+                data: grupsPoblats.map(g => g.label),
+                axisLabel: { fontSize: 10, fontWeight: 600, overflow: 'none' }
+            },
+            series: [{
+                type: 'bar',
+                barMaxWidth: 44,
+                data: grupsPoblats.map(g => ({
+                    value: g.items.reduce((s, p) => s + p.importPonderat, 0),
+                    itemStyle: { color: g.color, borderRadius: [0, 6, 6, 0] }
+                })),
+                label: {
+                    show: true,
+                    position: 'insideRight',
+                    formatter: params => {
+                        const g = grupsPoblats[params.dataIndex];
+                        return `${g.items.length}p`;
+                    },
+                    fontSize: 11,
+                    fontWeight: 700,
+                    color: '#fff',
+                    textBorderColor: 'transparent'
+                }
+            }]
+        });
+    }
+
+    // 5. Cards con nombres abreviados
+    const grid = document.getElementById('cuartilesPersonasGrid');
+    if (!grid) return;
+    grid.innerHTML = '';
+    grups.forEach(g => {
+        const card = document.createElement('div');
+        card.style.cssText = `background:${g.bg};border:1px solid ${g.border};border-radius:12px;padding:12px;`;
+        const chips = g.items.map(p => {
+            const parts = (p.nom).trim().split(/\s+/);
+            const abr = parts.length >= 2
+                ? parts[0][0] + '. ' + parts.slice(1).join(' ')
+                : parts[0];
+            return `<span title="${p.nom}" style="display:inline-block;background:rgba(0,0,0,0.07);border-radius:20px;padding:2px 10px;margin:2px;font-size:11px;color:${g.textColor};font-weight:600;cursor:default">${abr}</span>`;
+        }).join('');
+        card.innerHTML = `
+            <div style="font-size:12px;font-weight:700;color:${g.textColor};margin-bottom:6px">
+                ${g.label} <span style="font-weight:400;opacity:0.6">(${g.items.length})</span>
+            </div>
+            <div>${chips || '<span style="font-size:11px;opacity:0.45">Cap investigador</span>'}</div>`;
+        grid.appendChild(card);
+    });
+}
+
 /**
  * Renderitza un panell de chips genèric.
  * @param {string} containerId  ID del contenidor de chips
@@ -1105,6 +1287,13 @@ function inicializarTablas() {
             personaUuid: data.personaUuid || undefined
         });
     });
+
+    document.getElementById('btnDescargarExcelResumen')?.addEventListener('click', () => {
+        if (tablaResumen) tablaResumen.download('xlsx', 'resum-investigadors.xlsx');
+    });
+    document.getElementById('btnDescargarExcelAwards')?.addEventListener('click', () => {
+        if (tablaAwards) tablaAwards.download('xlsx', 'awards-persona.xlsx');
+    });
 }
 
 /**
@@ -1162,20 +1351,30 @@ function agruparPorAnio(filas) {
     filas.forEach(f => {
         const anio = Number(f['Año']);
         if (!Number.isFinite(anio)) return;
+        const cat = f['Categoria'] || 'Sense categoria';
         if (!porAnio[anio]) {
             porAnio[anio] = {
                 importeTotal: 0,
+                importePonderado: 0,
                 proyectos: 0,
                 ipcoip: 0,
                 coip: 0,
-                miembro: 0
+                miembro: 0,
+                categorias: {}
             };
         }
-        porAnio[anio].importeTotal += Number(f['Importe_Total (€)'] || 0);
-        porAnio[anio].ipcoip += Number(f['Proyectos_IP'] || 0);
-        porAnio[anio].coip += Number(f['Proyectos_CoIP'] || 0);
-        porAnio[anio].miembro += Number(f['Proyectos_Miembro'] || 0);
-        porAnio[anio].proyectos += Number(f['Proyectos_IP'] || 0) + Number(f['Proyectos_CoIP'] || 0) + Number(f['Proyectos_Miembro'] || 0);
+        const ip = Number(f['Proyectos_IP'] || 0);
+        const coip = Number(f['Proyectos_CoIP'] || 0);
+        const miem = Number(f['Proyectos_Miembro'] || 0);
+        const total = ip + coip + miem;
+        porAnio[anio].importeTotal += Number(f['Importe_IP (€)'] || 0) + Number(f['Importe_CoIP (€)'] || 0) + Number(f['Importe_Miembro (€)'] || 0);
+        porAnio[anio].importePonderado += Number(f['Importe_Ponderado (€)'] || 0);
+        porAnio[anio].ipcoip += ip + coip;
+        porAnio[anio].coip += coip;
+        porAnio[anio].miembro += miem;
+        porAnio[anio].proyectos += total;
+        if (!porAnio[anio].categorias[cat]) porAnio[anio].categorias[cat] = 0;
+        porAnio[anio].categorias[cat] += total;
     });
     return porAnio;
 }
@@ -1444,6 +1643,7 @@ function renderGraficos(filas) {
     const anios = Object.keys(porAnio).map(Number).sort((a, b) => a - b);
 
     const importes = anios.map(a => porAnio[a].importeTotal);
+    const importesPonderados = anios.map(a => porAnio[a].importePonderado);
     const proyectos = anios.map(a => porAnio[a].proyectos);
     const proyectosIp = anios.map(a => porAnio[a].ipcoip);
     const proyectosMiembro = anios.map(a => porAnio[a].miembro);
@@ -1471,37 +1671,80 @@ function renderGraficos(filas) {
         }]
     });
 
+    // Collect all unique categories across all years, sorted
+    const todasCategorias = [...new Set(
+        anios.flatMap(a => Object.keys(porAnio[a].categorias))
+    )].sort();
+    const PALETTE_CATS = [
+        '#5470c6','#91cc75','#fac858','#ee6666',
+        '#73c0de','#3ba272','#fc8452','#9a60b4',
+        '#ea7ccc','#b5b5b5'
+    ];
+    const seriesCategorias = todasCategorias.map((cat, i) => ({
+        name: cat,
+        type: 'bar',
+        stack: 'cats',
+        yAxisIndex: 0,
+        data: anios.map(a => porAnio[a].categorias[cat] ?? 0),
+        itemStyle: { color: PALETTE_CATS[i % PALETTE_CATS.length] }
+    }));
+
     chartProyectosAnio = echarts.init(document.getElementById('chartProyectosAnio'));
     chartProyectosAnio.setOption({
-        tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-        legend: { bottom: 0 },
-        grid: { left: 50, right: 20, top: 20, bottom: 50 },
-        xAxis: { type: 'category', data: anios },
-        yAxis: {
-            type: 'value',
-            minInterval: 1,
-            splitLine: { lineStyle: { color: UAB_COLORS.columna } }
+        tooltip: {
+            trigger: 'axis',
+            axisPointer: { type: 'shadow' },
+            formatter: function(params) {
+                let html = `<b>${params[0].axisValue}</b><br>`;
+                params.forEach(p => {
+                    if (p.value === 0 || p.value === null) return;
+                    const val = p.seriesName.includes('€')
+                        ? formatearNumero(p.value) + ' €'
+                        : p.value;
+                    html += `${p.marker}${p.seriesName}: <b>${val}</b><br>`;
+                });
+                return html;
+            }
         },
+        legend: { bottom: 0, type: 'scroll', textStyle: { fontSize: 11 } },
+        grid: { left: 50, right: 60, top: 20, bottom: 70 },
+        xAxis: { type: 'category', data: anios },
+        yAxis: [
+            {
+                type: 'value',
+                minInterval: 1,
+                splitLine: { lineStyle: { color: UAB_COLORS.columna } },
+                name: 'Projectes',
+                nameTextStyle: { fontSize: 10 }
+            },
+            {
+                type: 'value',
+                name: 'Import (€)',
+                nameTextStyle: { fontSize: 10 },
+                axisLabel: { formatter: v => formatearCompactoEje(v), fontSize: 10 },
+                splitLine: { show: false }
+            }
+        ],
         series: [
-            {
-                name: 'IP/CoIP',
-                type: 'bar',
-                data: proyectosIp,
-                itemStyle: { color: UAB_COLORS.cala }
-            },
-            {
-                name: 'Membre',
-                type: 'bar',
-                data: proyectosMiembro,
-                itemStyle: { color: UAB_COLORS.campus }
-            },
+            ...seriesCategorias,
             {
                 name: 'Total projectes',
                 type: 'line',
+                yAxisIndex: 0,
                 data: proyectos,
                 smooth: 0.2,
                 lineStyle: { color: UAB_COLORS.ocas },
                 itemStyle: { color: UAB_COLORS.ocas },
+                symbolSize: 6
+            },
+            {
+                name: 'Import ponderat (€)',
+                type: 'line',
+                yAxisIndex: 1,
+                data: importesPonderados,
+                smooth: 0.25,
+                lineStyle: { color: '#e05252', width: 2, type: 'dashed' },
+                itemStyle: { color: '#e05252' },
                 symbolSize: 6
             }
         ]
@@ -1748,6 +1991,7 @@ function renderGraficos(filas) {
             entry.importePonderado += Number(f['Importe_Ponderado (€)'] ?? 0);
         }
         renderGraficoRankingPercentil(agrupadoPorPersonaRanking);
+        renderGraficoCuartilesIngresos(agrupadoPorPersonaRanking);
 
         // Calcular medianas para los cuadrantes
         function mediana(arr) {
@@ -1773,7 +2017,7 @@ function renderGraficos(filas) {
         const seriesCuadrantes = [
             { name: 'Líders',       color: COLOR_LIDERS,       items: [] },
             { name: 'Especialistes',color: COLOR_ESPECIALISTES, items: [] },
-            { name: 'Formigues',    color: COLOR_FORMIGUES,    items: [] },
+            { name: 'Dinamitzadors',    color: COLOR_FORMIGUES,    items: [] },
             { name: 'Altres',       color: COLOR_ALTRES,       items: [] }
         ];
         for (const d of datosLiderazgo) {
@@ -1915,37 +2159,47 @@ function renderGraficos(filas) {
                 cuadrantes.ALTRES.push(d);
             }
         }
-        // Render HTML grid de cuadrantes
+        // Render HTML grid de cuadrantes com a targetes de chips
         const container = document.getElementById('chartQuadrantsPersona');
         if (container) {
-            container.innerHTML = `
-                <div style="display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 12px; height: 100%; width: 100%;">
-                    <div style="background:${COLOR_ESPECIALISTES}22; border:2px solid ${COLOR_ESPECIALISTES}; border-radius:16px; padding:12px; overflow:auto;">
-                        <div style="font-weight:bold; color:${COLOR_ESPECIALISTES}; font-size:15px; margin-bottom:6px;">Especialistes</div>
-                        <ul style="margin:0; padding:0; list-style:none;">
-                            ${cuadrantes.ESPECIALISTES.map(p => `<li style='margin-bottom:2px;cursor:pointer;font-weight:600;color:${COLOR_ESPECIALISTES}' onclick='window.aplicarSeleccionPersona && aplicarSeleccionPersona({persona: ${JSON.stringify(p.nombre)}, personaUuid: ${JSON.stringify(p.uuid)}})'>${p.nombre}</li>`).join('')}
-                        </ul>
-                    </div>
-                    <div style="background:${COLOR_LIDERS}22; border:2px solid ${COLOR_LIDERS}; border-radius:16px; padding:12px; overflow:auto;">
-                        <div style="font-weight:bold; color:${COLOR_LIDERS}; font-size:15px; margin-bottom:6px;">Líders</div>
-                        <ul style="margin:0; padding:0; list-style:none;">
-                            ${cuadrantes.LIDERS.map(p => `<li style='margin-bottom:2px;cursor:pointer;font-weight:600;color:${COLOR_LIDERS}' onclick='window.aplicarSeleccionPersona && aplicarSeleccionPersona({persona: ${JSON.stringify(p.nombre)}, personaUuid: ${JSON.stringify(p.uuid)}})'>${p.nombre}</li>`).join('')}
-                        </ul>
-                    </div>
-                    <div style="background:${COLOR_ALTRES}22; border:2px solid ${COLOR_ALTRES}; border-radius:16px; padding:12px; overflow:auto;">
-                        <div style="font-weight:bold; color:${COLOR_ALTRES}; font-size:15px; margin-bottom:6px;">Altres</div>
-                        <ul style="margin:0; padding:0; list-style:none;">
-                            ${cuadrantes.ALTRES.map(p => `<li style='margin-bottom:2px;cursor:pointer;font-weight:600;color:${COLOR_ALTRES}' onclick='window.aplicarSeleccionPersona && aplicarSeleccionPersona({persona: ${JSON.stringify(p.nombre)}, personaUuid: ${JSON.stringify(p.uuid)}})'>${p.nombre}</li>`).join('')}
-                        </ul>
-                    </div>
-                    <div style="background:${COLOR_FORMIGUES}22; border:2px solid ${COLOR_FORMIGUES}; border-radius:16px; padding:12px; overflow:auto;">
-                        <div style="font-weight:bold; color:${COLOR_FORMIGUES}; font-size:15px; margin-bottom:6px;">Formigues</div>
-                        <ul style="margin:0; padding:0; list-style:none;">
-                            ${cuadrantes.FORMIGUES.map(p => `<li style='margin-bottom:2px;cursor:pointer;font-weight:600;color:${COLOR_FORMIGUES}' onclick='window.aplicarSeleccionPersona && aplicarSeleccionPersona({persona: ${JSON.stringify(p.nombre)}, personaUuid: ${JSON.stringify(p.uuid)}})'>${p.nombre}</li>`).join('')}
-                        </ul>
-                    </div>
-                </div>
-            `;
+            const quadrantDefs = [
+                { key: 'ESPECIALISTES', label: 'Especialistes d\'Alt Impacte', color: COLOR_ESPECIALISTES, bg: COLOR_ESPECIALISTES + '18', border: COLOR_ESPECIALISTES + '66' },
+                { key: 'LIDERS',        label: 'Líders Consolidats',           color: COLOR_LIDERS,        bg: COLOR_LIDERS        + '18', border: COLOR_LIDERS        + '66' },
+                { key: 'ALTRES',        label: 'Perfils en Creixement',        color: COLOR_ALTRES,        bg: COLOR_ALTRES        + '18', border: COLOR_ALTRES        + '66' },
+                { key: 'FORMIGUES',     label: 'Dinamitzadors',                color: COLOR_FORMIGUES,     bg: COLOR_FORMIGUES     + '18', border: COLOR_FORMIGUES     + '66' }
+            ];
+
+            function abreviarNom(nom) {
+                const parts = (nom ?? '').trim().split(/\s+/);
+                if (parts.length <= 1) return parts[0] ?? '';
+                const apellidos = parts.slice(-2).join(' ');
+                const inicials = parts.slice(0, -2).map(p => p[0] + '.').join('');
+                return (inicials ? inicials + ' ' : '') + apellidos;
+            }
+
+            container.innerHTML = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">` +
+                quadrantDefs.map(q => {
+                    const persones = cuadrantes[q.key] ?? [];
+                    const chips = persones.map(p => {
+                        const abr = abreviarNom(p.nombre);
+                        const dataPersona = JSON.stringify(p.nombre).replace(/'/g, '&#39;');
+                        const dataUuid = JSON.stringify(p.uuid).replace(/'/g, '&#39;');
+                        return `<span
+                            title="${p.nombre}"
+                            onclick="window.aplicarSeleccionPersona && aplicarSeleccionPersona({persona:${dataPersona},personaUuid:${dataUuid}})"
+                            style="display:inline-block;background:rgba(0,0,0,0.07);border-radius:20px;padding:3px 11px;margin:2px;font-size:11px;color:${q.color};font-weight:600;cursor:pointer;transition:background 0.15s"
+                            onmouseover="this.style.background='${q.color}33'"
+                            onmouseout="this.style.background='rgba(0,0,0,0.07)'"
+                        >${abr}</span>`;
+                    }).join('');
+                    return `<div style="background:${q.bg};border:1.5px solid ${q.border};border-radius:14px;padding:12px;">
+                        <div style="font-size:12px;font-weight:700;color:${q.color};margin-bottom:6px;">
+                            ${q.label} <span style="font-weight:400;opacity:0.55">(${persones.length})</span>
+                        </div>
+                        <div>${chips || `<span style="font-size:11px;opacity:0.4">Cap investigador</span>`}</div>
+                    </div>`;
+                }).join('') +
+            `</div>`;
         }
 
             // --- Gràfic d'Anàlisi de Pareto (80/20) ---
@@ -2470,13 +2724,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function resizeDeptCharts() {
         // Redimensiona todos los gráficos ECharts de la pestaña depto
-        if (chartImporteAnio && typeof chartImporteAnio.resize === 'function') chartImporteAnio.resize();
-        if (chartProyectosAnio && typeof chartProyectosAnio.resize === 'function') chartProyectosAnio.resize();
-        if (chartTopPersonas && typeof chartTopPersonas.resize === 'function') chartTopPersonas.resize();
-        if (chartLiderazgo && typeof chartLiderazgo.resize === 'function') chartLiderazgo.resize();
-        if (chartQuadrantsPersona && typeof chartQuadrantsPersona.resize === 'function') chartQuadrantsPersona.resize();
-        if (chartPareto && typeof chartPareto.resize === 'function') chartPareto.resize();
-       
+        [
+            chartImporteAnio, chartProyectosAnio, chartTopPersonas,
+            chartLiderazgo, chartPareto,
+            chartRankingPercentil, chartCuartilesPie, chartCuartilesIngresos,
+            chartEvolucionPersonaDept
+        ].forEach(c => { if (c && typeof c.resize === 'function') c.resize(); });
     }
 
     function updateDeptTabVisibility() {

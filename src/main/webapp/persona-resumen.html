@@ -14,6 +14,7 @@
     <link href="https://unpkg.com/tabulator-tables@6.3.0/dist/css/tabulator.min.css" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.7.1/nouislider.min.js"></script>
     <script src="https://unpkg.com/tabulator-tables@6.3.0/dist/js/tabulator.min.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 </head>
 <body class="bg-slate-50 min-h-screen">
     <div id="loadingOverlay" class="hidden fixed inset-0 z-50 bg-slate-900/20 backdrop-blur-[1px]">
@@ -117,7 +118,12 @@
             <!-- Tab Contents -->
             <div id="tabResumen" class="">
                 <section class="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
-                    <div id="estado" class="p-4 text-sm text-slate-500">Mou els filtres per executar la consulta.</div>
+                    <div class="flex items-center justify-between px-4 py-2 border-b border-slate-100">
+                        <div id="estado" class="text-sm text-slate-500">Mou els filtres per executar la consulta.</div>
+                        <button id="btnDescargarExcelResumen" type="button" class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg hover:bg-emerald-100 transition" title="Descarregar Excel">
+                            <i class="fa-solid fa-file-excel"></i> Excel
+                        </button>
+                    </div>
                     <div class="overflow-auto">
                         <div id="tablaResumenTable"></div>
                     </div>
@@ -163,8 +169,8 @@
                             <br>Significat: Sol incloure investigadors que acaben d'arribar, perfils en fase inicial de la seva carrera o aquells que estan reorientant la seva recerca. L'objectiu estratègic aquí és moure's cap a la dreta (més activitat) o cap amunt (més finançament).
                         </details>
                     </div>
-                    <div class="overflow-auto">
-                        <div id="chartQuadrantsPersona" class="w-full h-[420px]"></div>
+                    <div class="overflow-auto p-4">
+                        <div id="chartQuadrantsPersona" class="w-full"></div>
                     </div>
                 </section>
                 <section id="seccionPareto" class="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden mt-6">
@@ -197,7 +203,7 @@
                         </details>
                     </div>
                     <div class="overflow-auto">
-                        <div hidden id="chartRankingPercentil" class="w-5/6 mx-auto h-[420px]"></div>
+                        <div id="chartRankingPercentil" class="w-5/6 mx-auto h-[420px]"></div>
                         <!-- Llegenda de colors percentil -->
                         <div class="w-5/6 mx-auto mt-4 mb-2">
                             <div class="flex flex-wrap gap-3 text-xs">
@@ -210,6 +216,22 @@
                         <div id="tablaRankingPercentilTable" class="w-5/6 mx-auto mt-6"></div>
                     </div>
                 </section>
+
+                <!-- Nou gràfic: Distribució per Quartils d'Ingressos -->
+                <section id="seccionCuartilesIngresos" class="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden mt-6">
+                    <div class="p-4 border-b border-slate-100">
+                        <h2 class="text-sm font-bold text-slate-700">Distribució per Quartils d'Ingressos</h2>
+                        <p class="text-xs text-slate-500 mt-1">Classificació dels investigadors en 4 grups segons els seus ingressos ponderats relatius al departament: Top 5% (≥95), Alt rendiment (≥75), Mitjana (≥50) i Per sota (&lt;50).</p>
+                    </div>
+                    <div class="overflow-auto p-4">
+                        <div class="flex flex-col md:flex-row gap-4 mb-6">
+                            <div id="chartCuartilesPie" class="w-full md:w-2/5 h-[260px]"></div>
+                            <div id="chartCuartilesIngresos" class="w-full md:w-3/5 h-[260px]"></div>
+                        </div>
+                        <div id="cuartilesPersonasGrid" class="grid grid-cols-2 gap-4"></div>
+                    </div>
+                </section>
+
                 <section id="seccionEvolucionPersonaDept" class="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden mt-6">
                     <div class="p-4 border-b border-slate-100">
                         <h2 class="text-sm font-bold text-slate-700">Evolució persona vs departament</h2>
@@ -259,8 +281,11 @@
                 </div>
 
                 <section id="seccionAwardsPersona" class="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden hidden">
-                    <div class="p-4 border-b border-slate-100">
+                    <div class="p-4 border-b border-slate-100 flex items-center justify-between">
                         <h2 id="tituloAwardsPersona" class="text-sm font-bold text-slate-700">Awards de la persona seleccionada</h2>
+                        <button id="btnDescargarExcelAwards" type="button" class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg hover:bg-emerald-100 transition" title="Descarregar Excel">
+                            <i class="fa-solid fa-file-excel"></i> Excel
+                        </button>
                     </div>
                     <div class="overflow-auto">
                         <div id="tablaAwardsTable"></div>
