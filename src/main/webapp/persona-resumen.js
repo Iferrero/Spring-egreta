@@ -23,7 +23,12 @@ function renderGraficoEvolucionPersonaDept(rows) {
     const personaData = rows.map(r => r.personaImporte);
     const deptoData = rows.map(r => r.deptoMedia);
     chartEvolucionPersonaDept.setOption({
-        tooltip: { trigger: 'axis' },
+        tooltip: {
+            trigger: 'axis',
+            formatter: params => params.map(p =>
+                `${p.marker} ${p.seriesName}: <b>${formatearNumero(p.value)} €</b>`
+            ).join('<br>')
+        },
         legend: { data: ['Investigador', 'Mitja Dept.'], top: 10 },
         grid: { left: 60, right: 60, top: 40, bottom: 40 },
         xAxis: {
@@ -33,20 +38,12 @@ function renderGraficoEvolucionPersonaDept(rows) {
             nameLocation: 'middle',
             nameGap: 30
         },
-        yAxis: [
-            {
-                type: 'value',
-                name: '€ Investigador',
-                position: 'left',
-                axisLabel: { formatter: value => formatearNumero(value) }
-            },
-            {
-                type: 'value',
-                name: '€ Mitja Dept.',
-                position: 'right',
-                axisLabel: { formatter: value => formatearNumero(value) }
-            }
-        ],
+        yAxis: {
+            type: 'value',
+            name: '€ Mitja Dept.',
+            position: 'left',
+            axisLabel: { formatter: value => formatearNumero(value) + ' €' }
+        },
         series: [
             {
                 name: 'Investigador',
@@ -64,7 +61,7 @@ function renderGraficoEvolucionPersonaDept(rows) {
                 name: 'Mitja Dept.',
                 type: 'line',
                 data: deptoData,
-                yAxisIndex: 1,
+                yAxisIndex: 0,
                 smooth: true,
                 lineStyle: { color: UAB_COLORS.cala, width: 3, type: 'dashed' },
                 itemStyle: { color: UAB_COLORS.cala },
@@ -1772,8 +1769,58 @@ function renderGraficos(filas) {
         const COLOR_FORMIGUES = '#ffb800';      // Amarillo fuerte
         const COLOR_ALTRES = '#7c3aed';         // Morado fuerte
 
+        // Separar puntos por cuadrante
+        const seriesCuadrantes = [
+            { name: 'Líders',       color: COLOR_LIDERS,       items: [] },
+            { name: 'Especialistes',color: COLOR_ESPECIALISTES, items: [] },
+            { name: 'Formigues',    color: COLOR_FORMIGUES,    items: [] },
+            { name: 'Altres',       color: COLOR_ALTRES,       items: [] }
+        ];
+        for (const d of datosLiderazgo) {
+            const item = {
+                value: [d.ponderado, d.ayudas],
+                nombre: d.nombre, uuid: d.uuid,
+                ponderado: d.ponderado, ayudas: d.ayudas, desglose: d.desglose
+            };
+            if (d.ponderado >= medianaPonderado && d.ayudas >= medianaAyudas)      seriesCuadrantes[0].items.push(item);
+            else if (d.ponderado < medianaPonderado && d.ayudas >= medianaAyudas)  seriesCuadrantes[1].items.push(item);
+            else if (d.ponderado >= medianaPonderado && d.ayudas < medianaAyudas)  seriesCuadrantes[2].items.push(item);
+            else                                                                    seriesCuadrantes[3].items.push(item);
+        }
+
+        const labelFormatter = function(params) {
+            const nombre = (params.data.nombre ?? '').trim();
+            const parts = nombre.split(/\s+/);
+            if (parts.length <= 1) return parts[0] ?? '';
+            const apellidos = parts.slice(-2).join(' ');
+            const iniciales = parts.slice(0, -2).map(p => p[0] + '.').join('');
+            return (iniciales ? iniciales + ' ' : '') + apellidos;
+        };
+
         chartLiderazgo.setOption({
-            grid: { left: 60, right: 30, top: 40, bottom: 50 },
+            grid: { left: 60, right: 30, top: 60, bottom: 50 },
+            legend: {
+                data: seriesCuadrantes.map(s => ({ name: s.name, icon: 'circle' })),
+                top: 8,
+                textStyle: { fontSize: 12 },
+                selectedMode: true
+            },
+            toolbox: {
+                right: 10,
+                top: 5,
+                feature: {
+                    dataZoom: {
+                        yAxisIndex: 0,
+                        title: { zoom: 'Zoom rectangular (arrossega per seleccionar)', back: 'Desfer zoom' },
+                        brushStyle: {
+                            borderWidth: 2,
+                            borderColor: '#1a7cff',
+                            color: 'rgba(26,124,255,0.2)'
+                        }
+                    },
+                    restore: { title: 'Restablir zoom' }
+                }
+            },
             tooltip: {
                 trigger: 'item',
                 formatter: function(params) {
@@ -1789,26 +1836,8 @@ function renderGraficos(filas) {
                 }
             },
             dataZoom: [
-                {
-                    type: 'inside',
-                    xAxisIndex: 0,
-                    filterMode: 'none'
-                },
-                {
-                    type: 'inside',
-                    yAxisIndex: 0,
-                    filterMode: 'none'
-                },
-                {
-                    type: 'slider',
-                    xAxisIndex: 0,
-                    filterMode: 'none'
-                },
-                {
-                    type: 'slider',
-                    yAxisIndex: 0,
-                    filterMode: 'none'
-                }
+                { type: 'inside', xAxisIndex: 0, filterMode: 'none' },
+                { type: 'inside', yAxisIndex: 0, filterMode: 'none' }
             ],
             xAxis: {
                 name: "Dinero ponderat (€)",
@@ -1831,67 +1860,27 @@ function renderGraficos(filas) {
                 axisLabel: { fontWeight: 600 },
                 splitLine: { lineStyle: { color: UAB_COLORS.columna } }
             },
-            series: [{
-                symbolSize: 18,
+            series: seriesCuadrantes.map(s => ({
+                name: s.name,
                 type: 'scatter',
-                data: datosLiderazgo.map(d => ({
-                    value: [d.ponderado, d.ayudas],
-                    nombre: d.nombre,
-                    uuid: d.uuid,
-                    ponderado: d.ponderado,
-                    ayudas: d.ayudas,
-                    desglose: d.desglose
-                })),
-                itemStyle: {
-                    color: function(params) {
-                        // Colorear por cuadrante con colores muy contrastados
-                        const x = params.data.ponderado;
-                        const y = params.data.ayudas;
-                        if (x >= medianaPonderado && y >= medianaAyudas) return COLOR_LIDERS; // Líderes
-                        if (x < medianaPonderado && y >= medianaAyudas) return COLOR_ESPECIALISTES; // Especialistas
-                        if (x >= medianaPonderado && y < medianaAyudas) return COLOR_FORMIGUES; // Formigues
-                        return COLOR_ALTRES; // Altres
-                    }
-                },
+                symbolSize: 18,
+                data: s.items,
+                itemStyle: { color: s.color },
                 emphasis: {
-                    focus: 'series',
-                    itemStyle: { borderColor: '#222', borderWidth: 2 }
+                    focus: 'self',
+                    itemStyle: { borderColor: '#222', borderWidth: 2 },
+                    label: { show: false }
                 },
                 label: {
                     show: true,
                     position: 'top',
-                    formatter: function(params) {
-                        return params.data.nombre;
-                    },
-                    fontSize: 11,
-                    color: '#444',
+                    formatter: labelFormatter,
+                    fontSize: 10,
+                    color: '#555',
                     fontWeight: 600
-                }
-            }],
-            // Líneas de referencia para cuadrantes
-            graphic: [
-                // Etiquetas de cuadrantes (aproximadas, con colores nuevos)
-                {
-                    type: 'text',
-                    left: '70%', top: '10%',
-                    style: { text: 'Líders', fill: COLOR_LIDERS, font: 'bold 14px sans-serif' }
                 },
-                {
-                    type: 'text',
-                    left: '10%', top: '10%',
-                    style: { text: 'Especialistes', fill: COLOR_ESPECIALISTES, font: 'bold 14px sans-serif' }
-                },
-                {
-                    type: 'text',
-                    left: '70%', top: '80%',
-                    style: { text: 'Formigues', fill: COLOR_FORMIGUES, font: 'bold 14px sans-serif' }
-                },
-                {
-                    type: 'text',
-                    left: '10%', top: '80%',
-                    style: { text: 'Altres', fill: COLOR_ALTRES, font: 'bold 14px sans-serif' }
-                }
-            ]
+                labelLayout: { hideOverlap: true }
+            }))
         });
 
         // Evento: mostrar awards de la persona al hacer clic en un punto de la matriz

@@ -956,16 +956,12 @@ public class AwardController {
                     // direct relation thesis → external orgs (equiv. relationExternalorganisationsStudentthesises)
                     thesisOr.add(new Document("supervisorOrganizations.uuid",
                             new Document("$in", new ArrayList<>(funderUuids))));
-                    // supervisor or contributor affiliated with an org from that country
+                    // supervisor affiliated with an org from that country
                     thesisOr.add(new Document("supervisors.organizations.uuid",
-                            new Document("$in", new ArrayList<>(funderUuids))));
-                    thesisOr.add(new Document("contributors.organizations.uuid",
                             new Document("$in", new ArrayList<>(funderUuids))));
                 }
                 if (!personUuids.isEmpty()) {
                     thesisOr.add(new Document("supervisors.person.uuid",
-                            new Document("$in", new ArrayList<>(personUuids))));
-                    thesisOr.add(new Document("contributors.person.uuid",
                             new Document("$in", new ArrayList<>(personUuids))));
                 }
 
