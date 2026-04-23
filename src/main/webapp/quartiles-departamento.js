@@ -1,4 +1,5 @@
 let refrescoTimer = null;
+let comparativaRefrescoTimer = null;
 let chartQuartiles = null;
 let chartQuartilesEvolution = null;
 let chartOpenAccess = null;
@@ -11,6 +12,154 @@ let currentLoadController = null;
 let currentLoadSeq = 0;
 let allArticles = [];
 let openAccessFilter = null; // null | true | false
+const chartComparativaPies = new Map();
+let departamentosComparativa = [];
+let chartComparativaBarras = null;
+let chartComparativaGrowth = null;
+const comparativaQuartilesData = new Map(); // uuid -> { nombre, q1, total }
+const comparativaGrowthData = new Map(); // uuid -> { nombre, growth }
+
+function clearComparativaSelection() {
+    departamentosComparativa = [];
+    chartComparativaPies.forEach(ch => ch.dispose());
+    chartComparativaPies.clear();
+    comparativaQuartilesData.clear();
+    comparativaGrowthData.clear();
+    document.getElementById('comparativaPiesContainer').innerHTML = '';
+    renderComparativaBarChart();
+    renderComparativaGrowthChart();
+    renderComparativaDeptChips();
+}
+
+function renderComparativaBarChart() {
+    const section = document.getElementById('comparativaBarChartSection');
+    const el = document.getElementById('comparativaBarChart');
+    if (!section || !el) return;
+
+    const entries = Array.from(comparativaQuartilesData.values())
+        .filter(d => d.total > 0)
+        .map(d => ({ nombre: d.nombre, pct: Math.round(d.q1 / d.total * 100) }))
+        .sort((a, b) => b.pct - a.pct);
+
+    if (entries.length === 0) {
+        section.classList.add('hidden');
+        if (chartComparativaBarras) { chartComparativaBarras.dispose(); chartComparativaBarras = null; }
+        return;
+    }
+
+    section.classList.remove('hidden');
+    const rowHeight = 32;
+    const minHeight = 120;
+    el.style.height = Math.max(minHeight, entries.length * rowHeight + 60) + 'px';
+
+    if (!chartComparativaBarras) {
+        chartComparativaBarras = echarts.init(el);
+    } else {
+        chartComparativaBarras.resize();
+    }
+
+    const names = entries.map(d => d.nombre);
+    const values = entries.map(d => d.pct);
+
+    chartComparativaBarras.setOption({
+        tooltip: {
+            trigger: 'axis',
+            axisPointer: { type: 'shadow' },
+            formatter: p => `${p[0].name}: <b>${p[0].value}%</b>`
+        },
+        grid: { left: 200, right: 48, top: 12, bottom: 24, containLabel: false },
+        xAxis: {
+            type: 'value',
+            max: 100,
+            axisLabel: { formatter: '{value}%', color: '#596473', fontSize: 11 },
+            splitLine: { lineStyle: { color: '#f1f2f4' } }
+        },
+        yAxis: {
+            type: 'category',
+            data: names,
+            inverse: true,
+            axisLabel: {
+                color: '#2a3037',
+                fontSize: 11,
+                width: 190,
+                overflow: 'truncate'
+            }
+        },
+        series: [{
+            type: 'bar',
+            data: values.map((v, i) => ({
+                value: v,
+                itemStyle: { color: i === 0 ? '#004d21' : '#008037', borderRadius: [0, 4, 4, 0] }
+            })),
+            label: { show: true, position: 'right', formatter: '{c}%', fontSize: 11, color: '#596473' },
+            barMaxWidth: 24
+        }]
+    }, true);
+}
+
+function renderComparativaGrowthChart() {
+    const section = document.getElementById('comparativaGrowthChartSection');
+    const el = document.getElementById('comparativaGrowthChart');
+    if (!section || !el) return;
+
+    const entries = Array.from(comparativaGrowthData.values())
+        .filter(d => d.growth !== null && d.growth !== undefined)
+        .sort((a, b) => b.growth - a.growth);
+
+    if (entries.length === 0) {
+        section.classList.add('hidden');
+        if (chartComparativaGrowth) { chartComparativaGrowth.dispose(); chartComparativaGrowth = null; }
+        return;
+    }
+
+    section.classList.remove('hidden');
+    const rowHeight = 32;
+    const minHeight = 120;
+    el.style.height = Math.max(minHeight, entries.length * rowHeight + 60) + 'px';
+
+    if (!chartComparativaGrowth) {
+        chartComparativaGrowth = echarts.init(el);
+    } else {
+        chartComparativaGrowth.resize();
+    }
+
+    const names = entries.map(d => d.nombre);
+    const values = entries.map(d => d.growth);
+
+    chartComparativaGrowth.setOption({
+        tooltip: {
+            trigger: 'axis',
+            axisPointer: { type: 'shadow' },
+            formatter: p => `${p[0].name}: <b>${p[0].value > 0 ? '+' : ''}${p[0].value.toFixed(1)}%</b>`
+        },
+        grid: { left: 200, right: 48, top: 12, bottom: 24, containLabel: false },
+        xAxis: {
+            type: 'value',
+            axisLabel: { formatter: '{value}%', color: '#596473', fontSize: 11 },
+            splitLine: { lineStyle: { color: '#f1f2f4' } }
+        },
+        yAxis: {
+            type: 'category',
+            data: names,
+            inverse: true,
+            axisLabel: {
+                color: '#2a3037',
+                fontSize: 11,
+                width: 190,
+                overflow: 'truncate'
+            }
+        },
+        series: [{
+            type: 'bar',
+            data: values.map((v) => ({
+                value: v,
+                itemStyle: { color: v >= 0 ? '#004d21' : '#dc2626', borderRadius: v >= 0 ? [0, 4, 4, 0] : [4, 0, 0, 4] }
+            })),
+            label: { show: true, position: 'right', formatter: p => `${p.value > 0 ? '+' : ''}${p.value.toFixed(1)}%`, fontSize: 11, color: '#596473' },
+            barMaxWidth: 24
+        }]
+    }, true);
+}
 
 function mostrarOverlayCargando() {
     const overlay = document.getElementById('loadingOverlay');
@@ -27,6 +176,30 @@ function ocultarOverlayCargando() {
 function programarRefresco() {
     clearTimeout(refrescoTimer);
     refrescoTimer = setTimeout(cargarDatos, 250);
+}
+
+function hayComparativaSeleccionada() {
+    return Array.isArray(departamentosComparativa) && departamentosComparativa.length > 0;
+}
+
+function programarRefrescoComparativa() {
+    clearTimeout(comparativaRefrescoTimer);
+    comparativaRefrescoTimer = setTimeout(() => {
+        refrescarComparativa();
+    }, 250);
+}
+
+async function refrescarComparativa() {
+    if (!hayComparativaSeleccionada()) return;
+
+    const deps = [...departamentosComparativa];
+    await Promise.allSettled(deps.map(dep => carregarComparativaPiePerDept(dep)));
+
+    requestAnimationFrame(() => {
+        chartComparativaPies.forEach(ch => ch.resize());
+        if (chartComparativaBarras) chartComparativaBarras.resize();
+        if (chartComparativaGrowth) chartComparativaGrowth.resize();
+    });
 }
 
 function hayDepartamentoSeleccionado() {
@@ -300,6 +473,9 @@ function configurarSlider(min, max, defaultDesde = 2021, defaultHasta = 2025) {
             cargarPersones();
             programarRefresco();
         }
+        if (hayComparativaSeleccionada()) {
+            programarRefrescoComparativa();
+        }
     });
 }
 
@@ -401,7 +577,7 @@ function renderEvolution(data, deptName) {
 
     const rows = Array.isArray(data) ? data : [];
     const years = rows.map(item => String(item.year ?? ''));
-    const quartiles = ['Q1', 'Q2', 'Q3', 'Q4'];
+    const quartiles = ['Q1', 'Q2', 'Q3', 'Q4', 'Sense Quartil'];
 
     const yearTotals = rows.map(item =>
         quartiles.reduce((sum, q) => sum + Number(item[q] || 0), 0)
@@ -412,7 +588,7 @@ function renderEvolution(data, deptName) {
         type: 'bar',
         stack: 'total',
         barMaxWidth: 48,
-        itemStyle: { color: getColorByQuartile(q), borderRadius: q === 'Q4' ? [4, 4, 0, 0] : 0 },
+        itemStyle: { color: getColorByQuartile(q), borderRadius: q === 'Sense Quartil' ? [4, 4, 0, 0] : 0 },
         emphasis: { focus: 'series' },
         label: {
             show: true,
@@ -718,7 +894,277 @@ window.addEventListener('resize', () => {
     if (chartQuartilesEvolution) {
         chartQuartilesEvolution.resize();
     }
+    chartComparativaPies.forEach(ch => ch.resize());
+    if (chartComparativaBarras) chartComparativaBarras.resize();
+    if (chartComparativaGrowth) chartComparativaGrowth.resize();
 });
+
+// ─── Comparativa ─────────────────────────────────────────────────────────────
+function activateTab(tab) {
+    const tabDept = document.getElementById('tabDept');
+    const tabComp = document.getElementById('tabComparativa');
+    const btnDept = document.getElementById('tabDeptBtn');
+    const btnComp = document.getElementById('tabComparativaBtn');
+    const ACTIVE = 'px-4 py-2 text-sm font-semibold text-indigo-700 border-b-2 border-indigo-600 focus:outline-none';
+    const INACTIVE = 'px-4 py-2 text-sm font-semibold text-slate-500 hover:text-indigo-700 border-b-2 border-transparent focus:outline-none';
+    if (tab === 'comparativa') {
+        tabDept.classList.add('hidden');
+        tabComp.classList.remove('hidden');
+        btnDept.className = INACTIVE;
+        btnComp.className = ACTIVE;
+
+        // Re-render after the tab becomes visible to avoid hidden-container render glitches.
+        requestAnimationFrame(() => {
+            departamentosComparativa.forEach(dep => {
+                carregarComparativaPiePerDept(dep);
+            });
+
+            requestAnimationFrame(() => {
+                chartComparativaPies.forEach(ch => ch.resize());
+                if (chartComparativaBarras) chartComparativaBarras.resize();
+                if (chartComparativaGrowth) chartComparativaGrowth.resize();
+            });
+        });
+    } else {
+        tabComp.classList.add('hidden');
+        tabDept.classList.remove('hidden');
+        btnComp.className = INACTIVE;
+        btnDept.className = ACTIVE;
+    }
+}
+
+function renderComparativaDeptChips() {
+    const container = document.getElementById('compareDepartamentosSeleccionados');
+    container.innerHTML = '';
+    departamentosComparativa.forEach(dep => {
+        const chip = document.createElement('span');
+        chip.className = 'inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 text-xs font-semibold';
+        chip.innerHTML = `${escapeHtml(dep.nombre)} <button type="button" class="ml-1 text-indigo-500 hover:text-indigo-700" data-comp-remove="${escapeHtml(dep.uuid)}"><i class="fa-solid fa-xmark"></i></button>`;
+        container.appendChild(chip);
+    });
+    container.querySelectorAll('button[data-comp-remove]').forEach(btn => {
+        btn.addEventListener('click', e => {
+            const uuid = e.currentTarget.getAttribute('data-comp-remove');
+            departamentosComparativa = departamentosComparativa.filter(d => d.uuid !== uuid);
+            const ch = chartComparativaPies.get(uuid);
+            if (ch) { ch.dispose(); chartComparativaPies.delete(uuid); }
+            const card = document.getElementById(`comp-pie-${uuid}`);
+            if (card) card.remove();
+            comparativaQuartilesData.delete(uuid);
+            renderComparativaBarChart();
+            renderComparativaDeptChips();
+        });
+    });
+}
+
+async function carregarComparativaPiePerDept(dep) {
+    const slider = document.getElementById('sliderAnios');
+    const [desdeRaw, hastaRaw] = slider.noUiSlider.get();
+    const desde = parseInt(desdeRaw, 10);
+    const hasta = parseInt(hastaRaw, 10);
+    const filtrePersonalEl = document.querySelector('input[name="filtrePersonal"]:checked');
+    const filtrePersonal = filtrePersonalEl ? filtrePersonalEl.value : 'vigent';
+    const params = new URLSearchParams({ desde: String(desde), hasta: String(hasta), filtrePersonal });
+    params.append('deptUuid', dep.uuid);
+
+    const container = document.getElementById('comparativaPiesContainer');
+    let card = document.getElementById(`comp-pie-${dep.uuid}`);
+    if (!card) {
+        card = document.createElement('section');
+        card.id = `comp-pie-${dep.uuid}`;
+        card.className = 'bg-white border border-slate-100 rounded-2xl shadow-sm p-4';
+        card.innerHTML = `<h3 class="text-xs font-bold text-slate-700 mb-2 truncate" title="${escapeHtml(dep.nombre)}">${escapeHtml(dep.nombre)}</h3><div id="comp-pie-chart-${escapeHtml(dep.uuid)}" class="w-full h-[280px]"></div>`;
+        container.appendChild(card);
+    }
+
+    const chartEl = document.getElementById(`comp-pie-chart-${dep.uuid}`);
+    let ch = chartComparativaPies.get(dep.uuid);
+    if (ch) { ch.dispose(); }
+    ch = echarts.init(chartEl);
+    chartComparativaPies.set(dep.uuid, ch);
+
+    try {
+        const response = await apiFetch(`/pure/stats/quartiles/dashboard?${params.toString()}`);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const dashboard = await response.json();
+        const data = Array.isArray(dashboard?.quartiles) ? dashboard.quartiles : [];
+        const chartData = data.map(item => ({
+            name: item.quartile,
+            value: item.total,
+            itemStyle: { color: getColorByQuartile(item.quartile) }
+        }));
+
+        // Store Q1 data for bar chart
+        const total = data.reduce((acc, d) => acc + Number(d.total || 0), 0);
+        const q1 = Number(data.find(d => d.quartile === 'Q1')?.total || 0);
+        comparativaQuartilesData.set(dep.uuid, { nombre: dep.nombre, q1, total });
+        renderComparativaBarChart();
+
+        // Compute growth from evolution data (structure: [{year, Q1, Q2, Q3, Q4, ...}])
+        const evolution = Array.isArray(dashboard?.evolution) ? dashboard.evolution : [];
+        const sortedEvo = evolution.slice().sort((a, b) => Number(a.year) - Number(b.year));
+        let growth = null;
+        if (sortedEvo.length >= 2) {
+            const firstQ1 = Number(sortedEvo[0]['Q1'] || 0);
+            const lastQ1 = Number(sortedEvo[sortedEvo.length - 1]['Q1'] || 0);
+            if (firstQ1 > 0) {
+                growth = (lastQ1 - firstQ1) / firstQ1 * 100;
+            } else if (lastQ1 > 0) {
+                growth = 100;
+            } else {
+                growth = 0;
+            }
+        }
+        comparativaGrowthData.set(dep.uuid, { nombre: dep.nombre, growth });
+        renderComparativaGrowthChart();
+
+        ch.setOption({
+            tooltip: { trigger: 'item', formatter: p => `${p.name}: <b>${p.value}</b> (${p.percent}%)` },
+            legend: { orient: 'horizontal', bottom: 0, textStyle: { fontSize: 10, color: '#596473' } },
+            series: [{
+                name: 'Quartils', type: 'pie', radius: ['30%', '65%'], center: ['50%', '44%'],
+                itemStyle: { borderRadius: 6, borderColor: '#fff', borderWidth: 2 },
+                label: { show: false },
+                emphasis: { label: { show: true, formatter: '{b}: {c}', fontSize: 12 } },
+                data: chartData
+            }]
+        });
+
+        requestAnimationFrame(() => ch.resize());
+    } catch (_err) {
+        ch.setOption({ graphic: [{ type: 'text', left: 'center', top: 'middle',
+            style: { text: 'Error carregant dades', fill: '#ef4444', fontSize: 13 } }] });
+    }
+}
+
+function afegirDepartamentComparativa(dep) {
+    if (departamentosComparativa.some(d => d.uuid === dep.uuid)) return;
+    departamentosComparativa.push(dep);
+    renderComparativaDeptChips();
+    carregarComparativaPiePerDept(dep);
+}
+
+function poblarCompareDeptoDropdown() {
+    const menu = document.getElementById('compareDeptoDropdownMenu');
+    menu.innerHTML = '';
+
+    const totsItem = document.createElement('div');
+    totsItem.className = 'px-3 py-2 hover:bg-indigo-50 cursor-pointer text-sm font-semibold text-slate-700 border-b border-slate-100';
+    totsItem.textContent = 'Tots els departaments';
+    totsItem.addEventListener('click', () => {
+        clearComparativaSelection();
+
+        departamentosCatalogo.forEach(dep => {
+            afegirDepartamentComparativa(dep);
+        });
+
+        document.getElementById('compareDeptoDropdownMenu').classList.add('hidden');
+    });
+    menu.appendChild(totsItem);
+
+    departamentosCatalogo.forEach(dep => {
+        const item = document.createElement('div');
+        item.className = 'px-3 py-2 hover:bg-indigo-50 cursor-pointer text-sm';
+        item.textContent = dep.nombre;
+        item.addEventListener('click', () => {
+            afegirDepartamentComparativa(dep);
+            document.getElementById('compareDeptoDropdownMenu').classList.add('hidden');
+        });
+        menu.appendChild(item);
+    });
+}
+
+async function carregarAmbits() {
+    const select = document.getElementById('compareAmbitSelect');
+    try {
+        const response = await apiFetch('/persons/ambits');
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const ambits = await response.json();
+        select.innerHTML = '<option value="">Selecciona un àmbit...</option>';
+        (Array.isArray(ambits) ? ambits : []).forEach(a => {
+            const opt = document.createElement('option');
+            opt.value = a;
+            opt.textContent = a;
+            select.appendChild(opt);
+        });
+    } catch (_err) {
+        select.innerHTML = '<option value="">Error carregant àmbits</option>';
+    }
+}
+
+async function carregarAmbit() {
+    const ambit = document.getElementById('compareAmbitSelect').value;
+    if (!ambit) return;
+    try {
+        const response = await apiFetch(`/persons/departamentos-by-ambit?ambit=${encodeURIComponent(ambit)}`);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const depts = await response.json();
+        clearComparativaSelection();
+        (Array.isArray(depts) ? depts : []).forEach(dep => {
+            afegirDepartamentComparativa({ uuid: dep.uuid, nombre: dep.nombre });
+        });
+        renderComparativaDeptChips();
+    } catch (_err) { /* silent */ }
+}
+
+function configurarModeComparativa() {
+    const btnDepto = document.getElementById('btnModeDepto');
+    const btnAmbit = document.getElementById('btnModeAmbit');
+    const ambitSelect = document.getElementById('compareAmbitSelect');
+    const btnClear = document.getElementById('btnClearComparativaSelection');
+    const btnClearAmbit = document.getElementById('btnClearAmbitSelection');
+    const panelDepto = document.getElementById('compareModeDepartament');
+    const panelAmbit = document.getElementById('compareModeAmbit');
+    const ACTIVE_BTN = 'px-3 py-1.5 text-xs font-semibold rounded-lg bg-indigo-600 text-white';
+    const INACTIVE_BTN = 'px-3 py-1.5 text-xs font-semibold rounded-lg bg-white border border-slate-300 text-slate-600 hover:border-indigo-400';
+
+    btnDepto.addEventListener('click', () => {
+        btnDepto.className = ACTIVE_BTN;
+        btnAmbit.className = INACTIVE_BTN;
+        panelDepto.style.display = 'flex';
+        panelAmbit.style.display = 'none';
+    });
+    btnAmbit.addEventListener('click', () => {
+        btnAmbit.className = ACTIVE_BTN;
+        btnDepto.className = INACTIVE_BTN;
+        panelAmbit.style.display = 'flex';
+        panelDepto.style.display = 'none';
+    });
+
+    if (ambitSelect) {
+        ambitSelect.addEventListener('change', carregarAmbit);
+    }
+
+    if (btnClear) {
+        btnClear.addEventListener('click', () => clearComparativaSelection());
+    }
+
+    if (btnClearAmbit) {
+        btnClearAmbit.addEventListener('click', () => {
+            const ambitSelect = document.getElementById('compareAmbitSelect');
+            if (ambitSelect) ambitSelect.value = '';
+            clearComparativaSelection();
+        });
+    }
+
+    const compMenu = document.getElementById('compareDeptoDropdownMenu');
+    const compBtn = document.getElementById('compareDeptoDropdownBtn');
+    compBtn.addEventListener('click', e => {
+        e.stopPropagation();
+        if (compMenu.classList.contains('hidden')) {
+            poblarCompareDeptoDropdown();
+            compMenu.classList.remove('hidden');
+        } else {
+            compMenu.classList.add('hidden');
+        }
+    });
+    document.addEventListener('click', e => {
+        if (!compBtn.contains(e.target) && !compMenu.contains(e.target)) {
+            compMenu.classList.add('hidden');
+        }
+    });
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
 async function init() {
     const min = 2015;
@@ -726,12 +1172,20 @@ async function init() {
     configurarSlider(min, max, 2021, 2024);
     await cargarDepartamentos();
 
+    await carregarAmbits();
+    document.getElementById('tabDeptBtn').addEventListener('click', () => activateTab('dept'));
+    document.getElementById('tabComparativaBtn').addEventListener('click', () => activateTab('comparativa'));
+    configurarModeComparativa();
+
     document.querySelectorAll('input[name="filtrePersonal"]').forEach(radio => {
         radio.addEventListener('change', () => {
             if (hayDepartamentoSeleccionado()) {
                 resetPersonaDropdown();
                 cargarPersones();
                 programarRefresco();
+            }
+            if (hayComparativaSeleccionada()) {
+                programarRefrescoComparativa();
             }
         });
     });

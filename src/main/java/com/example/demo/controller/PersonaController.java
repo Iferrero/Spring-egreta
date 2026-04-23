@@ -1,4 +1,4 @@
-﻿package com.example.demo.controller;
+package com.example.demo.controller;
 
 import com.example.demo.model.Organizacion;
 import com.example.demo.model.Persona;
@@ -569,6 +569,71 @@ public class PersonaController {
                 "nombre", org.getNombre()
             ))
             .toList();
+    }
+
+        /**
+         * Retorna la llista d'àmbits distints vinculats a organitzacions
+         * que són departaments vigents.
+         */
+    @GetMapping("/ambits")
+    public List<String> listarAmbits() {
+        Query deptQuery = new Query();
+        deptQuery.addCriteria(Criteria.where("type.term.ca_ES").is("Departament"));
+        deptQuery.addCriteria(Criteria.where("lifecycle.endDate").is(null));
+
+        List<String> deptUuids = mongoTemplate.findDistinct(
+            deptQuery,
+            "uuid",
+            "Organizations",
+            String.class
+        );
+
+        if (deptUuids == null || deptUuids.isEmpty()) {
+            return List.of();
+        }
+
+        return mongoTemplate.getDb()
+                .getCollection("v_orga_ambit")
+            .distinct(
+                "ambit",
+                new org.bson.Document("uuid", new org.bson.Document("$in", deptUuids)),
+                String.class
+            )
+                .into(new java.util.ArrayList<>())
+                .stream()
+                .filter(a -> a != null && !a.isBlank())
+                .sorted()
+                .toList();
+    }
+
+    /**
+     * Retorna els departaments (uuid + nombre) pertanyents a un àmbit concret,
+     * creuant kraken.v_orga_ambit amb Organizations per obtenir el nom oficial.
+     */
+    @GetMapping("/departamentos-by-ambit")
+    public List<Map<String, String>> listarDepartamentosPorAmbit(@RequestParam String ambit) {
+        List<org.bson.Document> orgaAmbits = mongoTemplate.getDb()
+                .getCollection("v_orga_ambit")
+                .find(new org.bson.Document("ambit", ambit))
+                .into(new java.util.ArrayList<>());
+
+        List<String> uuids = orgaAmbits.stream()
+                .map(d -> d.getString("uuid"))
+                .filter(u -> u != null && !u.isBlank())
+                .distinct()
+                .toList();
+
+        if (uuids.isEmpty()) return List.of();
+
+        Query query = new Query();
+        query.addCriteria(Criteria.where("uuid").in(uuids));
+        query.addCriteria(Criteria.where("type.term.ca_ES").is("Departament"));
+        query.addCriteria(Criteria.where("lifecycle.endDate").is(null));
+        query.with(Sort.by(Sort.Direction.ASC, "name.ca_ES"));
+
+        return mongoTemplate.find(query, Organizacion.class, "Organizations").stream()
+                .map(org -> Map.of("uuid", org.getUuid(), "nombre", org.getNombre()))
+                .toList();
     }
 
     /**

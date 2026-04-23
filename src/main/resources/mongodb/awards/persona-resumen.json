@@ -37,13 +37,65 @@
                 }
             }
         }, {
+            "$lookup": {
+                "from": "ExternalOrganizations",
+                "localField": "fundings.funder.uuid",
+                "foreignField": "uuid",
+                "as": "funder_org"
+            }
+        }, {
+            "$addFields": {
+                "funder_type": {
+                    "$let": {
+                        "vars": {
+                            "kgs": {
+                                "$ifNull": [
+                                    { "$arrayElemAt": ["$funder_org.keywordGroups", 0] },
+                                    []
+                                ]
+                            }
+                        },
+                        "in": {
+                            "$ifNull": [
+                                {
+                                    "$reduce": {
+                                        "input": "$$kgs",
+                                        "initialValue": null,
+                                        "in": {
+                                            "$ifNull": [
+                                                "$$value",
+                                                {
+                                                    "$arrayElemAt": [
+                                                        {
+                                                            "$map": {
+                                                                "input": { "$ifNull": ["$$this.classifications", []] },
+                                                                "as": "cls",
+                                                                "in": { "$ifNull": ["$$cls.term.ca_ES", "$$cls.term.en_GB"] }
+                                                            }
+                                                        },
+                                                        0
+                                                    ]
+                                                }
+                                            ]
+                                        }
+                                    }
+                                },
+                                "Desconegut"
+                            ]
+                        }
+                    }
+                }
+            }
+        }, {
+            "$unset": "funder_org"
+        }, {
             "$group": {
                 "_id": "$uuid",
                 "anyo": {
                     "$first": "$anyo"
                 },
-                "categoria": {
-                    "$first": {"$ifNull": ["$categoria", "Sense categoria"]}
+                "funder_type": {
+                    "$first": "$funder_type"
                 },
                 "awardHolders": {
                     "$first": "$awardHolders"
@@ -107,7 +159,7 @@
                     "personUuid": "$personUuid",
                     "anyo": "$anyo",
                     "awardUuid": "$_id",
-                    "categoria": "$categoria"
+                    "funder_type": "$funder_type"
                 },
                 "importe_uab_award": {
                     "$first": "$importe_uab_award"
@@ -130,7 +182,7 @@
                 "_id": {
                     "personUuid": "$_id.personUuid",
                     "anyo": "$_id.anyo",
-                    "categoria": "$_id.categoria"
+                    "funder_type": "$_id.funder_type"
                 },
                 "proyectos_ip": {
                     "$sum": "$proy_ip"
@@ -171,7 +223,7 @@
                 "_id": 0,
                 "PersonaUuid": "$_id.personUuid",
                 "Año": "$_id.anyo",
-                "Categoria": "$_id.categoria",
+                "FunderType": "$_id.funder_type",
                 "Persona": "",
                 "Proyectos_IP": "$proyectos_ip",
                 "Proyectos_CoIP": "$proyectos_coip",

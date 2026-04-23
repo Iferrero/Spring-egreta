@@ -24,26 +24,27 @@
     </div>
 
     <div class="mx-auto px-4 py-6 w-full">
-        <section class="bg-white border border-slate-200 rounded-2xl shadow-sm p-5 mb-6">
-            <div class="grid grid-cols-1 lg:grid-cols-12 gap-x-6 gap-y-4 items-start">
+        <!-- Tab navigation -->
+        <div class="flex border-b border-slate-200 mb-4 gap-1">
+            <button id="tabDeptBtn" type="button"
+                class="px-4 py-2 text-sm font-semibold text-indigo-700 border-b-2 border-indigo-600 focus:outline-none">Departament</button>
+            <button id="tabComparativaBtn" type="button"
+                class="px-4 py-2 text-sm font-semibold text-slate-500 hover:text-indigo-700 border-b-2 border-transparent focus:outline-none">Comparativa</button>
+        </div>
 
-                <!-- Departament + filtre personal -->
-                <div class="lg:col-span-5 flex flex-col gap-2">
-                    <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Departament</label>
-                    <div class="relative">
-                        <button id="departamentoDropdownBtn" type="button"
-                            class="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm bg-white text-left flex items-center justify-between hover:border-indigo-400 transition-colors">
-                            <span id="departamentoDropdownLabel" class="text-slate-500">Afegeix departament...</span>
-                            <i class="fa fa-chevron-down text-slate-400 ml-2 text-xs"></i>
-                        </button>
-                        <div id="departamentoDropdownMenu"
-                            class="absolute z-10 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-56 overflow-auto hidden"></div>
+        <!-- Filtres globals compartits entre pestanyes -->
+        <section class="bg-white border border-slate-200 rounded-2xl shadow-sm p-5 mb-4">
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-x-6 gap-y-3 items-center">
+                <div class="lg:col-span-8 flex flex-col gap-2">
+                    <div class="flex items-center justify-between">
+                        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Rang d'anys</label>
+                        <span id="valorRango" class="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full"></span>
                     </div>
-                    <select id="departamentoSelect" multiple class="hidden"></select>
-
-                    <!-- Filtre personal inline -->
-                    <div class="flex items-center gap-1 mt-0.5">
-                        <span class="text-xs text-slate-400 font-medium mr-1">Personal:</span>
+                    <div id="sliderAnios" class="mt-3"></div>
+                </div>
+                <div class="lg:col-span-4 flex flex-col gap-2">
+                    <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Personal</label>
+                    <div class="flex items-center gap-1">
                         <label class="inline-flex items-center gap-1.5 cursor-pointer px-2.5 py-1 rounded-full border text-xs font-medium transition-colors has-[:checked]:bg-indigo-50 has-[:checked]:border-indigo-300 has-[:checked]:text-indigo-700 border-slate-200 text-slate-600 hover:border-indigo-200">
                             <input type="radio" name="filtrePersonal" value="vigent" checked class="sr-only">
                             <i class="fa-solid fa-user-check text-[10px]"></i>
@@ -56,9 +57,30 @@
                         </label>
                     </div>
                 </div>
+            </div>
+        </section>
+
+        <div id="tabDept">
+        <section class="bg-white border border-slate-200 rounded-2xl shadow-sm p-5 mb-6">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-x-6 gap-y-4 items-start">
+
+                <!-- Departament -->
+                <div class="flex flex-col gap-2">
+                    <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Departament</label>
+                    <div class="relative">
+                        <button id="departamentoDropdownBtn" type="button"
+                            class="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm bg-white text-left flex items-center justify-between hover:border-indigo-400 transition-colors">
+                            <span id="departamentoDropdownLabel" class="text-slate-500">Afegeix departament...</span>
+                            <i class="fa fa-chevron-down text-slate-400 ml-2 text-xs"></i>
+                        </button>
+                        <div id="departamentoDropdownMenu"
+                            class="absolute z-10 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-56 overflow-auto hidden"></div>
+                    </div>
+                    <select id="departamentoSelect" multiple class="hidden"></select>
+                </div>
 
                 <!-- Persona -->
-                <div class="lg:col-span-3 flex flex-col gap-2">
+                <div class="flex flex-col gap-2">
                     <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Persona</label>
                     <div class="relative">
                         <button id="personaDropdownBtn" type="button" disabled
@@ -72,15 +94,6 @@
                         </div>
                     </div>
                     <input type="hidden" id="personaSeleccionadaUuid" value="">
-                </div>
-
-                <!-- Rang d'anys -->
-                <div class="lg:col-span-4 flex flex-col gap-2 pt-0.5">
-                    <div class="flex items-center justify-between">
-                        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Rang d'anys</label>
-                        <span id="valorRango" class="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full"></span>
-                    </div>
-                    <div id="sliderAnios" class="mt-3"></div>
                 </div>
 
             </div>
@@ -132,6 +145,80 @@
                 </table>
             </div>
         </section>
+
+        </div><!-- /tabDept -->
+
+        <div id="tabComparativa" class="hidden">
+            <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-5 mb-4">
+                <!-- Mode toggle -->
+                <div class="flex gap-2 mb-4">
+                    <button id="btnModeDepto" type="button"
+                        class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-indigo-600 text-white">Per departaments</button>
+                    <button id="btnModeAmbit" type="button"
+                        class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-white border border-slate-300 text-slate-600 hover:border-indigo-400">Per àmbit</button>
+                </div>
+
+                <!-- Mode: per departaments -->
+                <div id="compareModeDepartament" class="flex flex-col gap-2">
+                    <div class="flex items-center justify-between gap-2">
+                        <label class="text-xs font-bold text-slate-500 uppercase tracking-wider">Afegeix departament</label>
+                        <button id="btnClearComparativaSelection" type="button"
+                            class="px-2.5 py-1 text-[11px] font-semibold rounded-lg border border-slate-300 text-slate-600 hover:border-rose-300 hover:text-rose-700 transition-colors">
+                            <i class="fa-solid fa-trash-can mr-1"></i>Eliminar seleccio
+                        </button>
+                    </div>
+                    <div class="relative">
+                        <button id="compareDeptoDropdownBtn" type="button"
+                            class="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm bg-white text-left flex items-center justify-between hover:border-indigo-400 transition-colors">
+                            <span id="compareDeptoDropdownLabel" class="text-slate-500">Afegeix departament...</span>
+                            <i class="fa fa-chevron-down text-slate-400 ml-2 text-xs"></i>
+                        </button>
+                        <div id="compareDeptoDropdownMenu"
+                            class="absolute z-10 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-56 overflow-auto hidden"></div>
+                    </div>
+                </div>
+
+                <!-- Mode: per àmbit -->
+                <div id="compareModeAmbit" class="hidden flex-col gap-2">
+                    <div class="flex items-center justify-between gap-2">
+                        <label class="text-xs font-bold text-slate-500 uppercase tracking-wider">Àmbit</label>
+                        <button id="btnClearAmbitSelection" type="button"
+                            class="px-2.5 py-1 text-[11px] font-semibold rounded-lg border border-slate-300 text-slate-600 hover:border-rose-300 hover:text-rose-700 transition-colors">
+                            <i class="fa-solid fa-trash-can mr-1"></i>Eliminar seleccio
+                        </button>
+                    </div>
+                    <div class="flex items-center">
+                        <select id="compareAmbitSelect"
+                            class="flex-1 border border-slate-300 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:border-indigo-400">
+                            <option value="">Carregant àmbits...</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chips de departaments seleccionats per comparativa -->
+            <div id="compareDepartamentosSeleccionados" class="flex flex-wrap gap-2 mb-4"></div>
+
+            <!-- Gràfics de barres % Q1 i creixement, side by side -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+                <!-- Gràfic de barres % Q1 per departament -->
+                <section id="comparativaBarChartSection" class="bg-white border border-slate-100 rounded-2xl shadow-sm p-4 hidden">
+                    <h2 class="text-sm font-bold text-slate-700 mb-3">% Q1 per departament</h2>
+                    <div id="comparativaBarChart" class="w-full"></div>
+                </section>
+
+                <!-- Gràfic de creixement/decreixement -->
+                <section id="comparativaGrowthChartSection" class="bg-white border border-slate-100 rounded-2xl shadow-sm p-4 hidden">
+                    <h2 class="text-sm font-bold text-slate-700 mb-3">% Creixement Q1 en el període</h2>
+                    <div id="comparativaGrowthChart" class="w-full"></div>
+                </section>
+            </div>
+
+            
+
+            <!-- Grid de pastissos de quartils -->
+            <div id="comparativaPiesContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+        </div><!-- /tabComparativa -->
 
     </div>
 

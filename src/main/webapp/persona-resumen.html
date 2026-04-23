@@ -112,6 +112,7 @@
                 <nav class="flex gap-2" aria-label="Tabs">
                     <button id="tabResumenBtn" class="px-4 py-2 text-sm font-semibold text-indigo-700 border-b-2 border-indigo-600 focus:outline-none" type="button">Resum General</button>
                     <button id="tabDeptBtn" class="px-4 py-2 text-sm font-semibold text-slate-500 hover:text-indigo-700 border-b-2 border-transparent focus:outline-none" type="button">Anàlisi per Departament</button>
+                    <button id="tabComparativaBtn" class="px-4 py-2 text-sm font-semibold text-slate-500 hover:text-indigo-700 border-b-2 border-transparent focus:outline-none" type="button">Comparativa</button>
                 </nav>
             </div>
 
@@ -128,6 +129,13 @@
                         <div id="tablaResumenTable"></div>
                     </div>
                 </section>
+                <div id="cardProyectosAnio" class="chart-card relative bg-white border border-slate-100 rounded-2xl shadow-sm p-4 mt-6">
+                    <button onclick="abrirPantallaCompleta('cardProyectosAnio')" class="absolute top-3 right-3 text-xs font-semibold text-indigo-600 hover:text-indigo-800">
+                        <i class="fa-solid fa-expand mr-1"></i>Pantalla completa
+                    </button>
+                    <h2 id="tituloChartProyectosAnio" class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Projectes per any</h2>
+                    <div id="chartProyectosAnio" class="w-full h-[360px]"></div>
+                </div>
             </div>
             <div id="tabDept" class="hidden">
                 
@@ -186,36 +194,6 @@
                         <div id="chartPareto" class="w-full h-[420px]"></div>
                     </div>
                 </section>
-                <section id="seccionRankingPercentil" class="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden mt-6">
-                    <div class="p-4 border-b border-slate-100">
-                        <h2 class="text-sm font-bold text-slate-700">Ranking Percentil</h2>
-                        <p class="text-xs text-slate-500 mt-1">Mostra el percentil de cada investigador segons el seu import total ponderat, en relació amb la resta del departament.</p>
-                        <details class="mt-3 bg-slate-50 border border-slate-200 rounded-lg p-3 text-xs text-slate-700 whitespace-pre-line">
-                            <summary class="font-semibold cursor-pointer mb-2">Què és el percentil?</summary>
-                            El percentil indica la posició relativa d'un investigador dins la distribució de finançament: un percentil 90 vol dir que la persona ha captat més fons que el 90% dels seus companys. Permet identificar ràpidament qui són els perfils més destacats i la dispersió de recursos.
-                            El percentil respon a la pregunta: "A quin percentatge del departament supero en captació de fons?"
-
-                            Percentil 90: Significa que la teva captació de recursos és superior a la del 90% dels teus companys. Estàs en el top 10% del departament.
-
-                            Percentil 50: Indica que estàs exactament en el punt mitjà: la meitat del departament ha captat més fons que tu, i l'altra meitat n'ha captat menys.
-
-                            Percentil 25: Indica que el teu volum de fons és superior al del 25% dels membres, situant-te en una fase de creixement o consolidació inicial.
-                        </details>
-                    </div>
-                    <div class="overflow-auto">
-                        <div id="chartRankingPercentil" class="w-5/6 mx-auto h-[420px]"></div>
-                        <!-- Llegenda de colors percentil -->
-                        <div class="w-5/6 mx-auto mt-4 mb-2">
-                            <div class="flex flex-wrap gap-3 text-xs">
-                                <div class="flex items-center gap-2"><span style="display:inline-block;width:18px;height:18px;background:#f5efcc;border-radius:4px;border:1px solid #e0d9b6;"></span> ≥ 95: Top 5% (excel·lència)</div>
-                                <div class="flex items-center gap-2"><span style="display:inline-block;width:18px;height:18px;background:#d1f4e4;border-radius:4px;border:1px solid #a3e4c7;"></span> ≥ 75: Alt rendiment</div>
-                                <div class="flex items-center gap-2"><span style="display:inline-block;width:18px;height:18px;background:#dfe9f9;border-radius:4px;border:1px solid #b5c9e6;"></span> ≥ 50: Mitjana o superior</div>
-                                <div class="flex items-center gap-2"><span style="display:inline-block;width:18px;height:18px;background:#f8f9fa;border-radius:4px;border:1px solid #e2e3e5;"></span> < 50: Per sota de la mitjana</div>
-                            </div>
-                        </div>
-                        <div id="tablaRankingPercentilTable" class="w-5/6 mx-auto mt-6"></div>
-                    </div>
-                </section>
 
                 <!-- Nou gràfic: Distribució per Quartils d'Ingressos -->
                 <section id="seccionCuartilesIngresos" class="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden mt-6">
@@ -263,22 +241,7 @@
                     <div id="chartImporteAnio" class="w-full h-[360px]"></div>
                 </div>
 
-                <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                    <div id="cardProyectosAnio" class="chart-card bg-white border border-slate-100 rounded-2xl shadow-sm p-4">
-                        <button onclick="abrirPantallaCompleta('cardProyectosAnio')" class="absolute top-3 right-3 text-xs font-semibold text-indigo-600 hover:text-indigo-800">
-                            <i class="fa-solid fa-expand mr-1"></i>Pantalla completa
-                        </button>
-                        <h2 id="tituloChartProyectosAnio" class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Projectes per any</h2>
-                        <div id="chartProyectosAnio" class="w-full h-[360px]"></div>
-                    </div>
-                    <div id="cardTopPersonas" class="chart-card bg-white border border-slate-100 rounded-2xl shadow-sm p-4">
-                        <button onclick="abrirPantallaCompleta('cardTopPersonas')" class="absolute top-3 right-3 text-xs font-semibold text-indigo-600 hover:text-indigo-800">
-                            <i class="fa-solid fa-expand mr-1"></i>Pantalla completa
-                        </button>
-                        <h2 id="tituloChartTopPersonas" class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Top persones per import ponderat (període seleccionat)</h2>
-                        <div id="chartTopPersonas" class="w-full h-[360px]"></div>
-                    </div>
-                </div>
+
 
                 <section id="seccionAwardsPersona" class="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden hidden">
                     <div class="p-4 border-b border-slate-100 flex items-center justify-between">
@@ -292,23 +255,56 @@
                     </div>
                 </section>
 
-                <div hidden class="bg-white border border-slate-100 rounded-2xl shadow-sm p-4">
-                    <div class="flex flex-col lg:flex-row lg:items-end gap-3 mb-3">
-                        <div class="w-full lg:w-96">
-                            <label for="compareDepartamentoSelect" class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Comparar ajuts persones de departaments</label>
-                            <select id="compareDepartamentoSelect" class="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm bg-white">
-                                <option value="">Selecciona departament</option>
-                            </select>
-                        </div>
-                        <button id="btnAddDepartamentoCompare" type="button" class="h-10 px-4 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700">
-                            Afegir
-                        </button>
-                    </div>
-                    <div id="compareDepartamentosSeleccionados" class="flex flex-wrap gap-2 mb-3"></div>
-                    <div id="chartComparativaDept" class="w-full h-[360px]"></div>
-                </div>
             </section>
         </section>
+    </div>
+
+    <div id="tabComparativa" class="hidden mx-auto px-6 py-4">
+        <div class="bg-white border border-slate-100 rounded-2xl shadow-sm p-4">
+            <h2 class="text-sm font-bold text-slate-700 mb-3">Comparativa entre departaments</h2>
+
+            <!-- Mode toggle: Departament / Àmbit -->
+            <div class="flex items-center gap-2 mb-4">
+                <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Cercar per:</span>
+                <button id="btnModeDepto" type="button"
+                    class="px-3 py-1 rounded-full text-xs font-semibold bg-indigo-600 text-white">
+                    Departament
+                </button>
+                <button id="btnModeAmbit" type="button"
+                    class="px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 hover:bg-slate-200">
+                    Àmbit
+                </button>
+            </div>
+
+            <!-- Selector departament (mode: departament) -->
+            <div id="compareModeDepartament" class="flex flex-col lg:flex-row lg:items-end gap-3 mb-3">
+                <div class="w-full lg:w-96">
+                    <label for="compareDepartamentoSelect" class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Afegir departament per comparar</label>
+                    <select id="compareDepartamentoSelect" class="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm bg-white">
+                        <option value="">Selecciona departament</option>
+                    </select>
+                </div>
+                <button id="btnAddDepartamentoCompare" type="button" class="h-10 px-4 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700">
+                    Afegir
+                </button>
+            </div>
+
+            <!-- Selector àmbit (mode: àmbit) -->
+            <div id="compareModeAmbit" class="hidden flex flex-col lg:flex-row lg:items-end gap-3 mb-3">
+                <div class="w-full lg:w-96">
+                    <label for="compareAmbitSelect" class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Selecciona àmbit</label>
+                    <select id="compareAmbitSelect" class="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm bg-white">
+                        <option value="">Selecciona àmbit...</option>
+                    </select>
+                </div>
+                <button id="btnCarregarAmbit" type="button" class="h-10 px-4 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700">
+                    Carregar
+                </button>
+            </div>
+
+            <div id="compareDepartamentosSeleccionados" class="flex flex-wrap gap-2 mb-3"></div>
+            <div id="comparativaPiesContainer" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mt-2"></div>
+        </div>
     </div>
 
     <script src="persona-resumen.js"></script>
