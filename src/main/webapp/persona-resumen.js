@@ -33,7 +33,7 @@ function renderGraficoEvolucionPersonaDept(rows) {
             ).join('<br>')
         },
         legend: { data: ['Investigador', 'Mitja Dept.'], top: 10 },
-        grid: { left: 60, right: 60, top: 40, bottom: 40 },
+        grid: { left: '5%', right: 40, top: 40, bottom: 40, containLabel: true },
         xAxis: {
             type: 'category',
             data: anios,
@@ -45,7 +45,11 @@ function renderGraficoEvolucionPersonaDept(rows) {
             type: 'value',
             name: '€ Mitja Dept.',
             position: 'left',
-            axisLabel: { formatter: value => formatearNumero(value) + ' €' }
+            axisLabel: {
+                formatter: value => formatearNumero(value) + ' €',
+                overflow: 'truncate',
+                width: 120
+            }
         },
         series: [
             {
@@ -178,8 +182,10 @@ function renderGraficoCuartilesIngresos(agrupadoPorPersona) {
     }
 
     // 4b. Gráfico de barras horizontales: total ingresos por grupo (solo grupos con datos)
+    // Invertimos para que ECharts (que renderiza de abajo a arriba) muestre Top 5% arriba
+    const grupsPoblatsInv = [...grupsPoblats].reverse();
     chartCuartilesIngresos = echarts.init(container);
-    if (grupsPoblats.length === 0) {
+    if (grupsPoblatsInv.length === 0) {
         chartCuartilesIngresos.setOption({ title: { text: 'Sense dades', left: 'center', top: 'center', textStyle: { color: '#aaa', fontSize: 13 } } });
     } else {
         chartCuartilesIngresos.setOption({
@@ -187,7 +193,7 @@ function renderGraficoCuartilesIngresos(agrupadoPorPersona) {
             tooltip: {
                 trigger: 'axis',
                 formatter: params => {
-                    const g = grupsPoblats[params[0].dataIndex];
+                    const g = grupsPoblatsInv[params[0].dataIndex];
                     const total = g.items.reduce((s, p) => s + p.importPonderat, 0);
                     return `<b>${g.label}</b><br>Persones: <b>${g.items.length}</b><br>Total ingressos: <b>${formatearNumero(total)} €</b>`;
                 }
@@ -199,13 +205,13 @@ function renderGraficoCuartilesIngresos(agrupadoPorPersona) {
             },
             yAxis: {
                 type: 'category',
-                data: grupsPoblats.map(g => g.label),
+                data: grupsPoblatsInv.map(g => g.label),
                 axisLabel: { fontSize: 10, fontWeight: 600, overflow: 'none' }
             },
             series: [{
                 type: 'bar',
                 barMaxWidth: 44,
-                data: grupsPoblats.map(g => ({
+                data: grupsPoblatsInv.map(g => ({
                     value: g.items.reduce((s, p) => s + p.importPonderat, 0),
                     itemStyle: { color: g.color, borderRadius: [0, 6, 6, 0] }
                 })),
@@ -213,7 +219,7 @@ function renderGraficoCuartilesIngresos(agrupadoPorPersona) {
                     show: true,
                     position: 'insideRight',
                     formatter: params => {
-                        const g = grupsPoblats[params.dataIndex];
+                        const g = grupsPoblatsInv[params.dataIndex];
                         return `${g.items.length}p`;
                     },
                     fontSize: 11,
@@ -1300,6 +1306,20 @@ function esMismaPersonaSeleccionada(persona) {
     return normalizarTexto(actual.persona) === normalizarTexto(nueva.persona);
 }
 
+function renderizarChipPersona() {
+    const container = document.getElementById('personaChipContainer');
+    if (!container) return;
+    container.innerHTML = '';
+    if (!personaTopSeleccionada || !personaTopSeleccionada.persona) return;
+    const chip = document.createElement('span');
+    chip.className = 'inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 text-xs font-semibold';
+    chip.innerHTML = `${personaTopSeleccionada.persona} <button type="button" class="ml-1 text-indigo-500 hover:text-indigo-700"><i class="fa-solid fa-xmark"></i></button>`;
+    chip.querySelector('button').addEventListener('click', () => {
+        aplicarSeleccionPersona(personaTopSeleccionada);
+    });
+    container.appendChild(chip);
+}
+
 async function aplicarSeleccionPersona(persona) {
     if (!persona) return;
 
@@ -1310,20 +1330,31 @@ async function aplicarSeleccionPersona(persona) {
 
     const yaSeleccionada = esMismaPersonaSeleccionada(identidad);
     personaTopSeleccionada = yaSeleccionada ? null : identidad;
-    // Filtrar filas por persona seleccionada si hay selección
-    let filasFiltradas = filasResumenActual;
+    renderizarChipPersona();
+    // Filtrar filas per persona seleccionada (només per al gràfic de projectes per any)
+    let filasFiltrades = filasResumenActual;
     if (!yaSeleccionada && identidad.personaUuid) {
-        filasFiltradas = filasResumenActual.filter(f => {
+        filasFiltrades = filasResumenActual.filter(f => {
             return (f['PersonaUuid'] ?? f.personaUuid ?? '') === identidad.personaUuid;
         });
     }
-    renderGraficos(filasFiltradas);
+    // Renderitzem tots els gràfics amb les dades globals (sense filtrar per persona)
+    renderGraficos(filasResumenActual);
+    // Sobreescrivim només el gràfic "Projectes per any" amb les dades de la persona
+    renderGraficoProjectesPerAny(filasFiltrades);
     
     // Mostrar/ocultar tabla de evolución persona vs departamento
     const seccionEvol = document.getElementById('seccionEvolucionPersonaDept');
     if (personaTopSeleccionada && seccionEvol) {
         seccionEvol.classList.remove('hidden');
-        renderTablaEvolucionPersonaDept(filasFiltradas, personaTopSeleccionada);
+        // Cambiar el título del gráfico de evolución con el nombre de la persona
+        const tituloEvol = seccionEvol.querySelector('h2');
+        if (tituloEvol && personaTopSeleccionada.persona) {
+            tituloEvol.textContent = `Evolució de ${personaTopSeleccionada.persona} vs departament`;
+        } else if (tituloEvol) {
+            tituloEvol.textContent = 'Evolució persona vs departament';
+        }
+        renderTablaEvolucionPersonaDept(filasFiltrades, personaTopSeleccionada);
     } else if (seccionEvol) {
         seccionEvol.classList.add('hidden');
         if (window.tablaEvolucionPersonaDept) window.tablaEvolucionPersonaDept.clearData();
@@ -1447,6 +1478,109 @@ async function cargarAwardsPersona(persona) {
  * Renderiza los tres gráficos principales del dashboard.
  * @param {Array<object>} filas
  */
+/**
+ * Renderitza (o actualitza) únicament el gràfic "Projectes per any".
+ * Accepta les files ja filtrades i, opcionalment, porAnio/anios/seriesCategorias
+ * precalculats (quan es crida des de renderGraficos). Si no es passen, els calcula.
+ * @param {Array<object>} filas
+ * @param {object} [porAnioExt]
+ * @param {number[]} [aniosExt]
+ * @param {Array} [seriesCatsExt]
+ */
+function renderGraficoProjectesPerAny(filas, porAnioExt, aniosExt, seriesCatsExt) {
+    const porAnio = porAnioExt ?? agruparPorAnio(filas);
+    const anios   = aniosExt  ?? Object.keys(porAnio).map(Number).sort((a, b) => a - b);
+
+    const importesPonderados = anios.map(a => porAnio[a].importePonderado);
+    const proyectos          = anios.map(a => porAnio[a].proyectos);
+
+    // Sèries per categoria (si no vénen precalculades, les recalculem)
+    let seriesCategorias = seriesCatsExt;
+    if (!seriesCategorias) {
+        const todasCategorias = [...new Set(
+            anios.flatMap(a => Object.keys(porAnio[a].categorias))
+        )].sort();
+        const PALETTE_CATS = [
+            UAB_COLORS.campus, UAB_COLORS.ocas, UAB_COLORS.cala,
+            UAB_COLORS.tauro, UAB_COLORS.collserola,
+            '#00a34f', '#fab84c', '#006b7a', '#8a99a8', UAB_COLORS.pissarra
+        ];
+        const CAT_COLOR_FIXED = {
+            'pública': UAB_COLORS.campus, 'publica': UAB_COLORS.campus,
+            'privada': UAB_COLORS.ocas,
+        };
+        function catColor(name) {
+            const key = name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+            const fixedKey = Object.keys(CAT_COLOR_FIXED).find(k =>
+                name.toLowerCase() === k || key === k.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+            );
+            if (fixedKey) return CAT_COLOR_FIXED[fixedKey];
+            let h = 0;
+            for (let i = 0; i < name.length; i++) h = (Math.imul(31, h) + name.charCodeAt(i)) | 0;
+            return PALETTE_CATS[Math.abs(h) % PALETTE_CATS.length];
+        }
+        seriesCategorias = todasCategorias.map(cat => ({
+            name: cat, type: 'bar', stack: 'cats', yAxisIndex: 0,
+            data: anios.map(a => porAnio[a].categorias[cat] ?? 0),
+            itemStyle: { color: catColor(cat) }
+        }));
+    }
+
+    if (chartProyectosAnio) {
+        chartProyectosAnio.dispose();
+        chartProyectosAnio = null;
+    }
+    chartProyectosAnio = echarts.init(document.getElementById('chartProyectosAnio'));
+    chartProyectosAnio.setOption({
+        tooltip: {
+            trigger: 'axis',
+            axisPointer: { type: 'shadow' },
+            formatter: function(params) {
+                let html = `<b>${params[0].axisValue}</b><br>`;
+                params.forEach(p => {
+                    if (p.value === 0 || p.value === null) return;
+                    const val = p.seriesName.includes('€')
+                        ? formatearNumero(p.value) + ' €'
+                        : p.value;
+                    html += `${p.marker}${p.seriesName}: <b>${val}</b><br>`;
+                });
+                return html;
+            }
+        },
+        legend: { bottom: 0, type: 'scroll', textStyle: { fontSize: 11 } },
+        grid: { left: 50, right: 60, top: 20, bottom: 70 },
+        xAxis: { type: 'category', data: anios },
+        yAxis: [
+            {
+                type: 'value', minInterval: 1,
+                splitLine: { lineStyle: { color: UAB_COLORS.columna } },
+                name: 'Projectes', nameTextStyle: { fontSize: 10 }
+            },
+            {
+                type: 'value', name: 'Import (€)',
+                nameTextStyle: { fontSize: 10 },
+                axisLabel: { formatter: v => formatearCompactoEje(v), fontSize: 10 },
+                splitLine: { show: false }
+            }
+        ],
+        series: [
+            ...seriesCategorias,
+            {
+                name: 'Total projectes', type: 'line', yAxisIndex: 0,
+                data: proyectos, smooth: 0.2,
+                lineStyle: { color: UAB_COLORS.ocas },
+                itemStyle: { color: UAB_COLORS.ocas }, symbolSize: 6
+            },
+            {
+                name: 'Import ponderat (€)', type: 'line', yAxisIndex: 1,
+                data: importesPonderados, smooth: 0.25,
+                lineStyle: { color: '#e05252', width: 2, type: 'dashed' },
+                itemStyle: { color: '#e05252' }, symbolSize: 6
+            }
+        ]
+    });
+}
+
 function renderGraficos(filas) {
     destruirGraficos();
     const seccionMatriz = document.getElementById('seccionMatrizLiderazgo');
@@ -1543,66 +1677,7 @@ function renderGraficos(filas) {
         itemStyle: { color: catColor(cat) }
     }));
 
-    chartProyectosAnio = echarts.init(document.getElementById('chartProyectosAnio'));
-    chartProyectosAnio.setOption({
-        tooltip: {
-            trigger: 'axis',
-            axisPointer: { type: 'shadow' },
-            formatter: function(params) {
-                let html = `<b>${params[0].axisValue}</b><br>`;
-                params.forEach(p => {
-                    if (p.value === 0 || p.value === null) return;
-                    const val = p.seriesName.includes('€')
-                        ? formatearNumero(p.value) + ' €'
-                        : p.value;
-                    html += `${p.marker}${p.seriesName}: <b>${val}</b><br>`;
-                });
-                return html;
-            }
-        },
-        legend: { bottom: 0, type: 'scroll', textStyle: { fontSize: 11 } },
-        grid: { left: 50, right: 60, top: 20, bottom: 70 },
-        xAxis: { type: 'category', data: anios },
-        yAxis: [
-            {
-                type: 'value',
-                minInterval: 1,
-                splitLine: { lineStyle: { color: UAB_COLORS.columna } },
-                name: 'Projectes',
-                nameTextStyle: { fontSize: 10 }
-            },
-            {
-                type: 'value',
-                name: 'Import (€)',
-                nameTextStyle: { fontSize: 10 },
-                axisLabel: { formatter: v => formatearCompactoEje(v), fontSize: 10 },
-                splitLine: { show: false }
-            }
-        ],
-        series: [
-            ...seriesCategorias,
-            {
-                name: 'Total projectes',
-                type: 'line',
-                yAxisIndex: 0,
-                data: proyectos,
-                smooth: 0.2,
-                lineStyle: { color: UAB_COLORS.ocas },
-                itemStyle: { color: UAB_COLORS.ocas },
-                symbolSize: 6
-            },
-            {
-                name: 'Import ponderat (€)',
-                type: 'line',
-                yAxisIndex: 1,
-                data: importesPonderados,
-                smooth: 0.25,
-                lineStyle: { color: '#e05252', width: 2, type: 'dashed' },
-                itemStyle: { color: '#e05252' },
-                symbolSize: 6
-            }
-        ]
-    });
+    renderGraficoProjectesPerAny(filas, porAnio, anios, seriesCategorias);
 
 
 
@@ -1627,26 +1702,24 @@ function renderGraficos(filas) {
     let modoAwardsDept = 'miembros'; // 'miembros' o 'gestionados'
 
     function crearToggleAwardsDept() {
-        const container = document.getElementById('departamentoChipsContainer');
+        const container = document.getElementById('toggleAwardsDeptContainer');
         if (!container) return;
-        let toggle = document.getElementById('toggleAwardsDept');
-        if (!toggle) {
-            toggle = document.createElement('div');
-            toggle.id = 'toggleAwardsDept';
-            toggle.className = 'mt-2 mb-2 flex items-center gap-2';
-            toggle.innerHTML = `
-                <label class="text-xs font-semibold text-slate-600">Mostrar:</label>
-                <select id="selectAwardsDept" class="border border-slate-300 rounded px-2 py-1 text-xs">
-                    <option value="miembros">Ajuts dels membres del departament</option>
-                    <option value="gestionados">Ajuts gestionats pel departament</option>
-                </select>
-            `;
-            container.parentNode.insertBefore(toggle, container.nextSibling);
-            document.getElementById('selectAwardsDept').addEventListener('change', (e) => {
-                modoAwardsDept = e.target.value;
-                programarRefresco();
-            });
-        }
+        if (document.getElementById('toggleAwardsDept')) return;
+        const toggle = document.createElement('div');
+        toggle.id = 'toggleAwardsDept';
+        toggle.className = 'flex items-center gap-2 mb-1';
+        toggle.innerHTML = `
+            <label class="text-xs font-semibold text-slate-600">Mostrar:</label>
+            <select id="selectAwardsDept" class="border border-slate-300 rounded px-2 py-1 text-xs">
+                <option value="miembros">Ajuts dels membres del departament</option>
+                <option value="gestionados">Ajuts gestionats pel departament</option>
+            </select>
+        `;
+        container.appendChild(toggle);
+        document.getElementById('selectAwardsDept').addEventListener('change', (e) => {
+            modoAwardsDept = e.target.value;
+            programarRefresco();
+        });
     }
 
     // Modifica renderizarChipsDepartamentos para llamar crearToggleAwardsDept
@@ -1717,6 +1790,7 @@ function renderGraficos(filas) {
             if (requestSeq !== currentLoadSeq) return;
             filasResumenActual = data;
             personaTopSeleccionada = null;
+            renderizarChipPersona();
             const seccionEvol = document.getElementById('seccionEvolucionPersonaDept');
             if (seccionEvol) {
                 seccionEvol.classList.add('hidden');
@@ -1989,15 +2063,20 @@ function renderGraficos(filas) {
                     const persones = cuadrantes[q.key] ?? [];
                     const chips = persones.map(p => {
                         const abr = abreviarNom(p.nombre);
-                        const dataPersona = JSON.stringify(p.nombre).replace(/'/g, '&#39;');
-                        const dataUuid = JSON.stringify(p.uuid).replace(/'/g, '&#39;');
+                        const nombreEscapado = p.nombre.replace(/'/g, "\\'");
+                        const uuidEscapado = p.uuid.replace(/'/g, "\\'");
                         return `<span
                             title="${p.nombre}"
-                            onclick="window.aplicarSeleccionPersona && aplicarSeleccionPersona({persona:${dataPersona},personaUuid:${dataUuid}})"
+                            onclick="aplicarSeleccionPersona ({persona:'${nombreEscapado}',personaUuid:'${uuidEscapado}'})"
                             style="display:inline-block;background:rgba(0,0,0,0.07);border-radius:20px;padding:3px 11px;margin:2px;font-size:11px;color:${q.color};font-weight:600;cursor:pointer;transition:background 0.15s"
+                            class="chip-persona-clicable"
                             onmouseover="this.style.background='${q.color}33'"
                             onmouseout="this.style.background='rgba(0,0,0,0.07)'"
                         >${abr}</span>`;
+                    // Añadir estilo global para el cursor pointer en los chips de persona
+                    const styleChipPersona = document.createElement('style');
+                    styleChipPersona.innerHTML = `.chip-persona-clicable { cursor: pointer !important; }`;
+                    document.head.appendChild(styleChipPersona);
                     }).join('');
                     return `<div style="background:${q.bg};border:1.5px solid ${q.border};border-radius:14px;padding:12px;">
                         <div style="font-size:12px;font-weight:700;color:${q.color};margin-bottom:6px;">
@@ -2417,6 +2496,7 @@ async function cargarDatos() {
         if (requestSeq !== currentLoadSeq) return;
         filasResumenActual = data;
         personaTopSeleccionada = null;
+        renderizarChipPersona();
         const seccionEvol = document.getElementById('seccionEvolucionPersonaDept');
         if (seccionEvol) {
             seccionEvol.classList.add('hidden');
@@ -2604,6 +2684,20 @@ document.addEventListener('DOMContentLoaded', function() {
             btn.classList.toggle('text-slate-500', !isActive);
             btn.classList.toggle('border-transparent', !isActive);
         });
+
+        // Mover seccionAwardsPersona al tab activo
+        const seccionAwards = document.getElementById('seccionAwardsPersona');
+        if (seccionAwards) {
+            if (activeBtn === tabDeptBtn) {
+                const placeholder = document.getElementById('awardsPlaceholderDept');
+                if (placeholder) placeholder.appendChild(seccionAwards);
+            } else if (activeBtn === tabResumenBtn) {
+                // Devolver a tabResumen (al final, antes del cierre del div)
+                tabResumen.appendChild(seccionAwards);
+            }
+            // En tabComparativa no se mueve: permanece donde estaba
+        }
+
         if (activeBtn === tabDeptBtn) {
             setTimeout(resizeDeptCharts, 100);
         }
