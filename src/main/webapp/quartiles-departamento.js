@@ -61,6 +61,9 @@ function renderComparativaBarChart() {
     const names = entries.map(d => d.nombre);
     const values = entries.map(d => d.pct);
 
+    // Calcular la media
+    const avg = values.length > 0 ? (values.reduce((a, b) => a + b, 0) / values.length) : 0;
+
     chartComparativaBarras.setOption({
         tooltip: {
             trigger: 'axis',
@@ -92,7 +95,26 @@ function renderComparativaBarChart() {
                 itemStyle: { color: i === 0 ? '#004d21' : '#008037', borderRadius: [0, 4, 4, 0] }
             })),
             label: { show: true, position: 'right', formatter: '{c}%', fontSize: 11, color: '#596473' },
-            barMaxWidth: 24
+            barMaxWidth: 24,
+            markLine: {
+                symbol: 'none',
+                label: {
+                    show: true,
+                    position: 'end',
+                    formatter: `Media: {c}%`,
+                    fontSize: 11,
+                    color: '#004d5e',
+                    fontWeight: 700
+                },
+                lineStyle: {
+                    type: 'dashed',
+                    color: '#004d5e',
+                    width: 2
+                },
+                data: [
+                    { xAxis: avg }
+                ]
+            }
         }]
     }, true);
 }
@@ -271,6 +293,7 @@ function renderizarChipsDepartamentos() {
         programarRefresco();
     } else {
         resetPersonaDropdown();
+        if (typeof clearAllData === 'function') clearAllData();
         updateEstado('Selecciona un departament per carregar dades.', false, false);
     }
 }
@@ -544,7 +567,21 @@ function renderPie(data, deptName) {
                     borderWidth: 2
                 },
                 label: {
-                    formatter: '{b}: {c}'
+                    show: true,
+                    position: 'inside',
+                    formatter: p => p.percent > 0 ? `${p.percent}%` : '',
+                    fontSize: 13,
+                    color: '#fff',
+                    fontWeight: 700
+                },
+                emphasis: {
+                    label: {
+                        show: true,
+                        fontSize: 15,
+                        fontWeight: 'bold',
+                        color: '#fff',
+                        formatter: p => p.percent > 0 ? `${p.percent}%` : ''
+                    }
                 },
                 data: chartData
             }
@@ -575,15 +612,36 @@ function renderEvolution(data, deptName) {
             : 'Evolucio anual per quartils';
     }
 
+
     const rows = Array.isArray(data) ? data : [];
     const years = rows.map(item => String(item.year ?? ''));
-    const quartiles = ['Q1', 'Q2', 'Q3', 'Q4', 'Sense Quartil'];
+    const quartiles = ['Sense Quartil', 'Q4', 'Q3', 'Q2', 'Q1'];
 
-    const yearTotals = rows.map(item =>
-        quartiles.reduce((sum, q) => sum + Number(item[q] || 0), 0)
-    );
+    // Precalcular los valores por año y quartil
+    const valuesByYear = rows.map(item => quartiles.map(q => Number(item[q] || 0)));
+    const yearTotals = valuesByYear.map(vals => vals.reduce((a, b) => a + b, 0));
 
-    const series = quartiles.map(q => ({
+    // Calcular los porcentajes ajustados para que sumen 100% por año
+    const percentByYear = valuesByYear.map((vals, yearIdx) => {
+        const total = yearTotals[yearIdx];
+        if (total === 0) return vals.map(_ => 0);
+        // Calcular porcentajes decimales
+        let raw = vals.map(v => v / total * 100);
+        // Redondear hacia abajo todos menos el último con valor > 0
+        let rounded = raw.map(Math.floor);
+        let sum = rounded.reduce((a, b) => a + b, 0);
+        // Buscar el último índice con valor > 0
+        let lastIdx = -1;
+        for (let i = rounded.length - 1; i >= 0; --i) {
+            if (vals[i] > 0) { lastIdx = i; break; }
+        }
+        if (lastIdx >= 0) {
+            rounded[lastIdx] += 100 - sum;
+        }
+        return rounded;
+    });
+
+    const series = quartiles.map((q, qIdx) => ({
         name: q,
         type: 'bar',
         stack: 'total',
@@ -595,21 +653,35 @@ function renderEvolution(data, deptName) {
             position: 'inside',
             formatter: p => {
                 if (p.value <= 0) return '';
-                const total = yearTotals[p.dataIndex] || 0;
-                const pct = total > 0 ? Math.round(p.value / total * 100) : 0;
+                // El índice de año es p.dataIndex (por reverse)
+                const yearIdx = p.dataIndex;
+                const pct = percentByYear[yearIdx][qIdx];
                 return `${pct}%`;
             },
             fontSize: 11,
             color: '#fff',
             lineHeight: 16
         },
-        data: rows.map(item => Number(item[q] || 0))
+        data: rows.map(item => Number(item[q] || 0)).reverse()
     }));
 
     chartQuartilesEvolution.setOption({
         tooltip: {
             trigger: 'axis',
-            axisPointer: { type: 'shadow' }
+            axisPointer: { type: 'shadow' },
+            formatter: function(params) {
+                // params: array of series for the hovered x value (year)
+                // Ordenar igual que el orden visual (de arriba a abajo)
+                const order = [ 'Q1', 'Q2', 'Q3', 'Q4', 'Sense Quartil' ];
+                const sorted = params.slice().sort((a, b) => order.indexOf(a.seriesName) - order.indexOf(b.seriesName));
+                let str = `<b>${params[0].axisValueLabel}</b><br/>`;
+                sorted.forEach(p => {
+                    if (p.value > 0) {
+                        str += `<span style='display:inline-block;margin-right:4px;border-radius:3px;width:10px;height:10px;background:${p.color}'></span> ${p.seriesName}: <b>${p.value}</b><br/>`;
+                    }
+                });
+                return str;
+            }
         },
         legend: {
             top: 0
@@ -859,6 +931,19 @@ async function cargarDatos() {
     }
 }
 
+function clearAllData() {
+    if (chartQuartiles) chartQuartiles.clear();
+    if (chartQuartilesEvolution) chartQuartilesEvolution.clear();
+    if (chartOpenAccess) chartOpenAccess.clear();
+    renderArticlesTable([]);
+    // Restaurar el título original del gráfico de evolución
+    const sectionTitle = document.getElementById('quartilesEvolutionTitle');
+    if (sectionTitle) {
+        sectionTitle.textContent = 'Evolucio anual per quartils';
+    }
+}
+window.clearAllData = clearAllData;
+
 document.addEventListener('click', (e) => {
     const btn = document.getElementById('departamentoDropdownBtn');
     const menu = document.getElementById('departamentoDropdownMenu');
@@ -1030,10 +1115,28 @@ async function carregarComparativaPiePerDept(dep) {
             tooltip: { trigger: 'item', formatter: p => `${p.name}: <b>${p.value}</b> (${p.percent}%)` },
             legend: { orient: 'horizontal', bottom: 0, textStyle: { fontSize: 10, color: '#596473' } },
             series: [{
-                name: 'Quartils', type: 'pie', radius: ['30%', '65%'], center: ['50%', '44%'],
+                name: 'Quartils',
+                type: 'pie',
+                radius: ['30%', '65%'],
+                center: ['50%', '44%'],
                 itemStyle: { borderRadius: 6, borderColor: '#fff', borderWidth: 2 },
-                label: { show: false },
-                emphasis: { label: { show: true, formatter: '{b}: {c}', fontSize: 12 } },
+                label: {
+                    show: true,
+                    position: 'inside',
+                    formatter: p => p.percent > 0 ? `${p.percent}%` : '',
+                    fontSize: 9,
+                    color: '#fff',
+                    fontWeight: 600
+                },
+                emphasis: {
+                    label: {
+                        show: true,
+                        fontSize: 11,
+                        fontWeight: 'bold',
+                        color: '#fff',
+                        formatter: p => p.percent > 0 ? `${p.percent}%` : ''
+                    }
+                },
                 data: chartData
             }]
         });
