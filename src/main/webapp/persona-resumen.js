@@ -13,10 +13,6 @@ let chartEvolucionPersonaDept = null;
 let chartCuartilesIngresos = null;
 let chartCuartilesPie = null;
 
-// Añadir estilo global para el cursor pointer en los chips de persona
-    const styleChipPersona = document.createElement('style');
-    styleChipPersona.innerHTML = `.chip-persona-clicable { cursor: pointer !important; }`;
-    document.head.appendChild(styleChipPersona);
 
 /**
  * Renderiza el gráfico de líneas doble: evolución investigador vs media departamento
@@ -254,10 +250,8 @@ function renderGraficoCuartilesIngresos(agrupadoPorPersona) {
             const uuidEscapado = p.uuid.replace(/'/g, "\\'");
             return `<span title="${p.nom}" 
             onclick="aplicarSeleccionPersona ({persona:'${nombreEscapado}',personaUuid:'${uuidEscapado}'})"                             
-            style="display:inline-block;background:rgba(0,0,0,0.07);border-radius:20px;padding:2px 10px;margin:2px;font-size:11px;color:${g.textColor};font-weight:600;cursor:default"
-            class="chip-persona-clicable"
-            onmouseover="this.style.background='${g.textColor}33'"
-            onmouseout="this.style.background='rgba(0,0,0,0.07)'">
+            style="color: ${g.textColor};"
+            class="chip-persona-clicable">
             ${abr}</span>`;
         }).join('');
         card.innerHTML = `
@@ -2083,11 +2077,9 @@ function renderGraficos(filas) {
                         return `<span
                             title="${p.nombre}"
                             onclick="aplicarSeleccionPersona ({persona:'${nombreEscapado}',personaUuid:'${uuidEscapado}'})"
-                            style="display:inline-block;background:rgba(0,0,0,0.07);border-radius:20px;padding:3px 11px;margin:2px;font-size:11px;color:${q.color};font-weight:600;cursor:pointer;transition:background 0.15s"
-                            class="chip-persona-clicable"
-                            onmouseover="this.style.background='${q.color}33'"
-                            onmouseout="this.style.background='rgba(0,0,0,0.07)'"
-                        >${abr}</span>`;
+                            style="color:${q.color}"
+                            class="chip-persona-clicable">
+                        ${abr}</span>`;
                     }).join('');
                     return `<div style="background:${q.bg};border:1.5px solid ${q.border};border-radius:14px;padding:12px;">
                         <div style="font-size:12px;font-weight:700;color:${q.color};margin-bottom:6px;">

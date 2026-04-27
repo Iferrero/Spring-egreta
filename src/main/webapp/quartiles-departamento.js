@@ -716,7 +716,15 @@ function renderArticlesTable(rows) {
     tbody.innerHTML = data.map(item => {
         const year = item.year ?? '-';
         const quartile = item.quartile ?? 'Sense Quartil';
-        const cita = item.cita ?? '-';
+        let cita = item.cita ?? '-';
+        // Si hay subtítulo y título, añadir ": subtítulo" después del título en la cita
+        if (cita && (item.subtitulo || item.subtitle)) {
+            // Buscar el título dentro de la cita (asumimos que es el inicio)
+            const titulo = item.titulo || item.title;
+            if (titulo && cita.startsWith(titulo) && !cita.includes(':')) {
+                cita = `${titulo}: ${(item.subtitulo || item.subtitle)}${cita.slice(titulo.length)}`;
+            }
+        }
         const oa = item.openAccess === true;
         const oaBadge = oa
             ? '<span class="inline-block ml-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700">OA</span>'

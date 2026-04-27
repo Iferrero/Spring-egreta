@@ -830,30 +830,33 @@ public class ResearchOutputJournalLinkService {
         List<Document> matchClauses = new ArrayList<>();
         matchClauses.add(new Document("workflow.step", "approved"));
 
+        // Filtro para solo artículos
+        matchClauses.add(new Document("type.term.ca_ES", "Article"));
+
         Document yearCriteria = buildPublicationYearCriteria(desde, hasta);
         if (yearCriteria != null) {
             matchClauses.add(yearCriteria);
         }
 
         matchClauses.add(new Document("$or", List.of(
-                new Document("contributors.person.uuid", new Document("$in", personUuids)),
-                new Document("contributors.externalPerson.uuid", new Document("$in", personUuids))
+            new Document("contributors.person.uuid", new Document("$in", personUuids)),
+            new Document("contributors.externalPerson.uuid", new Document("$in", personUuids))
         )));
 
         Document filter = new Document("$and", matchClauses);
         Document projection = new Document("uuid", 1).append("_id", 0);
 
         List<Document> rows = mongoTemplate
-                .getCollection(RESEARCHOUTPUTS_COLLECTION)
-                .find(filter)
-                .projection(projection)
-                .into(new ArrayList<>());
+            .getCollection(RESEARCHOUTPUTS_COLLECTION)
+            .find(filter)
+            .projection(projection)
+            .into(new ArrayList<>());
 
         return rows.stream()
-                .map(row -> row.getString("uuid"))
-                .filter(value -> value != null && !value.isBlank())
-                .distinct()
-                .toList();
+            .map(row -> row.getString("uuid"))
+            .filter(value -> value != null && !value.isBlank())
+            .distinct()
+            .toList();
     }
 
     /**
