@@ -24,15 +24,7 @@ function calcularEdad(fechaNacimiento) {
     }
     return edad;
 }
-// Asegura que el select de modo awards siempre dispara la recarga
-document.addEventListener('DOMContentLoaded', function() {
-    var select = document.getElementById('selectAwardsDept');
-    if (select) {
-        select.addEventListener('change', function() {
-            programarRefresco();
-        });
-    }
-});
+
 // Instancia global para el gráfico de evolución persona vs depto
 let chartEvolucionPersonaDept = null;
 // Instancia global para el gráfico de cuartiles de ingresos
@@ -319,7 +311,7 @@ function renderChipsPanel(containerId, selectId, items, getLabel, removeAttr, on
     const btnLabel = document.getElementById(labelId);
     btnLabel.textContent = items.length === 0 ? emptyText : 'Afegeix més...';
     if (onAfter) onAfter();
-    programarRefresco();
+    if (!_inicializando) programarRefresco();
 }
 
 function renderizarChipsDepartamentos() {
@@ -643,6 +635,8 @@ document.getElementById('tipusDropdownBtn').addEventListener('click', (e) => {
 let refrescoTimer = null;
 let currentLoadController = null;
 let currentLoadSeq = 0;
+/** Evita llamadas a cargarDatos durante la inicialización (carga de catálogos). */
+let _inicializando = true;
 
 const _requestCache = new Map();
 
@@ -1816,13 +1810,13 @@ function renderGraficos(filas) {
                     data = cached.data;
                     serieProyectos = cached.serieProyectos;
                 } else {
-                    const [resumenRes, serieProyectosRes] = await Promise.all([
+                    const [resumenRes, serieProyectos_] = await Promise.all([
                         fetch(apiUrl(`/awards/stats/persona-resumen?${params.toString()}`), { signal: controller.signal }),
-                        cargarSerieProyectosAnio()
+                        cargarSerieProyectosAnio(params, controller.signal)
                     ]);
                     if (!resumenRes.ok) throw new Error(`HTTP ${resumenRes.status}`);
                     data = await resumenRes.json();
-                    serieProyectos = await serieProyectosRes;
+                    serieProyectos = serieProyectos_;
                     _requestCache.set(ckey, { data, serieProyectos });
                 }
             }
@@ -2224,19 +2218,12 @@ function renderGraficos(filas) {
 
 /**
  * Recupera serie anual de proyectos/importes para gráfico superior.
+ * @param {URLSearchParams} params - Parámetros ya construidos por el llamador.
+ * @param {AbortSignal} [signal]
  * @returns {Promise<Array<{anio:number,importeTotal:number}>>}
  */
-async function cargarSerieProyectosAnio() {
-    const { desde, hasta, deptUuid, persona, modoAnio, categoria, tipus } = obtenerFiltrosActuales();
-    const params = new URLSearchParams({
-        desde: String(desde),
-        hasta: String(hasta),
-        modoAnio
-    });
-    appendFilterParams(params, { deptUuid, categoria, tipus });
-    if (persona) params.set('persona', persona);
-
-    const res = await fetch(apiUrl(`/awards/stats/proyectos-anio?${params.toString()}`));
+async function cargarSerieProyectosAnio(params, signal) {
+    const res = await fetch(apiUrl(`/awards/stats/proyectos-anio?${params.toString()}`), signal ? { signal } : {});
     if (!res.ok) {
         throw new Error(`HTTP ${res.status}`);
     }
@@ -2515,13 +2502,13 @@ async function cargarDatos() {
                 data = cached.data;
                 serieProyectos = cached.serieProyectos;
             } else {
-                const [resumenRes, serieProyectosRes] = await Promise.all([
+                const [resumenRes, serieProyectos_] = await Promise.all([
                     fetch(apiUrl(`/awards/stats/persona-resumen?${params.toString()}`), { signal: controller.signal }),
-                    cargarSerieProyectosAnio()
+                    cargarSerieProyectosAnio(params, controller.signal)
                 ]);
                 if (!resumenRes.ok) throw new Error(`HTTP ${resumenRes.status}`);
                 data = await resumenRes.json();
-                serieProyectos = await serieProyectosRes;
+                serieProyectos = serieProyectos_;
                 _requestCache.set(ckey, { data, serieProyectos });
             }
         }
@@ -2654,7 +2641,7 @@ function configurarSlider() {
 
     slider.noUiSlider.on('update', (values) => {
         valorRango.textContent = `${values[0]} - ${values[1]}`;
-        programarRefresco();
+        if (!_inicializando) programarRefresco();
     });
 }
 
@@ -2687,7 +2674,7 @@ async function init() {
     await cargarCategorias();
     await cargarTipus();
     await actualizarGraficoComparativaDepartamentos();
-    
+    _inicializando = false;  // A partir d'aquí, els chips i el slider disparen refresc
     cargarDatos();
 }
 
