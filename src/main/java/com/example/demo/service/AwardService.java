@@ -244,25 +244,40 @@ public class AwardService {
                 .append("name.firstName", 1).append("name.lastName", 1))
             .into(new ArrayList<>());
 
-        // Build name map and qualifying UUID set
-        Map<String, String> names = new HashMap<>();
-        Set<String> qualifyingUuids = new HashSet<>();
-        for (Document p : qualifyingPersons) {
-            String uuid = p.getString("uuid");
-            Document name = p.get("name", Document.class);
-            if (uuid != null) {
-                qualifyingUuids.add(uuid);
-                if (name != null) {
-                    names.put(uuid, name.getString("firstName") + " " + name.getString("lastName"));
+                // Build name map, birthdate map y qualifying UUID set
+                Map<String, String> names = new HashMap<>();
+                Map<String, Object> birthdates = new HashMap<>();
+                Set<String> qualifyingUuids = new HashSet<>();
+                for (Document p : qualifyingPersons) {
+                        String uuid = p.getString("uuid");
+                        Document name = p.get("name", Document.class);
+                        if (uuid != null) {
+                                qualifyingUuids.add(uuid);
+                                if (name != null) {
+                                        names.put(uuid, name.getString("firstName") + " " + name.getString("lastName"));
+                                }
+                                // Buscar birthdate en los rows (ya viene del pipeline)
+                                // Si no está, dejarlo null
+                        }
                 }
-            }
-        }
 
-        // Filter rows and enrich with names
-        return rows.stream()
-            .filter(r -> qualifyingUuids.contains(r.getString("PersonaUuid")))
-            .peek(r -> r.put("Persona", names.getOrDefault(r.getString("PersonaUuid"), "")))
-            .collect(Collectors.toList());
+                // Mapear birthdate por PersonaUuid desde rows
+                for (Document r : rows) {
+                        String uuid = r.getString("PersonaUuid");
+                        if (uuid != null && r.containsKey("birthdate")) {
+                                birthdates.put(uuid, r.get("birthdate"));
+                        }
+                }
+
+                // Filter rows y enriquecer con nombre y birthdate
+                return rows.stream()
+                        .filter(r -> qualifyingUuids.contains(r.getString("PersonaUuid")))
+                        .peek(r -> {
+                                String uuid = r.getString("PersonaUuid");
+                                r.put("Persona", names.getOrDefault(uuid, ""));
+                                r.put("birthdate", birthdates.getOrDefault(uuid, null));
+                        })
+                        .collect(Collectors.toList());
     }
 
     /*

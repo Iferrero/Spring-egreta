@@ -1,3 +1,29 @@
+/**
+ * Calcula la edad a partir de una fecha de nacimiento en formato ISO (YYYY-MM-DD) o Date.
+ * @param {string|Date} fechaNacimiento
+ * @returns {number|null} Edad en años o null si no se puede calcular
+ */
+function calcularEdad(fechaNacimiento) {
+    if (!fechaNacimiento) return null;
+    let fecha;
+    if (typeof fechaNacimiento === 'string') {
+        // Acepta formatos YYYY-MM-DD, YYYY/MM/DD, o ISO
+        const clean = fechaNacimiento.replace(/\//g, '-');
+        fecha = new Date(clean);
+        if (isNaN(fecha)) return null;
+    } else if (fechaNacimiento instanceof Date) {
+        fecha = fechaNacimiento;
+    } else {
+        return null;
+    }
+    const hoy = new Date();
+    let edad = hoy.getFullYear() - fecha.getFullYear();
+    const m = hoy.getMonth() - fecha.getMonth();
+    if (m < 0 || (m === 0 && hoy.getDate() < fecha.getDate())) {
+        edad--;
+    }
+    return edad;
+}
 // Asegura que el select de modo awards siempre dispara la recarga
 document.addEventListener('DOMContentLoaded', function() {
     var select = document.getElementById('selectAwardsDept');
@@ -88,9 +114,10 @@ function renderGraficoEvolucionPersonaDept(rows) {
  */
 function calcularQuartilesGrups(agrupadoPorPersona) {
     const personas = Array.from(agrupadoPorPersona.values()).map(p => ({
-        nom: p.nombre ?? p.nom ?? '',
-        uuid: p.uuid,
-        importPonderat: p.importePonderado ?? 0
+        nom: p.nombre ?? p.nom ?? p.persona ?? '',
+        uuid: p.uuid ?? p.personaUuid ?? '',
+        importPonderat: p.importePonderado ?? 0,
+        edad: p.edad ?? null
     }));
     const sorted = personas.slice().sort((a, b) => b.importPonderat - a.importPonderat);
     const n = sorted.length;
@@ -242,17 +269,13 @@ function renderGraficoCuartilesIngresos(agrupadoPorPersona) {
         
                         
         const chips = g.items.map(p => {
-            const parts = (p.nom).trim().split(/\s+/);
-            const abr = parts.length >= 2
-                ? parts[0][0] + '. ' + parts.slice(1).join(' ')
-                : parts[0];
             const nombreEscapado = p.nom.replace(/'/g, "\\'");
             const uuidEscapado = p.uuid.replace(/'/g, "\\'");
             return `<span title="${p.nom}" 
             onclick="aplicarSeleccionPersona ({persona:'${nombreEscapado}',personaUuid:'${uuidEscapado}'})"                             
             style="color: ${g.textColor};"
             class="chip-persona-clicable">
-            ${abr}</span>`;
+            ${p.nom}</span>`;
         }).join('');
         card.innerHTML = `
             <div style="font-size:12px;font-weight:700;color:${g.textColor};margin-bottom:6px">
@@ -1574,12 +1597,12 @@ function renderGraficoProjectesPerAny(filas, porAnioExt, aniosExt, seriesCatsExt
         ],
         series: [
             ...seriesCategorias,
-            {
+            /*{
                 name: 'Total projectes', type: 'line', yAxisIndex: 0,
                 data: proyectos, smooth: 0.2,
                 lineStyle: { color: UAB_COLORS.ocas },
                 itemStyle: { color: UAB_COLORS.ocas }, symbolSize: 6
-            },
+            },*/
             {
                 name: 'Import ponderat (€)', type: 'line', yAxisIndex: 1,
                 data: importesPonderados, smooth: 0.25,
@@ -1695,18 +1718,25 @@ function renderGraficos(filas) {
     for (const f of filasParaTop) {
         const nombre = f['Persona'] ?? f.persona ?? 'N/D';
         const uuid = f['PersonaUuid'] ?? f.personaUuid ?? '';
+        const fechaNac = f['Fecha_Nacimiento'] ?? f['fecha_nacimiento'] ?? f['nacimiento'] ?? f['birthdate'] ?? null;
+        const edad = calcularEdad(fechaNac);
         const key = `${uuid}||${nombre}`;
         if (!agrupadoPorPersonaTop.has(key)) {
             agrupadoPorPersonaTop.set(key, {
                 persona: nombre,
                 personaUuid: uuid,
-                importePonderado: 0
+                importePonderado: 0,
+                edad: edad
             });
         }
         const entry = agrupadoPorPersonaTop.get(key);
         // Usar directamente el campo del JSON
         entry.importePonderado += Number(f['Importe_Ponderado (€)'] ?? 0);
+        // Si no tenía edad, la añade si la fila la tiene
+        if (entry.edad == null && edad != null) entry.edad = edad;
     }
+    // Guardar el agrupado de personas del departamento seleccionado en window para análisis IA
+    window.agrupadoPorPersona = agrupadoPorPersonaTop;
     // Toggle para awards gestionados vs miembros
     let modoAwardsDept = 'miembros'; // 'miembros' o 'gestionados'
 
@@ -2071,7 +2101,6 @@ function renderGraficos(filas) {
                 quadrantDefs.map(q => {
                     const persones = cuadrantes[q.key] ?? [];
                     const chips = persones.map(p => {
-                        const abr = abreviarNom(p.nombre);
                         const nombreEscapado = p.nombre.replace(/'/g, "\\'");
                         const uuidEscapado = p.uuid.replace(/'/g, "\\'");
                         return `<span
@@ -2079,7 +2108,7 @@ function renderGraficos(filas) {
                             onclick="aplicarSeleccionPersona ({persona:'${nombreEscapado}',personaUuid:'${uuidEscapado}'})"
                             style="color:${q.color}"
                             class="chip-persona-clicable">
-                        ${abr}</span>`;
+                        ${p.nombre}</span>`;
                     }).join('');
                     return `<div style="background:${q.bg};border:1.5px solid ${q.border};border-radius:14px;padding:12px;">
                         <div style="font-size:12px;font-weight:700;color:${q.color};margin-bottom:6px;">
@@ -2749,5 +2778,110 @@ document.addEventListener('DOMContentLoaded', function() {
     // Llamar al cargar
     updateDeptTabVisibility();
 });
+
+function extraerDatosDeGraficos() {
+    let contextoGráficos = "";
+
+    // 1. Extraer datos del gráfico de Evolución (Persona vs Depto)
+    if (chartEvolucionPersonaDept) {
+        const options = chartEvolucionPersonaDept.getOption();
+        const años = options.xAxis[0].data;
+        const valoresDepto = options.series.find(s => s.name.includes('Dept'))?.data || [];
+        contextoGráficos += `\n- Tendencia Temporal: En los años ${años.join(', ')}, la media del departamento ha sido [${valoresDepto.join(', ')}] €.`;
+    }
+
+    // 2. Extraer datos del gráfico de Cuartiles (Distribución)
+    if (chartCuartilesPie) {
+        const options = chartCuartilesPie.getOption();
+        const distribucion = options.series[0].data.map(d => `${d.name}: ${d.value} personas`).join(', ');
+        contextoGráficos += `\n- Distribución Actual: ${distribucion}.`;
+    }
+
+    return contextoGráficos;
+}
+
+function extraerDatosPareto() {
+    // Buscamos el gráfico de Pareto (asumiendo que se llama chartPareto)
+    if (!chartPareto) return "Datos de Pareto no disponibles.";
+
+    const options = chartPareto.getOption();
+    const nombres = options.xAxis[0].data; // Investigadores ordenados de mayor a menor
+    const acumulado = options.series.find(s => s.type === 'line').data; // La curva de Pareto
+    
+    // Encontramos el "Punto 80": ¿Cuánta gente suma el 80% de los ingresos?
+    const indice80 = acumulado.findIndex(val => val >= 80);
+    const numPersonas80 = indice80 + 1;
+    const porcentajePersonas = ((numPersonas80 / nombres.length) * 100).toFixed(1);
+
+    return `Análisis de Pareto: El 80% de los ingresos del departamento es generado por el ${porcentajePersonas}% de los investigadores (${numPersonas80} personas de un total de ${nombres.length}).`;
+}
+
+
+async function analizarDepartamentoConVLLM() {
+    const VLLM_CONFIG = {
+        model: "Qwen/Qwen2.5-Coder-32B-Instruct-AWQ",
+        apiBase: "http://ymir.uab.cat:8014/v1/chat/completions",
+        apiKey: "EMPTY" // vLLM no suele requerir key si es interno
+    };
+    // Obtenemos los datos que ya corregimos antes
+    const datosRaw = window.agrupadoPorPersona || window.dataMap;
+    if (!datosRaw) return;
+
+    // Obtener grupos de cuartil
+    const grupos = calcularQuartilesGrups(datosRaw);
+    // Construir tabla de investigadores con edad y grupo
+    let tablaInvestigadores = 'Investigadores del departamento (nombre, edad, grupo):\n';
+    for (const grupo of grupos) {
+        for (const persona of grupo.items) {
+            const nombre = persona.nom || persona.nombre || persona.persona || 'N/D';
+            // Buscar edad en todos los campos posibles y mostrar si es número
+            let edad = persona.edad ?? persona.Edad ?? null;
+            if (typeof edad !== 'number' || isNaN(edad)) edad = 'N/D';
+            tablaInvestigadores += `- ${nombre} (edad: ${edad}) → ${grupo.label}\n`;
+        }
+    }
+
+    const datosDeGraficos = extraerDatosDeGraficos();
+    const datosPareto = extraerDatosPareto();
+
+    const prompt = `
+        Analiza el departamento basándote en estos gráficos y datos:
+        Analiza la estructura de este departamento universitario con estos indicadores:
+    1. ${datosPareto}
+    2. ${datosDeGraficos}
+
+        ${tablaInvestigadores}
+        Datos adicionales: Total de ${datosRaw.size} investigadores.
+
+        Pregunta: ¿Cómo describirías la salud financiera y competitiva del departamento viendo la evolución de las medias y la distribución de los grupos?
+        Evolución en los próximos años: ¿Qué riesgos o fortalezas ves en esta evolución? ¿Qué estrategias recomendarías para mejorar la posición del departamento, especialmente para los investigadores de los grupos más bajos?
+        Responde de forma ejecutiva.
+    `;
+    console.log("Prompt para vLLM:", prompt);
+    try {
+        const response = await fetch(VLLM_CONFIG.apiBase, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${VLLM_CONFIG.apiKey}`
+            },
+            body: JSON.stringify({
+                model: VLLM_CONFIG.model,
+                messages: [
+                    { role: "system", content: "Eres un analista de datos experto en investigación universitaria." },
+                    { role: "user", content: prompt }
+                ],
+                temperature: 0.3, // Temperatura baja para que no invente datos
+                max_tokens: 5000
+            })
+        });
+
+        const data = await response.json();
+        return data.choices[0].message.content;
+    } catch (error) {
+        console.error("Error llamando a vLLM:", error);
+        return "Error al generar l'anàlisi de la IA.";
+    }
+}
 
 init();

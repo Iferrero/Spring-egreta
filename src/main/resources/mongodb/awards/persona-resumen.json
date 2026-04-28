@@ -218,7 +218,21 @@
                     "$sum": "$importe_ponderado"
                 }
             }
-        }, {
+        },
+        {
+            "$lookup": {
+                "from": "Persons",
+                "localField": "_id.personUuid",
+                "foreignField": "uuid",
+                "as": "personaInfo"
+            }
+        },
+        {
+            "$addFields": {
+                "birthdate": { "$arrayElemAt": ["$personaInfo.dateOfBirth", 0] }
+            }
+        },
+        {
             "$project": {
                 "_id": 0,
                 "PersonaUuid": "$_id.personUuid",
@@ -231,9 +245,11 @@
                 "Importe_IP (€)": "$importe_ip",
                 "Importe_CoIP (€)": "$importe_coip",
                 "Importe_Miembro (€)": "$importe_miembro",
-                "Importe_Ponderado (€)": "$importe_ponderado_total"
+                "Importe_Ponderado (€)": "$importe_ponderado_total",
+                "birthdate": 1
             }
-        }, {
+        },
+        {
             "$sort": {
                 "Año": -1,
                 "Importe_Ponderado (€)": -1
