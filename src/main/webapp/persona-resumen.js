@@ -332,12 +332,22 @@ function toggleDepartamentoSeleccionado(uuid) {
         // Solo permitir uno: sustituir el anterior
         departamentosSeleccionados = [uuid];
         renderizarChipsDepartamentos();
+        // Limpiar el análisis IA si existe el div
+        const aiDeptOutput = document.getElementById('ai-dept-output');
+        if (aiDeptOutput) {
+            aiDeptOutput.textContent = "Prem el botó per obtenir l'anàlisi automàtica del departament.";
+        }
     }
 }
 
 function quitarDepartamentoSeleccionado(uuid) {
     departamentosSeleccionados = departamentosSeleccionados.filter(d => d !== uuid);
     renderizarChipsDepartamentos();
+    // Limpiar el análisis IA si existe el div
+    const aiDeptOutput = document.getElementById('ai-dept-output');
+    if (aiDeptOutput) {
+        aiDeptOutput.textContent = "Prem el botó per obtenir l'anàlisi automàtica del departament.";
+    }
 }
 
 function abrirDropdownDepartamentos() {
@@ -2805,8 +2815,14 @@ function extraerDatosPareto() {
 
 
 async function analizarDepartamentoConVLLM() {
+    // Mostrar mensaje de carga en el div de salida IA
+    const aiDeptOutput = document.getElementById('ai-dept-output');
+    if (aiDeptOutput) {
+        aiDeptOutput.textContent = "Generant informe automàtic...";
+    }
+
     const VLLM_CONFIG = {
-        model: "Qwen/Qwen2.5-Coder-32B-Instruct-AWQ",
+        model: "openai/gpt-oss-20b",
         apiBase: "http://ymir.uab.cat:8014/v1/chat/completions",
         apiKey: "EMPTY" // vLLM no suele requerir key si es interno
     };
@@ -2832,19 +2848,49 @@ async function analizarDepartamentoConVLLM() {
     const datosPareto = extraerDatosPareto();
 
     const prompt = `
-        Analiza el departamento basándote en estos gráficos y datos:
-        Analiza la estructura de este departamento universitario con estos indicadores:
-    1. ${datosPareto}
-    2. ${datosDeGraficos}
+        Realitza una anàlisi acadèmica exhaustiva de l' estructura i rendiment d' un departament universitari a partir de les següents dades quantitatives i qualitatives.
+L' anàlisi ha d' adoptar un enfocament propi d' avaluació institucional en educació superior, integrant criteris de productivitat científica, sostenibilitat organitzativa i competitivitat en captació de recursos.
+Dades del departament:
+•	Mida total de l'equip investigador: ${datosRaw.size}
+•	Anàlisi de Pareto: ${datosPareto} 
+•	Distribució de rendiment: ${datosDeGraficos}
+•	Llistat d'investigadors amb edat i categoria de rendiment:
+     ${tablaInvestigadores}
+________________________________________
+   Instruccions d' anàlisi:
+1.	Estructura de productivitat
+o	Avalua el grau de concentració de la producció científica i captació de recursos.
+o	Determina si el model respon a una distribució eficient o presenta riscos estructurals.
+2.	Anàlisi de capital humà
+o	Examina la distribució per edats i la seva relació amb el rendiment.
+o	Identifica possibles problemes de relleu generacional, acumulació de sèniority o manca de desenvolupament de talent jove.
+3.	Avaluació de la sostenibilitat
+o	Analitza la viabilitat del model actual a mitjà i llarg termini (3–10 anys).
+o	Considera riscos derivats de dependència, envelliment o baixa productivitat estructural.
+4.	Competitivitat acadèmica
+o	Valora la capacitat del departament per competir en convocatòries nacionals i internacionals.
+o	Avalua l'equilibri entre excel·lència (top performers) i base productiva.
+5.	Diagnòstic organitzatiu
+o	Identifica ineficiències internes (desigualtat de càrregues, baixa contribució, falta d'incentius).
+o	Analitza si existeix una estructura de "doble velocitat" o segmentació interna.
+6.	Projecció evolutiva
+o	Descriu escenaris probables (optimista, tendencial, negatiu).
+o	Explica com evolucionarà la productivitat mitjana del departament.
+7.	Recomanacions estratègiques
+o	Propó mesures basades en evidència per a:
+	millorar la productivitat del grup de baix rendiment,
+	escalar el grup mitjà,
+	assegurar la successió del lideratge científic,
+	optimitzar l' assignació de recursos i la governança.
+________________________________________
+Format de resposta:
+•	Estil acadèmica (tipus informe o avaluació ANECA/ERC).
+•	Argumentació basada en les dades proporcionades.
+•	Ús de conceptes com: concentració de productivitat, massa crítica, eficiència organitzativa, pipeline de talent, sostenibilitat científica.
+•	Conclusió sintètica amb diagnòstic global del departament.
 
-        ${tablaInvestigadores}
-        Datos adicionales: Total de ${datosRaw.size} investigadores.
-
-        Pregunta: ¿Cómo describirías la salud financiera y competitiva del departamento viendo la evolución de las medias y la distribución de los grupos?
-        Evolución en los próximos años: ¿Qué riesgos o fortalezas ves en esta evolución? ¿Qué estrategias recomendarías para mejorar la posición del departamento, especialmente para los investigadores de los grupos más bajos?
-        Responde de forma ejecutiva.
     `;
-    console.log("Prompt para vLLM:", prompt);
+    //console.log("Prompt para vLLM:", prompt);
     try {
         const response = await fetch(VLLM_CONFIG.apiBase, {
             method: 'POST',
@@ -2855,16 +2901,68 @@ async function analizarDepartamentoConVLLM() {
             body: JSON.stringify({
                 model: VLLM_CONFIG.model,
                 messages: [
-                    { role: "system", content: "Eres un analista de datos experto en investigación universitaria." },
+                    { role: "system", content: "Ets un analista de dades expert en investigació universitària." },
                     { role: "user", content: prompt }
                 ],
-                temperature: 0.3, // Temperatura baja para que no invente datos
-                max_tokens: 5000
+                temperature: 0.3, 
+                max_tokens: 15000
             })
         });
 
+        // Check if the HTTP response is actually okay (e.g., 200 OK)
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
         const data = await response.json();
-        return data.choices[0].message.content;
+        const result = data.choices[0].message.content;
+
+        // Corrected syntax for updating the UI
+        const outputElement = document.getElementById('ai-dept-output');
+        if (outputElement) {
+            // 1. Creamos el componente zero-md
+            const zeroMd = document.createElement('zero-md');
+
+            // 2. Añadimos CSS para reducir el espaciado vertical
+            const style = document.createElement('style');
+            style.textContent = `
+                zero-md, zero-md * {
+                    line-height: 1.3 !important;
+                    font-size: 13px !important;
+                }
+                zero-md h1, zero-md h2, zero-md h3, zero-md h4, zero-md h5, zero-md h6 {
+                    margin-top: 0.7em !important;
+                    margin-bottom: 0.3em !important;
+                    font-size: 1.1em !important;
+                }
+                zero-md p {
+                    margin-top: 0.2em !important;
+                    margin-bottom: 0.2em !important;
+                }
+                zero-md ul, zero-md ol {
+                    margin-top: 0.2em !important;
+                    margin-bottom: 0.2em !important;
+                }
+                zero-md li {
+                    margin-top: 0.1em !important;
+                    margin-bottom: 0.1em !important;
+                }
+            `;
+            zeroMd.appendChild(style);
+
+            // 3. Creamos el script interno donde inyectamos el texto de la IA
+            const script = document.createElement('script');
+            script.type = 'text/markdown';
+            script.text = result; // Aquí va el contenido de tu variable
+
+            // 4. Limpiamos el contenedor y añadimos el componente
+            zeroMd.appendChild(script);
+            outputElement.innerHTML = '';
+            outputElement.appendChild(zeroMd);
+        }
+
+        return result;
+
     } catch (error) {
         console.error("Error llamando a vLLM:", error);
         return "Error al generar l'anàlisi de la IA.";
