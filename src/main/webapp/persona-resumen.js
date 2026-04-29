@@ -1,4 +1,73 @@
 /**
+ * Renderiza un gráfico de pastel con la proporción de PDI que ha generado ingresos y la que no.
+ * @param {Array<object>} filas - Filas de datos de personas (resumen).
+ */
+function renderGraficoPdiIngresos(filas) {
+    // Contar PDI con ingresos (>0) y sin ingresos (==0)
+    let conIngresos = 0;
+    let sinIngresos = 0;
+    (filas || []).forEach(f => {
+        const importe = Number(f['Importe_Ponderado (€)'] ?? f.importePonderado ?? 0);
+        if (importe > 0) conIngresos++;
+        else sinIngresos++;
+    });
+
+    // Crear o reutilizar el contenedor
+    let container = document.getElementById('chartPdiIngresos');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'chartPdiIngresos';
+        container.style = 'width: 100%; max-width: 340px; height: 260px; margin: 0 auto 18px auto;';
+        // Insertar antes del grid de cuartiles si existe
+        const grid = document.getElementById('cuartilesPersonasGrid');
+        if (grid && grid.parentNode) {
+            grid.parentNode.insertBefore(container, grid);
+        } else {
+            document.body.appendChild(container);
+        }
+    }
+
+    // Inicializar ECharts
+    const chart = echarts.init(container);
+    chart.setOption({
+        title: {
+            text: 'PDI segons generació d\'ingressos',
+            left: 'center',
+            top: 10,
+            textStyle: { fontSize: 15, fontWeight: 700 }
+        },
+        tooltip: {
+            trigger: 'item',
+            formatter: p => `<b>${p.name}</b>: <b>${p.value}</b> (${p.percent.toFixed(1)}%)`
+        },
+        legend: {
+            orient: 'horizontal',
+            bottom: 0,
+            left: 'center',
+            textStyle: { fontSize: 11 },
+            itemWidth: 12, itemHeight: 12
+        },
+        series: [{
+            name: 'PDI',
+            type: 'pie',
+            radius: ['40%', '70%'],
+            center: ['50%', '50%'],
+            avoidLabelOverlap: true,
+            label: {
+                show: true,
+                formatter: p => `${p.name}: ${p.value}`,
+                fontSize: 13,
+                fontWeight: 600
+            },
+            labelLine: { show: true },
+            data: [
+                { value: conIngresos, name: 'Amb ingressos', itemStyle: { color: UAB_COLORS.campus } },
+                { value: sinIngresos, name: 'Sense ingressos', itemStyle: { color: UAB_COLORS.ocas } }
+            ]
+        }]
+    });
+}
+/**
  * Calcula la edad a partir de una fecha de nacimiento en formato ISO (YYYY-MM-DD) o Date.
  * @param {string|Date} fechaNacimiento
  * @returns {number|null} Edad en años o null si no se puede calcular
@@ -167,8 +236,7 @@ function renderGraficoCuartilesIngresos(agrupadoPorPersona) {
             chartCuartilesPie.setOption({
                 tooltip: {
                     trigger: 'item',
-                    formatter: params =>
-                        `<b>${params.name}</b><br>Persones: <b>${params.value}</b><br>${params.percent.toFixed(1)}%`
+                    formatter: p => `<b>${p.name}</b><br>Persones: <b>${p.value}</b><br>${p.percent.toFixed(1)}%`
                 },
                 legend: {
                     orient: 'horizontal',
@@ -186,7 +254,7 @@ function renderGraficoCuartilesIngresos(agrupadoPorPersona) {
                     avoidLabelOverlap: true,
                     label: {
                         show: true,
-                        formatter: params => params.value > 0 ? `${params.value}` : '',
+                        formatter: p => p.value > 0 ? `${p.value}` : '',
                         fontSize: 13,
                         fontWeight: 700
                     },
@@ -1272,8 +1340,8 @@ function agruparPorAnio(filas) {
         const coip = Number(f['Proyectos_CoIP'] || 0);
         const miem = Number(f['Proyectos_Miembro'] || 0);
         const total = ip + coip + miem;
-        porAnio[anio].importeTotal += Number(f['Importe_IP (€)'] || 0) + Number(f['Importe_CoIP (€)'] || 0) + Number(f['Importe_Miembro (€)'] || 0);
-        porAnio[anio].importePonderado += Number(f['Importe_Ponderado (€)'] || 0);
+        porAnio[anio].importeTotal += Number(f['Importe_IP (€)'] ?? 0) + Number(f['Importe_CoIP (€)'] ?? 0) + Number(f['Importe_Miembro (€)'] ?? 0);
+        porAnio[anio].importePonderado += Number(f['Importe_Ponderado (€)'] ?? 0);
         porAnio[anio].ipcoip += ip + coip;
         porAnio[anio].coip += coip;
         porAnio[anio].miembro += miem;
@@ -1537,12 +1605,23 @@ function renderGraficoProjectesPerAny(filas, porAnioExt, aniosExt, seriesCatsExt
             anios.flatMap(a => Object.keys(porAnio[a].categorias))
         )].sort();
         const PALETTE_CATS = [
-            UAB_COLORS.campus, UAB_COLORS.ocas, UAB_COLORS.cala,
-            UAB_COLORS.tauro, UAB_COLORS.collserola,
-            '#00a34f', '#fab84c', '#006b7a', '#8a99a8', UAB_COLORS.pissarra
+            UAB_COLORS.campus,      // #008037 verd campus
+            UAB_COLORS.ocas,        // #F88C12 ocas taronja
+            UAB_COLORS.cala,        // #004D5E cala blau-verd
+            UAB_COLORS.tauro,       // #596473 taure gris
+            UAB_COLORS.collserola,  // #004d21 verd collserola
+            '#00a34f',              // verd campus clar
+            '#fab84c',              // ocas clar
+            '#006b7a',              // cala clar
+            '#8a99a8',              // taure clar
+            UAB_COLORS.pissarra     // #2a3037 pissarra fosc
         ];
+        // Asignar color por nombre de categoría (hash estable) para que cada clase
+        // mantenga sempre el mateix color independentment del filtrat activo.
+        // Excepcions fijes: pública → campus (verd), privada → ocas (taronja).
         const CAT_COLOR_FIXED = {
-            'pública': UAB_COLORS.campus, 'publica': UAB_COLORS.campus,
+            'pública': UAB_COLORS.campus,
+            'publica': UAB_COLORS.campus,
             'privada': UAB_COLORS.ocas,
         };
         function catColor(name) {
@@ -1687,8 +1766,8 @@ function renderGraficos(filas) {
         UAB_COLORS.pissarra     // #2a3037 pissarra fosc
     ];
     // Asignar color por nombre de categoría (hash estable) para que cada clase
-    // mantenga siempre el mismo color independientemente del filtrado activo.
-    // Excepciones fijas: pública → campus (verd), privada → ocas (taronja).
+    // mantenga sempre el mateix color independentment del filtrat activo.
+    // Excepcions fijes: pública → campus (verd), privada → ocas (taronja).
     const CAT_COLOR_FIXED = {
         'pública': UAB_COLORS.campus,
         'publica': UAB_COLORS.campus,
@@ -1793,8 +1872,10 @@ function renderGraficos(filas) {
             if (modoAwardsDept === 'gestionados' && deptUuid) {
                 
                 // Awards gestionados por el departamento
-                const params = new URLSearchParams({ gestionadosPorDept: 'gestionados' });
+                const params = new URLSearchParams({ gestionadosPorDept: 'managed' });
                 appendFilterParams(params, { deptUuid });
+                if (persona) params.set('persona', persona);
+                appendFilterParams(params, { categoria, tipus });
                 const ckey = _cacheKey(params, modoAwardsDept);
                 if (_requestCache.has(ckey)) {
                     data = _requestCache.get(ckey).data;
@@ -1961,8 +2042,8 @@ function renderGraficos(filas) {
             const parts = nombre.split(/\s+/);
             if (parts.length <= 1) return parts[0] ?? '';
             const apellidos = parts.slice(-2).join(' ');
-            const iniciales = parts.slice(0, -2).map(p => p[0] + '.').join('');
-            return (iniciales ? iniciales + ' ' : '') + apellidos;
+            const inicials = parts.slice(0, -2).map(p => p[0] + '.').join('');
+            return (inicials ? inicials + ' ' : '') + apellidos;
         };
 
         chartLiderazgo.setOption({
@@ -2814,6 +2895,146 @@ function extraerDatosPareto() {
 }
 
 
+// ---------------------------------------------------------------------------
+// Construeix el prompt per a l'analisi IA del departament
+// ---------------------------------------------------------------------------
+function buildPromptDepartament(datosRaw, tablaInvestigadores) {
+    const datosDeGraficos = extraerDatosDeGraficos();
+    const datosPareto = extraerDatosPareto();
+    return `
+Realitza una analisi academica exhaustiva de l'estructura i rendiment d'un departament universitari a partir de les seguents dades quantitatives i qualitatives.
+L'analisi ha d'adoptar un enfocament propi d'avaluacio institucional en educacio superior, integrant criteris de productivitat cientifica, sostenibilitat organitzativa i competitivitat en captacio de recursos.
+
+Dades del departament:
+- Mida total de l'equip investigador: ${datosRaw.size}
+- Analisi de Pareto: ${datosPareto}
+- Distribucio de rendiment: ${datosDeGraficos}
+- Llistat d'investigadors amb edat i categoria de rendiment:
+  ${tablaInvestigadores}
+________________________________________
+Instruccions d'analisi:
+1. Estructura de productivitat
+   - Avalua el grau de concentracio de la produccio cientifica i captacio de recursos.
+   - Determina si el model respon a una distribucio eficient o presenta riscos estructurals.
+2. Analisi de capital huma
+   - Examina la distribucio per edats i la seva relacio amb el rendiment.
+   - Identifica possibles problemes de relleu generacional, acumulacio de seniority o manca de desenvolupament de talent jove.
+3. Avaluacio de la sostenibilitat
+   - Analitza la viabilitat del model actual a mitja i llarg termini (3-10 anys).
+   - Considera riscos derivats de dependencia, envelliment o baixa productivitat estructural.
+4. Competitivitat academica
+   - Valora la capacitat del departament per competir en convocatories nacionals i internacionals.
+   - Avalua l'equilibri entre excellencia (top performers) i base productiva.
+5. Diagnostic organitzatiu
+   - Identifica ineficiencies internes (desigualtat de carregues, baixa contribucio, falta d'incentius).
+   - Analitza si existeix una estructura de "doble velocitat" o segmentacio interna.
+6. Projeccio evolutiva
+   - Descriu escenaris probables (optimista, tendencial, negatiu).
+   - Explica com evolucionara la productivitat mitjana del departament.
+7. Recomanacions estrategiques
+   - Propo mesures basades en evidencia per a:
+     millorar la productivitat del grup de baix rendiment,
+     escalar el grup mitja,
+     assegurar la successio del lideratge cientific,
+     optimitzar l'assignacio de recursos i la governanca.
+________________________________________
+Format de resposta:
+- Estil academica (tipus informe o avaluacio ANECA/ERC).
+- Argumentacio basada en les dades proporcionades.
+- Us de conceptes com: concentracio de productivitat, massa critica, eficiencia organitzativa, pipeline de talent, sostenibilitat cientifica.
+- Conclusio sintetica amb diagnostic global del departament.
+    `;
+}
+
+// ---------------------------------------------------------------------------
+// Mostra el prompt en una finestra flotant (modal)
+// ---------------------------------------------------------------------------
+function mostrarPromptModal() {
+    const datosRaw = window.agrupadoPorPersona || window.dataMap;
+    if (!datosRaw) {
+        alert("Encara no hi ha dades carregades. Selecciona un departament primer.");
+        return;
+    }
+
+    const grupos = calcularQuartilesGrups(datosRaw);
+    let tablaInvestigadores = 'Investigadors del departament (nom, edat, grup):\n';
+    for (const grupo of grupos) {
+        for (const persona of grupo.items) {
+            const nombre = persona.nom || persona.nombre || persona.persona || 'N/D';
+            let edad = persona.edad ?? persona.Edad ?? null;
+            if (typeof edad !== 'number' || isNaN(edad)) edad = 'N/D';
+            tablaInvestigadores += `- ${nombre} (edat: ${edad}) -> ${grupo.label}\n`;
+        }
+    }
+
+    const prompt = buildPromptDepartament(datosRaw, tablaInvestigadores);
+
+    let modal = document.getElementById('promptModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'promptModal';
+        modal.style.cssText = [
+            'position:fixed', 'inset:0', 'z-index:9999',
+            'background:rgba(15,23,42,0.55)', 'backdrop-filter:blur(2px)',
+            'display:flex', 'align-items:center', 'justify-content:center',
+            'padding:1rem'
+        ].join(';');
+        modal.innerHTML = `
+            <div style="background:#fff;border-radius:1rem;box-shadow:0 8px 40px rgba(0,0,0,0.18);width:100%;max-width:760px;max-height:85vh;display:flex;flex-direction:column;overflow:hidden;">
+                <div style="padding:0.85rem 1.1rem;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;background:#f8fafc;">
+                    <span style="font-size:0.8rem;font-weight:700;color:#4338ca;display:flex;align-items:center;gap:0.4rem;">
+                        <i class="fa-regular fa-message"></i> Prompt enviat al model IA
+                    </span>
+                    <div style="display:flex;gap:0.5rem;">
+                        <button id="promptModalCopyBtn" title="Copiar al portapapers"
+                            style="font-size:0.72rem;font-weight:600;padding:0.3rem 0.8rem;border:1px solid #c7d2fe;border-radius:0.5rem;background:#eef2ff;color:#4338ca;cursor:pointer;display:flex;align-items:center;gap:0.3rem;">
+                            <i class="fa-regular fa-copy"></i> Copiar
+                        </button>
+                        <button id="promptModalCloseBtn" title="Tancar"
+                            style="font-size:0.72rem;font-weight:600;padding:0.3rem 0.8rem;border:1px solid #e2e8f0;border-radius:0.5rem;background:#f1f5f9;color:#64748b;cursor:pointer;display:flex;align-items:center;gap:0.3rem;">
+                            <i class="fa-solid fa-xmark"></i> Tancar
+                        </button>
+                    </div>
+                </div>
+                <div style="flex:1;overflow-y:auto;padding:1rem;">
+                    <pre id="promptModalContent" style="font-family:'Fira Mono','Consolas',monospace;font-size:0.72rem;line-height:1.6;white-space:pre-wrap;word-break:break-word;color:#334155;margin:0;background:#f8fafc;border:1px solid #e2e8f0;border-radius:0.5rem;padding:0.9rem;"></pre>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) modal.style.display = 'none';
+        });
+        modal.querySelector('#promptModalCloseBtn').addEventListener('click', () => {
+            modal.style.display = 'none';
+        });
+        modal.querySelector('#promptModalCopyBtn').addEventListener('click', async () => {
+            const text = document.getElementById('promptModalContent').textContent;
+            try {
+                await navigator.clipboard.writeText(text);
+                const btn = modal.querySelector('#promptModalCopyBtn');
+                btn.innerHTML = '<i class="fa-solid fa-check"></i> Copiat!';
+                btn.style.background = '#dcfce7';
+                btn.style.borderColor = '#86efac';
+                btn.style.color = '#15803d';
+                setTimeout(() => {
+                    btn.innerHTML = '<i class="fa-regular fa-copy"></i> Copiar';
+                    btn.style.background = '#eef2ff';
+                    btn.style.borderColor = '#c7d2fe';
+                    btn.style.color = '#4338ca';
+                }, 2000);
+            } catch(err) {
+                alert("No s'ha pogut copiar al portapapers.");
+            }
+        });
+    }
+
+    document.getElementById('promptModalContent').textContent = prompt;
+    modal.style.display = 'flex';
+}
+
+
 async function analizarDepartamentoConVLLM() {
     // Mostrar mensaje de carga en el div de salida IA
     const aiDeptOutput = document.getElementById('ai-dept-output');
@@ -2844,52 +3065,7 @@ async function analizarDepartamentoConVLLM() {
         }
     }
 
-    const datosDeGraficos = extraerDatosDeGraficos();
-    const datosPareto = extraerDatosPareto();
-
-    const prompt = `
-        Realitza una anàlisi acadèmica exhaustiva de l' estructura i rendiment d' un departament universitari a partir de les següents dades quantitatives i qualitatives.
-L' anàlisi ha d' adoptar un enfocament propi d' avaluació institucional en educació superior, integrant criteris de productivitat científica, sostenibilitat organitzativa i competitivitat en captació de recursos.
-Dades del departament:
-•	Mida total de l'equip investigador: ${datosRaw.size}
-•	Anàlisi de Pareto: ${datosPareto} 
-•	Distribució de rendiment: ${datosDeGraficos}
-•	Llistat d'investigadors amb edat i categoria de rendiment:
-     ${tablaInvestigadores}
-________________________________________
-   Instruccions d' anàlisi:
-1.	Estructura de productivitat
-o	Avalua el grau de concentració de la producció científica i captació de recursos.
-o	Determina si el model respon a una distribució eficient o presenta riscos estructurals.
-2.	Anàlisi de capital humà
-o	Examina la distribució per edats i la seva relació amb el rendiment.
-o	Identifica possibles problemes de relleu generacional, acumulació de sèniority o manca de desenvolupament de talent jove.
-3.	Avaluació de la sostenibilitat
-o	Analitza la viabilitat del model actual a mitjà i llarg termini (3–10 anys).
-o	Considera riscos derivats de dependència, envelliment o baixa productivitat estructural.
-4.	Competitivitat acadèmica
-o	Valora la capacitat del departament per competir en convocatòries nacionals i internacionals.
-o	Avalua l'equilibri entre excel·lència (top performers) i base productiva.
-5.	Diagnòstic organitzatiu
-o	Identifica ineficiències internes (desigualtat de càrregues, baixa contribució, falta d'incentius).
-o	Analitza si existeix una estructura de "doble velocitat" o segmentació interna.
-6.	Projecció evolutiva
-o	Descriu escenaris probables (optimista, tendencial, negatiu).
-o	Explica com evolucionarà la productivitat mitjana del departament.
-7.	Recomanacions estratègiques
-o	Propó mesures basades en evidència per a:
-	millorar la productivitat del grup de baix rendiment,
-	escalar el grup mitjà,
-	assegurar la successió del lideratge científic,
-	optimitzar l' assignació de recursos i la governança.
-________________________________________
-Format de resposta:
-•	Estil acadèmica (tipus informe o avaluació ANECA/ERC).
-•	Argumentació basada en les dades proporcionades.
-•	Ús de conceptes com: concentració de productivitat, massa crítica, eficiència organitzativa, pipeline de talent, sostenibilitat científica.
-•	Conclusió sintètica amb diagnòstic global del departament.
-
-    `;
+    const prompt = buildPromptDepartament(datosRaw, tablaInvestigadores);
     //console.log("Prompt para vLLM:", prompt);
     try {
         const response = await fetch(VLLM_CONFIG.apiBase, {

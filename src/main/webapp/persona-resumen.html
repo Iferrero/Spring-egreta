@@ -252,9 +252,14 @@
             <section id="seccionAnalisisIADept" class="bg-white border border-indigo-200 rounded-2xl shadow-sm overflow-hidden mt-6">
                 <div class="p-4 border-b border-indigo-100 flex items-center justify-between">
                     <h2 class="text-sm font-bold text-indigo-700">Anàlisi automàtica del departament (IA)</h2>
-                    <button id="btnAnalizarDeptIA" type="button" class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-indigo-600 border border-indigo-700 rounded-lg hover:bg-indigo-700 transition" onclick="analizarDepartamentoConVLLM()">
-                        <i class="fa-solid fa-robot"></i> Analitzar amb IA
-                    </button>
+                    <div class="flex flex-row gap-2">
+                        <button id="btnAnalizarDeptIA" type="button" class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-indigo-600 border border-indigo-700 rounded-lg hover:bg-indigo-700 transition" onclick="analizarDepartamentoConVLLM()">
+                            <i class="fa-solid fa-robot"></i> Analitzar amb IA
+                        </button>
+                        <button id="btnVeurePrompt" type="button" class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-indigo-600 border border-indigo-700 rounded-lg hover:bg-indigo-700 transition" onclick="mostrarPromptModal()">
+                            <i class="fa-regular fa-message"></i> Veure prompt
+                        </button>
+                    </div>
                 </div>
                 <div class="p-4">
                     <div id="ai-dept-output" class="whitespace-pre-line text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-lg p-3 min-h-[80px]">Prem el botó per obtenir l'anàlisi automàtica del departament.</div>
