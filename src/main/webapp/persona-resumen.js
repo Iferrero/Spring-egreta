@@ -770,6 +770,11 @@ let modoTablaResumenActual = 'awardDate';
 // Variable global para la tabla de evolución persona vs departamento
 let tablaEvolucionPersonaDept = null;
 
+// Datos anuales agregados del departamento para el prompt IA
+let aniosDeptoGlobal = [];
+let importesDeptoGlobal = [];
+let proyectosDeptoGlobal = [];
+
 
 const UAB_COLORS = {
     campus: '#008037',
@@ -1728,6 +1733,13 @@ function renderGraficos(filas) {
     const proyectos = anios.map(a => porAnio[a].proyectos);
     const proyectosIp = anios.map(a => porAnio[a].ipcoip);
     const proyectosMiembro = anios.map(a => porAnio[a].miembro);
+
+    // Guardar los datos globales para el prompt IA si los datos tienen más de un año
+    if (anios.length > 1) {
+        aniosDeptoGlobal = anios;
+        importesDeptoGlobal = importes;
+        proyectosDeptoGlobal = proyectos;
+    }
 
     chartImporteAnio = echarts.init(document.getElementById('chartImporteAnio'));
     chartImporteAnio.setOption({
@@ -2883,19 +2895,25 @@ document.addEventListener('DOMContentLoaded', function() {
 function extraerDatosDeGraficos() {
     let contextoGráficos = "";
 
-    // 1. Extraer datos del gráfico de Evolución (Persona vs Depto)
+    // 1. Evolución anual de proyectos y dinero (usar siempre los datos globales del departamento)
+    if (aniosDeptoGlobal.length && importesDeptoGlobal.length && proyectosDeptoGlobal.length) {
+        const evolucion = aniosDeptoGlobal.map((anio, i) => `${anio}: ${proyectosDeptoGlobal[i]} proyectos, ${formatearNumero(importesDeptoGlobal[i])} €`).join('; ');
+        contextoGráficos += `\n- Evolució anual d’ajudes: ${evolucion}.`;
+    }
+
+    // 2. Extraer datos del gráfico de Evolución (Persona vs Depto)
     if (chartEvolucionPersonaDept) {
         const options = chartEvolucionPersonaDept.getOption();
         const años = options.xAxis[0].data;
         const valoresDepto = options.series.find(s => s.name.includes('Dept'))?.data || [];
-        contextoGráficos += `\n- Tendencia Temporal: En los años ${años.join(', ')}, la media del departamento ha sido [${valoresDepto.join(', ')}] €.`;
+        contextoGráficos += `\n- Tendència temporal (mitjana departament): Anys ${años.join(', ')}, valors [${valoresDepto.join(', ')}] €.`;
     }
 
-    // 2. Extraer datos del gráfico de Cuartiles (Distribución)
+    // 3. Extraer datos del gráfico de Cuartiles (Distribución)
     if (chartCuartilesPie) {
         const options = chartCuartilesPie.getOption();
-        const distribucion = options.series[0].data.map(d => `${d.name}: ${d.value} personas`).join(', ');
-        contextoGráficos += `\n- Distribución Actual: ${distribucion}.`;
+        const distribucion = options.series[0].data.map(d => `${d.name}: ${d.value} persones`).join(', ');
+        contextoGráficos += `\n- Distribució actual: ${distribucion}.`;
     }
 
     return contextoGráficos;
