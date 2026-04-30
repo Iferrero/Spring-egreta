@@ -2001,15 +2001,19 @@ function renderGraficos(filas) {
         }
         renderGraficoCuartilesIngresos(agrupadoPorPersonaRanking);
 
-        // Calcular medianas para los cuadrantes
+        // Calcular medianas solo sobre personas con awards (excluir los 0/null)
         function mediana(arr) {
             if (!arr.length) return 0;
             const s = [...arr].sort((a, b) => a - b);
             const m = Math.floor(s.length / 2);
             return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
         }
-        const ponderadoArr = datosLiderazgo.map(d => d.ponderado);
-        const ayudasArr = datosLiderazgo.map(d => d.ayudas);
+
+        const datosConAwards = datosLiderazgo.filter(d =>
+            (d.ponderado != null && d.ponderado > 0) || (d.ayudas != null && d.ayudas > 0)
+        );
+        const ponderadoArr = datosConAwards.map(d => d.ponderado);
+        const ayudasArr = datosConAwards.map(d => d.ayudas);
         const medianaPonderado = mediana(ponderadoArr);
         const medianaAyudas = mediana(ayudasArr);
 
@@ -2917,7 +2921,7 @@ function extraerDatosPareto() {
 // ---------------------------------------------------------------------------
 // Construeix el prompt per a l'analisi IA del departament
 // ---------------------------------------------------------------------------
-function buildPromptDepartament(datosRaw, tablaInvestigadores) {
+function buildPromptDepartament(datosRaw, tablaInvestigadores,nombreDepartamento) {
     const datosDeGraficos = extraerDatosDeGraficos();
     const datosPareto = extraerDatosPareto();
     return `
@@ -2925,6 +2929,7 @@ Realitza una analisi academica exhaustiva de l'estructura i rendiment d'un depar
 L'analisi ha d'adoptar un enfocament propi d'avaluacio institucional en educacio superior, integrant criteris de productivitat cientifica, sostenibilitat organitzativa i competitivitat en captacio de recursos.
 
 Dades del departament:
+- Nom del departament: ${nombreDepartamento}
 - Mida total de l'equip investigador: ${datosRaw.size}
 - Analisi de Pareto: ${datosPareto}
 - Distribucio de rendiment: ${datosDeGraficos}
@@ -2958,10 +2963,12 @@ Instruccions d'analisi:
      optimitzar l'assignacio de recursos i la governanca.
 ________________________________________
 Format de resposta:
-- Estil academica (tipus informe o avaluacio ANECA/ERC).
-- Argumentacio basada en les dades proporcionades.
-- Us de conceptes com: concentracio de productivitat, massa critica, eficiencia organitzativa, pipeline de talent, sostenibilitat cientifica.
-- Conclusio sintetica amb diagnostic global del departament.
+1. Genera primer un apartat anomenat "### 🧠 Raonament i Càlculs" on analitzis en veu alta i pas a pas les dades (ex: si el 80% dels fons els porta el 10% del personal, què implica això estratègicament?).
+2. Després d'aquest raonament, genera l'informe final amb:
+   - Estil acadèmic (tipus informe o avaluació ANECA/ERC).
+   - Argumentació basada en les dades proporcionades.
+   - Ús de conceptes com: concentració de productivitat, massa crítica, eficiència organitzativa, pipeline de talent, sostenibilitat científica.
+   - Conclusió sintètica amb diagnòstic global del departament.
     `;
 }
 
@@ -2986,7 +2993,16 @@ function mostrarPromptModal() {
         }
     }
 
-    const prompt = buildPromptDepartament(datosRaw, tablaInvestigadores);
+    let nombreDepartamento = "Departament desconegut";
+    if (window.departamentosSeleccionados && window.departamentosSeleccionados.length > 0) {
+        const uuidDept = window.departamentosSeleccionados[0];
+        const deptCatalogo = window.departamentosCatalogo.find(d => d.uuid === uuidDept);
+        if (deptCatalogo) {
+            nombreDepartamento = deptCatalogo.nombre;
+        }
+    }
+
+    const prompt = buildPromptDepartament(datosRaw, tablaInvestigadores, nombreDepartamento);
 
     let modal = document.getElementById('promptModal');
     if (!modal) {
@@ -3055,29 +3071,40 @@ function mostrarPromptModal() {
 
 
 async function analizarDepartamentoConVLLM() {
-    // Mostrar mensaje de carga en el div de salida IA
     const aiDeptOutput = document.getElementById('ai-dept-output');
+    
+    // Variables para el cronómetro
+    let tiempoInicio = performance.now();
+    let intervaloTimer;
+
     if (aiDeptOutput) {
-        aiDeptOutput.textContent = "Generant informe automàtic...";
+        aiDeptOutput.textContent = "Generant informe automàtic... (0.0s)";
+        
+        // Actualizar el UI cada 100ms
+        intervaloTimer = setInterval(() => {
+            const tiempoActual = performance.now();
+            const segundosTranscurridos = ((tiempoActual - tiempoInicio) / 1000).toFixed(1);
+            aiDeptOutput.textContent = `Generant informe automàtic... (${segundosTranscurridos}s)`;
+        }, 100);
     }
 
     const VLLM_CONFIG = {
         model: "openai/gpt-oss-20b",
         apiBase: "http://ymir.uab.cat:8014/v1/chat/completions",
-        apiKey: "EMPTY" // vLLM no suele requerir key si es interno
+        apiKey: "EMPTY"
     };
-    // Obtenemos los datos que ya corregimos antes
-    const datosRaw = window.agrupadoPorPersona || window.dataMap;
-    if (!datosRaw) return;
 
-    // Obtener grupos de cuartil
+    const datosRaw = window.agrupadoPorPersona || window.dataMap;
+    if (!datosRaw) {
+        clearInterval(intervaloTimer); // Detener timer si no hay datos
+        return;
+    }
+
     const grupos = calcularQuartilesGrups(datosRaw);
-    // Construir tabla de investigadores con edad y grupo
     let tablaInvestigadores = 'Investigadores del departamento (nombre, edad, grupo):\n';
     for (const grupo of grupos) {
         for (const persona of grupo.items) {
             const nombre = persona.nom || persona.nombre || persona.persona || 'N/D';
-            // Buscar edad en todos los campos posibles y mostrar si es número
             let edad = persona.edad ?? persona.Edad ?? null;
             if (typeof edad !== 'number' || isNaN(edad)) edad = 'N/D';
             tablaInvestigadores += `- ${nombre} (edad: ${edad}) → ${grupo.label}\n`;
@@ -3085,7 +3112,7 @@ async function analizarDepartamentoConVLLM() {
     }
 
     const prompt = buildPromptDepartament(datosRaw, tablaInvestigadores);
-    //console.log("Prompt para vLLM:", prompt);
+
     try {
         const response = await fetch(VLLM_CONFIG.apiBase, {
             method: 'POST',
@@ -3096,7 +3123,7 @@ async function analizarDepartamentoConVLLM() {
             body: JSON.stringify({
                 model: VLLM_CONFIG.model,
                 messages: [
-                    { role: "system", content: "Ets un analista de dades expert en investigació universitària." },
+                    { role: "system", content: "Ets un analista de dades expert en investigació universitària. Pensa sempre pas a pas i estructura el teu raonament logicament abans d'emetre una conclusió final." },
                     { role: "user", content: prompt }
                 ],
                 temperature: 0.3, 
@@ -3104,54 +3131,70 @@ async function analizarDepartamentoConVLLM() {
             })
         });
 
-        // Check if the HTTP response is actually okay (e.g., 200 OK)
+        // ¡Petición terminada! Detenemos el cronómetro
+        clearInterval(intervaloTimer);
+
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
 
         const data = await response.json();
         const result = data.choices[0].message.content;
+        
+        // Calculamos el tiempo total exacto
+        const tiempoTotal = ((performance.now() - tiempoInicio) / 1000).toFixed(2);
 
-        // Corrected syntax for updating the UI
+        // Agregamos un pequeño pie de página al resultado indicando el tiempo
+        const resultadoConTiempo = result + `\n\n---\n*⏱️ Informe generat en ${tiempoTotal} segons.*`;
+
         const outputElement = document.getElementById('ai-dept-output');
         if (outputElement) {
-            // 1. Creamos el componente zero-md
             const zeroMd = document.createElement('zero-md');
 
-            // 2. Añadimos CSS para reducir el espaciado vertical
-            const style = document.createElement('style');
-            style.textContent = `
-                zero-md, zero-md * {
-                    line-height: 1.3 !important;
-                    font-size: 13px !important;
-                }
-                zero-md h1, zero-md h2, zero-md h3, zero-md h4, zero-md h5, zero-md h6 {
-                    margin-top: 0.7em !important;
-                    margin-bottom: 0.3em !important;
-                    font-size: 1.1em !important;
-                }
-                zero-md p {
-                    margin-top: 0.2em !important;
-                    margin-bottom: 0.2em !important;
-                }
-                zero-md ul, zero-md ol {
-                    margin-top: 0.2em !important;
-                    margin-bottom: 0.2em !important;
-                }
-                zero-md li {
-                    margin-top: 0.1em !important;
-                    margin-bottom: 0.1em !important;
-                }
-            `;
-            zeroMd.appendChild(style);
+            const template = document.createElement('template');
+            template.setAttribute('data-merge', 'append');
+            template.innerHTML = `
+                <style>
+                    :host { font-size: 13px; line-height: 1.4; }
+                    h1, h2, h3, h4, h5, h6 {
+                        font-size: 1.05em !important;
+                        margin: 0.5em 0 0.2em 0 !important;
+                    }
+                    p { 
+                        margin: 0 0 0.5em 0 !important; 
+                    }
+                    ul, ol { 
+                        margin: 0 0 0.5em 0 !important; 
+                        padding-left: 1.4em !important; 
+                    }
+                    li { 
+                        margin: 0.2em 0 !important; /* Un pelín más de aire entre los elementos de la lista */
+                    }
+                    hr { margin: 0.4em 0 !important; }
+                    li p {
+                        margin-top: 0 !important;
+                        margin-bottom: 0.1em !important; /* Casi pegado a la sub-lista */
+                    }
 
-            // 3. Creamos el script interno donde inyectamos el texto de la IA
+                    /* 2. Asegurar que la sub-lista no añada margen por arriba */
+                    li ul, li ol {
+                        margin-top: 0 !important;
+                        margin-bottom: 0.4em !important;
+                    }
+
+                    /* 3. Juntar más los elementos de la sub-lista */
+                    li li {
+                        margin: 0.1em 0 !important;
+                    }
+                </style>
+            `;
+            zeroMd.appendChild(template);
+
             const script = document.createElement('script');
             script.type = 'text/markdown';
-            script.text = result; // Aquí va el contenido de tu variable
-
-            // 4. Limpiamos el contenedor y añadimos el componente
+            script.text = resultadoConTiempo; // Usamos el resultado con el tiempo inyectado
             zeroMd.appendChild(script);
+
             outputElement.innerHTML = '';
             outputElement.appendChild(zeroMd);
         }
@@ -3159,7 +3202,11 @@ async function analizarDepartamentoConVLLM() {
         return result;
 
     } catch (error) {
+        clearInterval(intervaloTimer); // Asegurarnos de detenerlo en caso de error
         console.error("Error llamando a vLLM:", error);
+        if (aiDeptOutput) {
+            aiDeptOutput.textContent = "Error al generar l'anàlisi de la IA.";
+        }
         return "Error al generar l'anàlisi de la IA.";
     }
 }

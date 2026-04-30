@@ -11,6 +11,7 @@ import org.springframework.util.StreamUtils;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -463,29 +464,44 @@ public class AwardService {
      * with staffType = "Académico", endDate null or in the future, and
      * employmentType NOT matching "Asociado" (case-insensitive).
      */
-    private Set<String> getAcademicActivePersonUuids() {
-        List<Document> pipeline = List.of(
-            new Document("$match", new Document("staffOrganizationAssociations",
+        private Set<String> getAcademicActivePersonUuids() {
+        String today = new SimpleDateFormat("yyyy-MM-dd").format(new Date());
+
+        // Paso 1: académicos activos (cualquier tipo)
+        Document matchAcademic = new Document("$match", new Document("staffOrganizationAssociations",
                 new Document("$elemMatch",
-                    new Document("staffType.term.ca_ES", "Acadèmic")
+                new Document("staffType.term.ca_ES", "Acadèmic")
                         .append("$or", List.of(
-                            new Document("period.endDate", null),
-                            new Document("period.endDate", new Document("$gte", new Date()))
+                        new Document("period.endDate", null),
+                        new Document("period.endDate", new Document("$gte", today))
                         ))
-                        .append("employmentType.term.ca_ES",
-                            new Document("$not", new Document("$regex", "ocia|ormació|Tècnic|Estudiant").append("$options", "i")))
                 )
-            )),
-            new Document("$project", new Document("_id", 0).append("uuid", 1))
-        );
+        ));
+
+        // Paso 2: excluir los que tengan alguna asociación activa con tipo excluido
+        Document excludeAssociats = new Document("$match", new Document("staffOrganizationAssociations",
+                new Document("$not", new Document("$elemMatch",
+                new Document("$or", List.of(
+                        new Document("period.endDate", null),
+                        new Document("period.endDate", new Document("$gte", today))
+                ))
+                .append("employmentType.term.ca_ES",
+                        new Document("$regex", "ssociat|ormació|Tècnic|Estudiant").append("$options", "i"))
+                ))
+        ));
+
+        Document project = new Document("$project", new Document("_id", 0).append("uuid", 1));
+
+        List<Document> pipeline = List.of(matchAcademic, excludeAssociats, project);
+
         return mongoTemplate.getCollection("Persons")
-            .aggregate(pipeline)
-            .into(new ArrayList<>())
-            .stream()
-            .map(d -> d.getString("uuid"))
-            .filter(Objects::nonNull)
-            .collect(Collectors.toSet());
-    }
+                .aggregate(pipeline)
+                .into(new ArrayList<>())
+                .stream()
+                .map(d -> d.getString("uuid"))
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        }
 
     /**
      * Fetches firstName + lastName for the given person UUIDs in a single query.
@@ -509,61 +525,69 @@ public class AwardService {
         return names;
     }
 
-    private Set<String> getPersonUuidsByFilters(String deptUuid,
-                                            String persona) {
+    private Set<String> getPersonUuidsByFilters(String deptUuid, String persona) {
 
-            List<Document> personsPipeline = new ArrayList<>();
+        String today = new SimpleDateFormat("yyyy-MM-dd").format(new Date());
+        List<Document> personsPipeline = new ArrayList<>();
 
-            if (deptUuid != null && !deptUuid.isBlank()) {
-                // Solo contratos vigentes en el departamento
+        if (deptUuid != null && !deptUuid.isBlank()) {
                 personsPipeline.add(
-                        new Document("$match",
-                                new Document("staffOrganizationAssociations",
-                                        new Document("$elemMatch",
-                                                new Document("organization.uuid", deptUuid)
-                                                        .append("$or", List.of(
-                                                                new Document("period.endDate", null),
-                                                                new Document("period.endDate", new Document("$gte", new Date()))
-                                                        ))
-                                        )
-                                )
-                        )
-                );
-            }
-
-            if (persona != null && !persona.isBlank()) {
-
-                personsPipeline.add(
-                        new Document("$match",
-                                new Document("$or", List.of(
-
-                                        new Document("name.firstName",
-                                                new Document("$regex", persona)
-                                                        .append("$options", "i")),
-
-                                        new Document("name.lastName",
-                                                new Document("$regex", persona)
-                                                        .append("$options", "i"))
+                new Document("$match",
+                        new Document("staffOrganizationAssociations",
+                        new Document("$elemMatch",
+                                new Document("organization.uuid", deptUuid)
+                                .append("$or", List.of(
+                                        new Document("period.endDate", null),
+                                        new Document("period.endDate", new Document("$gte", today))
                                 ))
-                ));
-            }
+                        )
+                        )
+                )
+                );
+        }
 
-            personsPipeline.add(
-                    new Document("$project",
-                            new Document("_id", 0)
-                                    .append("uuid", 1))
-            );
+        // Excluir associats, formació, tècnics y estudiants activos
+        personsPipeline.add(
+                new Document("$match",
+                new Document("staffOrganizationAssociations",
+                        new Document("$not", new Document("$elemMatch",
+                        new Document("$or", List.of(
+                                new Document("period.endDate", null),
+                                new Document("period.endDate", new Document("$gte", today))
+                        ))
+                        .append("employmentType.term.ca_ES",
+                                new Document("$regex", "ssociat|ormació|Tècnic|Estudiant")
+                                .append("$options", "i"))
+                        ))
+                )
+                )
+        );
 
-            List<Document> persons = mongoTemplate
-                    .getCollection("Persons")
-                    .aggregate(personsPipeline)
-                    .into(new ArrayList<>());
+        if (persona != null && !persona.isBlank()) {
+                personsPipeline.add(
+                new Document("$match",
+                        new Document("$or", List.of(
+                        new Document("name.firstName",
+                                new Document("$regex", persona).append("$options", "i")),
+                        new Document("name.lastName",
+                                new Document("$regex", persona).append("$options", "i"))
+                        ))
+                )
+                );
+        }
 
-            return persons.stream()
-                    .map(p -> p.getString("uuid"))
-                    .filter(Objects::nonNull)
-                    .collect(Collectors.toSet());
-        }               
+        personsPipeline.add(
+                new Document("$project", new Document("_id", 0).append("uuid", 1))
+        );
+
+        return mongoTemplate.getCollection("Persons")
+                .aggregate(personsPipeline)
+                .into(new ArrayList<>())
+                .stream()
+                .map(p -> p.getString("uuid"))
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        }              
 
     /*
     ===============================
