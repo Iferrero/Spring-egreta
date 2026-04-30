@@ -269,7 +269,7 @@ function renderGraficoCuartilesIngresos(agrupadoPorPersona) {
         }
     }
 
-    // 4b. Gráfico de barras horizontales: total ingresos por grupo (solo grupos con datos)
+    // 4b. Gráfico de barras horizontales: número de personas por grupo (altura) y dinero ponderado como etiqueta interna
     // Invertimos para que ECharts (que renderiza de abajo a arriba) muestre Top 5% arriba
     const grupsPoblatsInv = [...grupsPoblats].reverse();
     chartCuartilesIngresos = echarts.init(container);
@@ -288,7 +288,7 @@ function renderGraficoCuartilesIngresos(agrupadoPorPersona) {
             },
             xAxis: {
                 type: 'value',
-                axisLabel: { formatter: v => formatearCompactoEje(v) + ' €', fontSize: 10 },
+                axisLabel: { formatter: v => v + 'p', fontSize: 10 },
                 splitLine: { lineStyle: { type: 'dashed', color: '#eee' } }
             },
             yAxis: {
@@ -300,7 +300,8 @@ function renderGraficoCuartilesIngresos(agrupadoPorPersona) {
                 type: 'bar',
                 barMaxWidth: 44,
                 data: grupsPoblatsInv.map(g => ({
-                    value: g.items.reduce((s, p) => s + p.importPonderat, 0),
+                    value: g.items.length,
+                    totalImporte: g.items.reduce((s, p) => s + p.importPonderat, 0),
                     itemStyle: { color: g.color, borderRadius: [0, 6, 6, 0] }
                 })),
                 label: {
@@ -308,12 +309,14 @@ function renderGraficoCuartilesIngresos(agrupadoPorPersona) {
                     position: 'insideRight',
                     formatter: params => {
                         const g = grupsPoblatsInv[params.dataIndex];
-                        return `${g.items.length}p`;
+                        const total = g.items.reduce((s, p) => s + p.importPonderat, 0);
+                        return `${g.items.length}p\n${formatearNumero(total)} €`;
                     },
                     fontSize: 11,
                     fontWeight: 700,
                     color: '#fff',
-                    textBorderColor: 'transparent'
+                    textBorderColor: 'transparent',
+                    lineHeight: 15
                 }
             }]
         });
@@ -1974,7 +1977,7 @@ function renderGraficos(filas) {
             entry.desglose['Membre'].n += miembro;
             entry.desglose['Membre'].suma += Number(f['Importe_Miembro (€)'] ?? 0);
         }
-        const datosLiderazgo = Array.from(agrupadoLiderazgo.values()).filter(d => d.ayudas > 0 || d.ponderado > 0);
+        const datosLiderazgo = Array.from(agrupadoLiderazgo.values());
 
         // --- Ranking Percentil ---
         // Generar agrupadoPorPersona para ranking
@@ -2017,13 +2020,15 @@ function renderGraficos(filas) {
         const COLOR_ESPECIALISTES = '#ff3b30';  // Rojo fuerte
         const COLOR_FORMIGUES = '#ffb800';      // Amarillo fuerte
         const COLOR_ALTRES = '#7c3aed';         // Morado fuerte
+        const COLOR_SENSE_AWARDS = '#b0b0b0';   // Gris
 
-        // Separar puntos por cuadrante
+        // Separar puntos por cuadrante, añadiendo "Sense awards"
         const seriesCuadrantes = [
-            { name: 'Líders',       color: COLOR_LIDERS,       items: [] },
-            { name: 'Especialistes',color: COLOR_ESPECIALISTES, items: [] },
-            { name: 'Dinamitzadors',    color: COLOR_FORMIGUES,    items: [] },
-            { name: 'Altres',       color: COLOR_ALTRES,       items: [] }
+            { name: 'Líders',         color: COLOR_LIDERS,         items: [] },
+            { name: 'Especialistes',  color: COLOR_ESPECIALISTES,  items: [] },
+            { name: 'Dinamitzadors',  color: COLOR_FORMIGUES,      items: [] },
+            { name: 'Altres',         color: COLOR_ALTRES,         items: [] },
+            { name: 'Sense ajuts',   color: COLOR_SENSE_AWARDS,   items: [] }
         ];
         for (const d of datosLiderazgo) {
             const item = {
@@ -2031,10 +2036,17 @@ function renderGraficos(filas) {
                 nombre: d.nombre, uuid: d.uuid,
                 ponderado: d.ponderado, ayudas: d.ayudas, desglose: d.desglose
             };
-            if (d.ponderado >= medianaPonderado && d.ayudas >= medianaAyudas)      seriesCuadrantes[0].items.push(item);
-            else if (d.ponderado < medianaPonderado && d.ayudas >= medianaAyudas)  seriesCuadrantes[1].items.push(item);
-            else if (d.ponderado >= medianaPonderado && d.ayudas < medianaAyudas)  seriesCuadrantes[2].items.push(item);
-            else                                                                    seriesCuadrantes[3].items.push(item);
+            if ((d.ponderado === 0 || d.ponderado == null) && (d.ayudas === 0 || d.ayudas == null)) {
+                seriesCuadrantes[4].items.push(item); // Sense awards
+            } else if (d.ponderado >= medianaPonderado && d.ayudas >= medianaAyudas) {
+                seriesCuadrantes[0].items.push(item);
+            } else if (d.ponderado < medianaPonderado && d.ayudas >= medianaAyudas) {
+                seriesCuadrantes[1].items.push(item);
+            } else if (d.ponderado >= medianaPonderado && d.ayudas < medianaAyudas) {
+                seriesCuadrantes[2].items.push(item);
+            } else {
+                seriesCuadrantes[3].items.push(item);
+            }
         }
 
         const labelFormatter = function(params) {
@@ -2074,6 +2086,9 @@ function renderGraficos(filas) {
                 trigger: 'item',
                 formatter: function(params) {
                     const d = params.data;
+                    if (d.ponderado === 0 && d.ayudas === 0) {
+                        return `<b>${d.nombre}</b><br><i>Sense ajuts</i>`;
+                    }
                     let html = `<b>${d.nombre}</b><br>Ingresos ponderats: <b>${formatearNumero(d.ponderado)} €</b><br>Ajuts: <b>${d.ayudas}</b>`;
                     if (d.desglose) {
                         html += '<br><u>Quantitats per rol:</u>';
@@ -2149,12 +2164,15 @@ function renderGraficos(filas) {
             LIDERS: [],
             ESPECIALISTES: [],
             FORMIGUES: [],
-            ALTRES: []
+            ALTRES: [],
+            SENSE_AWARDS: []
         };
         for (const d of datosLiderazgo) {
             const x = d.ponderado;
             const y = d.ayudas;
-            if (x >= medianaPonderado && y >= medianaAyudas) {
+            if ((x === 0 || x == null) && (y === 0 || y == null)) {
+                cuadrantes.SENSE_AWARDS.push(d);
+            } else if (x >= medianaPonderado && y >= medianaAyudas) {
                 cuadrantes.LIDERS.push(d);
             } else if (x < medianaPonderado && y >= medianaAyudas) {
                 cuadrantes.ESPECIALISTES.push(d);
@@ -2171,7 +2189,8 @@ function renderGraficos(filas) {
                 { key: 'ESPECIALISTES', label: 'Especialistes d\'Alt Impacte', color: COLOR_ESPECIALISTES, bg: COLOR_ESPECIALISTES + '18', border: COLOR_ESPECIALISTES + '66' },
                 { key: 'LIDERS',        label: 'Líders Consolidats',           color: COLOR_LIDERS,        bg: COLOR_LIDERS        + '18', border: COLOR_LIDERS        + '66' },
                 { key: 'ALTRES',        label: 'Perfils en Creixement',        color: COLOR_ALTRES,        bg: COLOR_ALTRES        + '18', border: COLOR_ALTRES        + '66' },
-                { key: 'FORMIGUES',     label: 'Dinamitzadors',                color: COLOR_FORMIGUES,     bg: COLOR_FORMIGUES     + '18', border: COLOR_FORMIGUES     + '66' }
+                { key: 'FORMIGUES',     label: 'Dinamitzadors',                color: COLOR_FORMIGUES,     bg: COLOR_FORMIGUES     + '18', border: COLOR_FORMIGUES     + '66' },
+                { key: 'SENSE_AWARDS',  label: 'Sense ajuts',                 color: COLOR_SENSE_AWARDS,  bg: COLOR_SENSE_AWARDS  + '18', border: COLOR_SENSE_AWARDS  + '66' }
             ];
 
             function abreviarNom(nom) {
@@ -2199,7 +2218,7 @@ function renderGraficos(filas) {
                         <div style="font-size:12px;font-weight:700;color:${q.color};margin-bottom:6px;">
                             ${q.label} <span style="font-weight:400;opacity:0.55">(${persones.length})</span>
                         </div>
-                        <div>${chips || `<span style="font-size:11px;opacity:0.4">Cap investigador</span>`}</div>
+                        <div>${chips || `<span style=\"font-size:11px;opacity:0.4\">Cap investigador</span>`}</div>
                     </div>`;
                 }).join('') +
             `</div>`;

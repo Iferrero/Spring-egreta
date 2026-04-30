@@ -1,6 +1,8 @@
 package com.example.demo.service;
 
 import com.example.demo.util.MongoPipelineBuilder;
+import com.mongodb.client.MongoCollection;
+
 import org.bson.Document;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.mongodb.core.MongoTemplate;
@@ -220,66 +222,70 @@ public class AwardService {
                     }
                 });
 
-        if (rows.isEmpty()) return rows;
-
-        // Collect person UUIDs from aggregation results
-        Set<String> uuids = rows.stream()
-            .map(r -> r.getString("PersonaUuid"))
-            .filter(Objects::nonNull)
-            .collect(Collectors.toSet());
-
-        // Single query: fetch names and filter by academic+active+non-asociado
-        List<Document> qualifyingPersons = mongoTemplate.getCollection("Persons")
-            .find(new Document("uuid", new Document("$in", new ArrayList<>(uuids)))
-                .append("staffOrganizationAssociations", new Document("$elemMatch",
-                    new Document("staffType.term.es_ES", "Académico")
-                        .append("$or", List.of(
-                            new Document("period.endDate", null),
-                            new Document("period.endDate", new Document("$gte", new Date()))
-                        ))
-                        .append("employmentType.term.es_ES",
-                            new Document("$not", new Document("$regex", "Asociado").append("$options", "i")))
-                )))
-            .projection(new Document("_id", 0).append("uuid", 1)
-                .append("name.firstName", 1).append("name.lastName", 1))
-            .into(new ArrayList<>());
-
-                // Build name map, birthdate map y qualifying UUID set
-                Map<String, String> names = new HashMap<>();
-                Map<String, Object> birthdates = new HashMap<>();
-                Set<String> qualifyingUuids = new HashSet<>();
-                for (Document p : qualifyingPersons) {
-                        String uuid = p.getString("uuid");
-                        Document name = p.get("name", Document.class);
-                        if (uuid != null) {
-                                qualifyingUuids.add(uuid);
-                                if (name != null) {
-                                        names.put(uuid, name.getString("firstName") + " " + name.getString("lastName"));
-                                }
-                                // Buscar birthdate en los rows (ya viene del pipeline)
-                                // Si no está, dejarlo null
-                        }
+                // 1. Obtener los UUIDs de personas académicas activas filtradas por deptUuid/persona
+                Set<String> filteredUuids;
+                if ((deptUuid == null || deptUuid.isBlank()) && (persona == null || persona.isBlank())) {
+                        filteredUuids = getAcademicActivePersonUuids();
+                } else {
+                        filteredUuids = getPersonUuidsByFilters(deptUuid, persona);
                 }
 
-                // Mapear birthdate por PersonaUuid desde rows
+                // 2. Mapear los rows existentes por PersonaUuid
+                Map<String, Document> resumenByUuid = new HashMap<>();
                 for (Document r : rows) {
                         String uuid = r.getString("PersonaUuid");
-                        if (uuid != null && r.containsKey("birthdate")) {
-                                birthdates.put(uuid, r.get("birthdate"));
+                        if (uuid != null) {
+                                resumenByUuid.put(uuid, r);
                         }
                 }
 
-                // Filter rows y enriquecer con nombre y birthdate
-                return rows.stream()
-                        .filter(r -> qualifyingUuids.contains(r.getString("PersonaUuid")))
+                // 3. Obtener nombres y birthdates de todos los posibles (con y sin awards)
+                Map<String, String> names = fetchPersonNames(filteredUuids);
+                Map<String, Object> birthdates = fetchPersonBirthdates(filteredUuids);
+                
+                // 4. Construir la lista: primero los que tienen awards (comportamiento original)
+                List<Document> result = rows.stream()
+                        .filter(r -> filteredUuids.contains(r.getString("PersonaUuid")))
                         .peek(r -> {
                                 String uuid = r.getString("PersonaUuid");
                                 r.put("Persona", names.getOrDefault(uuid, ""));
                                 r.put("birthdate", birthdates.getOrDefault(uuid, null));
                         })
                         .collect(Collectors.toList());
+
+                // 5. Añadir personas filtradas que no tienen awards, con totales en 0
+                for (String uuid : filteredUuids) {
+                        if (!resumenByUuid.containsKey(uuid)) {
+                                Document resumen = new Document();
+                                resumen.put("PersonaUuid", uuid);
+                                resumen.put("Persona", names.getOrDefault(uuid, ""));
+                                resumen.put("birthdate", birthdates.getOrDefault(uuid, null));
+                                resumen.put("totalProyectos", 0);
+                                resumen.put("totalDinero", 0);
+                                // Agrega aquí otros campos de totales si los necesitas
+                                result.add(resumen);
+                        }
+                }
+                return result;
     }
 
+    private Map<String, Object> fetchPersonBirthdates(Set<String> uuids) {
+        if (uuids == null || uuids.isEmpty()) return Collections.emptyMap();
+
+        MongoCollection<Document> col = mongoTemplate.getCollection("Persons");
+        Map<String, Object> result = new HashMap<>();
+
+        col.find(new Document("uuid", new Document("$in", new ArrayList<>(uuids))))
+        .projection(new Document("uuid", 1).append("dateOfBirth", 1).append("_id", 0))
+        .forEach(doc -> {
+                String uuid = doc.getString("uuid");
+                if (uuid != null) {
+                result.put(uuid, doc.get("dateOfBirth"));
+                }
+        });
+
+        return result;
+}
     /*
     ===============================
     AWARDS POR PERSONA
@@ -461,13 +467,13 @@ public class AwardService {
         List<Document> pipeline = List.of(
             new Document("$match", new Document("staffOrganizationAssociations",
                 new Document("$elemMatch",
-                    new Document("staffType.term.es_ES", "Académico")
+                    new Document("staffType.term.ca_ES", "Acadèmic")
                         .append("$or", List.of(
                             new Document("period.endDate", null),
                             new Document("period.endDate", new Document("$gte", new Date()))
                         ))
-                        .append("employmentType.term.es_ES",
-                            new Document("$not", new Document("$regex", "Asociado").append("$options", "i")))
+                        .append("employmentType.term.ca_ES",
+                            new Document("$not", new Document("$regex", "ocia|ormació|Tècnic|Estudiant").append("$options", "i")))
                 )
             )),
             new Document("$project", new Document("_id", 0).append("uuid", 1))
