@@ -70,6 +70,10 @@
 
                 body.innerHTML = data.content.map(a => {
                 const titulo = a.title?.es_ES || a.title?.en_GB || "Sin título";
+                const pureId = a.pureId ?? '';
+                const tituloHtml = pureId
+                    ? `<button type="button" data-egreta-id="${String(pureId).replace(/"/g, '&quot;')}" data-egreta-title="${titulo.replace(/"/g, '&quot;')}" class="text-left text-indigo-700 hover:text-indigo-900 hover:underline cursor-pointer">${titulo}</button>`
+                    : titulo;
                 const ip = (a.awardHolders && a.awardHolders.length > 0) 
                     ? `${a.awardHolders[0].name.firstName} ${a.awardHolders[0].name.lastName}` : "N/D";
 
@@ -94,7 +98,7 @@
                 <tr class="hover:bg-slate-50 transition-all">
                     <td class="px-8 py-5">
                         <div class="text-[10px] font-bold text-indigo-400 uppercase tracking-tighter">ID: ${a.uuid}</div>
-                        <div class="font-bold text-slate-800">${titulo}</div>
+                        <div class="font-bold text-slate-800">${tituloHtml}</div>
                     </td>
                     <td class="px-8 py-5 text-sm text-slate-600">${ip}</td>
                     <td class="px-8 py-5 text-right font-black text-indigo-600">
@@ -121,5 +125,6 @@
         cargarStats();
         cargarAwards();
     </script>
+    <script src="egreta-modal.js"></script>
 </body>
 </html>

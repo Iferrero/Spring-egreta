@@ -91,6 +91,7 @@
       "$project": {
         "_id": 0,
         "awardUuid": "$uuid",
+        "pureId": "$pureId",
         "anyo": 1,
         "vigenciaInicio": "$actualPeriod.startDate",
         "vigenciaFin": "$actualPeriod.endDate",
@@ -202,6 +203,7 @@
     {
       "$group": {
         "_id": "$awardUuid",
+        "pureId": { "$first": "$pureId" },
         "anyo": { "$first": "$anyo" },
         "vigenciaInicio": { "$first": "$vigenciaInicio" },
         "vigenciaFin": { "$first": "$vigenciaFin" },
@@ -217,6 +219,7 @@
       "$project": {
         "_id": 0,
         "awardUuid": "$_id",
+        "pureId": 1,
         "anyo": 1,
         "vigenciaInicio": 1,
         "vigenciaFin": 1,

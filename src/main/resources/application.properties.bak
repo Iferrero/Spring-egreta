@@ -1,8 +1,11 @@
 spring.application.name=demo
-#spring.mongodb.uri=mongodb://myUserAdmin:Mongoplex.00@ymir.uab.cat:8000/kraken?authSource=admin
-spring.mongodb.uri=mongodb://localhost:27017/kraken
+spring.mongodb.uri=mongodb://myUserAdmin:Mongoplex.00@ymir.uab.cat:8000/kraken?authSource=admin&serverSelectionTimeoutMS=120000&socketTimeoutMS=120000&connectTimeoutMS=120000
+#spring.mongodb.uri=mongodb://localhost:27017/kraken
 
-app.security.user.name=recerca
-app.security.user.password=UAB
+# Segunda conexion Mongo para bibliometria JCR
+app.jcr.mongodb.uri=mongodb://myUserAdmin:Mongoplex.00@ymir.uab.cat:8000/JCR?authSource=admin
 
-server.port=8081
+spring.security.user.name=recerca
+spring.security.user.password=UAB
+
+server.port=8080
