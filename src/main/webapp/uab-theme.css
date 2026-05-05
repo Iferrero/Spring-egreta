@@ -92,6 +92,25 @@ h3,
     display: block;
 }
 
+.uab-brandbar__home {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--uab-pissarra);
+    text-decoration: none;
+    padding: 0.3rem 0.75rem;
+    border-radius: 0.5rem;
+    transition: background-color 0.15s, color 0.15s;
+}
+
+.uab-brandbar__home:hover {
+    background-color: var(--uab-columna);
+    color: var(--uab-campus);
+}
+
 @media (max-width: 640px) {
     .uab-brandbar {
         padding: 0.65rem 1rem;
@@ -205,4 +224,32 @@ a:hover {
 .chart-card:fullscreen div[id^="chart"] {
     width: 100% !important;
     height: 85vh !important;
+}
+/* Clase base */
+.chip-persona-clicable {
+    display: inline-block;
+    background: rgba(0, 0, 0, 0.07);
+    border-radius: 20px;
+    padding: 2px 10px;
+    margin: 2px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer; /* Cambiado de default a pointer */
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); /* Transición fluida */
+    user-select: none; /* Evita que se seleccione el texto al hacer clic rápido */
+    border: 1px solid transparent;
+}
+
+/* Efecto de Hover (Tendencia: Elevación suave + Brillo) */
+.chip-persona-clicable:hover {
+    background: rgba(0, 0, 0, 0.12) !important; /* Un poco más oscuro que el fondo */
+    transform: translateY(-1.5px); /* Elevación sutil */
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); /* Sombra suave */
+}
+
+/* Efecto de Clic (Tendencia: Feedback táctil) */
+.chip-persona-clicable:active {
+    transform: translateY(0.5px) scale(0.96); /* Se hunde y encoge un pelín */
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+    transition: all 0.05s; /* Respuesta instantánea */
 }

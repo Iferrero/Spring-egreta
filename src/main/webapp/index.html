@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Portal de Recerca</title>
+    <script src="config.js"></script>
+    <script src="uab-brand.js" defer></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="uab-theme.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body class="bg-slate-50 min-h-screen">
+
+    <div class="mx-auto px-6 py-8 max-w-3xl">
+        <header hidden class="mb-10">
+            <h1 class="text-2xl font-bold text-slate-800">Portal de Recerca</h1>
+            <p class="text-sm text-slate-500 mt-1">Selecciona un dels informes disponibles</p>
+        </header>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+
+            <a href="persona-resumen.html"
+               class="group bg-white border border-slate-200 rounded-2xl shadow-sm p-6 flex flex-col gap-4 hover:border-indigo-400 hover:shadow-md transition-all">
+                <div class="w-12 h-12 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 group-hover:bg-indigo-100 transition-colors">
+                    <i class="fa-solid fa-user-graduate text-xl"></i>
+                </div>
+                <div>
+                    <h2 class="text-base font-bold text-slate-800">Ajuts per investigador</h2>
+                    <p class="text-sm text-slate-500 mt-1">Resum d'ajuts i activitats per persona i departament.</p>
+                </div>
+            </a>
+
+            <a href="quartiles-departamento.html"
+               class="group bg-white border border-slate-200 rounded-2xl shadow-sm p-6 flex flex-col gap-4 hover:border-indigo-400 hover:shadow-md transition-all">
+                <div class="w-12 h-12 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 group-hover:bg-indigo-100 transition-colors">
+                    <i class="fa-solid fa-file-lines text-xl"></i>
+                </div>
+                <div>
+                    <h2 class="text-base font-bold text-slate-800">Producció científica</h2>
+                    <p class="text-sm text-slate-500 mt-1">Distribució de quartils i accés obert per departament.</p>
+                </div>
+            </a>
+
+            <a href="personas-vigentes-uab.html"
+               class="group bg-white border border-slate-200 rounded-2xl shadow-sm p-6 flex flex-col gap-4 hover:border-indigo-400 hover:shadow-md transition-all">
+                <div class="w-12 h-12 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 group-hover:bg-indigo-100 transition-colors">
+                    <i class="fa-solid fa-users text-xl"></i>
+                </div>
+                <div>
+                    <h2 class="text-base font-bold text-slate-800">Recursos humans</h2>
+                    <p class="text-sm text-slate-500 mt-1">Personal actiu per categoria i departament.</p>
+                </div>
+            </a>
+
+        </div>
+    </div>
+
+</body>
+</html>

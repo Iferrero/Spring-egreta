@@ -15,13 +15,9 @@
 
 <div class="w-full px-6 py-8">
     <header class="mb-8">
-        <h1 class="hidden text-2xl font-extrabold text-[#2a3037] tracking-tight">Persones <span class="text-[#008037]">Vigents UAB</span></h1>
+        <h1 class="hidden text-2xl font-extrabold text-[#2a3037] tracking-tight">Recursos  <span class="text-[#008037]">Humans UAB</span></h1>
         <p class="hidden text-[#596473] text-sm mt-1">Total de persones amb vinculació vigent</p>
-<<<<<<< HEAD
         <div class="hidden max-w-xs">
-=======
-        <div class=" max-w-xs">
->>>>>>> 3da728f7973b34d1c4273b233fc44513add433b7
             <label for="selectorPersonalType" class="block text-sm font-semibold text-[#2a3037] mb-1">Tipus de personal</label>
             <select id="selectorPersonalType" class="w-full rounded-xl border border-[#d4d8de] bg-white px-3 py-2 text-sm text-[#2a3037] focus:outline-none focus:ring-2 focus:ring-[#004d21]">
                 <option value="all">Tots</option>
@@ -43,9 +39,20 @@
                 <i class="fa-solid fa-users text-[#008037]"></i>
             </div>
             <div>
-                <p class="text-xs uppercase font-bold tracking-wider text-[#596473]">Persones vigents</p>
+                <p class="text-xs uppercase font-bold tracking-wider text-[#596473]">Persones vigents <span class="relative inline-block group align-middle"><i class="fa-solid fa-circle-info text-[#aab0bb] cursor-help text-[10px]"></i><span id="tooltipVigentes" class="pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-full mb-2 z-50 w-64 rounded-xl bg-[#2a3037] text-white text-[11px] font-normal normal-case tracking-normal px-3 py-2 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity leading-snug">Totes les persones amb almenys una vinculació laboral activa (staffOrganizationAssociation sense data de fi o posterior a avui).</span></span></p>
                 <p id="valorVigentes" class="text-3xl font-black text-[#111111] leading-none mt-1">--</p>
                 <p id="estadoVigentes" class="text-xs text-[#596473] mt-1">Carregant dades...</p>
+            </div>
+        </section>
+
+        <section class="bg-white border border-[#d4d8de] rounded-2xl shadow-sm px-5 py-4 flex items-center gap-4 w-full sm:w-auto">
+            <div class="w-11 h-11 rounded-full bg-[#e8e0f7] flex items-center justify-center">
+                <i class="fa-solid fa-person-chalkboard text-[#5b21b6]"></i>
+            </div>
+            <div>
+                <p class="text-xs uppercase font-bold tracking-wider text-[#596473]">Personal acadèmic</p>
+                <p id="valorPersonalAcademic" class="text-3xl font-black text-[#111111] leading-none mt-1">--</p>
+                <p id="estadoPersonalAcademic" class="text-xs text-[#596473] mt-1">Carregant dades...</p>
             </div>
         </section>
 
@@ -54,7 +61,7 @@
                 <i class="fa-solid fa-user-graduate text-[#004d5e]"></i>
             </div>
             <div>
-                <p class="text-xs uppercase font-bold tracking-wider text-[#596473]">Catedràtics</p>
+                <p class="text-xs uppercase font-bold tracking-wider text-[#596473]">Catedràtics <span class="relative inline-block group align-middle"><i class="fa-solid fa-circle-info text-[#aab0bb] cursor-help text-[10px]"></i><span id="tooltipCatedraticos" class="pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-full mb-2 z-50 w-64 rounded-xl bg-[#2a3037] text-white text-[11px] font-normal normal-case tracking-normal px-3 py-2 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity leading-snug">Catedràtic/a d'universitat.<br> Catedràtic/a contractat/da doctor/a.<br>Catedratics/ques d'escoles universitàries.</span></span></p>
                 <p id="valorCatedraticos" class="text-3xl font-black text-[#111111] leading-none mt-1">--</p>
                 <p id="estadoCatedraticos" class="text-xs text-[#596473] mt-1">Carregant dades...</p>
             </div>
@@ -65,7 +72,7 @@
                 <i class="fa-solid fa-chalkboard-user text-[#73a437]"></i>
             </div>
             <div>
-                <p class="text-xs uppercase font-bold tracking-wider text-[#596473]">Professors titulars</p>
+                <p class="text-xs uppercase font-bold tracking-wider text-[#596473]">Professors titulars <span class="relative inline-block group align-middle"><i class="fa-solid fa-circle-info text-[#aab0bb] cursor-help text-[10px]"></i><span id="tooltipTitulares" class="pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-full mb-2 z-50 w-64 rounded-xl bg-[#2a3037] text-white text-[11px] font-normal normal-case tracking-normal px-3 py-2 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity leading-snug">Professorat titular d'universitat.Professorat  titular d'escoles universitaries.Titular d'universitat interí/na.</span></span></p>
                 <p id="valorTitulares" class="text-3xl font-black text-[#111111] leading-none mt-1">--</p>
                 <p id="estadoTitulares" class="text-xs text-[#596473] mt-1">Carregant dades...</p>
             </div>
@@ -76,7 +83,7 @@
                 <i class="fa-solid fa-user-tie text-[#f88c12]"></i>
             </div>
             <div>
-                <p class="text-xs uppercase font-bold tracking-wider text-[#596473]">Agregats</p>
+                <p class="text-xs uppercase font-bold tracking-wider text-[#596473]">Agregats <span class="relative inline-block group align-middle"><i class="fa-solid fa-circle-info text-[#aab0bb] cursor-help text-[10px]"></i><span id="tooltipAgregados" class="pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-full mb-2 z-50 w-64 rounded-xl bg-[#2a3037] text-white text-[11px] font-normal normal-case tracking-normal px-3 py-2 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity leading-snug">Agregat/da interí/na</span></span></p>
                 <p id="valorAgregados" class="text-3xl font-black text-[#111111] leading-none mt-1">--</p>
                 <p id="estadoAgregados" class="text-xs text-[#596473] mt-1">Carregant dades...</p>
             </div>
@@ -87,7 +94,7 @@
                 <i class="fa-solid fa-book-open text-[#004d21]"></i>
             </div>
             <div>
-                <p class="text-xs uppercase font-bold tracking-wider text-[#596473]">Lectors</p>
+                <p class="text-xs uppercase font-bold tracking-wider text-[#596473]">Lectors <span class="relative inline-block group align-middle"><i class="fa-solid fa-circle-info text-[#aab0bb] cursor-help text-[10px]"></i><span id="tooltipLectores" class="pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-full mb-2 z-50 w-64 rounded-xl bg-[#2a3037] text-white text-[11px] font-normal normal-case tracking-normal px-3 py-2 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity leading-snug">Professor/a lector/a ajudant doctor/a.</span></span></p>
                 <p id="valorLectores" class="text-3xl font-black text-[#111111] leading-none mt-1">--</p>
                 <p id="estadoLectores" class="text-xs text-[#596473] mt-1">Carregant dades...</p>
             </div>
@@ -98,9 +105,20 @@
                 <i class="fa-solid fa-user-group text-[#434b56]"></i>
             </div>
             <div>
-                <p class="text-xs uppercase font-bold tracking-wider text-[#596473]">Associats</p>
+                <p class="text-xs uppercase font-bold tracking-wider text-[#596473]">Associats <span class="relative inline-block group align-middle"><i class="fa-solid fa-circle-info text-[#aab0bb] cursor-help text-[10px]"></i><span id="tooltipAsociados" class="pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-full mb-2 z-50 w-64 rounded-xl bg-[#2a3037] text-white text-[11px] font-normal normal-case tracking-normal px-3 py-2 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity leading-snug">Associat/da mèdic/a laboral.<br>Professor/a associat/da de fisioteràpia.<br>Professor/a associat/da de psicologia<br>Professor/a associat/da d'infermeria.<br>Professor/a associat/da laboral.<br>Professor/a associat/da logopeda.<br>Professor/a associat/da veterinari.<br>Professor/a Associat/da Veterinari/a de Camp.</span></span></p>
                 <p id="valorAsociados" class="text-3xl font-black text-[#111111] leading-none mt-1">--</p>
                 <p id="estadoAsociados" class="text-xs text-[#596473] mt-1">Carregant dades...</p>
+            </div>
+        </section>
+
+        <section class="bg-white border border-[#d4d8de] rounded-2xl shadow-sm px-5 py-4 flex items-center gap-4 w-full sm:w-auto">
+            <div class="w-11 h-11 rounded-full bg-[#fff7e6] flex items-center justify-center">
+                <i class="fa-solid fa-arrows-rotate text-[#c97300]"></i>
+            </div>
+            <div>
+                <p class="text-xs uppercase font-bold tracking-wider text-[#596473]">Substituts <span class="relative inline-block group align-middle"><i class="fa-solid fa-circle-info text-[#aab0bb] cursor-help text-[10px]"></i><span id="tooltipSubstituts" class="pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-full mb-2 z-50 w-64 rounded-xl bg-[#2a3037] text-white text-[11px] font-normal normal-case tracking-normal px-3 py-2 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity leading-snug">Professor/a substitut/a.</span></span></p>
+                <p id="valorSubstituts" class="text-3xl font-black text-[#111111] leading-none mt-1">--</p>
+                <p id="estadoSubstituts" class="text-xs text-[#596473] mt-1">Carregant dades...</p>
             </div>
         </section>
 
@@ -109,9 +127,31 @@
                 <i class="fa-solid fa-star text-[#003a47]"></i>
             </div>
             <div>
-                <p class="text-xs uppercase font-bold tracking-wider text-[#596473]">ICREA</p>
+                <p class="text-xs uppercase font-bold tracking-wider text-[#596473]">ICREA <span class="relative inline-block group align-middle"><i class="fa-solid fa-circle-info text-[#aab0bb] cursor-help text-[10px]"></i><span id="tooltipIcrea" class="pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-full mb-2 z-50 w-64 rounded-xl bg-[#2a3037] text-white text-[11px] font-normal normal-case tracking-normal px-3 py-2 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity leading-snug">Personal investigador ICREA.</span></span></p>
                 <p id="valorIcrea" class="text-3xl font-black text-[#111111] leading-none mt-1">--</p>
                 <p id="estadoIcrea" class="text-xs text-[#596473] mt-1">Carregant dades...</p>
+            </div>
+        </section>
+
+        <section class="bg-white border border-[#d4d8de] rounded-2xl shadow-sm px-5 py-4 flex items-center gap-4 w-full sm:w-auto">
+            <div class="w-11 h-11 rounded-full bg-[#e8f4e8] flex items-center justify-center">
+                <i class="fa-solid fa-flask text-[#1a6b1a]"></i>
+            </div>
+            <div>
+                <p class="text-xs uppercase font-bold tracking-wider text-[#596473]">Inv. Predoctorals <span class="relative inline-block group align-middle"><i class="fa-solid fa-circle-info text-[#aab0bb] cursor-help text-[10px]"></i><span id="tooltipPredoctorals" class="pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-full mb-2 z-50 w-64 rounded-xl bg-[#2a3037] text-white text-[11px] font-normal normal-case tracking-normal px-3 py-2 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity leading-snug">Investigador/a predoctoral en formació.<br>FPI, FI-JOAN ORÓ, FI-SDUR.<br>Investigador/a novell.<br>La Caixa.</span></span></p>
+                <p id="valorPredoctorals" class="text-3xl font-black text-[#111111] leading-none mt-1">--</p>
+                <p id="estadoPredoctorals" class="text-xs text-[#596473] mt-1">Carregant dades...</p>
+            </div>
+        </section>
+
+        <section class="bg-white border border-[#d4d8de] rounded-2xl shadow-sm px-5 py-4 flex items-center gap-4 w-full sm:w-auto">
+            <div class="w-11 h-11 rounded-full bg-[#f0e8f8] flex items-center justify-center">
+                <i class="fa-solid fa-microscope text-[#5a1a8b]"></i>
+            </div>
+            <div>
+                <p class="text-xs uppercase font-bold tracking-wider text-[#596473]">Inv. Postdoctorals <span class="relative inline-block group align-middle"><i class="fa-solid fa-circle-info text-[#aab0bb] cursor-help text-[10px]"></i><span id="tooltipPostdoctorals" class="pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-full mb-2 z-50 w-64 rounded-xl bg-[#2a3037] text-white text-[11px] font-normal normal-case tracking-normal px-3 py-2 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity leading-snug">Investigador/a postdoctoral ordinari/ària.<br>Ramón y Cajal. Beatriu de Pinós.<br>Juan de la Cierva.<br>Doctor/a distingit/da.<br>Director/a d'investigació.</span></span></p>
+                <p id="valorPostdoctorals" class="text-3xl font-black text-[#111111] leading-none mt-1">--</p>
+                <p id="estadoPostdoctorals" class="text-xs text-[#596473] mt-1">Carregant dades...</p>
             </div>
         </section>
     </div>
@@ -133,361 +173,26 @@
             <div id="chartSexo" class="w-full h-[420px]"></div>
         </section>
     </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+        <section class="bg-white border border-[#d4d8de] rounded-2xl shadow-sm p-6">
+            <div class="flex items-center justify-between mb-3">
+                <h2 class="text-sm font-bold text-[#2a3037] uppercase tracking-wider">% per tipus de contracte</h2>
+                <span id="estadoContractType" class="text-xs text-[#596473]">Carregant...</span>
+            </div>
+            <div id="chartContractType" class="w-full h-[420px]"></div>
+        </section>
+
+        <section class="bg-white border border-[#d4d8de] rounded-2xl shadow-sm p-6">
+            <div class="flex items-center justify-between mb-3">
+                <h2 class="text-sm font-bold text-[#2a3037] uppercase tracking-wider">Origen per nacionalitat</h2>
+                <span id="estadoNacionalitat" class="text-xs text-[#596473]">Carregant...</span>
+            </div>
+            <div id="chartNacionalitat" class="w-full h-[420px]"></div>
+        </section>
+    </div>
 </div>
 
-<script>
-    let chartPiramide = null;
-    let chartSexo = null;
-    const selectorPersonalType = document.getElementById('selectorPersonalType');
-    const selectorDepartamento = document.getElementById('selectorDepartamento');
-
-    function getPersonalTypeParam() {
-        return encodeURIComponent(selectorPersonalType?.value || 'all');
-    }
-
-    function getDeptParam() {
-        return selectorDepartamento?.value || '';
-    }
-
-    function buildUrl(path, includePersonalType = true) {
-        const params = new URLSearchParams();
-        if (includePersonalType) {
-            params.set('personalType', selectorPersonalType?.value || 'all');
-        }
-        const dept = getDeptParam();
-        if (dept) {
-            params.set('deptUuid', dept);
-        }
-        const query = params.toString();
-        return query ? `${path}?${query}` : path;
-    }
-
-    async function cargarDepartamentos() {
-        if (!selectorDepartamento) return;
-        try {
-            const res = await fetch(apiUrl('/persons/departamentos'));
-            if (!res.ok) throw new Error('No s\'han pogut carregar departaments');
-            const departamentos = await res.json();
-            departamentos.forEach(dep => {
-                const option = document.createElement('option');
-                option.value = dep.uuid;
-                option.textContent = dep.nombre;
-                selectorDepartamento.appendChild(option);
-            });
-        } catch (_) {
-            const option = document.createElement('option');
-            option.value = '';
-            option.textContent = 'No s\'han pogut carregar els departaments';
-            selectorDepartamento.appendChild(option);
-        }
-    }
-
-    function formatearNumero(valor) {
-        return Number(valor || 0).toLocaleString('ca-ES');
-    }
-
-    async function cargarPersonasVigentes() {
-        const estado = document.getElementById('estadoVigentes');
-        const valor = document.getElementById('valorVigentes');
-
-        estado.textContent = 'Carregant dades...';
-
-        try {
-            const url = buildUrl('/persons/vigentes', true);
-            const separator = url.includes('?') ? '&' : '?';
-            const res = await fetch(apiUrl(`${url}${separator}page=0`));
-            const data = await res.json();
-
-            const total = data?.page?.totalElements
-                ?? data?.totalElements
-                ?? (Array.isArray(data?.content) ? data.content.length : 0);
-
-            valor.textContent = formatearNumero(total);
-            estado.textContent = 'Dada actualitzada.';
-        } catch (e) {
-            valor.textContent = '--';
-            estado.textContent = 'No s\'han pogut carregar les dades.';
-        }
-    }
-
-    async function cargarCatedraticos() {
-        const estado = document.getElementById('estadoCatedraticos');
-        const valor = document.getElementById('valorCatedraticos');
-
-        estado.textContent = 'Carregant dades...';
-
-        try {
-            const res = await fetch(apiUrl(buildUrl('/persons/stats/catedraticos', true)));
-            if (!res.ok) throw new Error('No s\'han pogut carregar els catedràtics.');
-
-            const data = await res.json();
-            const total = Number(data?.total ?? data?.value?.total ?? 0);
-
-            valor.textContent = formatearNumero(total);
-            estado.textContent = 'Dada actualitzada.';
-        } catch (e) {
-            valor.textContent = '--';
-            estado.textContent = 'No s\'han pogut carregar les dades.';
-        }
-    }
-
-    async function cargarTitulares() {
-        const estado = document.getElementById('estadoTitulares');
-        const valor = document.getElementById('valorTitulares');
-
-        estado.textContent = 'Carregant dades...';
-
-        try {
-            const res = await fetch(apiUrl(buildUrl('/persons/stats/titulares', true)));
-            if (!res.ok) throw new Error('No s\'han pogut carregar els titulars.');
-
-            const data = await res.json();
-            const total = Number(data?.total ?? data?.value?.total ?? 0);
-
-            valor.textContent = formatearNumero(total);
-            estado.textContent = 'Dada actualitzada.';
-        } catch (e) {
-            valor.textContent = '--';
-            estado.textContent = 'No s\'han pogut carregar les dades.';
-        }
-    }
-
-    async function cargarAgregados() {
-        const estado = document.getElementById('estadoAgregados');
-        const valor = document.getElementById('valorAgregados');
-
-        estado.textContent = 'Carregant dades...';
-
-        try {
-            const res = await fetch(apiUrl(buildUrl('/persons/stats/agregados', true)));
-            if (!res.ok) throw new Error('No s\'han pogut carregar els agregats.');
-
-            const data = await res.json();
-            const total = Number(data?.total ?? data?.value?.total ?? 0);
-
-            valor.textContent = formatearNumero(total);
-            estado.textContent = 'Dada actualitzada.';
-        } catch (e) {
-            valor.textContent = '--';
-            estado.textContent = 'No s\'han pogut carregar les dades.';
-        }
-    }
-
-    async function cargarLectores() {
-        const estado = document.getElementById('estadoLectores');
-        const valor = document.getElementById('valorLectores');
-
-        estado.textContent = 'Carregant dades...';
-
-        try {
-            const res = await fetch(apiUrl(buildUrl('/persons/stats/lectores', true)));
-            if (!res.ok) throw new Error('No s\'han pogut carregar els lectors.');
-
-            const data = await res.json();
-            const total = Number(data?.total ?? data?.value?.total ?? 0);
-
-            valor.textContent = formatearNumero(total);
-            estado.textContent = 'Dada actualitzada.';
-        } catch (e) {
-            valor.textContent = '--';
-            estado.textContent = 'No s\'han pogut carregar les dades.';
-        }
-    }
-
-    async function cargarAsociados() {
-        const estado = document.getElementById('estadoAsociados');
-        const valor = document.getElementById('valorAsociados');
-
-        estado.textContent = 'Carregant dades...';
-
-        try {
-            const res = await fetch(apiUrl(buildUrl('/persons/stats/asociados', true)));
-            if (!res.ok) throw new Error('No s\'han pogut carregar els associats.');
-
-            const data = await res.json();
-            const total = Number(data?.total ?? data?.value?.total ?? 0);
-
-            valor.textContent = formatearNumero(total);
-            estado.textContent = 'Dada actualitzada.';
-        } catch (e) {
-            valor.textContent = '--';
-            estado.textContent = 'No s\'han pogut carregar les dades.';
-        }
-    }
-
-    async function cargarIcrea() {
-        const estado = document.getElementById('estadoIcrea');
-        const valor = document.getElementById('valorIcrea');
-
-        estado.textContent = 'Carregant dades...';
-
-        try {
-            const res = await fetch(apiUrl(buildUrl('/persons/stats/icrea', true)));
-            if (!res.ok) throw new Error('No s\'han pogut carregar les dades ICREA.');
-
-            const data = await res.json();
-            const total = Number(data?.total ?? data?.value?.total ?? 0);
-
-            valor.textContent = formatearNumero(total);
-            estado.textContent = 'Dada actualitzada.';
-        } catch (e) {
-            valor.textContent = '--';
-            estado.textContent = 'No s\'han pogut carregar les dades.';
-        }
-    }
-
-    async function cargarPiramideEdad() {
-        const estado = document.getElementById('estadoPiramide');
-        const contenedor = document.getElementById('chartPiramideEdad');
-
-        try {
-            const res = await fetch(apiUrl(buildUrl('/persons/stats/age-pyramid', true)));
-            const raw = await res.json();
-            const data = Array.isArray(raw) ? raw : (Array.isArray(raw?.value) ? raw.value : []);
-
-            const rangos = (data || []).map(d => d.rango || '-');
-            const hombres = (data || []).map(d => -Number(d.hombres || 0));
-            const mujeres = (data || []).map(d => Number(d.mujeres || 0));
-            const otros = (data || []).map(d => Number(d.otros || 0));
-            const totalHombres = (data || []).reduce((acc, d) => acc + Number(d.hombres || 0), 0);
-            const totalMujeres = (data || []).reduce((acc, d) => acc + Number(d.mujeres || 0), 0);
-            const totalOtros = (data || []).reduce((acc, d) => acc + Number(d.otros || 0), 0);
-
-            if (!chartPiramide) {
-                chartPiramide = echarts.init(contenedor);
-            }
-
-            chartPiramide.setOption({
-                tooltip: {
-                    trigger: 'axis',
-                    axisPointer: { type: 'shadow' },
-                    formatter: params => {
-                        const h = Math.abs(Number(params.find(p => p.seriesName === 'Homes')?.value || 0));
-                        const m = Math.abs(Number(params.find(p => p.seriesName === 'Dones')?.value || 0));
-                        const o = Math.abs(Number(params.find(p => p.seriesName === 'Altres')?.value || 0));
-                        return `${params[0].axisValue}<br/>Homes: ${h}<br/>Dones: ${m}<br/>Altres: ${o}`;
-                    }
-                },
-                legend: { data: ['Homes', 'Dones', 'Altres'] },
-                grid: { left: 70, right: 70, top: 30, bottom: 20 },
-                xAxis: {
-                    type: 'value',
-                    axisLabel: { formatter: value => Math.abs(value) },
-                    splitLine: { lineStyle: { color: '#d4d8de' } }
-                },
-                yAxis: {
-                    type: 'category',
-                    data: rangos,
-                    axisTick: { show: false }
-                },
-                series: [
-                    {
-                        name: 'Homes',
-                        type: 'bar',
-                        stack: 'total',
-                        itemStyle: { color: '#004D5E' },
-                        data: hombres
-                    },
-                    {
-                        name: 'Dones',
-                        type: 'bar',
-                        stack: 'total',
-                        itemStyle: { color: '#008037' },
-                        data: mujeres
-                    },
-                    {
-                        name: 'Altres',
-                        type: 'bar',
-                        stack: 'total',
-                        itemStyle: { color: '#F88C12' },
-                        data: otros
-                    }
-                ]
-            });
-
-            renderPastelSexo(totalHombres, totalMujeres, totalOtros);
-
-            estado.textContent = 'Actualitzada';
-        } catch (e) {
-            estado.textContent = 'No s\'ha pogut carregar';
-            contenedor.innerHTML = '<div class="h-full flex items-center justify-center text-sm text-rose-500">Error carregant la piràmide d\'edat</div>';
-        }
-    }
-
-    function renderPastelSexo(hombres, mujeres, otros) {
-        const estado = document.getElementById('estadoSexo');
-        const contenedor = document.getElementById('chartSexo');
-
-        if (!chartSexo) {
-            chartSexo = echarts.init(contenedor);
-        }
-
-        chartSexo.setOption({
-            tooltip: {
-                trigger: 'item',
-                formatter: params => `${params.name}: ${params.value} (${params.percent}%)`
-            },
-            legend: {
-                bottom: 0
-            },
-            series: [
-                {
-                    name: 'Sexe',
-                    type: 'pie',
-                    radius: ['45%', '70%'],
-                    avoidLabelOverlap: true,
-                    label: {
-                        formatter: '{b}: {d}%'
-                    },
-                    data: [
-                        { value: Number(hombres || 0), name: 'Homes', itemStyle: { color: '#004D5E' } },
-                        { value: Number(mujeres || 0), name: 'Dones', itemStyle: { color: '#008037' } },
-                        { value: Number(otros || 0), name: 'Altres', itemStyle: { color: '#F88C12' } }
-                    ]
-                }
-            ]
-        });
-
-        estado.textContent = 'Actualitzada';
-    }
-
-    selectorPersonalType.addEventListener('change', () => {
-        cargarPersonasVigentes();
-        cargarCatedraticos();
-        cargarTitulares();
-        cargarAgregados();
-        cargarLectores();
-        cargarAsociados();
-        cargarIcrea();
-        cargarPiramideEdad();
-    });
-
-    selectorDepartamento.addEventListener('change', () => {
-        cargarPersonasVigentes();
-        cargarCatedraticos();
-        cargarTitulares();
-        cargarAgregados();
-        cargarLectores();
-        cargarAsociados();
-        cargarIcrea();
-        cargarPiramideEdad();
-    });
-
-    window.addEventListener('resize', () => {
-        if (chartPiramide) chartPiramide.resize();
-        if (chartSexo) chartSexo.resize();
-    });
-
-    cargarDepartamentos().finally(() => {
-        cargarPersonasVigentes();
-        cargarCatedraticos();
-        cargarTitulares();
-        cargarAgregados();
-        cargarLectores();
-        cargarAsociados();
-        cargarIcrea();
-        cargarPiramideEdad();
-    });
-</script>
+    <script src="personas-vigentes-uab.js"></script>
 </body>
 </html>

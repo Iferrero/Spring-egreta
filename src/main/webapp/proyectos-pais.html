@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Informe per País</title>
+    <script src="config.js"></script>
+    <script src="uab-brand.js" defer></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="uab-theme.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body class="min-h-screen bg-[#f4f6f9]">
+
+<div class="w-full max-w-3xl mx-auto px-6 py-10">
+
+    <header class="mb-8">
+        <h1 class="text-2xl font-extrabold text-[#2a3037] tracking-tight">
+            Informe per <span class="text-[#008037]">País</span>
+        </h1>
+        <p class="text-[#596473] text-sm mt-1">
+            Selecciona un país i genera un document Word amb els projectes on el finançador o algun membre de l'equip és d'aquell país.
+        </p>
+    </header>
+
+    <div class="bg-white border border-[#d4d8de] rounded-2xl shadow-sm p-6 flex flex-col gap-6">
+
+        <!-- Selector de país -->
+        <div>
+            <label for="selectPais" class="block text-xs font-bold text-[#596473] uppercase tracking-wider mb-1">
+                Selecciona País
+            </label>
+            <select id="selectPais"
+                    class="w-full rounded-xl border border-[#d4d8de] bg-white px-3 py-2.5 text-sm text-[#2a3037] focus:outline-none focus:ring-2 focus:ring-[#004d21]">
+                <option value="">Carregant...</option>
+            </select>
+        </div>
+
+        <!-- Checkboxes: elements a incloure -->
+        <div>
+            <label class="block text-xs font-bold text-[#596473] uppercase tracking-wider mb-3">
+                Selecciona elements a incloure a l'informe
+            </label>
+
+            <p class="text-sm font-bold text-[#2a3037] mb-2 underline decoration-dotted">
+                Activitats de recerca
+            </p>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-3 mb-2 pl-2">
+                <label class="flex flex-col items-center gap-1 cursor-pointer text-xs text-[#596473] font-medium">
+                    Projectes
+                    <input type="checkbox" id="chkProjectes" checked class="accent-[#008037] w-4 h-4 mt-0.5">
+                </label>
+                <label class="flex flex-col items-center gap-1 cursor-pointer text-xs text-[#596473] font-medium">
+                    Convenis
+                    <input type="checkbox" id="chkConvenis" class="accent-[#008037] w-4 h-4 mt-0.5">
+                </label>
+                <label class="flex flex-col items-center gap-1 cursor-pointer text-xs text-[#596473] font-medium">
+                    Beques
+                    <input type="checkbox" id="chkBeques" class="accent-[#008037] w-4 h-4 mt-0.5">
+                </label>
+                <label class="flex flex-col items-center gap-1 cursor-pointer text-xs text-[#596473] font-medium">
+                    Xarxes
+                    <input type="checkbox" id="chkXarxes" class="accent-[#008037] w-4 h-4 mt-0.5">
+                </label>
+                <label class="flex flex-col items-center gap-1 cursor-pointer text-xs text-[#596473] font-medium">
+                    Tesis doctorals
+                    <input type="checkbox" id="chkTesis" class="accent-[#008037] w-4 h-4 mt-0.5">
+                </label>
+            </div>
+
+            <p class="text-sm font-bold text-[#2a3037] mb-2 mt-4 underline decoration-dotted">
+                Producció científica
+            </p>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-3 mb-2 pl-2">
+
+                <label class="flex flex-col items-center gap-1 cursor-pointer text-xs text-[#596473] font-medium">
+                    Articles
+                    <input type="checkbox" id="chkArticles" class="accent-[#008037] w-4 h-4 mt-0.5">
+                </label>
+                <label class="flex flex-col items-center gap-1 cursor-pointer text-xs text-[#596473] font-medium">
+                    Llibres
+                    <input type="checkbox" id="chkLlibres" class="accent-[#008037] w-4 h-4 mt-0.5">
+                </label>
+                <label class="flex flex-col items-center gap-1 cursor-pointer text-xs text-[#596473] font-medium">
+                    Capítols de llibre
+                    <input type="checkbox" id="chkCapitols" class="accent-[#008037] w-4 h-4 mt-0.5">
+                </label>
+            </div>
+        </div>
+
+        <!-- Rang de dates -->
+        <div>
+            <label class="block text-xs font-bold text-[#596473] uppercase tracking-wider mb-3">
+                Dates
+            </label>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                    <label for="dataInici" class="block text-xs font-semibold text-[#596473] mb-1">Data Inici</label>
+                    <input type="date" id="dataInici" value="2020-01-01"
+                           class="w-full rounded-xl border border-[#d4d8de] bg-white px-3 py-2 text-sm text-[#2a3037] focus:outline-none focus:ring-2 focus:ring-[#004d21]">
+                </div>
+                <div>
+                    <label for="dataFi" class="block text-xs font-semibold text-[#596473] mb-1">Data Final</label>
+                    <input type="date" id="dataFi"
+                           class="w-full rounded-xl border border-[#d4d8de] bg-white px-3 py-2 text-sm text-[#2a3037] focus:outline-none focus:ring-2 focus:ring-[#004d21]">
+                </div>
+            </div>
+        </div>
+
+        <!-- Botó -->
+        <div class="flex items-center gap-4 mt-1">
+            <button id="btnInforme"
+                    onclick="generarInforme()"
+                    class="flex items-center gap-2 bg-[#008037] hover:bg-[#006029] text-white font-bold px-6 py-2.5 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                <i class="fa-solid fa-file-word"></i>
+                Crear informe
+            </button>
+            <span id="estatText" class="text-sm text-[#596473] hidden">
+                <i class="fa-solid fa-spinner fa-spin"></i> Generant document...
+            </span>
+        </div>
+
+        <!-- Error -->
+        <div id="errorBox" class="hidden bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700"></div>
+    </div>
+
+    <!-- Info card -->
+    <div class="mt-6 bg-white border border-[#d4d8de] rounded-2xl shadow-sm p-5">
+        <h2 class="text-sm font-bold text-[#2a3037] mb-2">
+            <i class="fa-solid fa-circle-info text-[#008037] mr-1"></i>
+            Sobre l'informe
+        </h2>
+        <p class="text-xs text-[#596473] leading-relaxed">
+            El document Word inclourà els projectes i/o convenis validats en els quals el finançador o algun membre de l'equip investigador és del país seleccionat, dins del rang de dates indicat.
+        </p>
+    </div>
+</div>
+
+<script>
+    document.getElementById('dataFi').value = new Date().toISOString().slice(0, 10);
+
+    async function cargarPaises() {
+        const sel = document.getElementById('selectPais');
+        try {
+            const res = await apiFetch('/awards/countries');
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            const data = await res.json();
+            sel.innerHTML = '<option value="">— Selecciona un país —</option>';
+            data.sort((a, b) => a.countryName.localeCompare(b.countryName, 'ca'));
+            data.forEach(p => {
+                const opt = document.createElement('option');
+                opt.value = p.countryCode;
+                opt.textContent = p.countryName;
+                sel.appendChild(opt);
+            });
+        } catch (e) {
+            sel.innerHTML = '<option value="">Error carregant països</option>';
+            mostrarError('No s\'han pogut carregar els països: ' + e.message);
+        }
+    }
+
+    function mostrarError(msg) {
+        const box = document.getElementById('errorBox');
+        box.textContent = msg;
+        box.classList.remove('hidden');
+    }
+
+    function netejarError() {
+        document.getElementById('errorBox').classList.add('hidden');
+    }
+
+    function generarInforme() {
+        netejarError();
+
+        const pais = document.getElementById('selectPais').value;
+        const startDate = document.getElementById('dataInici').value;
+        const endDate = document.getElementById('dataFi').value;
+        const projectes = document.getElementById('chkProjectes').checked;
+        const convenis = document.getElementById('chkConvenis').checked;
+        const beques = document.getElementById('chkBeques').checked;
+        const xarxes = document.getElementById('chkXarxes').checked;
+        const tesis   = document.getElementById('chkTesis').checked;
+        const articles = document.getElementById('chkArticles').checked;
+        const llibres  = document.getElementById('chkLlibres').checked;
+        const capitols = document.getElementById('chkCapitols').checked;
+
+        if (!pais) { mostrarError('Has de seleccionar un país.'); return; }
+        if (!startDate || !endDate) { mostrarError('Has d\'indicar les dates d\'inici i fi.'); return; }
+        if (startDate > endDate) { mostrarError('La data d\'inici ha de ser anterior o igual a la data de fi.'); return; }
+        if (!projectes && !convenis && !beques && !xarxes && !tesis && !articles && !llibres && !capitols) { mostrarError('Has de seleccionar almenys un element a incloure.'); return; }
+
+        const btn = document.getElementById('btnInforme');
+        const estat = document.getElementById('estatText');
+        btn.disabled = true;
+        estat.classList.remove('hidden');
+
+        const bases = (window.APP_CONFIG && window.APP_CONFIG.apiBaseCandidates) || [window.APP_CONFIG && window.APP_CONFIG.apiBaseUrl || '/api'];
+        const base = Array.from(new Set(bases.filter(Boolean)))[0];
+        const url = base.replace(/\/$/, '') +
+            '/awards/informe-word-pais' +
+            '?countryCode=' + encodeURIComponent(pais) +
+            '&startDate=' + encodeURIComponent(startDate) +
+            '&endDate=' + encodeURIComponent(endDate) +
+            '&projectes=' + projectes +
+            '&convenis=' + convenis +
+            '&beques=' + beques +
+            '&xarxes=' + xarxes +
+            '&tesis=' + tesis +
+            '&articles=' + articles +
+            '&llibres=' + llibres +
+            '&capitols=' + capitols;
+
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = '';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+
+        setTimeout(() => {
+            btn.disabled = false;
+            estat.classList.add('hidden');
+        }, 3000);
+    }
+
+    cargarPaises();
+</script>
+</body>
+</html>

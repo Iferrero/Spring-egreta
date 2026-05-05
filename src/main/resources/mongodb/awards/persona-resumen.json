@@ -5,6 +5,10 @@
                 "workflow.step": "validated"
             }
         }, {
+            "$match": {
+                "fundings.fundingCollaborators.collaborator.uuid": "__COLLABORATOR_UUID__"
+            }
+        }, {
             "$unwind": "$fundings"
         }, {
             "$unwind": "$fundings.fundingCollaborators"
@@ -33,10 +37,65 @@
                 }
             }
         }, {
+            "$lookup": {
+                "from": "ExternalOrganizations",
+                "localField": "fundings.funder.uuid",
+                "foreignField": "uuid",
+                "as": "funder_org"
+            }
+        }, {
+            "$addFields": {
+                "funder_type": {
+                    "$let": {
+                        "vars": {
+                            "kgs": {
+                                "$ifNull": [
+                                    { "$arrayElemAt": ["$funder_org.keywordGroups", 0] },
+                                    []
+                                ]
+                            }
+                        },
+                        "in": {
+                            "$ifNull": [
+                                {
+                                    "$reduce": {
+                                        "input": "$$kgs",
+                                        "initialValue": null,
+                                        "in": {
+                                            "$ifNull": [
+                                                "$$value",
+                                                {
+                                                    "$arrayElemAt": [
+                                                        {
+                                                            "$map": {
+                                                                "input": { "$ifNull": ["$$this.classifications", []] },
+                                                                "as": "cls",
+                                                                "in": { "$ifNull": ["$$cls.term.ca_ES", "$$cls.term.en_GB"] }
+                                                            }
+                                                        },
+                                                        0
+                                                    ]
+                                                }
+                                            ]
+                                        }
+                                    }
+                                },
+                                "Desconegut"
+                            ]
+                        }
+                    }
+                }
+            }
+        }, {
+            "$unset": "funder_org"
+        }, {
             "$group": {
                 "_id": "$uuid",
                 "anyo": {
                     "$first": "$anyo"
+                },
+                "funder_type": {
+                    "$first": "$funder_type"
                 },
                 "awardHolders": {
                     "$first": "$awardHolders"
@@ -99,7 +158,8 @@
                 "_id": {
                     "personUuid": "$personUuid",
                     "anyo": "$anyo",
-                    "awardUuid": "$_id"
+                    "awardUuid": "$_id",
+                    "funder_type": "$funder_type"
                 },
                 "importe_uab_award": {
                     "$first": "$importe_uab_award"
@@ -121,7 +181,8 @@
             "$group": {
                 "_id": {
                     "personUuid": "$_id.personUuid",
-                    "anyo": "$_id.anyo"
+                    "anyo": "$_id.anyo",
+                    "funder_type": "$_id.funder_type"
                 },
                 "proyectos_ip": {
                     "$sum": "$proy_ip"
@@ -157,76 +218,38 @@
                     "$sum": "$importe_ponderado"
                 }
             }
-        }, {
+        },
+        {
             "$lookup": {
                 "from": "Persons",
                 "localField": "_id.personUuid",
                 "foreignField": "uuid",
-                "as": "persona"
+                "as": "personaInfo"
             }
-        }, {
-            "$unwind": "$persona"
-        }, {
-            "$unwind": "$persona.staffOrganizationAssociations"
-        }, {
+        },
+        {
             "$addFields": {
-                "endDateReal": {
-                    "$cond": [{
-                            "$ifNull": ["$persona.staffOrganizationAssociations.period.endDate", false]
-                        }, {
-                            "$toDate": "$persona.staffOrganizationAssociations.period.endDate"
-                        }, null]
-                }
+                "birthdate": { "$arrayElemAt": ["$personaInfo.dateOfBirth", 0] }
             }
-        }, {
-            "$match": {
-                "persona.staffOrganizationAssociations.staffType.term.es_ES": "Académico",
-                "$or": [{
-                        "endDateReal": null
-                    }, {
-                        "$expr": {
-                            "$gt": ["$endDateReal", "$$NOW"]
-                        }
-                    }
-                ],
-                "persona.staffOrganizationAssociations.employmentType.term.es_ES": {
-                    "$not": {
-                        "$regex": "Asociado",
-                        "$options": "i"
-                    }
-                }
-            }
-        }, {
-            "$group": {
-                "_id": {
-                    "personUuid": "$_id.personUuid",
-                    "anyo": "$_id.anyo"
-                },
-                "doc": {
-                    "$first": "$$ROOT"
-                }
-            }
-        }, {
-            "$replaceRoot": {
-                "newRoot": "$doc"
-            }
-        }, {
+        },
+        {
             "$project": {
                 "_id": 0,
                 "PersonaUuid": "$_id.personUuid",
                 "Año": "$_id.anyo",
-                "Persona": {
-                    "$concat": ["$persona.name.firstName", " ", "$persona.name.lastName"]
-                },
+                "FunderType": "$_id.funder_type",
+                "Persona": "",
                 "Proyectos_IP": "$proyectos_ip",
                 "Proyectos_CoIP": "$proyectos_coip",
                 "Proyectos_Miembro": "$proyectos_miembro",
                 "Importe_IP (€)": "$importe_ip",
                 "Importe_CoIP (€)": "$importe_coip",
                 "Importe_Miembro (€)": "$importe_miembro",
-                "Importe_Ponderado (€)": "$importe_ponderado_total"
+                "Importe_Ponderado (€)": "$importe_ponderado_total",
+                "birthdate": 1
             }
-        }, {
+        },
+        {
             "$sort": {
                 "Año": -1,
                 "Importe_Ponderado (€)": -1

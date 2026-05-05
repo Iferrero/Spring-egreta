@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Certificat</title>
+    <script src="config.js"></script>
+    <script src="uab-brand.js" defer></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="uab-theme.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body class="min-h-screen bg-[#f4f6f9]">
+
+<div class="w-full max-w-3xl mx-auto px-6 py-10">
+    <header hidden class="mb-8">
+        <h1 class="text-2xl font-extrabold text-[#2a3037] tracking-tight">
+            Certificats
+        </h1>
+        <p class="text-[#596473] text-sm mt-1">
+            Selecciona una persona vigent i un rang de dates per generar un document Word amb totes les seves ajudes.
+        </p>
+    </header>
+
+    <div class="bg-white border border-[#d4d8de] rounded-2xl shadow-sm p-6 flex flex-col gap-5">
+
+        <!-- Autocomplete persona -->
+        <div>
+            <label for="personaInput" class="block text-xs font-bold text-[#596473] uppercase tracking-wider mb-1">
+                Persona
+            </label>
+            <div class="relative">
+                <input type="text" id="personaInput" autocomplete="off"
+                       placeholder="Cerca per nom o cognom..."
+                       class="w-full rounded-xl border border-[#d4d8de] bg-white px-3 py-2 text-sm text-[#2a3037] focus:outline-none focus:ring-2 focus:ring-[#4F81BD]">
+                <div id="autocompleteDropdown"
+                     class="absolute z-20 left-0 right-0 mt-1 bg-white border border-[#d4d8de] rounded-xl shadow-lg max-h-56 overflow-auto hidden"></div>
+            </div>
+            <input type="hidden" id="personaUuid">
+            <p id="personaSelected" class="text-xs text-[#4F81BD] mt-1 hidden">
+                <i class="fa-solid fa-circle-check mr-1"></i><span id="personaSelectedName"></span>
+            </p>
+        </div>
+
+        <!-- Rang de dates -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+                <label for="dataInici" class="block text-xs font-bold text-[#596473] uppercase tracking-wider mb-1">
+                    Data d'inici
+                </label>
+                <input type="date" id="dataInici" value="1968-01-01"
+                       class="w-full rounded-xl border border-[#d4d8de] bg-white px-3 py-2 text-sm text-[#2a3037] focus:outline-none focus:ring-2 focus:ring-[#4F81BD]">
+            </div>
+            <div>
+                <label for="dataFi" class="block text-xs font-bold text-[#596473] uppercase tracking-wider mb-1">
+                    Data de fi
+                </label>
+                <input type="date" id="dataFi"
+                       class="w-full rounded-xl border border-[#d4d8de] bg-white px-3 py-2 text-sm text-[#2a3037] focus:outline-none focus:ring-2 focus:ring-[#4F81BD]">
+            </div>
+        </div>
+
+        <!-- Filtre de projectes -->
+        <div>
+            <label class="block text-xs font-bold text-[#596473] uppercase tracking-wider mb-2">
+                Filtre de projectes
+            </label>
+            <input type="hidden" id="projectFilter" value="all">
+            <div class="inline-flex rounded-xl border border-[#d4d8de] bg-[#f7f9fc] p-1 gap-1" role="group" aria-label="Filtre de projectes">
+                <button type="button"
+                        class="project-filter-btn px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors"
+                        data-filter="all"
+                        aria-pressed="true">
+                    Tots
+                </button>
+                <button type="button"
+                        class="project-filter-btn px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors"
+                        data-filter="ipcoip"
+                        aria-pressed="false">
+                    Només IP / CoIP
+                </button>
+            </div>
+        </div>
+
+        <!-- Idioma del certificat -->
+        <div>
+            <label class="block text-xs font-bold text-[#596473] uppercase tracking-wider mb-2">
+                Idioma del certificat
+            </label>
+            <input type="hidden" id="langFilter" value="ca">
+            <div class="inline-flex rounded-xl border border-[#d4d8de] bg-[#f7f9fc] p-1 gap-1" role="group" aria-label="Idioma del certificat">
+                <button type="button"
+                        class="lang-filter-btn px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors"
+                        data-lang="ca"
+                        aria-pressed="true">
+                    Català
+                </button>
+                <button type="button"
+                        class="lang-filter-btn px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors"
+                        data-lang="es"
+                        aria-pressed="false">
+                    Castellano
+                </button>
+                <button type="button"
+                        class="lang-filter-btn px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors"
+                        data-lang="en"
+                        aria-pressed="false">
+                    English
+                </button>
+            </div>
+        </div>
+
+        <!-- Botó -->
+        <div class="flex items-center gap-4 mt-2">
+            <button id="btnInforme"
+                    onclick="generarInforme()"
+                    class="flex items-center gap-2 bg-[#4F81BD] hover:bg-[#3a6ca8] text-white font-bold px-6 py-2.5 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                <i class="fa-solid fa-file-word"></i>
+                Crear informe
+            </button>
+            <span id="estatText" class="text-sm text-[#596473] hidden">
+                <i class="fa-solid fa-spinner fa-spin"></i> Generant document...
+            </span>
+        </div>
+
+        <!-- Missatge d'error -->
+        <div id="errorBox" class="hidden bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700">
+        </div>
+    </div>
+
+    <!-- Info card -->
+    <div class="mt-6 bg-white border border-[#d4d8de] rounded-2xl shadow-sm p-5">
+        <h2 class="text-sm font-bold text-[#2a3037] mb-2">
+            <i class="fa-solid fa-circle-info text-[#4F81BD] mr-1"></i>
+            Sobre l'informe
+        </h2>
+        <p class="text-xs text-[#596473] leading-relaxed">
+            El document Word inclourà totes les ajudes competitives i els convenis on la persona seleccionada
+            és membre de l'equip investigador, actius durant el rang de dates indicat.
+            Ordenats del més recent al més antic.
+        </p>
+    </div>
+</div>
+
+<script>
+    document.getElementById('dataFi').value = new Date().toISOString().slice(0, 10);
+
+    let debounceTimer = null;
+
+    const personaInput   = document.getElementById('personaInput');
+    const dropdown       = document.getElementById('autocompleteDropdown');
+    const personaUuidEl  = document.getElementById('personaUuid');
+    const selectedBadge  = document.getElementById('personaSelected');
+    const selectedNameEl = document.getElementById('personaSelectedName');
+    const projectFilterEl = document.getElementById('projectFilter');
+    const projectFilterBtns = Array.from(document.querySelectorAll('.project-filter-btn'));
+    const langFilterEl = document.getElementById('langFilter');
+    const langFilterBtns = Array.from(document.querySelectorAll('.lang-filter-btn'));
+
+    function renderProjectFilterButtons() {
+        const current = projectFilterEl.value || 'all';
+        projectFilterBtns.forEach(btn => {
+            const active = btn.dataset.filter === current;
+            btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+            btn.classList.toggle('bg-[#4F81BD]', active);
+            btn.classList.toggle('text-white', active);
+            btn.classList.toggle('shadow-sm', active);
+            btn.classList.toggle('text-[#2a3037]', !active);
+            btn.classList.toggle('hover:bg-[#e8f1f8]', !active);
+        });
+    }
+
+    function renderLangFilterButtons() {
+        const current = langFilterEl.value || 'ca';
+        langFilterBtns.forEach(btn => {
+            const active = btn.dataset.lang === current;
+            btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+            btn.classList.toggle('bg-[#4F81BD]', active);
+            btn.classList.toggle('text-white', active);
+            btn.classList.toggle('shadow-sm', active);
+            btn.classList.toggle('text-[#2a3037]', !active);
+            btn.classList.toggle('hover:bg-[#e8f1f8]', !active);
+        });
+    }
+
+    projectFilterBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            projectFilterEl.value = btn.dataset.filter || 'all';
+            renderProjectFilterButtons();
+        });
+    });
+
+    langFilterBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            langFilterEl.value = btn.dataset.lang || 'ca';
+            renderLangFilterButtons();
+        });
+    });
+
+    renderProjectFilterButtons();
+    renderLangFilterButtons();
+
+    personaInput.addEventListener('input', () => {
+        clearTimeout(debounceTimer);
+        // Clear selected uuid when the user types
+        personaUuidEl.value = '';
+        selectedBadge.classList.add('hidden');
+
+        const q = personaInput.value.trim();
+        if (q.length < 2) {
+            dropdown.classList.add('hidden');
+            return;
+        }
+        debounceTimer = setTimeout(() => buscarPersones(q), 300);
+    });
+
+    personaInput.addEventListener('blur', () => {
+        setTimeout(() => dropdown.classList.add('hidden'), 200);
+    });
+
+    async function buscarPersones(q) {
+        try {
+            const res = await apiFetch('/persons/search-vigentes?q=' + encodeURIComponent(q));
+            if (!res.ok) return;
+            const data = await res.json();
+            mostrarDropdown(data);
+        } catch (e) { /* ignore network errors */ }
+    }
+
+    function mostrarDropdown(items) {
+        dropdown.innerHTML = '';
+        if (!items || items.length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'px-3 py-2 text-sm text-[#596473] italic';
+            empty.textContent = 'Cap resultat';
+            dropdown.appendChild(empty);
+            dropdown.classList.remove('hidden');
+            return;
+        }
+        items.forEach(item => {
+            const div = document.createElement('div');
+            div.className = 'px-3 py-2 text-sm text-[#2a3037] hover:bg-[#e8f1f8] cursor-pointer';
+            div.textContent = item.nombre;
+            div.addEventListener('mousedown', () => {
+                personaInput.value      = item.nombre;
+                personaUuidEl.value     = item.uuid;
+                selectedNameEl.textContent = item.nombre;
+                selectedBadge.classList.remove('hidden');
+                dropdown.classList.add('hidden');
+            });
+            dropdown.appendChild(div);
+        });
+        dropdown.classList.remove('hidden');
+    }
+
+    function mostrarError(msg) {
+        const box = document.getElementById('errorBox');
+        box.textContent = msg;
+        box.classList.remove('hidden');
+    }
+
+    function netejarError() {
+        document.getElementById('errorBox').classList.add('hidden');
+    }
+
+    function generarInforme() {
+        netejarError();
+
+        const personUuid = personaUuidEl.value.trim();
+        const startDate  = document.getElementById('dataInici').value;
+        const endDate    = document.getElementById('dataFi').value;
+        const projectFilter = document.getElementById('projectFilter').value || 'all';
+        const lang = document.getElementById('langFilter').value || 'ca';
+
+        if (!personUuid) {
+            mostrarError('Has de seleccionar una persona de la llista de suggeriments.');
+            return;
+        }
+        if (!startDate || !endDate) {
+            mostrarError('Has d\'indicar les dates d\'inici i fi.');
+            return;
+        }
+        if (startDate > endDate) {
+            mostrarError('La data d\'inici ha de ser anterior o igual a la data de fi.');
+            return;
+        }
+
+        const btn  = document.getElementById('btnInforme');
+        const estat = document.getElementById('estatText');
+        btn.disabled = true;
+        estat.classList.remove('hidden');
+
+        const bases = (window.APP_CONFIG && window.APP_CONFIG.apiBaseCandidates)
+            || [window.APP_CONFIG && window.APP_CONFIG.apiBaseUrl || '/api'];
+        const base = Array.from(new Set(bases.filter(Boolean)))[0];
+        const url = base.replace(/\/$/, '') +
+            '/persons/informe-word-persona' +
+            '?personUuid=' + encodeURIComponent(personUuid) +
+            '&startDate='  + encodeURIComponent(startDate) +
+            '&endDate='    + encodeURIComponent(endDate) +
+            '&projectFilter=' + encodeURIComponent(projectFilter) +
+            '&lang=' + encodeURIComponent(lang);
+
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = '';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+
+        setTimeout(() => {
+            btn.disabled = false;
+            estat.classList.add('hidden');
+        }, 3000);
+    }
+</script>
+</body>
+</html>

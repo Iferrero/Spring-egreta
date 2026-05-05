@@ -1,14 +1,105 @@
-// Asegura que el select de modo awards siempre dispara la recarga
-document.addEventListener('DOMContentLoaded', function() {
-    var select = document.getElementById('selectAwardsDept');
-    if (select) {
-        select.addEventListener('change', function() {
-            programarRefresco();
-        });
+/**
+ * Renderiza un gráfico de pastel con la proporción de PDI que ha generado ingresos y la que no.
+ * @param {Array<object>} filas - Filas de datos de personas (resumen).
+ */
+function renderGraficoPdiIngresos(filas) {
+    // Contar PDI con ingresos (>0) y sin ingresos (==0)
+    let conIngresos = 0;
+    let sinIngresos = 0;
+    (filas || []).forEach(f => {
+        const importe = Number(f['Importe_Ponderado (€)'] ?? f.importePonderado ?? 0);
+        if (importe > 0) conIngresos++;
+        else sinIngresos++;
+    });
+
+    // Crear o reutilizar el contenedor
+    let container = document.getElementById('chartPdiIngresos');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'chartPdiIngresos';
+        container.style = 'width: 100%; max-width: 340px; height: 260px; margin: 0 auto 18px auto;';
+        // Insertar antes del grid de cuartiles si existe
+        const grid = document.getElementById('cuartilesPersonasGrid');
+        if (grid && grid.parentNode) {
+            grid.parentNode.insertBefore(container, grid);
+        } else {
+            document.body.appendChild(container);
+        }
     }
-});
+
+    // Inicializar ECharts
+    const chart = echarts.init(container);
+    chart.setOption({
+        title: {
+            text: 'PDI segons generació d\'ingressos',
+            left: 'center',
+            top: 10,
+            textStyle: { fontSize: 15, fontWeight: 700 }
+        },
+        tooltip: {
+            trigger: 'item',
+            formatter: p => `<b>${p.name}</b>: <b>${p.value}</b> (${p.percent.toFixed(1)}%)`
+        },
+        legend: {
+            orient: 'horizontal',
+            bottom: 0,
+            left: 'center',
+            textStyle: { fontSize: 11 },
+            itemWidth: 12, itemHeight: 12
+        },
+        series: [{
+            name: 'PDI',
+            type: 'pie',
+            radius: ['40%', '70%'],
+            center: ['50%', '50%'],
+            avoidLabelOverlap: true,
+            label: {
+                show: true,
+                formatter: p => `${p.name}: ${p.value}`,
+                fontSize: 13,
+                fontWeight: 600
+            },
+            labelLine: { show: true },
+            data: [
+                { value: conIngresos, name: 'Amb ingressos', itemStyle: { color: UAB_COLORS.campus } },
+                { value: sinIngresos, name: 'Sense ingressos', itemStyle: { color: UAB_COLORS.ocas } }
+            ]
+        }]
+    });
+}
+/**
+ * Calcula la edad a partir de una fecha de nacimiento en formato ISO (YYYY-MM-DD) o Date.
+ * @param {string|Date} fechaNacimiento
+ * @returns {number|null} Edad en años o null si no se puede calcular
+ */
+function calcularEdad(fechaNacimiento) {
+    if (!fechaNacimiento) return null;
+    let fecha;
+    if (typeof fechaNacimiento === 'string') {
+        // Acepta formatos YYYY-MM-DD, YYYY/MM/DD, o ISO
+        const clean = fechaNacimiento.replace(/\//g, '-');
+        fecha = new Date(clean);
+        if (isNaN(fecha)) return null;
+    } else if (fechaNacimiento instanceof Date) {
+        fecha = fechaNacimiento;
+    } else {
+        return null;
+    }
+    const hoy = new Date();
+    let edad = hoy.getFullYear() - fecha.getFullYear();
+    const m = hoy.getMonth() - fecha.getMonth();
+    if (m < 0 || (m === 0 && hoy.getDate() < fecha.getDate())) {
+        edad--;
+    }
+    return edad;
+}
+
 // Instancia global para el gráfico de evolución persona vs depto
 let chartEvolucionPersonaDept = null;
+// Instancia global para el gráfico de cuartiles de ingresos
+let chartCuartilesIngresos = null;
+let chartCuartilesPie = null;
+
 
 /**
  * Renderiza el gráfico de líneas doble: evolución investigador vs media departamento
@@ -17,18 +108,20 @@ let chartEvolucionPersonaDept = null;
 function renderGraficoEvolucionPersonaDept(rows) {
     const container = document.getElementById('chartEvolucionPersonaDept');
     if (!container) return;
-    if (chartEvolucionPersonaDept && typeof chartEvolucionPersonaDept.dispose === 'function') {
-        chartEvolucionPersonaDept.dispose();
-        chartEvolucionPersonaDept = null;
-    }
+    chartEvolucionPersonaDept?.dispose();
     chartEvolucionPersonaDept = echarts.init(container);
     const anios = rows.map(r => r.anio);
     const personaData = rows.map(r => r.personaImporte);
     const deptoData = rows.map(r => r.deptoMedia);
     chartEvolucionPersonaDept.setOption({
-        tooltip: { trigger: 'axis' },
+        tooltip: {
+            trigger: 'axis',
+            formatter: params => params.map(p =>
+                `${p.marker} ${p.seriesName}: <b>${formatearNumero(p.value)} €</b>`
+            ).join('<br>')
+        },
         legend: { data: ['Investigador', 'Mitja Dept.'], top: 10 },
-        grid: { left: 60, right: 60, top: 40, bottom: 40 },
+        grid: { left: '5%', right: 40, top: 40, bottom: 40, containLabel: true },
         xAxis: {
             type: 'category',
             data: anios,
@@ -36,20 +129,16 @@ function renderGraficoEvolucionPersonaDept(rows) {
             nameLocation: 'middle',
             nameGap: 30
         },
-        yAxis: [
-            {
-                type: 'value',
-                name: '€ Investigador',
-                position: 'left',
-                axisLabel: { formatter: value => formatearNumero(value) }
-            },
-            {
-                type: 'value',
-                name: '€ Mitja Dept.',
-                position: 'right',
-                axisLabel: { formatter: value => formatearNumero(value) }
+        yAxis: {
+            type: 'value',
+            name: '€ Mitja Dept.',
+            position: 'left',
+            axisLabel: {
+                formatter: value => formatearNumero(value) + ' €',
+                overflow: 'truncate',
+                width: 120
             }
-        ],
+        },
         series: [
             {
                 name: 'Investigador',
@@ -67,7 +156,7 @@ function renderGraficoEvolucionPersonaDept(rows) {
                 name: 'Mitja Dept.',
                 type: 'line',
                 data: deptoData,
-                yAxisIndex: 1,
+                yAxisIndex: 0,
                 smooth: true,
                 lineStyle: { color: UAB_COLORS.cala, width: 3, type: 'dashed' },
                 itemStyle: { color: UAB_COLORS.cala },
@@ -78,173 +167,233 @@ function renderGraficoEvolucionPersonaDept(rows) {
         ]
     });
 }
+// --- Chips y dropdown visual para departamentos ---
 /**
- * Renderiza el gráfico de Ranking Percentil de investigadores según su importe ponderado.
- * @param {Map} agrupadoPorPersona - Mapa de personas con sus ayudas y totales.
+ * Calcula els grups de quartils a partir d'un mapa de persones amb importePonderado.
+ * @param {Map} agrupadoPorPersona
+ * @returns {Array<{label:string,color:string,bg:string,border:string,textColor:string,items:Array}>}
  */
-function renderGraficoRankingPercentil(agrupadoPorPersona) {
-    const container = document.getElementById('chartRankingPercentil');
-    if (!container) return;
-    if (
-        chartRankingPercentil &&
-        typeof chartRankingPercentil.dispose === 'function'
-    ) {
-        chartRankingPercentil.dispose();
-        chartRankingPercentil = null;
+function calcularQuartilesGrups(agrupadoPorPersona) {
+    const personas = Array.from(agrupadoPorPersona.values()).map(p => ({
+        nom: p.nombre ?? p.nom ?? p.persona ?? '',
+        uuid: p.uuid ?? p.personaUuid ?? '',
+        importPonderat: p.importePonderado ?? 0,
+        edad: p.edad ?? null
+    }));
+    const sorted = personas.slice().sort((a, b) => b.importPonderat - a.importPonderat);
+    const n = sorted.length;
+    const grups = [
+        { label: '≥ 95 · Top 5%',        color: '#c9a227', bg: '#f5efcc', border: '#e0d9b6', textColor: '#7a6200', items: [] },
+        { label: '≥ 75 · Alt rendiment',  color: '#1a9e6b', bg: '#d1f4e4', border: '#a3e4c7', textColor: '#0f5132', items: [] },
+        { label: '≥ 50 · Mitjana',        color: '#1a7cff', bg: '#dfe9f9', border: '#b5c9e6', textColor: '#084298', items: [] },
+        { label: '< 50 · Per sota',       color: '#888',    bg: '#f8f9fa', border: '#e2e3e5', textColor: '#6c757d', items: [] }
+    ];
+    if (n === 0) return grups;
+    if (n <= 4) {
+        const sizes = [Math.ceil(n / 4), 0, 0, 0];
+        sizes[1] = Math.ceil((n - sizes[0]) / 3);
+        sizes[2] = Math.ceil((n - sizes[0] - sizes[1]) / 2);
+        sizes[3] = n - sizes[0] - sizes[1] - sizes[2];
+        let idx = 0;
+        for (let g = 0; g < 4; g++) {
+            for (let k = 0; k < sizes[g] && idx < n; k++, idx++) grups[g].items.push(sorted[idx]);
+        }
     } else {
-        chartRankingPercentil = null;
+        sorted.forEach((p, i) => { p.percentil = (1 - i / (n - 1)) * 100; });
+        for (const p of sorted) {
+            if (p.percentil >= 95)      grups[0].items.push(p);
+            else if (p.percentil >= 75) grups[1].items.push(p);
+            else if (p.percentil >= 50) grups[2].items.push(p);
+            else                        grups[3].items.push(p);
+        }
+    }
+    return grups;
+}
+
+/**
+ * Renderiza el gráfico de distribución por cuartiles de ingresos.
+ * @param {Map} agrupadoPorPersona - Mapa de personas con importePonderado.
+ */
+function renderGraficoCuartilesIngresos(agrupadoPorPersona) {
+    const container = document.getElementById('chartCuartilesIngresos');
+    if (!container) return;
+    chartCuartilesIngresos?.dispose();
+    chartCuartilesIngresos = null;
+
+    const grups = calcularQuartilesGrups(agrupadoPorPersona);
+
+    // Grupos con datos (para gráficos)
+    const grupsPoblats = grups.filter(g => g.items.length > 0);
+
+    // 4a. Gráfico de pastel: nº de personas por grupo
+    const pieContainer = document.getElementById('chartCuartilesPie');
+    if (pieContainer) {
+        chartCuartilesPie?.dispose();
+        chartCuartilesPie = echarts.init(pieContainer);
+        if (grupsPoblats.length === 0) {
+            chartCuartilesPie.setOption({ title: { text: 'Sense dades', left: 'center', top: 'center', textStyle: { color: '#aaa', fontSize: 13 } } });
+        } else {
+            chartCuartilesPie.setOption({
+                tooltip: {
+                    trigger: 'item',
+                    formatter: p => `<b>${p.name}</b><br>Persones: <b>${p.value}</b><br>${p.percent.toFixed(1)}%`
+                },
+                legend: {
+                    orient: 'horizontal',
+                    bottom: 4,
+                    left: 'center',
+                    textStyle: { fontSize: 10 },
+                    itemWidth: 10, itemHeight: 10,
+                    formatter: name => name.split('·')[0].trim()
+                },
+                series: [{
+                    name: 'Quartil',
+                    type: 'pie',
+                    radius: ['35%', '62%'],
+                    center: ['50%', '44%'],
+                    avoidLabelOverlap: true,
+                    label: {
+                        show: true,
+                        formatter: p => p.value > 0 ? `${p.value}` : '',
+                        fontSize: 13,
+                        fontWeight: 700
+                    },
+                    labelLine: { show: true },
+                    data: grupsPoblats.map(g => ({
+                        name: g.label,
+                        value: g.items.length,
+                        itemStyle: { color: g.color }
+                    }))
+                }]
+            });
+        }
     }
 
-    // 1. Calcular importe ponderado por persona
-    const personas = Array.from(agrupadoPorPersona.values()).map(p => ({
-        nom: p.nombre,
-        uuid: p.uuid,
-        importPonderat: p.importePonderado ?? 0
-    }));
-    // 2. Ordenar descendente por importe ponderado
-    const personasSorted = personas.slice().sort((a, b) => b.importPonderat - a.importPonderat);
-    // 3. Calcular percentil para cada persona
-    const n = personasSorted.length;
-    const percentiles = new Map();
-    personasSorted.forEach((p, i) => {
-        percentiles.set(p.uuid, n > 1 ? (1 - i / (n - 1)) * 100 : 100);
-    });
-    // 4. Datos para el eje X (nombres) e Y (percentil)
-    const nombres = personasSorted.map(p => p.nom);
-    const pcts = personasSorted.map(p => percentiles.get(p.uuid));
-
-    // 5. Renderizar gráfico
-    chartRankingPercentil = echarts.init(container);
-    chartRankingPercentil.setOption({
-        grid: { left: 60, right: 30, top: 40, bottom: 80 },
-        tooltip: {
-            trigger: 'axis',
-            formatter: function(params) {
-                const i = params[0].dataIndex;
-                const p = personasSorted[i];
-                return `<b>${p.nom}</b><br>Import ponderat: <b>${formatearNumero(p.importPonderat)} €</b><br>Percentil: <b>${pcts[i].toFixed(1)}</b>`;
-            }
-        },
-        xAxis: {
-            type: 'category',
-            data: nombres,
-            axisLabel: {
-                interval: 0,
-                rotate: 45,
-                fontSize: 10,
-                formatter: function(value) {
-                    return value.length > 12 ? value.slice(0, 12) + '…' : value;
+    // 4b. Gráfico de barras horizontales: número de personas por grupo (altura) y dinero ponderado como etiqueta interna
+    // Invertimos para que ECharts (que renderiza de abajo a arriba) muestre Top 5% arriba
+    const grupsPoblatsInv = [...grupsPoblats].reverse();
+    chartCuartilesIngresos = echarts.init(container);
+    if (grupsPoblatsInv.length === 0) {
+        chartCuartilesIngresos.setOption({ title: { text: 'Sense dades', left: 'center', top: 'center', textStyle: { color: '#aaa', fontSize: 13 } } });
+    } else {
+        chartCuartilesIngresos.setOption({
+            grid: { containLabel: true, left: 8, right: 16, top: 10, bottom: 10 },
+            tooltip: {
+                trigger: 'axis',
+                formatter: params => {
+                    const g = grupsPoblatsInv[params[0].dataIndex];
+                    const total = g.items.reduce((s, p) => s + p.importPonderat, 0);
+                    return `<b>${g.label}</b><br>Persones: <b>${g.items.length}</b><br>Total ingressos: <b>${formatearNumero(total)} €</b>`;
                 }
             },
-            name: 'Investigadors (ordenats)',
-            nameLocation: 'middle',
-            nameGap: 50
-        },
-        yAxis: {
-            type: 'value',
-            min: 0,
-            max: 100,
-            axisLabel: {
-                formatter: '{value}'
+            xAxis: {
+                type: 'value',
+                axisLabel: { formatter: v => v + 'p', fontSize: 10 },
+                splitLine: { lineStyle: { type: 'dashed', color: '#eee' } }
             },
-            name: 'Percentil',
-            nameLocation: 'middle',
-            nameGap: 40
-        },
-        series: [
-            {
-                name: 'Ranking Percentil',
-                type: 'line',
-                data: pcts,
-                smooth: true,
-                lineStyle: { color: UAB_COLORS.campus, width: 3 },
-                itemStyle: { color: UAB_COLORS.campus },
-                symbol: 'circle',
-                symbolSize: 7
-            }
-        ]
-    });
-
-    // 6. Renderizar tabla con Tabulator
-    const tablaContainer = document.getElementById('tablaRankingPercentilTable');
-    if (tablaContainer) {
-        // Limpiar el contenedor
-        tablaContainer.innerHTML = '';
-        // Preparar datos para la tabla
-        const tablaData = personasSorted.map((p, i) => ({
-            nombre: p.nom,
-            percentil: pcts[i].toFixed(1),
-            importe: formatearNumero(p.importPonderat)
-        }));
-        // Crear instancia Tabulator
-        new Tabulator(tablaContainer, {
-            data: tablaData,
-            layout: 'fitColumns',
-            columns: [
-                { title: 'Nom', field: 'nombre', widthGrow: 2 },
-                { title: 'Percentil', field: 'percentil',hozAlign: 'center',  widthGrow: 1,
-                    formatter: function(cell) {
-                        const pct = parseFloat(cell.getValue());
-                        const el = cell.getElement(); 
-                        if (pct >= 95) {
-                            el.style.backgroundColor = '#f5efcc';
-                            el.style.color = '#000';
-                            el.style.fontWeight = 'bold';
-                        } else if (pct >= 75) {
-                            el.style.backgroundColor = '#d1f4e4';
-                            el.style.color = '#0f5132';
-                        } else if (pct >= 50) {
-                            el.style.backgroundColor = '#dfe9f9';
-                            el.style.color = '#084298';
-                        } else {
-                            el.style.backgroundColor = '#f8f9fa';
-                            el.style.color = '#6c757d';
-                        }
-
-                        return pct; // Retornamos solo el número
-                    }
-                },                
-                { title: 'Import ponderat (€)', field: 'importe', hozAlign: 'right', widthGrow: 1 }
-            ],
-            height: '350px',
-            responsiveLayout: true,
-            movableColumns: true
+            yAxis: {
+                type: 'category',
+                data: grupsPoblatsInv.map(g => g.label),
+                axisLabel: { fontSize: 10, fontWeight: 600, overflow: 'none' }
+            },
+            series: [{
+                type: 'bar',
+                barMaxWidth: 44,
+                data: grupsPoblatsInv.map(g => ({
+                    value: g.items.length,
+                    totalImporte: g.items.reduce((s, p) => s + p.importPonderat, 0),
+                    itemStyle: { color: g.color, borderRadius: [0, 6, 6, 0] }
+                })),
+                label: {
+                    show: true,
+                    position: 'insideRight',
+                    formatter: params => {
+                        const g = grupsPoblatsInv[params.dataIndex];
+                        const total = g.items.reduce((s, p) => s + p.importPonderat, 0);
+                        return `${g.items.length}p\n${formatearNumero(total)} €`;
+                    },
+                    fontSize: 11,
+                    fontWeight: 700,
+                    color: '#fff',
+                    textBorderColor: 'transparent',
+                    lineHeight: 15
+                }
+            }]
         });
     }
-}
-// --- Chips y dropdown visual para departamentos ---
-function renderizarChipsDepartamentos() {
-    const container = document.getElementById('departamentoChipsContainer');
-    const select = document.getElementById('departamentoSelect');
-    container.innerHTML = '';
-    // Sincroniza el select oculto
-    Array.from(select.options).forEach(opt => {
-        opt.selected = departamentosSeleccionados.includes(opt.value);
+
+    // 5. Cards con nombres abreviados
+    const grid = document.getElementById('cuartilesPersonasGrid');
+    if (!grid) return;
+    grid.innerHTML = '';
+    grups.forEach(g => {
+        const card = document.createElement('div');
+        card.style.cssText = `background:${g.bg};border:1px solid ${g.border};border-radius:12px;padding:12px;`;
+        
+                        
+        const chips = g.items.map(p => {
+            const nombreEscapado = p.nom.replace(/'/g, "\\'");
+            const uuidEscapado = p.uuid.replace(/'/g, "\\'");
+            return `<span title="${p.nom}" 
+            onclick="aplicarSeleccionPersona ({persona:'${nombreEscapado}',personaUuid:'${uuidEscapado}'})"                             
+            style="color: ${g.textColor};"
+            class="chip-persona-clicable">
+            ${p.nom}</span>`;
+        }).join('');
+        card.innerHTML = `
+            <div style="font-size:12px;font-weight:700;color:${g.textColor};margin-bottom:6px">
+                ${g.label} <span style="font-weight:400;opacity:0.6">(${g.items.length})</span>
+            </div>
+            <div>${chips || '<span style="font-size:11px;opacity:0.45">Cap investigador</span>'}</div>`;
+        grid.appendChild(card);
     });
-    departamentosSeleccionados.forEach(uuid => {
-        const dep = departamentosCatalogo.find(d => d.uuid === uuid);
-        if (!dep) return;
+}
+
+/**
+ * Renderitza un panell de chips genèric.
+ * @param {string} containerId  ID del contenidor de chips
+ * @param {string} selectId     ID del select ocult associat
+ * @param {string[]} items      Valors seleccionats
+ * @param {function(string):string} getLabel  Retorna el text de la chip per a cada valor
+ * @param {string} removeAttr   Nom de l'atribut data- del botó d'eliminar
+ * @param {function(string):void} onRemove   Cridat quan l'usuari elimina un element
+ * @param {string} labelId      ID de l'element de text del botó del desplegable
+ * @param {string} emptyText    Text quan no hi ha selecció
+ * @param {function():void} [onAfter]  Tasca addicional que s'executa al final
+ */
+function renderChipsPanel(containerId, selectId, items, getLabel, removeAttr, onRemove, labelId, emptyText, onAfter) {
+    const container = document.getElementById(containerId);
+    const select = document.getElementById(selectId);
+    container.innerHTML = '';
+    Array.from(select.options).forEach(opt => {
+        opt.selected = items.includes(opt.value);
+    });
+    items.forEach(value => {
+        const label = getLabel(value);
+        if (label == null) return;
         const chip = document.createElement('span');
         chip.className = 'inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 text-xs font-semibold';
-        chip.innerHTML = `${dep.nombre} <button type="button" class="ml-1 text-indigo-500 hover:text-indigo-700" data-remove-dep="${dep.uuid}"><i class="fa-solid fa-xmark"></i></button>`;
+        chip.innerHTML = `${label} <button type="button" class="ml-1 text-indigo-500 hover:text-indigo-700" ${removeAttr}="${value}"><i class="fa-solid fa-xmark"></i></button>`;
         container.appendChild(chip);
     });
-    // Evento para quitar departamento
-    container.querySelectorAll('button[data-remove-dep]').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            const uuid = e.currentTarget.getAttribute('data-remove-dep');
-            quitarDepartamentoSeleccionado(uuid);
-        });
+    container.querySelectorAll(`button[${removeAttr}]`).forEach(btn => {
+        btn.addEventListener('click', e => onRemove(e.currentTarget.getAttribute(removeAttr)));
     });
-    // Actualiza el label del botón
-    const label = document.getElementById('departamentoDropdownLabel');
-    if (departamentosSeleccionados.length === 0) {
-        label.textContent = 'Afegeix departament...';
-    } else {
-        label.textContent = 'Afegeix més...';
-    }
-    // Dispara el refresco de filtros
-    programarRefresco();
+    const btnLabel = document.getElementById(labelId);
+    btnLabel.textContent = items.length === 0 ? emptyText : 'Afegeix més...';
+    if (onAfter) onAfter();
+    if (!_inicializando) programarRefresco();
+}
+
+function renderizarChipsDepartamentos() {
+    renderChipsPanel(
+        'departamentoChipsContainer', 'departamentoSelect',
+        departamentosSeleccionados,
+        uuid => { const d = departamentosCatalogo.find(x => x.uuid === uuid); return d ? d.nombre : null; },
+        'data-remove-dep',
+        quitarDepartamentoSeleccionado,
+        'departamentoDropdownLabel', 'Afegeix departament...'
+    );
 }
 
 function toggleDepartamentoSeleccionado(uuid) {
@@ -254,12 +403,22 @@ function toggleDepartamentoSeleccionado(uuid) {
         // Solo permitir uno: sustituir el anterior
         departamentosSeleccionados = [uuid];
         renderizarChipsDepartamentos();
+        // Limpiar el análisis IA si existe el div
+        const aiDeptOutput = document.getElementById('ai-dept-output');
+        if (aiDeptOutput) {
+            aiDeptOutput.textContent = "Prem el botó per obtenir l'anàlisi automàtica del departament.";
+        }
     }
 }
 
 function quitarDepartamentoSeleccionado(uuid) {
     departamentosSeleccionados = departamentosSeleccionados.filter(d => d !== uuid);
     renderizarChipsDepartamentos();
+    // Limpiar el análisis IA si existe el div
+    const aiDeptOutput = document.getElementById('ai-dept-output');
+    if (aiDeptOutput) {
+        aiDeptOutput.textContent = "Prem el botó per obtenir l'anàlisi automàtica del departament.";
+    }
 }
 
 function abrirDropdownDepartamentos() {
@@ -335,38 +494,15 @@ async function cargarCategorias() {
 }
 
 function renderizarChipsCategorias() {
-    const container = document.getElementById('categoriaChipsContainer');
-    const select = document.getElementById('categoriaSelect');
-    container.innerHTML = '';
-    // Sincroniza el select oculto
-    Array.from(select.options).forEach(opt => {
-        opt.selected = categoriasSeleccionadas.includes(opt.value);
-    });
-    categoriasSeleccionadas.forEach(cat => {
-        const chip = document.createElement('span');
-        chip.className = 'inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 text-xs font-semibold';
-        chip.innerHTML = `${cat} <button type="button" class="ml-1 text-indigo-500 hover:text-indigo-700" data-remove-cat="${cat}"><i class="fa-solid fa-xmark"></i></button>`;
-        container.appendChild(chip);
-    });
-    // Evento para quitar categoría
-    container.querySelectorAll('button[data-remove-cat]').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            const cat = e.currentTarget.getAttribute('data-remove-cat');
-            quitarCategoriaSeleccionada(cat);
-        });
-    });
-    // Actualiza el label del botón
-    const label = document.getElementById('categoriaDropdownLabel');
-    if (categoriasSeleccionadas.length === 0) {
-        label.textContent = 'Afegeix categoria...';
-    } else {
-        label.textContent = 'Afegeix més...';
-    }
-
-    actualitzarTipusSegonsCategories();
-
-    // Dispara el refresco de filtros
-    programarRefresco();
+    renderChipsPanel(
+        'categoriaChipsContainer', 'categoriaSelect',
+        categoriasSeleccionadas,
+        cat => cat,
+        'data-remove-cat',
+        quitarCategoriaSeleccionada,
+        'categoriaDropdownLabel', 'Afegeix categoria...',
+        actualitzarTipusSegonsCategories
+    );
 }
 
 function toggleCategoriaSeleccionada(cat) {
@@ -515,38 +651,15 @@ function actualitzarTipusSegonsCategories() {
 }
 
 function renderitzarChipsTipus() {
-    const container = document.getElementById('tipusChipsContainer');
-    const select = document.getElementById('tipusSelect');
-    container.innerHTML = '';
-
-    Array.from(select.options).forEach(opt => {
-        opt.selected = tipusSeleccionados.includes(opt.value);
-    });
-
-    tipusSeleccionados.forEach(tipusNom => {
-        const chip = document.createElement('span');
-        chip.className = 'inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 text-xs font-semibold';
-        chip.innerHTML = `${tipusNom} <button type="button" class="ml-1 text-indigo-500 hover:text-indigo-700" data-remove-tipus="${tipusNom}"><i class="fa-solid fa-xmark"></i></button>`;
-        container.appendChild(chip);
-    });
-
-    container.querySelectorAll('button[data-remove-tipus]').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            const tipusNom = e.currentTarget.getAttribute('data-remove-tipus');
-            quitarTipusSeleccionat(tipusNom);
-        });
-    });
-
-    const label = document.getElementById('tipusDropdownLabel');
-    if (tipusSeleccionados.length === 0) {
-        label.textContent = 'Afegeix tipus...';
-    } else {
-        label.textContent = 'Afegeix més...';
-    }
-
-    // Compatibilidad con código legado que lee desde window.
-    window.tipusSeleccionados = [...tipusSeleccionados];
-    programarRefresco();
+    renderChipsPanel(
+        'tipusChipsContainer', 'tipusSelect',
+        tipusSeleccionados,
+        tipusNom => tipusNom,
+        'data-remove-tipus',
+        quitarTipusSeleccionat,
+        'tipusDropdownLabel', 'Afegeix tipus...',
+        () => { window.tipusSeleccionados = [...tipusSeleccionados]; }
+    );
 }
 
 function toggleTipusSeleccionat(tipusNom) {
@@ -601,12 +714,45 @@ document.getElementById('tipusDropdownBtn').addEventListener('click', (e) => {
 
 /** Estado de refresco/debounce. */
 let refrescoTimer = null;
+let currentLoadController = null;
+let currentLoadSeq = 0;
+/** Evita llamadas a cargarDatos durante la inicialización (carga de catálogos). */
+let _inicializando = true;
+
+const _requestCache = new Map();
+
+function _cacheKey(params, modo) {
+    const sorted = new URLSearchParams([...params.entries()].sort());
+    return `${modo}|${sorted.toString()}`;
+}
+
+/**
+ * Afegeix els filtres de categoria, tipus i deptUuid a un URLSearchParams.
+ * @param {URLSearchParams} params
+ * @param {{categoria?:string|string[], tipus?:string|string[], deptUuid?:string|string[]}} filtres
+ */
+function appendFilterParams(params, { categoria, tipus, deptUuid } = {}) {
+    if (Array.isArray(deptUuid) && deptUuid.length > 0) {
+        deptUuid.forEach(dep => params.append('deptUuid', dep));
+    } else if (typeof deptUuid === 'string' && deptUuid) {
+        params.set('deptUuid', deptUuid);
+    }
+    if (Array.isArray(categoria) && categoria.length > 0) {
+        categoria.forEach(cat => params.append('categoria', cat));
+    } else if (typeof categoria === 'string' && categoria) {
+        params.set('categoria', categoria);
+    }
+    if (Array.isArray(tipus) && tipus.length > 0) {
+        tipus.forEach(t => params.append('tipus', t));
+    } else if (typeof tipus === 'string' && tipus) {
+        params.set('tipus', tipus);
+    }
+}
 
 /** Instancias de gráficos ECharts. */
 let chartImporteAnio = null;
 let chartProyectosAnio = null;
-let chartTopPersonas = null;
-let chartComparativaDept = null;
+const chartComparativaPies = new Map();
 let chartLiderazgo = null;
 let chartQuadrantsPersona = null;
 let chartPersonasConSinProyectos = null;
@@ -616,7 +762,6 @@ let chartPareto = null;
 
 /** Estado de selección y datos en memoria del dashboard. */
 
-let topPersonasSeleccionables = [];
 let filasResumenActual = [];
 let filasResumenTablaActual = [];
 let personaTopSeleccionada = null;
@@ -631,6 +776,11 @@ let personalDeptCache = new Map();
 let modoTablaResumenActual = 'awardDate';
 // Variable global para la tabla de evolución persona vs departamento
 let tablaEvolucionPersonaDept = null;
+
+// Datos anuales agregados del departamento para el prompt IA
+let aniosDeptoGlobal = [];
+let importesDeptoGlobal = [];
+let proyectosDeptoGlobal = [];
 
 
 const UAB_COLORS = {
@@ -860,32 +1010,7 @@ function renderTablaEvolucionPersonaDept(filas, personaSel) {
         return row;
     });
     // Renderizar gráfico de líneas doble
-    console.log(rows);
     renderGraficoEvolucionPersonaDept(rows);
-    // Crear o actualizar tabla
-    /*if (!tablaEvolucionPersonaDept) {
-        tablaEvolucionPersonaDept = new Tabulator(tablaDiv, {
-            layout: 'fitDataStretch',
-            maxHeight: '40vh',
-            reactiveData: false,
-            placeholder: 'No hi ha dades per a la comparativa.',
-            columns: [
-                { title: 'Any', field: 'anio', sorter: 'number', hozAlign: 'left' },
-                { title: '€ Investigador (Ponderat)', field: 'personaImporte', sorter: 'number', hozAlign: 'right', formatter: (cell) => formatearNumero(cell.getValue()) },
-                { title: '% Creixement Inv.', field: 'crecimiento', sorter: 'number', hozAlign: 'right', formatter: (cell) => {
-                    const v = cell.getValue();
-                    if (v == null || isNaN(v)) return '-';
-                    const num = Number(v);
-                    const texto = `${num > 0 ? '+' : ''}${num.toLocaleString('ca-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`;
-                    if (num > 0) return `<span style=\"color:${UAB_COLORS.campus};font-weight:700;\">${texto}</span>`;
-                    if (num < 0) return `<span style=\"color:${UAB_COLORS.ocas};font-weight:700;\">${texto}</span>`;
-                    return `<span style=\"color:${UAB_COLORS.pissarra};font-weight:700;\">${texto}</span>`;
-                } },
-                { title: '€ Mitjana Dept.', field: 'deptoMedia', sorter: 'number', hozAlign: 'right', formatter: (cell) => formatearNumero(cell.getValue()) }
-            ]
-        });
-    }
-    tablaEvolucionPersonaDept.setData(rows);*/
 }
 
 /**
@@ -1362,6 +1487,13 @@ function inicializarTablas() {
             personaUuid: data.personaUuid || undefined
         });
     });
+
+    document.getElementById('btnDescargarExcelResumen')?.addEventListener('click', () => {
+        if (tablaResumen) tablaResumen.download('xlsx', 'resum-investigadors.xlsx');
+    });
+    document.getElementById('btnDescargarExcelAwards')?.addEventListener('click', () => {
+        if (tablaAwards) tablaAwards.download('xlsx', 'awards-persona.xlsx');
+    });
 }
 
 /**
@@ -1377,45 +1509,23 @@ function renderTabla(filas, modoAnio = 'awardDate', desde = 0, hasta = 0, person
     const resumenRows = resumirFilasPorInvestigador(filas, desde, hasta);
     const sourceRows = completarResumenConPersonal(resumenRows, personalDept, desde, hasta);
     filasResumenTablaActual = sourceRows;
-    console.log('Filas para tabla resumen:', sourceRows);
     const rows = sourceRows.map(f => {
-        if (modoAnio === 'vigencia') {
-            // En modo vigencia, los datos vienen de resumirFilasPorInvestigador
-            // Mapear correctamente los importes y el ponderado
-            const proyectosIp = Number(f['Proyectos_IP'] ?? 0);
-            const proyectosCoip = Number(f['Proyectos_CoIP'] ?? 0);
-            const proyectosMiembro = Number(f['Proyectos_Miembro'] ?? 0);
-            return {
-                anio: f['Año'] ?? '-',
-                personaUuid: f['PersonaUuid'] ?? '',
-                persona: f['Persona'] ?? '-',
-                proyectosIp,
-                proyectosCoip,
-                proyectosMiembro,
-                totalProyectos: proyectosIp + proyectosCoip + proyectosMiembro,
-                importeIp: Number(f['Importe_IP (€)'] ?? 0),
-                importeCoip: Number(f['Importe_CoIP (€)'] ?? 0),
-                importeMiembro: Number(f['Importe_Miembro (€)'] ?? 0),
-                importePonderado: Number(f['Importe_Ponderado (€)'] ?? 0)
-            };
-        } else {
-            const proyectosIp = Number(f['Proyectos_IP'] ?? 0);
-            const proyectosCoip = Number(f['Proyectos_CoIP'] ?? 0);
-            const proyectosMiembro = Number(f['Proyectos_Miembro'] ?? 0);
-            return {
-                anio: f['Año'] ?? '-',
-                personaUuid: f['PersonaUuid'] ?? '',
-                persona: f['Persona'] ?? '-',
-                proyectosIp,
-                proyectosCoip,
-                proyectosMiembro,
-                totalProyectos: proyectosIp + proyectosCoip + proyectosMiembro,
-                importeIp: Number(f['Importe_IP (€)'] ?? 0),
-                importeCoip: Number(f['Importe_CoIP (€)'] ?? 0),
-                importeMiembro: Number(f['Importe_Miembro (€)'] ?? 0),
-                importePonderado: Number(f['Importe_Ponderado (€)'] ?? 0)
-            };
-        }
+        const proyectosIp = Number(f['Proyectos_IP'] ?? 0);
+        const proyectosCoip = Number(f['Proyectos_CoIP'] ?? 0);
+        const proyectosMiembro = Number(f['Proyectos_Miembro'] ?? 0);
+        return {
+            anio: f['Año'] ?? '-',
+            personaUuid: f['PersonaUuid'] ?? '',
+            persona: f['Persona'] ?? '-',
+            proyectosIp,
+            proyectosCoip,
+            proyectosMiembro,
+            totalProyectos: proyectosIp + proyectosCoip + proyectosMiembro,
+            importeIp: Number(f['Importe_IP (€)'] ?? 0),
+            importeCoip: Number(f['Importe_CoIP (€)'] ?? 0),
+            importeMiembro: Number(f['Importe_Miembro (€)'] ?? 0),
+            importePonderado: Number(f['Importe_Ponderado (€)'] ?? 0)
+        };
     });
 
     const personalDeptArray = Array.isArray(personalDept) ? personalDept : [];
@@ -1830,12 +1940,11 @@ function renderGraficoEmploymentTypeConSin(rows, personalDept = []) {
 
 /** Libera instancias de ECharts actuales antes de repintar. */
 function destruirGraficos() {
-    if (chartImporteAnio) { chartImporteAnio.dispose(); chartImporteAnio = null; }
-    if (chartProyectosAnio) { chartProyectosAnio.dispose(); chartProyectosAnio = null; }
-    if (chartTopPersonas) { chartTopPersonas.dispose(); chartTopPersonas = null; }
-    if (chartLiderazgo) { chartLiderazgo.dispose(); chartLiderazgo = null; }
-    if (chartQuadrantsPersona) { chartQuadrantsPersona.dispose(); chartQuadrantsPersona = null; }
-    if (chartPareto) { chartPareto.dispose(); chartPareto = null; }
+    chartImporteAnio?.dispose();    chartImporteAnio = null;
+    chartProyectosAnio?.dispose();  chartProyectosAnio = null;
+    chartLiderazgo?.dispose();      chartLiderazgo = null;
+    chartQuadrantsPersona?.dispose(); chartQuadrantsPersona = null;
+    chartPareto?.dispose();         chartPareto = null;
 }
 
 /**
@@ -1848,50 +1957,32 @@ function agruparPorAnio(filas) {
     filas.forEach(f => {
         const anio = Number(f['Año']);
         if (!Number.isFinite(anio)) return;
+        const cat = f['FunderType'] || 'Desconegut';
         if (!porAnio[anio]) {
             porAnio[anio] = {
                 importeTotal: 0,
+                importePonderado: 0,
                 proyectos: 0,
                 ipcoip: 0,
                 coip: 0,
-                miembro: 0
+                miembro: 0,
+                categorias: {}
             };
         }
-        porAnio[anio].importeTotal += Number(f['Importe_Total (€)'] || 0);
-        porAnio[anio].ipcoip += Number(f['Proyectos_IP'] || 0);
-        porAnio[anio].coip += Number(f['Proyectos_CoIP'] || 0);
-        porAnio[anio].miembro += Number(f['Proyectos_Miembro'] || 0);
-        porAnio[anio].proyectos += Number(f['Proyectos_IP'] || 0) + Number(f['Proyectos_CoIP'] || 0) + Number(f['Proyectos_Miembro'] || 0);
+        const ip = Number(f['Proyectos_IP'] || 0);
+        const coip = Number(f['Proyectos_CoIP'] || 0);
+        const miem = Number(f['Proyectos_Miembro'] || 0);
+        const total = ip + coip + miem;
+        porAnio[anio].importeTotal += Number(f['Importe_IP (€)'] ?? 0) + Number(f['Importe_CoIP (€)'] ?? 0) + Number(f['Importe_Miembro (€)'] ?? 0);
+        porAnio[anio].importePonderado += Number(f['Importe_Ponderado (€)'] ?? 0);
+        porAnio[anio].ipcoip += ip + coip;
+        porAnio[anio].coip += coip;
+        porAnio[anio].miembro += miem;
+        porAnio[anio].proyectos += total;
+        if (!porAnio[anio].categorias[cat]) porAnio[anio].categorias[cat] = 0;
+        porAnio[anio].categorias[cat] += total;
     });
     return porAnio;
-}
-
-/**
- * Calcula top de personas por importe total.
- * @param {Array<object>} filas
- * @param {number} [limite=8]
- * @returns {Array<{persona:string,personaUuid?:string,importe:number}>}
- */
-function agruparTopPersonas(filas, limite = 8) {
-    const porPersona = {};
-    filas.forEach(f => {
-        const persona = f['Persona'] ?? f.persona ?? 'N/D';
-        const personaUuid = f['PersonaUuid'] ?? f.personaUuid;
-        const importe = Number(f['Importe_Total (€)'] ?? f.importeTotal ?? 0);
-        const key = `${personaUuid || 'sin-uuid'}|${persona}`;
-        if (!porPersona[key]) {
-            porPersona[key] = {
-                persona,
-                personaUuid,
-                importe: 0
-            };
-        }
-        porPersona[key].importe += importe;
-    });
-
-    return Object.values(porPersona)
-        .sort((a, b) => b.importe - a.importe)
-        .slice(0, limite);
 }
 
 function obtenerIdentidadPersona(fila) {
@@ -1949,9 +2040,6 @@ function actualizarTitulosGraficos() {
     const sufijo = personaTopSeleccionada ? ` · ${personaTopSeleccionada.persona}` : '';
     document.getElementById('tituloChartImporteAnio').textContent = `Import total per projectes (sense duplicar)${sufijo}`;
     document.getElementById('tituloChartProyectosAnio').textContent = `Projectes per any${sufijo}`;
-    document.getElementById('tituloChartTopPersonas').textContent = personaTopSeleccionada
-        ? `Top persones per import ponderat (seleccionada: ${personaTopSeleccionada.persona})`
-        : 'Top persones per import ponderat (període seleccionat)';
 }
 
 function esMismaPersonaSeleccionada(persona) {
@@ -1967,6 +2055,20 @@ function esMismaPersonaSeleccionada(persona) {
     }
 
     return normalizarTexto(actual.persona) === normalizarTexto(nueva.persona);
+}
+
+function renderizarChipPersona() {
+    const container = document.getElementById('personaChipContainer');
+    if (!container) return;
+    container.innerHTML = '';
+    if (!personaTopSeleccionada || !personaTopSeleccionada.persona) return;
+    const chip = document.createElement('span');
+    chip.className = 'inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 text-xs font-semibold';
+    chip.innerHTML = `${personaTopSeleccionada.persona} <button type="button" class="ml-1 text-indigo-500 hover:text-indigo-700"><i class="fa-solid fa-xmark"></i></button>`;
+    chip.querySelector('button').addEventListener('click', () => {
+        aplicarSeleccionPersona(personaTopSeleccionada);
+    });
+    container.appendChild(chip);
 }
 
 async function aplicarSeleccionPersona(persona) {
@@ -1985,20 +2087,31 @@ async function aplicarSeleccionPersona(persona) {
 
     const yaSeleccionada = esMismaPersonaSeleccionada(identidad);
     personaTopSeleccionada = yaSeleccionada ? null : identidad;
-    // Filtrar filas por persona seleccionada si hay selección
-    let filasFiltradas = filasResumenActual;
+    renderizarChipPersona();
+    // Filtrar filas per persona seleccionada (només per al gràfic de projectes per any)
+    let filasFiltrades = filasResumenActual;
     if (!yaSeleccionada && identidad.personaUuid) {
-        filasFiltradas = filasResumenActual.filter(f => {
+        filasFiltrades = filasResumenActual.filter(f => {
             return (f['PersonaUuid'] ?? f.personaUuid ?? '') === identidad.personaUuid;
         });
     }
-    renderGraficos(filasFiltradas);
+    // Renderitzem tots els gràfics amb les dades globals (sense filtrar per persona)
+    renderGraficos(filasResumenActual);
+    // Sobreescrivim només el gràfic "Projectes per any" amb les dades de la persona
+    renderGraficoProjectesPerAny(filasFiltrades);
     
     // Mostrar/ocultar tabla de evolución persona vs departamento
     const seccionEvol = document.getElementById('seccionEvolucionPersonaDept');
     if (personaTopSeleccionada && seccionEvol) {
         seccionEvol.classList.remove('hidden');
-        renderTablaEvolucionPersonaDept(filasFiltradas, personaTopSeleccionada);
+        // Cambiar el título del gráfico de evolución con el nombre de la persona
+        const tituloEvol = seccionEvol.querySelector('h2');
+        if (tituloEvol && personaTopSeleccionada.persona) {
+            tituloEvol.textContent = `Evolució de ${personaTopSeleccionada.persona} vs departament`;
+        } else if (tituloEvol) {
+            tituloEvol.textContent = 'Evolució persona vs departament';
+        }
+        renderTablaEvolucionPersonaDept(filasFiltrades, personaTopSeleccionada);
     } else if (seccionEvol) {
         seccionEvol.classList.add('hidden');
         if (window.tablaEvolucionPersonaDept) window.tablaEvolucionPersonaDept.clearData();
@@ -2089,11 +2202,6 @@ function renderAwardsPersona(filas, personaNombre) {
 
     const rows = Array.from(uniqueByAward.values());
 
-    const fullCellTooltip = (e, cell, onRender) => {
-        const value = cell.getValue();
-        return value == null ? '' : String(value);
-    };
-
     // Add managingOrganization and comanagingOrganization columns if not present
     tablaAwards.setColumns([
         { title: 'Any', field: 'anyo', width: 70 },
@@ -2129,19 +2237,7 @@ async function cargarAwardsPersona(persona, requestSeq) {
         hasta: String(hasta),
         modoAnio
     });
-    // Añadir tipos seleccionados
-    if (tipus && tipus.length > 0) {
-        tipus.forEach(t => params.append('tipus', t));
-    }
-    if (deptUuid) {
-        params.set('deptUuid', deptUuid);
-    }
-    if (categoria && Array.isArray(categoria) && categoria.length > 0) {
-        categoria.forEach(cat => params.append('categoria', cat));
-    } else if (categoria) {
-        params.set('categoria', categoria);
-    }
-    // Añadir el parámetro gestionadosPorDept si el modo es gestionados
+    appendFilterParams(params, { deptUuid, categoria, tipus });
     if (modoAwardsDept === 'gestionados') {
         params.set('gestionadosPorDept', 'managed');
     }
@@ -2163,22 +2259,133 @@ async function cargarAwardsPersona(persona, requestSeq) {
  * Renderiza los tres gráficos principales del dashboard.
  * @param {Array<object>} filas
  */
+/**
+ * Renderitza (o actualitza) únicament el gràfic "Projectes per any".
+ * Accepta les files ja filtrades i, opcionalment, porAnio/anios/seriesCategorias
+ * precalculats (quan es crida des de renderGraficos). Si no es passen, els calcula.
+ * @param {Array<object>} filas
+ * @param {object} [porAnioExt]
+ * @param {number[]} [aniosExt]
+ * @param {Array} [seriesCatsExt]
+ */
+function renderGraficoProjectesPerAny(filas, porAnioExt, aniosExt, seriesCatsExt) {
+    const porAnio = porAnioExt ?? agruparPorAnio(filas);
+    const anios   = aniosExt  ?? Object.keys(porAnio).map(Number).sort((a, b) => a - b);
+
+    const importesPonderados = anios.map(a => porAnio[a].importePonderado);
+    const proyectos          = anios.map(a => porAnio[a].proyectos);
+
+    // Sèries per categoria (si no vénen precalculades, les recalculem)
+    let seriesCategorias = seriesCatsExt;
+    if (!seriesCategorias) {
+        const todasCategorias = [...new Set(
+            anios.flatMap(a => Object.keys(porAnio[a].categorias))
+        )].sort();
+        const PALETTE_CATS = [
+            UAB_COLORS.campus,      // #008037 verd campus
+            UAB_COLORS.ocas,        // #F88C12 ocas taronja
+            UAB_COLORS.cala,        // #004D5E cala blau-verd
+            UAB_COLORS.tauro,       // #596473 taure gris
+            UAB_COLORS.collserola,  // #004d21 verd collserola
+            '#00a34f',              // verd campus clar
+            '#fab84c',              // ocas clar
+            '#006b7a',              // cala clar
+            '#8a99a8',              // taure clar
+            UAB_COLORS.pissarra     // #2a3037 pissarra fosc
+        ];
+        // Asignar color por nombre de categoría (hash estable) para que cada clase
+        // mantenga sempre el mateix color independentment del filtrat activo.
+        // Excepcions fijes: pública → campus (verd), privada → ocas (taronja).
+        const CAT_COLOR_FIXED = {
+            'pública': UAB_COLORS.campus,
+            'publica': UAB_COLORS.campus,
+            'privada': UAB_COLORS.ocas,
+        };
+        function catColor(name) {
+            const key = name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+            const fixedKey = Object.keys(CAT_COLOR_FIXED).find(k =>
+                name.toLowerCase() === k || key === k.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+            );
+            if (fixedKey) return CAT_COLOR_FIXED[fixedKey];
+            let h = 0;
+            for (let i = 0; i < name.length; i++) h = (Math.imul(31, h) + name.charCodeAt(i)) | 0;
+            return PALETTE_CATS[Math.abs(h) % PALETTE_CATS.length];
+        }
+        seriesCategorias = todasCategorias.map(cat => ({
+            name: cat, type: 'bar', stack: 'cats', yAxisIndex: 0,
+            data: anios.map(a => porAnio[a].categorias[cat] ?? 0),
+            itemStyle: { color: catColor(cat) }
+        }));
+    }
+
+    if (chartProyectosAnio) {
+        chartProyectosAnio.dispose();
+        chartProyectosAnio = null;
+    }
+    chartProyectosAnio = echarts.init(document.getElementById('chartProyectosAnio'));
+    chartProyectosAnio.setOption({
+        tooltip: {
+            trigger: 'axis',
+            axisPointer: { type: 'shadow' },
+            formatter: function(params) {
+                let html = `<b>${params[0].axisValue}</b><br>`;
+                params.forEach(p => {
+                    if (p.value === 0 || p.value === null) return;
+                    const val = p.seriesName.includes('€')
+                        ? formatearNumero(p.value) + ' €'
+                        : p.value;
+                    html += `${p.marker}${p.seriesName}: <b>${val}</b><br>`;
+                });
+                return html;
+            }
+        },
+        legend: { bottom: 0, type: 'scroll', textStyle: { fontSize: 11 } },
+        grid: { left: 50, right: 60, top: 20, bottom: 70 },
+        xAxis: { type: 'category', data: anios },
+        yAxis: [
+            {
+                type: 'value', minInterval: 1,
+                splitLine: { lineStyle: { color: UAB_COLORS.columna } },
+                name: 'Projectes', nameTextStyle: { fontSize: 10 }
+            },
+            {
+                type: 'value', name: 'Import (€)',
+                nameTextStyle: { fontSize: 10 },
+                axisLabel: { formatter: v => formatearCompactoEje(v), fontSize: 10 },
+                splitLine: { show: false }
+            }
+        ],
+        series: [
+            ...seriesCategorias,
+            /*{
+                name: 'Total projectes', type: 'line', yAxisIndex: 0,
+                data: proyectos, smooth: 0.2,
+                lineStyle: { color: UAB_COLORS.ocas },
+                itemStyle: { color: UAB_COLORS.ocas }, symbolSize: 6
+            },*/
+            {
+                name: 'Import ponderat (€)', type: 'line', yAxisIndex: 1,
+                data: importesPonderados, smooth: 0.25,
+                lineStyle: { color: '#e05252', width: 2, type: 'dashed' },
+                itemStyle: { color: '#e05252' }, symbolSize: 6
+            }
+        ]
+    });
+}
+
 function renderGraficos(filas) {
     destruirGraficos();
     const seccionMatriz = document.getElementById('seccionMatrizLiderazgo');
     const seccionQuadrants = document.getElementById('seccionQuadrantsPersona');
     const seccionPareto = document.getElementById('seccionPareto');
-    const seccionRanking = document.getElementById('seccionRankingPercentil');
     if (departamentosSeleccionados.length > 0) {
         seccionMatriz.classList.remove('hidden');
         seccionQuadrants.classList.remove('hidden');
         seccionPareto.classList.remove('hidden');
-        seccionRanking.classList.remove('hidden');
     } else {
         seccionMatriz.classList.add('hidden');
         seccionQuadrants.classList.add('hidden');
         seccionPareto.classList.add('hidden');
-        seccionRanking.classList.add('hidden');
     }
 
 
@@ -2191,9 +2398,17 @@ function renderGraficos(filas) {
     const anios = Object.keys(porAnio).map(Number).sort((a, b) => a - b);
 
     const importes = anios.map(a => porAnio[a].importeTotal);
+    const importesPonderados = anios.map(a => porAnio[a].importePonderado);
     const proyectos = anios.map(a => porAnio[a].proyectos);
     const proyectosIp = anios.map(a => porAnio[a].ipcoip);
     const proyectosMiembro = anios.map(a => porAnio[a].miembro);
+
+    // Guardar los datos globales para el prompt IA si los datos tienen más de un año
+    if (anios.length > 1) {
+        aniosDeptoGlobal = anios;
+        importesDeptoGlobal = importes;
+        proyectosDeptoGlobal = proyectos;
+    }
 
     chartImporteAnio = echarts.init(document.getElementById('chartImporteAnio'));
     chartImporteAnio.setOption({
@@ -2218,41 +2433,50 @@ function renderGraficos(filas) {
         }]
     });
 
-    chartProyectosAnio = echarts.init(document.getElementById('chartProyectosAnio'));
-    chartProyectosAnio.setOption({
-        tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-        legend: { bottom: 0 },
-        grid: { left: 50, right: 20, top: 20, bottom: 50 },
-        xAxis: { type: 'category', data: anios },
-        yAxis: {
-            type: 'value',
-            minInterval: 1,
-            splitLine: { lineStyle: { color: UAB_COLORS.columna } }
-        },
-        series: [
-            {
-                name: 'IP/CoIP',
-                type: 'bar',
-                data: proyectosIp,
-                itemStyle: { color: UAB_COLORS.cala }
-            },
-            {
-                name: 'Membre',
-                type: 'bar',
-                data: proyectosMiembro,
-                itemStyle: { color: UAB_COLORS.campus }
-            },
-            {
-                name: 'Total projectes',
-                type: 'line',
-                data: proyectos,
-                smooth: 0.2,
-                lineStyle: { color: UAB_COLORS.ocas },
-                itemStyle: { color: UAB_COLORS.ocas },
-                symbolSize: 6
-            }
-        ]
-    });
+    // Collect all unique categories across all years, sorted
+    const todasCategorias = [...new Set(
+        anios.flatMap(a => Object.keys(porAnio[a].categorias))
+    )].sort();
+    const PALETTE_CATS = [
+        UAB_COLORS.campus,      // #008037 verd campus
+        UAB_COLORS.ocas,        // #F88C12 ocas taronja
+        UAB_COLORS.cala,        // #004D5E cala blau-verd
+        UAB_COLORS.tauro,       // #596473 taure gris
+        UAB_COLORS.collserola,  // #004d21 verd collserola
+        '#00a34f',              // verd campus clar
+        '#fab84c',              // ocas clar
+        '#006b7a',              // cala clar
+        '#8a99a8',              // taure clar
+        UAB_COLORS.pissarra     // #2a3037 pissarra fosc
+    ];
+    // Asignar color por nombre de categoría (hash estable) para que cada clase
+    // mantenga sempre el mateix color independentment del filtrat activo.
+    // Excepcions fijes: pública → campus (verd), privada → ocas (taronja).
+    const CAT_COLOR_FIXED = {
+        'pública': UAB_COLORS.campus,
+        'publica': UAB_COLORS.campus,
+        'privada': UAB_COLORS.ocas,
+    };
+    function catColor(name) {
+        const key = name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        const fixedKey = Object.keys(CAT_COLOR_FIXED).find(k =>
+            name.toLowerCase() === k || key === k.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        );
+        if (fixedKey) return CAT_COLOR_FIXED[fixedKey];
+        let h = 0;
+        for (let i = 0; i < name.length; i++) h = (Math.imul(31, h) + name.charCodeAt(i)) | 0;
+        return PALETTE_CATS[Math.abs(h) % PALETTE_CATS.length];
+    }
+    const seriesCategorias = todasCategorias.map((cat) => ({
+        name: cat,
+        type: 'bar',
+        stack: 'cats',
+        yAxisIndex: 0,
+        data: anios.map(a => porAnio[a].categorias[cat] ?? 0),
+        itemStyle: { color: catColor(cat) }
+    }));
+
+    renderGraficoProjectesPerAny(filas, porAnio, anios, seriesCategorias);
 
 
 
@@ -2261,42 +2485,47 @@ function renderGraficos(filas) {
     for (const f of filasParaTop) {
         const nombre = f['Persona'] ?? f.persona ?? 'N/D';
         const uuid = f['PersonaUuid'] ?? f.personaUuid ?? '';
+        const fechaNac = f['Fecha_Nacimiento'] ?? f['fecha_nacimiento'] ?? f['nacimiento'] ?? f['birthdate'] ?? null;
+        const edad = calcularEdad(fechaNac);
         const key = `${uuid}||${nombre}`;
         if (!agrupadoPorPersonaTop.has(key)) {
             agrupadoPorPersonaTop.set(key, {
                 persona: nombre,
                 personaUuid: uuid,
-                importePonderado: 0
+                importePonderado: 0,
+                edad: edad
             });
         }
         const entry = agrupadoPorPersonaTop.get(key);
         // Usar directamente el campo del JSON
         entry.importePonderado += Number(f['Importe_Ponderado (€)'] ?? 0);
+        // Si no tenía edad, la añade si la fila la tiene
+        if (entry.edad == null && edad != null) entry.edad = edad;
     }
+    // Guardar el agrupado de personas del departamento seleccionado en window para análisis IA
+    window.agrupadoPorPersona = agrupadoPorPersonaTop;
     // Toggle para awards gestionados vs miembros
     let modoAwardsDept = 'miembros'; // 'miembros' o 'gestionados'
 
     function crearToggleAwardsDept() {
-        const container = document.getElementById('departamentoChipsContainer');
+        const container = document.getElementById('toggleAwardsDeptContainer');
         if (!container) return;
-        let toggle = document.getElementById('toggleAwardsDept');
-        if (!toggle) {
-            toggle = document.createElement('div');
-            toggle.id = 'toggleAwardsDept';
-            toggle.className = 'mt-2 mb-2 flex items-center gap-2';
-            toggle.innerHTML = `
-                <label class="text-xs font-semibold text-slate-600">Mostrar:</label>
-                <select id="selectAwardsDept" class="border border-slate-300 rounded px-2 py-1 text-xs">
-                    <option value="miembros">Ajuts dels membres del departament</option>
-                    <option value="gestionados">Ajuts gestionats pel departament</option>
-                </select>
-            `;
-            container.parentNode.insertBefore(toggle, container.nextSibling);
-            document.getElementById('selectAwardsDept').addEventListener('change', (e) => {
-                modoAwardsDept = e.target.value;
-                programarRefresco();
-            });
-        }
+        if (document.getElementById('toggleAwardsDept')) return;
+        const toggle = document.createElement('div');
+        toggle.id = 'toggleAwardsDept';
+        toggle.className = 'flex items-center gap-2 mb-1';
+        toggle.innerHTML = `
+            <label class="text-xs font-semibold text-slate-600">Mostrar:</label>
+            <select id="selectAwardsDept" class="border border-slate-300 rounded px-2 py-1 text-xs">
+                <option value="miembros">Ajuts dels membres del departament</option>
+                <option value="gestionados">Ajuts gestionats pel departament</option>
+            </select>
+        `;
+        container.appendChild(toggle);
+        document.getElementById('selectAwardsDept').addEventListener('change', (e) => {
+            modoAwardsDept = e.target.value;
+            programarRefresco();
+        });
     }
 
     // Modifica renderizarChipsDepartamentos para llamar crearToggleAwardsDept
@@ -2313,6 +2542,10 @@ function renderGraficos(filas) {
         document.getElementById('seccionAwardsPersona').classList.add('hidden');
         if (tablaAwards) tablaAwards.clearData();
         mostrarOverlayCargando();
+        if (currentLoadController) currentLoadController.abort();
+        const controller = new AbortController();
+        currentLoadController = controller;
+        const requestSeq = ++currentLoadSeq;
 
         try {
             mostrarEstadoCargando();
@@ -2323,12 +2556,19 @@ function renderGraficos(filas) {
             if (modoAwardsDept === 'gestionados' && deptUuid) {
                 
                 // Awards gestionados por el departamento
-                const params = new URLSearchParams({ deptUuid, gestionadosPorDept: 'gestionados' });
-                const res = await fetch(apiUrl(`/awards/stats/persona-resumen?${params.toString()}`));
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                data = await res.json();
-                // Adaptar data si es necesario para los gráficos/tablas
-                // (aquí puedes mapear los campos si el formato es diferente)
+                const params = new URLSearchParams({ gestionadosPorDept: 'managed' });
+                appendFilterParams(params, { deptUuid });
+                if (persona) params.set('persona', persona);
+                appendFilterParams(params, { categoria, tipus });
+                const ckey = _cacheKey(params, modoAwardsDept);
+                if (_requestCache.has(ckey)) {
+                    data = _requestCache.get(ckey).data;
+                } else {
+                    const res = await fetch(apiUrl(`/awards/stats/persona-resumen?${params.toString()}`), { signal: controller.signal });
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                    data = await res.json();
+                    _requestCache.set(ckey, { data });
+                }
             } else {
                 // Awards de miembros (lógica original)
                 const params = new URLSearchParams({
@@ -2336,31 +2576,29 @@ function renderGraficos(filas) {
                     hasta: String(hasta),
                     modoAnio
                 });
-                if (deptUuid) params.set('deptUuid', deptUuid);
                 if (persona) params.set('persona', persona);
-                if (Array.isArray(categoria) && categoria.length > 0) {
-                    categoria.forEach(cat => params.append('categoria', cat));
-                } else if (typeof categoria === 'string' && categoria) {
-                    params.set('categoria', categoria);
+                appendFilterParams(params, { deptUuid, categoria, tipus });
+                if (modoAwardsDept === 'gestionados') params.set('gestionadosPorDept', 'managed');
+                const ckey = _cacheKey(params, modoAwardsDept);
+                if (_requestCache.has(ckey)) {
+                    const cached = _requestCache.get(ckey);
+                    data = cached.data;
+                    serieProyectos = cached.serieProyectos;
+                } else {
+                    const [resumenRes, serieProyectos_] = await Promise.all([
+                        fetch(apiUrl(`/awards/stats/persona-resumen?${params.toString()}`), { signal: controller.signal }),
+                        cargarSerieProyectosAnio(params, controller.signal)
+                    ]);
+                    if (!resumenRes.ok) throw new Error(`HTTP ${resumenRes.status}`);
+                    data = await resumenRes.json();
+                    serieProyectos = serieProyectos_;
+                    _requestCache.set(ckey, { data, serieProyectos });
                 }
-                if (Array.isArray(tipus) && tipus.length > 0) {
-                    tipus.forEach(t => params.append('tipus', t));
-                } else if (typeof tipus === 'string' && tipus) {
-                    params.set('tipus', tipus);
-                }
-                if (modoAwardsDept === 'gestionados') {
-                    params.set('gestionadosPorDept', 'managed');
-                }
-                const [resumenRes, serieProyectosRes] = await Promise.all([
-                    fetch(apiUrl(`/awards/stats/persona-resumen?${params.toString()}`)),
-                    cargarSerieProyectosAnio()
-                ]);
-                if (!resumenRes.ok) throw new Error(`HTTP ${resumenRes.status}`);
-                data = await resumenRes.json();
-                serieProyectos = await serieProyectosRes;
             }
+            if (requestSeq !== currentLoadSeq) return;
             filasResumenActual = data;
             personaTopSeleccionada = null;
+            renderizarChipPersona();
             const seccionEvol = document.getElementById('seccionEvolucionPersonaDept');
             if (seccionEvol) {
                 seccionEvol.classList.add('hidden');
@@ -2369,11 +2607,11 @@ function renderGraficos(filas) {
             renderTabla(data, modoAnio, desde, hasta);
             renderTablaCrecimiento(data, desde, hasta);
             renderGraficos(data);
-            if (chartImporteAnio) chartImporteAnio.dispose();
             renderGraficoImportePorProyecto(serieProyectos);
-            
             estado.className = 'p-4 text-sm text-emerald-600 font-semibold';
         } catch (error) {
+            if (error && error.name === 'AbortError') return;
+            if (requestSeq !== currentLoadSeq) return;
             estado.textContent = `Error en carregar dades: ${error.message}`;
             estado.className = 'p-4 text-sm text-red-600';
             renderTabla([], modoAnio, desde, hasta);
@@ -2382,56 +2620,10 @@ function renderGraficos(filas) {
             renderGraficos([]);
             renderGraficoImportePorProyecto([]);
         } finally {
-            ocultarOverlayCargando();
+            if (requestSeq === currentLoadSeq) ocultarOverlayCargando();
         }
     }
     // ...existing code...
-    // Ordenar descendente y tomar top 8
-    const top = Array.from(agrupadoPorPersonaTop.values()).sort((a, b) => b.importePonderado - a.importePonderado).slice(0, 8);
-    topPersonasSeleccionables = top;
-    chartTopPersonas = echarts.init(document.getElementById('chartTopPersonas'));
-    chartTopPersonas.setOption({
-        tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-        grid: { left: 90, right: 10, top: 10, bottom: 10, containLabel: true },
-        xAxis: { type: 'value' },
-        yAxis: {
-            type: 'category',
-            data: top.map(t => t.persona),
-            inverse: true,
-            axisLine: { show: false },
-            axisTick: { show: false },
-            axisLabel: {
-                width: 140,
-                overflow: 'truncate'
-            }
-        },
-        series: [{
-            name: 'Import ponderat (€)',
-            type: 'bar',
-            data: top.map(t => t.importePonderado),
-            barWidth: '55%',
-            itemStyle: {
-                color: (params) => {
-                    const t = top[params.dataIndex];
-                    const seleccionada = personaTopSeleccionada && (
-                        (personaTopSeleccionada.personaUuid && personaTopSeleccionada.personaUuid === t.personaUuid) ||
-                        (!personaTopSeleccionada.personaUuid && personaTopSeleccionada.persona === t.persona)
-                    );
-                    if (!personaTopSeleccionada) return UAB_COLORS.cala;
-                    return seleccionada ? UAB_COLORS.campus : UAB_COLORS.columna;
-                }
-            }
-        }]
-    });
-
-    chartTopPersonas.off('click');
-    chartTopPersonas.on('click', async (params) => {
-        const index = params.dataIndex;
-        if (index == null || index < 0) return;
-        const persona = topPersonasSeleccionables[index];
-        await aplicarSeleccionPersona(persona);
-    });
-
 
         // --- Matriz de Liderazgo (Scatter Plot, eje X = dinero ponderado, eje Y = nº ayudas) ---
         // Agrupar por persona y sumar importe ponderado igual que el top
@@ -2466,7 +2658,7 @@ function renderGraficos(filas) {
             entry.desglose['Membre'].n += miembro;
             entry.desglose['Membre'].suma += Number(f['Importe_Miembro (€)'] ?? 0);
         }
-        const datosLiderazgo = Array.from(agrupadoLiderazgo.values()).filter(d => d.ayudas > 0 || d.ponderado > 0);
+        const datosLiderazgo = Array.from(agrupadoLiderazgo.values());
 
         // --- Ranking Percentil ---
         // Generar agrupadoPorPersona para ranking
@@ -2488,17 +2680,21 @@ function renderGraficos(filas) {
             // Usar directamente el campo del JSON si existe
             entry.importePonderado += Number(f['Importe_Ponderado (€)'] ?? 0);
         }
-        renderGraficoRankingPercentil(agrupadoPorPersonaRanking);
+        renderGraficoCuartilesIngresos(agrupadoPorPersonaRanking);
 
-        // Calcular medianas para los cuadrantes
+        // Calcular medianas solo sobre personas con awards (excluir los 0/null)
         function mediana(arr) {
             if (!arr.length) return 0;
             const s = [...arr].sort((a, b) => a - b);
             const m = Math.floor(s.length / 2);
             return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
         }
-        const ponderadoArr = datosLiderazgo.map(d => d.ponderado);
-        const ayudasArr = datosLiderazgo.map(d => d.ayudas);
+
+        const datosConAwards = datosLiderazgo.filter(d =>
+            (d.ponderado != null && d.ponderado > 0) || (d.ayudas != null && d.ayudas > 0)
+        );
+        const ponderadoArr = datosConAwards.map(d => d.ponderado);
+        const ayudasArr = datosConAwards.map(d => d.ayudas);
         const medianaPonderado = mediana(ponderadoArr);
         const medianaAyudas = mediana(ayudasArr);
 
@@ -2509,13 +2705,75 @@ function renderGraficos(filas) {
         const COLOR_ESPECIALISTES = '#ff3b30';  // Rojo fuerte
         const COLOR_FORMIGUES = '#ffb800';      // Amarillo fuerte
         const COLOR_ALTRES = '#7c3aed';         // Morado fuerte
+        const COLOR_SENSE_AWARDS = '#b0b0b0';   // Gris
+
+        // Separar puntos por cuadrante, añadiendo "Sense awards"
+        const seriesCuadrantes = [
+            { name: 'Líders',         color: COLOR_LIDERS,         items: [] },
+            { name: 'Especialistes',  color: COLOR_ESPECIALISTES,  items: [] },
+            { name: 'Dinamitzadors',  color: COLOR_FORMIGUES,      items: [] },
+            { name: 'Altres',         color: COLOR_ALTRES,         items: [] },
+            { name: 'Sense ajuts',   color: COLOR_SENSE_AWARDS,   items: [] }
+        ];
+        for (const d of datosLiderazgo) {
+            const item = {
+                value: [d.ponderado, d.ayudas],
+                nombre: d.nombre, uuid: d.uuid,
+                ponderado: d.ponderado, ayudas: d.ayudas, desglose: d.desglose
+            };
+            if ((d.ponderado === 0 || d.ponderado == null) && (d.ayudas === 0 || d.ayudas == null)) {
+                seriesCuadrantes[4].items.push(item); // Sense awards
+            } else if (d.ponderado >= medianaPonderado && d.ayudas >= medianaAyudas) {
+                seriesCuadrantes[0].items.push(item);
+            } else if (d.ponderado < medianaPonderado && d.ayudas >= medianaAyudas) {
+                seriesCuadrantes[1].items.push(item);
+            } else if (d.ponderado >= medianaPonderado && d.ayudas < medianaAyudas) {
+                seriesCuadrantes[2].items.push(item);
+            } else {
+                seriesCuadrantes[3].items.push(item);
+            }
+        }
+
+        const labelFormatter = function(params) {
+            const nombre = (params.data.nombre ?? '').trim();
+            const parts = nombre.split(/\s+/);
+            if (parts.length <= 1) return parts[0] ?? '';
+            const apellidos = parts.slice(-2).join(' ');
+            const inicials = parts.slice(0, -2).map(p => p[0] + '.').join('');
+            return (inicials ? inicials + ' ' : '') + apellidos;
+        };
 
         chartLiderazgo.setOption({
-            grid: { left: 60, right: 30, top: 40, bottom: 50 },
+            grid: { left: 60, right: 30, top: 60, bottom: 50 },
+            legend: {
+                data: seriesCuadrantes.map(s => ({ name: s.name, icon: 'circle' })),
+                top: 8,
+                textStyle: { fontSize: 12 },
+                selectedMode: true
+            },
+            toolbox: {
+                right: 10,
+                top: 5,
+                feature: {
+                    dataZoom: {
+                        yAxisIndex: 0,
+                        title: { zoom: 'Zoom rectangular (arrossega per seleccionar)', back: 'Desfer zoom' },
+                        brushStyle: {
+                            borderWidth: 2,
+                            borderColor: '#1a7cff',
+                            color: 'rgba(26,124,255,0.2)'
+                        }
+                    },
+                    restore: { title: 'Restablir zoom' }
+                }
+            },
             tooltip: {
                 trigger: 'item',
                 formatter: function(params) {
                     const d = params.data;
+                    if (d.ponderado === 0 && d.ayudas === 0) {
+                        return `<b>${d.nombre}</b><br><i>Sense ajuts</i>`;
+                    }
                     let html = `<b>${d.nombre}</b><br>Ingresos ponderats: <b>${formatearNumero(d.ponderado)} €</b><br>Ajuts: <b>${d.ayudas}</b>`;
                     if (d.desglose) {
                         html += '<br><u>Quantitats per rol:</u>';
@@ -2527,29 +2785,11 @@ function renderGraficos(filas) {
                 }
             },
             dataZoom: [
-                {
-                    type: 'inside',
-                    xAxisIndex: 0,
-                    filterMode: 'none'
-                },
-                {
-                    type: 'inside',
-                    yAxisIndex: 0,
-                    filterMode: 'none'
-                },
-                {
-                    type: 'slider',
-                    xAxisIndex: 0,
-                    filterMode: 'none'
-                },
-                {
-                    type: 'slider',
-                    yAxisIndex: 0,
-                    filterMode: 'none'
-                }
+                { type: 'inside', xAxisIndex: 0, filterMode: 'none' },
+                { type: 'inside', yAxisIndex: 0, filterMode: 'none' }
             ],
             xAxis: {
-                name: "Dinero ponderat (€)",
+                name: "Import ponderat (€)",
                 nameLocation: 'middle',
                 nameGap: 30,
                 type: 'value',
@@ -2569,67 +2809,27 @@ function renderGraficos(filas) {
                 axisLabel: { fontWeight: 600 },
                 splitLine: { lineStyle: { color: UAB_COLORS.columna } }
             },
-            series: [{
-                symbolSize: 18,
+            series: seriesCuadrantes.map(s => ({
+                name: s.name,
                 type: 'scatter',
-                data: datosLiderazgo.map(d => ({
-                    value: [d.ponderado, d.ayudas],
-                    nombre: d.nombre,
-                    uuid: d.uuid,
-                    ponderado: d.ponderado,
-                    ayudas: d.ayudas,
-                    desglose: d.desglose
-                })),
-                itemStyle: {
-                    color: function(params) {
-                        // Colorear por cuadrante con colores muy contrastados
-                        const x = params.data.ponderado;
-                        const y = params.data.ayudas;
-                        if (x >= medianaPonderado && y >= medianaAyudas) return COLOR_LIDERS; // Líderes
-                        if (x < medianaPonderado && y >= medianaAyudas) return COLOR_ESPECIALISTES; // Especialistas
-                        if (x >= medianaPonderado && y < medianaAyudas) return COLOR_FORMIGUES; // Formigues
-                        return COLOR_ALTRES; // Altres
-                    }
-                },
+                symbolSize: 18,
+                data: s.items,
+                itemStyle: { color: s.color },
                 emphasis: {
-                    focus: 'series',
-                    itemStyle: { borderColor: '#222', borderWidth: 2 }
+                    focus: 'self',
+                    itemStyle: { borderColor: '#222', borderWidth: 2 },
+                    label: { show: false }
                 },
                 label: {
                     show: true,
                     position: 'top',
-                    formatter: function(params) {
-                        return params.data.nombre;
-                    },
-                    fontSize: 11,
-                    color: '#444',
+                    formatter: labelFormatter,
+                    fontSize: 10,
+                    color: '#555',
                     fontWeight: 600
-                }
-            }],
-            // Líneas de referencia para cuadrantes
-            graphic: [
-                // Etiquetas de cuadrantes (aproximadas, con colores nuevos)
-                {
-                    type: 'text',
-                    left: '70%', top: '10%',
-                    style: { text: 'Líders', fill: COLOR_LIDERS, font: 'bold 14px sans-serif' }
                 },
-                {
-                    type: 'text',
-                    left: '10%', top: '10%',
-                    style: { text: 'Especialistes', fill: COLOR_ESPECIALISTES, font: 'bold 14px sans-serif' }
-                },
-                {
-                    type: 'text',
-                    left: '70%', top: '80%',
-                    style: { text: 'Formigues', fill: COLOR_FORMIGUES, font: 'bold 14px sans-serif' }
-                },
-                {
-                    type: 'text',
-                    left: '10%', top: '80%',
-                    style: { text: 'Altres', fill: COLOR_ALTRES, font: 'bold 14px sans-serif' }
-                }
-            ]
+                labelLayout: { hideOverlap: true }
+            }))
         });
 
         // Evento: mostrar awards de la persona al hacer clic en un punto de la matriz
@@ -2649,12 +2849,15 @@ function renderGraficos(filas) {
             LIDERS: [],
             ESPECIALISTES: [],
             FORMIGUES: [],
-            ALTRES: []
+            ALTRES: [],
+            SENSE_AWARDS: []
         };
         for (const d of datosLiderazgo) {
             const x = d.ponderado;
             const y = d.ayudas;
-            if (x >= medianaPonderado && y >= medianaAyudas) {
+            if ((x === 0 || x == null) && (y === 0 || y == null)) {
+                cuadrantes.SENSE_AWARDS.push(d);
+            } else if (x >= medianaPonderado && y >= medianaAyudas) {
                 cuadrantes.LIDERS.push(d);
             } else if (x < medianaPonderado && y >= medianaAyudas) {
                 cuadrantes.ESPECIALISTES.push(d);
@@ -2664,37 +2867,46 @@ function renderGraficos(filas) {
                 cuadrantes.ALTRES.push(d);
             }
         }
-        // Render HTML grid de cuadrantes
+        // Render HTML grid de cuadrantes com a targetes de chips
         const container = document.getElementById('chartQuadrantsPersona');
         if (container) {
-            container.innerHTML = `
-                <div style="display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 12px; height: 100%; width: 100%;">
-                    <div style="background:${COLOR_ESPECIALISTES}22; border:2px solid ${COLOR_ESPECIALISTES}; border-radius:16px; padding:12px; overflow:auto;">
-                        <div style="font-weight:bold; color:${COLOR_ESPECIALISTES}; font-size:15px; margin-bottom:6px;">Especialistes</div>
-                        <ul style="margin:0; padding:0; list-style:none;">
-                            ${cuadrantes.ESPECIALISTES.map(p => `<li style='margin-bottom:2px;cursor:pointer;font-weight:600;color:${COLOR_ESPECIALISTES}' onclick='window.aplicarSeleccionPersona && aplicarSeleccionPersona({persona: ${JSON.stringify(p.nombre)}, personaUuid: ${JSON.stringify(p.uuid)}})'>${p.nombre}</li>`).join('')}
-                        </ul>
-                    </div>
-                    <div style="background:${COLOR_LIDERS}22; border:2px solid ${COLOR_LIDERS}; border-radius:16px; padding:12px; overflow:auto;">
-                        <div style="font-weight:bold; color:${COLOR_LIDERS}; font-size:15px; margin-bottom:6px;">Líders</div>
-                        <ul style="margin:0; padding:0; list-style:none;">
-                            ${cuadrantes.LIDERS.map(p => `<li style='margin-bottom:2px;cursor:pointer;font-weight:600;color:${COLOR_LIDERS}' onclick='window.aplicarSeleccionPersona && aplicarSeleccionPersona({persona: ${JSON.stringify(p.nombre)}, personaUuid: ${JSON.stringify(p.uuid)}})'>${p.nombre}</li>`).join('')}
-                        </ul>
-                    </div>
-                    <div style="background:${COLOR_ALTRES}22; border:2px solid ${COLOR_ALTRES}; border-radius:16px; padding:12px; overflow:auto;">
-                        <div style="font-weight:bold; color:${COLOR_ALTRES}; font-size:15px; margin-bottom:6px;">Altres</div>
-                        <ul style="margin:0; padding:0; list-style:none;">
-                            ${cuadrantes.ALTRES.map(p => `<li style='margin-bottom:2px;cursor:pointer;font-weight:600;color:${COLOR_ALTRES}' onclick='window.aplicarSeleccionPersona && aplicarSeleccionPersona({persona: ${JSON.stringify(p.nombre)}, personaUuid: ${JSON.stringify(p.uuid)}})'>${p.nombre}</li>`).join('')}
-                        </ul>
-                    </div>
-                    <div style="background:${COLOR_FORMIGUES}22; border:2px solid ${COLOR_FORMIGUES}; border-radius:16px; padding:12px; overflow:auto;">
-                        <div style="font-weight:bold; color:${COLOR_FORMIGUES}; font-size:15px; margin-bottom:6px;">Formigues</div>
-                        <ul style="margin:0; padding:0; list-style:none;">
-                            ${cuadrantes.FORMIGUES.map(p => `<li style='margin-bottom:2px;cursor:pointer;font-weight:600;color:${COLOR_FORMIGUES}' onclick='window.aplicarSeleccionPersona && aplicarSeleccionPersona({persona: ${JSON.stringify(p.nombre)}, personaUuid: ${JSON.stringify(p.uuid)}})'>${p.nombre}</li>`).join('')}
-                        </ul>
-                    </div>
-                </div>
-            `;
+            const quadrantDefs = [
+                { key: 'ESPECIALISTES', label: 'Especialistes d\'Alt Impacte', color: COLOR_ESPECIALISTES, bg: COLOR_ESPECIALISTES + '18', border: COLOR_ESPECIALISTES + '66' },
+                { key: 'LIDERS',        label: 'Líders Consolidats',           color: COLOR_LIDERS,        bg: COLOR_LIDERS        + '18', border: COLOR_LIDERS        + '66' },
+                { key: 'ALTRES',        label: 'Perfils en Creixement',        color: COLOR_ALTRES,        bg: COLOR_ALTRES        + '18', border: COLOR_ALTRES        + '66' },
+                { key: 'FORMIGUES',     label: 'Dinamitzadors',                color: COLOR_FORMIGUES,     bg: COLOR_FORMIGUES     + '18', border: COLOR_FORMIGUES     + '66' },
+                { key: 'SENSE_AWARDS',  label: 'Sense ajuts',                 color: COLOR_SENSE_AWARDS,  bg: COLOR_SENSE_AWARDS  + '18', border: COLOR_SENSE_AWARDS  + '66' }
+            ];
+
+            function abreviarNom(nom) {
+                const parts = (nom ?? '').trim().split(/\s+/);
+                if (parts.length <= 1) return parts[0] ?? '';
+                const apellidos = parts.slice(-2).join(' ');
+                const inicials = parts.slice(0, -2).map(p => p[0] + '.').join('');
+                return (inicials ? inicials + ' ' : '') + apellidos;
+            }
+
+            container.innerHTML = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">` +
+                quadrantDefs.map(q => {
+                    const persones = cuadrantes[q.key] ?? [];
+                    const chips = persones.map(p => {
+                        const nombreEscapado = p.nombre.replace(/'/g, "\\'");
+                        const uuidEscapado = p.uuid.replace(/'/g, "\\'");
+                        return `<span
+                            title="${p.nombre}"
+                            onclick="aplicarSeleccionPersona ({persona:'${nombreEscapado}',personaUuid:'${uuidEscapado}'})"
+                            style="color:${q.color}"
+                            class="chip-persona-clicable">
+                        ${p.nombre}</span>`;
+                    }).join('');
+                    return `<div style="background:${q.bg};border:1.5px solid ${q.border};border-radius:14px;padding:12px;">
+                        <div style="font-size:12px;font-weight:700;color:${q.color};margin-bottom:6px;">
+                            ${q.label} <span style="font-weight:400;opacity:0.55">(${persones.length})</span>
+                        </div>
+                        <div>${chips || `<span style=\"font-size:11px;opacity:0.4\">Cap investigador</span>`}</div>
+                    </div>`;
+                }).join('') +
+            `</div>`;
         }
 
             // --- Gràfic d'Anàlisi de Pareto (80/20) ---
@@ -2801,35 +3013,12 @@ function renderGraficos(filas) {
 
 /**
  * Recupera serie anual de proyectos/importes para gráfico superior.
+ * @param {URLSearchParams} params - Parámetros ya construidos por el llamador.
+ * @param {AbortSignal} [signal]
  * @returns {Promise<Array<{anio:number,importeTotal:number}>>}
  */
-async function cargarSerieProyectosAnio() {
-    const { desde, hasta, deptUuid, persona, modoAnio, categoria, tipus } = obtenerFiltrosActuales();
-    const params = new URLSearchParams({
-        desde: String(desde),
-        hasta: String(hasta),
-        modoAnio
-    });
-    if (Array.isArray(deptUuid) && deptUuid.length > 0) {
-        deptUuid.forEach(dep => params.append('deptUuid', dep));
-    } else if (typeof deptUuid === 'string' && deptUuid) {
-        params.set('deptUuid', deptUuid);
-    }
-    if (persona) {
-        params.set('persona', persona);
-    }
-    if (Array.isArray(categoria) && categoria.length > 0) {
-        categoria.forEach(cat => params.append('categoria', cat));
-    } else if (typeof categoria === 'string' && categoria) {
-        params.set('categoria', categoria);
-    }
-    if (Array.isArray(tipus) && tipus.length > 0) {
-        tipus.forEach(t => params.append('tipus', t));
-    } else if (typeof tipus === 'string' && tipus) {
-        params.set('tipus', tipus);
-    }
-
-    const res = await fetch(apiUrl(`/awards/stats/proyectos-anio?${params.toString()}`));
+async function cargarSerieProyectosAnio(params, signal) {
+    const res = await fetch(apiUrl(`/awards/stats/proyectos-anio?${params.toString()}`), signal ? { signal } : {});
     if (!res.ok) {
         throw new Error(`HTTP ${res.status}`);
     }
@@ -2850,10 +3039,9 @@ function renderGraficoImportePorProyecto(serie) {
     // Mapear los importes por año
     const byYear = new Map((serie || []).map(s => [Number(s.anio), Number(s.importeTotal || 0)]));
     const importes = anios.map(y => byYear.get(y) ?? 0);
-    if (chartImporteAnio) {
-        chartImporteAnio.dispose();
+    if (!chartImporteAnio) {
+        chartImporteAnio = echarts.init(document.getElementById('chartImporteAnio'));
     }
-    chartImporteAnio = echarts.init(document.getElementById('chartImporteAnio'));
     chartImporteAnio.setOption({
         tooltip: { trigger: 'axis' },
         grid: { left: 50, right: 20, top: 20, bottom: 30 },
@@ -2878,99 +3066,94 @@ function renderGraficoImportePorProyecto(serie) {
 }
 
 async function actualizarGraficoComparativaDepartamentos() {
-    if (!chartComparativaDept) {
-        chartComparativaDept = echarts.init(document.getElementById('chartComparativaDept'));
-    }
+    // Dispose all existing pie instances
+    chartComparativaPies.forEach(c => c.dispose());
+    chartComparativaPies.clear();
 
-    const { desde, hasta, persona, modoAnio, categoria, tipus } = obtenerFiltrosActuales();
-    const anios = [];
-    for (let year = desde; year <= hasta; year++) {
-        anios.push(year);
-    }
+    const piesContainer = document.getElementById('comparativaPiesContainer');
+    piesContainer.innerHTML = '';
 
     if (!departamentosComparativa.length) {
-        chartComparativaDept.setOption({
-            title: {
-                text: 'Afegeix departaments per comparar',
-                left: 'center',
-                top: 'middle',
-                textStyle: { color: UAB_COLORS.tauro, fontSize: 14, fontWeight: 600 }
-            },
-            xAxis: { type: 'category', data: anios },
-            yAxis: { type: 'value' },
-            series: []
-        }, true);
+        piesContainer.innerHTML = '<p class="text-slate-400 text-sm text-center col-span-full py-8">Afegeix departaments per comparar</p>';
         return;
     }
 
-    const colors = [
-        UAB_COLORS.campus,
-        UAB_COLORS.cala,
-        UAB_COLORS.ocas,
-        UAB_COLORS.collserola,
-        UAB_COLORS.pissarra,
-        UAB_COLORS.tauro,
-        '#73a437',
-        '#faae57'
-    ];
-    const seriesData = await Promise.all(
-        departamentosComparativa.map(async (dep, index) => {
-            const params = new URLSearchParams({ desde: String(desde), hasta: String(hasta), deptUuid: dep.uuid, modoAnio });
-            if (persona) {
-                params.set('persona', persona);
-            }
-            // Añadir filtro de categoría si aplica
-            if (Array.isArray(categoria) && categoria.length > 0) {
-                categoria.forEach(cat => params.append('categoria', cat));
-            } else if (typeof categoria === 'string' && categoria) {
-                params.set('categoria', categoria);
-            }
-            if (Array.isArray(tipus) && tipus.length > 0) {
-                tipus.forEach(t => params.append('tipus', t));
-            } else if (typeof tipus === 'string' && tipus) {
-                params.set('tipus', tipus);
-            }
-            const res = await fetch(apiUrl(`/awards/stats/proyectos-anio?${params.toString()}`));
-            if (!res.ok) {
-                return {
-                    name: dep.nombre,
-                    type: 'line',
-                    data: anios.map(() => 0),
-                    smooth: 0.2,
-                    lineStyle: { width: 2, color: colors[index % colors.length] },
-                    itemStyle: { color: colors[index % colors.length] }
-                };
-            }
+    const { desde, hasta, modoAnio } = obtenerFiltrosActuales();
 
-            const rows = await res.json();
-            const byYear = new Map(rows.map(r => [Number(r.anio), Number(r.importeTotal || 0)]));
+    await Promise.all(departamentosComparativa.map(async dep => {
+        // Create wrapper card
+        const wrapper = document.createElement('div');
+        wrapper.className = 'bg-white border border-slate-100 rounded-xl shadow-sm p-3 flex flex-col items-center';
+        const safeId = `comparePie-${dep.uuid.replace(/[^a-zA-Z0-9]/g, '_')}`;
+        wrapper.innerHTML = `
+            <div class="text-xs font-bold text-slate-600 text-center mb-1 w-full truncate" title="${dep.nombre}">${dep.nombre}</div>
+            <div id="${safeId}" class="w-full" style="height:220px;"></div>`;
+        piesContainer.appendChild(wrapper);
 
-            return {
-                name: dep.nombre,
-                type: 'line',
-                data: anios.map(y => byYear.get(y) ?? 0),
-                smooth: 0.2,
-                lineStyle: { width: 2, color: colors[index % colors.length] },
-                itemStyle: { color: colors[index % colors.length] }
-            };
-        })
-    );
+        const pieDiv = document.getElementById(safeId);
+        const chart = echarts.init(pieDiv);
+        chartComparativaPies.set(dep.uuid, chart);
 
-    chartComparativaDept.setOption({
-        title: { text: '' },
-        tooltip: { trigger: 'axis' },
-        legend: { type: 'scroll', bottom: 0 },
-        grid: { left: 55, right: 20, top: 20, bottom: 60 },
-        xAxis: { type: 'category', data: anios },
-        yAxis: {
-            type: 'value',
-            axisLabel: {
-                formatter: (value) => formatearCompactoEje(value)
+        // Fetch persona-resumen for this dept
+        const params = new URLSearchParams({ desde: String(desde), hasta: String(hasta), modoAnio, deptUuid: dep.uuid });
+        let filas = [];
+        try {
+            const res = await fetch(apiUrl(`/awards/stats/persona-resumen?${params.toString()}`));
+            if (res.ok) filas = await res.json();
+        } catch (_) { /* network error: show empty */ }
+
+        // Build agrupadoPorPersona map
+        const porPersona = new Map();
+        filas.forEach(f => {
+            const uuid = f['PersonaUuid'] ?? f.personaUuid ?? '';
+            const nombre = f['Persona'] ?? f.persona ?? 'N/D';
+            const key = uuid || nombre;
+            if (!porPersona.has(key)) porPersona.set(key, { importePonderado: 0 });
+            porPersona.get(key).importePonderado += Number(f['Importe_Ponderado (€)'] ?? 0);
+        });
+
+        const grups = calcularQuartilesGrups(porPersona);
+        const grupsPoblats = grups.filter(g => g.items.length > 0);
+
+        if (!grupsPoblats.length) {
+            chart.setOption({ title: { text: 'Sense dades', left: 'center', top: 'center', textStyle: { color: '#aaa', fontSize: 12 } } });
+            return;
+        }
+
+        chart.setOption({
+            tooltip: {
+                trigger: 'item',
+                formatter: p => `<b>${p.name}</b><br>Persones: <b>${p.value}</b><br>${p.percent.toFixed(1)}%`
             },
-            splitLine: { lineStyle: { color: UAB_COLORS.columna } }
-        },
-        series: seriesData
-    }, true);
+            legend: {
+                orient: 'horizontal',
+                bottom: 0,
+                left: 'center',
+                textStyle: { fontSize: 9 },
+                itemWidth: 8, itemHeight: 8,
+                formatter: name => name.split('·')[0].trim()
+            },
+            series: [{
+                name: 'Quartil',
+                type: 'pie',
+                radius: ['30%', '60%'],
+                center: ['50%', '44%'],
+                avoidLabelOverlap: true,
+                label: {
+                    show: true,
+                    formatter: p => p.value > 0 ? `${p.value}` : '',
+                    fontSize: 12,
+                    fontWeight: 700
+                },
+                labelLine: { show: true },
+                data: grupsPoblats.map(g => ({
+                    name: g.label,
+                    value: g.items.length,
+                    itemStyle: { color: g.color }
+                }))
+            }]
+        });
+    }));
 }
 
 function renderDepartamentosComparativaSeleccionados() {
@@ -3010,6 +3193,58 @@ async function agregarDepartamentoComparativa() {
     await actualizarGraficoComparativaDepartamentos();
 }
 
+async function carregarAmbit() {
+    const ambit = document.getElementById('compareAmbitSelect').value;
+    if (!ambit) return;
+    try {
+        const res = await fetch(apiUrl(`/persons/departamentos-by-ambit?ambit=${encodeURIComponent(ambit)}`));
+        if (!res.ok) return;
+        const deptos = await res.json();
+        // Reemplaça la selecció actual pels departaments de l'àmbit
+        departamentosComparativa = deptos.map(d => ({ uuid: d.uuid, nombre: d.nombre }));
+        renderDepartamentosComparativaSeleccionados();
+        await actualizarGraficoComparativaDepartamentos();
+    } catch (_) { /* network error */ }
+}
+
+async function carregarAmbits() {
+    const select = document.getElementById('compareAmbitSelect');
+    try {
+        const res = await fetch(apiUrl('/persons/ambits'));
+        if (!res.ok) return;
+        const ambits = await res.json();
+        ambits.forEach(a => {
+            const opt = document.createElement('option');
+            opt.value = a;
+            opt.textContent = a;
+            select.appendChild(opt);
+        });
+    } catch (_) { /* network error */ }
+}
+
+function configurarModeComparativa() {
+    const btnDepto = document.getElementById('btnModeDepto');
+    const btnAmbit = document.getElementById('btnModeAmbit');
+    const panelDepto = document.getElementById('compareModeDepartament');
+    const panelAmbit = document.getElementById('compareModeAmbit');
+
+    btnDepto.addEventListener('click', () => {
+        btnDepto.className = 'px-3 py-1 rounded-full text-xs font-semibold bg-indigo-600 text-white';
+        btnAmbit.className = 'px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 hover:bg-slate-200';
+        panelDepto.classList.remove('hidden');
+        panelAmbit.classList.add('hidden');
+    });
+
+    btnAmbit.addEventListener('click', () => {
+        btnAmbit.className = 'px-3 py-1 rounded-full text-xs font-semibold bg-indigo-600 text-white';
+        btnDepto.className = 'px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 hover:bg-slate-200';
+        panelAmbit.classList.remove('hidden');
+        panelDepto.classList.add('hidden');
+    });
+
+    document.getElementById('btnCarregarAmbit').addEventListener('click', carregarAmbit);
+}
+
 /**
  * Flujo principal de carga: consulta APIs, actualiza tablas y gráficos.
  * @returns {Promise<void>}
@@ -3020,6 +3255,10 @@ async function cargarDatos() {
     document.getElementById('seccionAwardsPersona').classList.add('hidden');
     if (tablaAwards) tablaAwards.clearData();
     mostrarOverlayCargando();
+    if (currentLoadController) currentLoadController.abort();
+    const controller = new AbortController();
+    currentLoadController = controller;
+    const requestSeq = ++currentLoadSeq;
 
     try {
         mostrarEstadoCargando();
@@ -3029,31 +3268,19 @@ async function cargarDatos() {
         const modoAwardsDept = document.getElementById('selectAwardsDept')?.value || 'miembros';
             if (modoAwardsDept === 'gestionados' && deptUuid) {
                 // Awards gestionados por el departamento
-                const params = new URLSearchParams({
-                    desde: String(desde),
-                    hasta: String(hasta),
-                    modoAnio
-                });
-                params.set('deptUuid', deptUuid);
+                const params = new URLSearchParams({ gestionadosPorDept: 'managed' });
+                appendFilterParams(params, { deptUuid });
                 if (persona) params.set('persona', persona);
-                if (Array.isArray(categoria) && categoria.length > 0) {
-                    categoria.forEach(cat => params.append('categoria', cat));
-                } else if (typeof categoria === 'string' && categoria) {
-                    params.set('categoria', categoria);
+                appendFilterParams(params, { categoria, tipus });
+                const ckey = _cacheKey(params, modoAwardsDept);
+                if (_requestCache.has(ckey)) {
+                    data = _requestCache.get(ckey).data;
+                } else {
+                    const res = await fetch(apiUrl(`/awards/stats/persona-resumen?${params.toString()}`), { signal: controller.signal });
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                    data = await res.json();
+                    _requestCache.set(ckey, { data });
                 }
-                if (Array.isArray(tipus) && tipus.length > 0) {
-                    tipus.forEach(t => params.append('tipus', t));
-                } else if (typeof tipus === 'string' && tipus) {
-                    params.set('tipus', tipus);
-                }
-                if (modoAwardsDept === 'gestionados') {
-                    params.set('gestionadosPorDept', 'managed');
-                }
-                const res = await fetch(apiUrl(`/awards/stats/persona-resumen?${params.toString()}`));
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                data = await res.json();
-                // Adaptar data si es necesario para los gráficos/tablas
-                // (aquí puedes mapear los campos si el formato es diferente)
             } else {
             // Awards de miembros (lógica original)
             const params = new URLSearchParams({
@@ -3061,40 +3288,29 @@ async function cargarDatos() {
                 hasta: String(hasta),
                 modoAnio
             });
-            if (deptUuid) params.set('deptUuid', deptUuid);
             if (persona) params.set('persona', persona);
-            if (Array.isArray(categoria) && categoria.length > 0) {
-                categoria.forEach(cat => params.append('categoria', cat));
-            } else if (typeof categoria === 'string' && categoria) {
-                params.set('categoria', categoria);
-            }
-            if (Array.isArray(tipus) && tipus.length > 0) {
-                tipus.forEach(t => params.append('tipus', t));
-            } else if (typeof tipus === 'string' && tipus) {
-                params.set('tipus', tipus);
-            }
-            if (modoAwardsDept === 'gestionados') {
-                params.set('gestionadosPorDept', 'managed');
-            }
-            const [resumenRes, serieProyectosRes] = await Promise.all([
-                fetch(apiUrl(`/awards/stats/persona-resumen?${params.toString()}`)),
-                cargarSerieProyectosAnio()
-            ]);
-            if (!resumenRes.ok) throw new Error(`HTTP ${resumenRes.status}`);
-            data = await resumenRes.json();
-            serieProyectos = await serieProyectosRes;
-        }
-        let personalDept = [];
-        if (Array.isArray(deptUuid) ? deptUuid.length > 0 : Boolean(deptUuid)) {
-            try {
-                personalDept = await cargarPersonalDepartamento(deptUuid);
-            } catch (e) {
-                console.warn('No s\'ha pogut carregar el personal del departament per completar la taula resum.', e);
+            appendFilterParams(params, { deptUuid, categoria, tipus });
+            if (modoAwardsDept === 'gestionados') params.set('gestionadosPorDept', 'managed');
+            const ckey = _cacheKey(params, modoAwardsDept);
+            if (_requestCache.has(ckey)) {
+                const cached = _requestCache.get(ckey);
+                data = cached.data;
+                serieProyectos = cached.serieProyectos;
+            } else {
+                const [resumenRes, serieProyectos_] = await Promise.all([
+                    fetch(apiUrl(`/awards/stats/persona-resumen?${params.toString()}`), { signal: controller.signal }),
+                    cargarSerieProyectosAnio(params, controller.signal)
+                ]);
+                if (!resumenRes.ok) throw new Error(`HTTP ${resumenRes.status}`);
+                data = await resumenRes.json();
+                serieProyectos = serieProyectos_;
+                _requestCache.set(ckey, { data, serieProyectos });
             }
         }
-
+        if (requestSeq !== currentLoadSeq) return;
         filasResumenActual = data;
         personaTopSeleccionada = null;
+        renderizarChipPersona();
         const seccionEvol = document.getElementById('seccionEvolucionPersonaDept');
         if (seccionEvol) {
             seccionEvol.classList.add('hidden');
@@ -3103,11 +3319,11 @@ async function cargarDatos() {
         renderTabla(data, modoAnio, desde, hasta, personalDept);
         renderTablaCrecimiento(data, desde, hasta);
         renderGraficos(data);
-        if (chartImporteAnio) chartImporteAnio.dispose();
         renderGraficoImportePorProyecto(serieProyectos);
-        //estado.textContent = `Resultats: ${data.length} files`;
         estado.className = 'p-4 text-sm text-emerald-600 font-semibold';
     } catch (error) {
+        if (error && error.name === 'AbortError') return;
+        if (requestSeq !== currentLoadSeq) return;
         estado.textContent = `Error en carregar dades: ${error.message}`;
         estado.className = 'p-4 text-sm text-red-600';
         renderTabla([], modoAnio, desde, hasta);
@@ -3116,7 +3332,7 @@ async function cargarDatos() {
         renderGraficos([]);
         renderGraficoImportePorProyecto([]);
     } finally {
-        ocultarOverlayCargando();
+        if (requestSeq === currentLoadSeq) ocultarOverlayCargando();
     }
 }
 
@@ -3220,7 +3436,7 @@ function configurarSlider() {
 
     slider.noUiSlider.on('update', (values) => {
         valorRango.textContent = `${values[0]} - ${values[1]}`;
-        programarRefresco();
+        if (!_inicializando) programarRefresco();
     });
 }
 
@@ -3231,34 +3447,29 @@ document.getElementById('personaInput').addEventListener('input', programarRefre
 document.getElementById('modoAnioSelect').addEventListener('change', programarRefresco);
 // El select oculto ya no dispara el refresco, lo hace el sistema de chips
 document.getElementById('btnAddDepartamentoCompare').addEventListener('click', agregarDepartamentoComparativa);
+configurarModeComparativa();
 
 document.addEventListener('fullscreenchange', () => {
     if (chartImporteAnio) chartImporteAnio.resize();
     if (chartProyectosAnio) chartProyectosAnio.resize();
-    if (chartTopPersonas) chartTopPersonas.resize();
-    if (chartComparativaDept) chartComparativaDept.resize();
-    if (chartPersonasConSinProyectos) chartPersonasConSinProyectos.resize();
-    if (chartEmploymentTypeConSin) chartEmploymentTypeConSin.resize();
+    chartComparativaPies.forEach(c => c.resize());
 });
 
 window.addEventListener('resize', () => {
     if (chartImporteAnio) chartImporteAnio.resize();
     if (chartProyectosAnio) chartProyectosAnio.resize();
-    if (chartTopPersonas) chartTopPersonas.resize();
-    if (chartComparativaDept) chartComparativaDept.resize();
-    if (chartPersonasConSinProyectos) chartPersonasConSinProyectos.resize();
-    if (chartEmploymentTypeConSin) chartEmploymentTypeConSin.resize();
+    chartComparativaPies.forEach(c => c.resize());
 });
 
 async function init() {
     inicializarTablas();
-    chartComparativaDept = echarts.init(document.getElementById('chartComparativaDept'));
     configurarSlider();
     await cargarDepartamentos();
+    await carregarAmbits();
     await cargarCategorias();
     await cargarTipus();
     await actualizarGraficoComparativaDepartamentos();
-    
+    _inicializando = false;  // A partir d'aquí, els chips i el slider disparen refresc
     cargarDatos();
 }
 
@@ -3266,19 +3477,57 @@ async function init() {
 document.addEventListener('DOMContentLoaded', function() {
     const tabResumenBtn = document.getElementById('tabResumenBtn');
     const tabDeptBtn = document.getElementById('tabDeptBtn');
+    const tabComparativaBtn = document.getElementById('tabComparativaBtn');
     const tabResumen = document.getElementById('tabResumen');
     const tabDept = document.getElementById('tabDept');
+    const tabComparativa = document.getElementById('tabComparativa');
     const tabNav = tabDeptBtn.parentElement;
+
+    const ALL_TABS = [
+        { btn: tabResumenBtn,    panel: tabResumen },
+        { btn: tabDeptBtn,       panel: tabDept },
+        { btn: tabComparativaBtn, panel: tabComparativa }
+    ];
+
+    function activarTab(activeBtn) {
+        ALL_TABS.forEach(({ btn, panel }) => {
+            const isActive = btn === activeBtn;
+            panel.classList.toggle('hidden', !isActive);
+            btn.classList.toggle('text-indigo-700', isActive);
+            btn.classList.toggle('border-indigo-600', isActive);
+            btn.classList.toggle('text-slate-500', !isActive);
+            btn.classList.toggle('border-transparent', !isActive);
+        });
+
+        // Mover seccionAwardsPersona al tab activo
+        const seccionAwards = document.getElementById('seccionAwardsPersona');
+        if (seccionAwards) {
+            if (activeBtn === tabDeptBtn) {
+                const placeholder = document.getElementById('awardsPlaceholderDept');
+                if (placeholder) placeholder.appendChild(seccionAwards);
+            } else if (activeBtn === tabResumenBtn) {
+                // Devolver a tabResumen (al final, antes del cierre del div)
+                tabResumen.appendChild(seccionAwards);
+            }
+            // En tabComparativa no se mueve: permanece donde estaba
+        }
+
+        if (activeBtn === tabDeptBtn) {
+            setTimeout(resizeDeptCharts, 100);
+        }
+        if (activeBtn === tabResumenBtn) {
+            setTimeout(() => { if (chartProyectosAnio && typeof chartProyectosAnio.resize === 'function') chartProyectosAnio.resize(); }, 100);
+        }
+    }
 
     function resizeDeptCharts() {
         // Redimensiona todos los gráficos ECharts de la pestaña depto
-        if (chartImporteAnio && typeof chartImporteAnio.resize === 'function') chartImporteAnio.resize();
-        if (chartProyectosAnio && typeof chartProyectosAnio.resize === 'function') chartProyectosAnio.resize();
-        if (chartTopPersonas && typeof chartTopPersonas.resize === 'function') chartTopPersonas.resize();
-        if (chartLiderazgo && typeof chartLiderazgo.resize === 'function') chartLiderazgo.resize();
-        if (chartQuadrantsPersona && typeof chartQuadrantsPersona.resize === 'function') chartQuadrantsPersona.resize();
-        if (chartPareto && typeof chartPareto.resize === 'function') chartPareto.resize();
-       
+        [
+            chartImporteAnio, chartProyectosAnio,
+            chartLiderazgo, chartPareto,
+            chartCuartilesPie, chartCuartilesIngresos,
+            chartEvolucionPersonaDept
+        ].forEach(c => { if (c && typeof c.resize === 'function') c.resize(); });
     }
 
     function updateDeptTabVisibility() {
@@ -3286,35 +3535,21 @@ document.addEventListener('DOMContentLoaded', function() {
         const hasDept = departamentosSeleccionados && departamentosSeleccionados.length > 0;
         if (hasDept) {
             tabDeptBtn.classList.remove('hidden');
-            // Si la pestaña estaba activa y se quitó el último departamento, volver a resumen
         } else {
             tabDeptBtn.classList.add('hidden');
-            tabDept.classList.add('hidden');
-            tabResumen.classList.remove('hidden');
-            tabResumenBtn.classList.add('text-indigo-700', 'border-indigo-600');
-            tabResumenBtn.classList.remove('text-slate-500', 'border-transparent');
-            tabDeptBtn.classList.remove('text-indigo-700', 'border-indigo-600');
-            tabDeptBtn.classList.add('text-slate-500', 'border-transparent');
+            // Si la pestaña activa era Dept o Comparativa, volver a Resum
+            if (!tabResumen.classList.contains('hidden') === false) {
+                activarTab(tabResumenBtn);
+            }
+            if (!tabDept.classList.contains('hidden') || !tabComparativa.classList.contains('hidden')) {
+                activarTab(tabResumenBtn);
+            }
         }
     }
 
-    tabResumenBtn.addEventListener('click', function() {
-        tabResumen.classList.remove('hidden');
-        tabDept.classList.add('hidden');
-        tabResumenBtn.classList.add('text-indigo-700', 'border-indigo-600');
-        tabResumenBtn.classList.remove('text-slate-500', 'border-transparent');
-        tabDeptBtn.classList.remove('text-indigo-700', 'border-indigo-600');
-        tabDeptBtn.classList.add('text-slate-500', 'border-transparent');
-    });
-    tabDeptBtn.addEventListener('click', function() {
-        tabResumen.classList.add('hidden');
-        tabDept.classList.remove('hidden');
-        tabDeptBtn.classList.add('text-indigo-700', 'border-indigo-600');
-        tabDeptBtn.classList.remove('text-slate-500', 'border-transparent');
-        tabResumenBtn.classList.remove('text-indigo-700', 'border-indigo-600');
-        tabResumenBtn.classList.add('text-slate-500', 'border-transparent');
-        setTimeout(resizeDeptCharts, 100);
-    });
+    tabResumenBtn.addEventListener('click', () => activarTab(tabResumenBtn));
+    tabDeptBtn.addEventListener('click', () => activarTab(tabDeptBtn));
+    tabComparativaBtn.addEventListener('click', () => activarTab(tabComparativaBtn));
 
     // Hook into chips rendering to update tab visibility
     const origRenderizarChipsDepartamentos = window.renderizarChipsDepartamentos;
@@ -3325,5 +3560,342 @@ document.addEventListener('DOMContentLoaded', function() {
     // Llamar al cargar
     updateDeptTabVisibility();
 });
+
+function extraerDatosDeGraficos() {
+    let contextoGráficos = "";
+
+    // 1. Evolución anual de proyectos y dinero (usar siempre los datos globales del departamento)
+    if (aniosDeptoGlobal.length && importesDeptoGlobal.length && proyectosDeptoGlobal.length) {
+        const evolucion = aniosDeptoGlobal.map((anio, i) => `${anio}: ${proyectosDeptoGlobal[i]} proyectos, ${formatearNumero(importesDeptoGlobal[i])} €`).join('; ');
+        contextoGráficos += `\n- Evolució anual d’ajudes: ${evolucion}.`;
+    }
+
+    // 2. Extraer datos del gráfico de Evolución (Persona vs Depto)
+    if (chartEvolucionPersonaDept) {
+        const options = chartEvolucionPersonaDept.getOption();
+        const años = options.xAxis[0].data;
+        const valoresDepto = options.series.find(s => s.name.includes('Dept'))?.data || [];
+        contextoGráficos += `\n- Tendència temporal (mitjana departament): Anys ${años.join(', ')}, valors [${valoresDepto.join(', ')}] €.`;
+    }
+
+    // 3. Extraer datos del gráfico de Cuartiles (Distribución)
+    if (chartCuartilesPie) {
+        const options = chartCuartilesPie.getOption();
+        const distribucion = options.series[0].data.map(d => `${d.name}: ${d.value} persones`).join(', ');
+        contextoGráficos += `\n- Distribució actual: ${distribucion}.`;
+    }
+
+    return contextoGráficos;
+}
+
+function extraerDatosPareto() {
+    // Buscamos el gráfico de Pareto (asumiendo que se llama chartPareto)
+    if (!chartPareto) return "Datos de Pareto no disponibles.";
+
+    const options = chartPareto.getOption();
+    const nombres = options.xAxis[0].data; // Investigadores ordenados de mayor a menor
+    const acumulado = options.series.find(s => s.type === 'line').data; // La curva de Pareto
+    
+    // Encontramos el "Punto 80": ¿Cuánta gente suma el 80% de los ingresos?
+    const indice80 = acumulado.findIndex(val => val >= 80);
+    const numPersonas80 = indice80 + 1;
+    const porcentajePersonas = ((numPersonas80 / nombres.length) * 100).toFixed(1);
+
+    return `Análisis de Pareto: El 80% de los ingresos del departamento es generado por el ${porcentajePersonas}% de los investigadores (${numPersonas80} personas de un total de ${nombres.length}).`;
+}
+
+
+// ---------------------------------------------------------------------------
+// Construeix el prompt per a l'analisi IA del departament
+// ---------------------------------------------------------------------------
+function buildPromptDepartament(datosRaw, tablaInvestigadores,nombreDepartamento) {
+    const datosDeGraficos = extraerDatosDeGraficos();
+    const datosPareto = extraerDatosPareto();
+    return `
+Realitza una analisi academica exhaustiva de l'estructura i rendiment d'un departament universitari a partir de les seguents dades quantitatives i qualitatives.
+L'analisi ha d'adoptar un enfocament propi d'avaluacio institucional en educacio superior, integrant criteris de productivitat cientifica, sostenibilitat organitzativa i competitivitat en captacio de recursos.
+
+Dades del departament:
+- Nom del departament: ${nombreDepartamento}
+- Mida total de l'equip investigador: ${datosRaw.size}
+- Analisi de Pareto: ${datosPareto}
+- Distribucio de rendiment: ${datosDeGraficos}
+- Llistat d'investigadors amb edat i categoria de rendiment:
+  ${tablaInvestigadores}
+________________________________________
+Instruccions d'analisi:
+1. Estructura de productivitat
+   - Avalua el grau de concentracio de la produccio cientifica i captacio de recursos.
+   - Determina si el model respon a una distribucio eficient o presenta riscos estructurals.
+2. Analisi de capital huma
+   - Examina la distribucio per edats i la seva relacio amb el rendiment.
+   - Identifica possibles problemes de relleu generacional, acumulacio de seniority o manca de desenvolupament de talent jove.
+3. Avaluacio de la sostenibilitat
+   - Analitza la viabilitat del model actual a mitja i llarg termini (3-10 anys).
+   - Considera riscos derivats de dependencia, envelliment o baixa productivitat estructural.
+4. Competitivitat academica
+   - Valora la capacitat del departament per competir en convocatories nacionals i internacionals.
+   - Avalua l'equilibri entre excellencia (top performers) i base productiva.
+5. Diagnostic organitzatiu
+   - Identifica ineficiencies internes (desigualtat de carregues, baixa contribucio, falta d'incentius).
+   - Analitza si existeix una estructura de "doble velocitat" o segmentacio interna.
+6. Projeccio evolutiva
+   - Descriu escenaris probables (optimista, tendencial, negatiu).
+   - Explica com evolucionara la productivitat mitjana del departament.
+7. Recomanacions estrategiques
+   - Propo mesures basades en evidencia per a:
+     millorar la productivitat del grup de baix rendiment,
+     escalar el grup mitja,
+     assegurar la successio del lideratge cientific,
+     optimitzar l'assignacio de recursos i la governanca.
+________________________________________
+Format de resposta:
+1. Genera primer un apartat anomenat "### 🧠 Raonament i Càlculs" on analitzis en veu alta i pas a pas les dades (ex: si el 80% dels fons els porta el 10% del personal, què implica això estratègicament?).
+2. Després d'aquest raonament, genera l'informe final amb:
+   - Estil acadèmic (tipus informe o avaluació ANECA/ERC).
+   - Argumentació basada en les dades proporcionades.
+   - Ús de conceptes com: concentració de productivitat, massa crítica, eficiència organitzativa, pipeline de talent, sostenibilitat científica.
+   - Conclusió sintètica amb diagnòstic global del departament.
+    `;
+}
+
+// ---------------------------------------------------------------------------
+// Mostra el prompt en una finestra flotant (modal)
+// ---------------------------------------------------------------------------
+function mostrarPromptModal() {
+    const datosRaw = window.agrupadoPorPersona || window.dataMap;
+    if (!datosRaw) {
+        alert("Encara no hi ha dades carregades. Selecciona un departament primer.");
+        return;
+    }
+
+    const grupos = calcularQuartilesGrups(datosRaw);
+    let tablaInvestigadores = 'Investigadors del departament (nom, edat, grup):\n';
+    for (const grupo of grupos) {
+        for (const persona of grupo.items) {
+            const nombre = persona.nom || persona.nombre || persona.persona || 'N/D';
+            let edad = persona.edad ?? persona.Edad ?? null;
+            if (typeof edad !== 'number' || isNaN(edad)) edad = 'N/D';
+            tablaInvestigadores += `- ${nombre} (edat: ${edad}) -> ${grupo.label}\n`;
+        }
+    }
+
+    let nombreDepartamento = "Departament desconegut";
+    if (window.departamentosSeleccionados && window.departamentosSeleccionados.length > 0) {
+        const uuidDept = window.departamentosSeleccionados[0];
+        const deptCatalogo = window.departamentosCatalogo.find(d => d.uuid === uuidDept);
+        if (deptCatalogo) {
+            nombreDepartamento = deptCatalogo.nombre;
+        }
+    }
+
+    const prompt = buildPromptDepartament(datosRaw, tablaInvestigadores, nombreDepartamento);
+
+    let modal = document.getElementById('promptModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'promptModal';
+        modal.style.cssText = [
+            'position:fixed', 'inset:0', 'z-index:9999',
+            'background:rgba(15,23,42,0.55)', 'backdrop-filter:blur(2px)',
+            'display:flex', 'align-items:center', 'justify-content:center',
+            'padding:1rem'
+        ].join(';');
+        modal.innerHTML = `
+            <div style="background:#fff;border-radius:1rem;box-shadow:0 8px 40px rgba(0,0,0,0.18);width:100%;max-width:760px;max-height:85vh;display:flex;flex-direction:column;overflow:hidden;">
+                <div style="padding:0.85rem 1.1rem;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;background:#f8fafc;">
+                    <span style="font-size:0.8rem;font-weight:700;color:#4338ca;display:flex;align-items:center;gap:0.4rem;">
+                        <i class="fa-regular fa-message"></i> Prompt enviat al model IA
+                    </span>
+                    <div style="display:flex;gap:0.5rem;">
+                        <button id="promptModalCopyBtn" title="Copiar al portapapers"
+                            style="font-size:0.72rem;font-weight:600;padding:0.3rem 0.8rem;border:1px solid #c7d2fe;border-radius:0.5rem;background:#eef2ff;color:#4338ca;cursor:pointer;display:flex;align-items:center;gap:0.3rem;">
+                            <i class="fa-regular fa-copy"></i> Copiar
+                        </button>
+                        <button id="promptModalCloseBtn" title="Tancar"
+                            style="font-size:0.72rem;font-weight:600;padding:0.3rem 0.8rem;border:1px solid #e2e8f0;border-radius:0.5rem;background:#f1f5f9;color:#64748b;cursor:pointer;display:flex;align-items:center;gap:0.3rem;">
+                            <i class="fa-solid fa-xmark"></i> Tancar
+                        </button>
+                    </div>
+                </div>
+                <div style="flex:1;overflow-y:auto;padding:1rem;">
+                    <pre id="promptModalContent" style="font-family:'Fira Mono','Consolas',monospace;font-size:0.72rem;line-height:1.6;white-space:pre-wrap;word-break:break-word;color:#334155;margin:0;background:#f8fafc;border:1px solid #e2e8f0;border-radius:0.5rem;padding:0.9rem;"></pre>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) modal.style.display = 'none';
+        });
+        modal.querySelector('#promptModalCloseBtn').addEventListener('click', () => {
+            modal.style.display = 'none';
+        });
+        modal.querySelector('#promptModalCopyBtn').addEventListener('click', async () => {
+            const text = document.getElementById('promptModalContent').textContent;
+            try {
+                await navigator.clipboard.writeText(text);
+                const btn = modal.querySelector('#promptModalCopyBtn');
+                btn.innerHTML = '<i class="fa-solid fa-check"></i> Copiat!';
+                btn.style.background = '#dcfce7';
+                btn.style.borderColor = '#86efac';
+                btn.style.color = '#15803d';
+                setTimeout(() => {
+                    btn.innerHTML = '<i class="fa-regular fa-copy"></i> Copiar';
+                    btn.style.background = '#eef2ff';
+                    btn.style.borderColor = '#c7d2fe';
+                    btn.style.color = '#4338ca';
+                }, 2000);
+            } catch(err) {
+                alert("No s'ha pogut copiar al portapapers.");
+            }
+        });
+    }
+
+    document.getElementById('promptModalContent').textContent = prompt;
+    modal.style.display = 'flex';
+}
+
+
+async function analizarDepartamentoConVLLM() {
+    const aiDeptOutput = document.getElementById('ai-dept-output');
+    
+    // Variables para el cronómetro
+    let tiempoInicio = performance.now();
+    let intervaloTimer;
+
+    if (aiDeptOutput) {
+        aiDeptOutput.textContent = "Generant informe automàtic... (0.0s)";
+        
+        // Actualizar el UI cada 100ms
+        intervaloTimer = setInterval(() => {
+            const tiempoActual = performance.now();
+            const segundosTranscurridos = ((tiempoActual - tiempoInicio) / 1000).toFixed(1);
+            aiDeptOutput.textContent = `Generant informe automàtic... (${segundosTranscurridos}s)`;
+        }, 100);
+    }
+
+    const VLLM_CONFIG = {
+        model: "openai/gpt-oss-20b",
+        apiBase: "http://ymir.uab.cat:8014/v1/chat/completions",
+        apiKey: "EMPTY"
+    };
+
+    const datosRaw = window.agrupadoPorPersona || window.dataMap;
+    if (!datosRaw) {
+        clearInterval(intervaloTimer); // Detener timer si no hay datos
+        return;
+    }
+
+    const grupos = calcularQuartilesGrups(datosRaw);
+    let tablaInvestigadores = 'Investigadores del departamento (nombre, edad, grupo):\n';
+    for (const grupo of grupos) {
+        for (const persona of grupo.items) {
+            const nombre = persona.nom || persona.nombre || persona.persona || 'N/D';
+            let edad = persona.edad ?? persona.Edad ?? null;
+            if (typeof edad !== 'number' || isNaN(edad)) edad = 'N/D';
+            tablaInvestigadores += `- ${nombre} (edad: ${edad}) → ${grupo.label}\n`;
+        }
+    }
+
+    const prompt = buildPromptDepartament(datosRaw, tablaInvestigadores);
+
+    try {
+        const response = await fetch(VLLM_CONFIG.apiBase, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${VLLM_CONFIG.apiKey}`
+            },
+            body: JSON.stringify({
+                model: VLLM_CONFIG.model,
+                messages: [
+                    { role: "system", content: "Ets un analista de dades expert en investigació universitària. Pensa sempre pas a pas i estructura el teu raonament logicament abans d'emetre una conclusió final." },
+                    { role: "user", content: prompt }
+                ],
+                temperature: 0.3, 
+                max_tokens: 15000
+            })
+        });
+
+        // ¡Petición terminada! Detenemos el cronómetro
+        clearInterval(intervaloTimer);
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
+        const result = data.choices[0].message.content;
+        
+        // Calculamos el tiempo total exacto
+        const tiempoTotal = ((performance.now() - tiempoInicio) / 1000).toFixed(2);
+
+        // Agregamos un pequeño pie de página al resultado indicando el tiempo
+        const resultadoConTiempo = result + `\n\n---\n*⏱️ Informe generat en ${tiempoTotal} segons.*`;
+
+        const outputElement = document.getElementById('ai-dept-output');
+        if (outputElement) {
+            const zeroMd = document.createElement('zero-md');
+
+            const template = document.createElement('template');
+            template.setAttribute('data-merge', 'append');
+            template.innerHTML = `
+                <style>
+                    :host { font-size: 13px; line-height: 1.4; }
+                    h1, h2, h3, h4, h5, h6 {
+                        font-size: 1.05em !important;
+                        margin: 0.5em 0 0.2em 0 !important;
+                    }
+                    p { 
+                        margin: 0 0 0.5em 0 !important; 
+                    }
+                    ul, ol { 
+                        margin: 0 0 0.5em 0 !important; 
+                        padding-left: 1.4em !important; 
+                    }
+                    li { 
+                        margin: 0.2em 0 !important; /* Un pelín más de aire entre los elementos de la lista */
+                    }
+                    hr { margin: 0.4em 0 !important; }
+                    li p {
+                        margin-top: 0 !important;
+                        margin-bottom: 0.1em !important; /* Casi pegado a la sub-lista */
+                    }
+
+                    /* 2. Asegurar que la sub-lista no añada margen por arriba */
+                    li ul, li ol {
+                        margin-top: 0 !important;
+                        margin-bottom: 0.4em !important;
+                    }
+
+                    /* 3. Juntar más los elementos de la sub-lista */
+                    li li {
+                        margin: 0.1em 0 !important;
+                    }
+                </style>
+            `;
+            zeroMd.appendChild(template);
+
+            const script = document.createElement('script');
+            script.type = 'text/markdown';
+            script.text = resultadoConTiempo; // Usamos el resultado con el tiempo inyectado
+            zeroMd.appendChild(script);
+
+            outputElement.innerHTML = '';
+            outputElement.appendChild(zeroMd);
+        }
+
+        return result;
+
+    } catch (error) {
+        clearInterval(intervaloTimer); // Asegurarnos de detenerlo en caso de error
+        console.error("Error llamando a vLLM:", error);
+        if (aiDeptOutput) {
+            aiDeptOutput.textContent = "Error al generar l'anàlisi de la IA.";
+        }
+        return "Error al generar l'anàlisi de la IA.";
+    }
+}
 
 init();
