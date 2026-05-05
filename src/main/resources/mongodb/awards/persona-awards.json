@@ -91,6 +91,7 @@
       "$project": {
         "_id": 0,
         "awardUuid": "$uuid",
+        "pureId": "$pureId",
         "anyo": 1,
         "vigenciaInicio": "$actualPeriod.startDate",
         "vigenciaFin": "$actualPeriod.endDate",
@@ -207,6 +208,7 @@
         "vigenciaFin": { "$first": "$vigenciaFin" },
         "tipoAward": { "$first": "$tipoAward" },
         "titulo": { "$first": "$titulo" },
+        "pureId": { "$first": "$pureId" },
         "rol": { "$first": "$rol" },
         "institutionalPart": { "$sum": "$importe_partida" },
         "managingOrganization": { "$first": "$managingOrganization" },
@@ -222,6 +224,7 @@
         "vigenciaFin": 1,
         "tipoAward": 1,
         "titulo": 1,
+        "pureId": 1,
         "rol": 1,
         "institutionalPart": { "$round": ["$institutionalPart", 2] },
         "managingOrganization": 1,
