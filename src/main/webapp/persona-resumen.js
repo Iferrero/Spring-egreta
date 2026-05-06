@@ -787,6 +787,7 @@ const UAB_COLORS = {
 let tablaResumen = null;
 let tablaAwards = null;
 let tablaCrecimiento = null;
+let informeWordToastTimer = null;
 
 /**
  * Formatea importes con locale catalán y 2 decimales.
@@ -1066,6 +1067,24 @@ function ocultarOverlayCargando() {
     const overlay = document.getElementById('loadingOverlay');
     if (!overlay) return;
     overlay.classList.add('hidden');
+}
+
+function mostrarAvisoGenerandoInformeWord() {
+    let toast = document.getElementById('wordReportToast');
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'wordReportToast';
+        toast.className = 'fixed bottom-5 right-5 z-50 bg-white border border-slate-200 shadow-lg rounded-xl px-4 py-3 text-sm text-slate-700 flex items-center gap-2';
+        toast.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-[#4F81BD]"></i><span>Generant informe Word...</span>';
+        document.body.appendChild(toast);
+    }
+    toast.classList.remove('hidden');
+}
+
+function ocultarAvisoGenerandoInformeWord() {
+    const toast = document.getElementById('wordReportToast');
+    if (!toast) return;
+    toast.classList.add('hidden');
 }
 
 /**
@@ -1611,16 +1630,43 @@ function generarInformePersona() {
     if (!personaTopSeleccionada || !personaTopSeleccionada.personaUuid) {
         return;
     }
-    const { desde, hasta } = obtenerFiltrosActuales();
+    const botonInforme = document.getElementById('btnGenerarInformeAwards');
+    if (botonInforme) {
+        botonInforme.disabled = true;
+        botonInforme.classList.add('opacity-60', 'cursor-not-allowed');
+    }
+
+    mostrarAvisoGenerandoInformeWord();
+
+    const finalizarAviso = () => {
+        ocultarAvisoGenerandoInformeWord();
+        if (botonInforme) {
+            botonInforme.disabled = false;
+            botonInforme.classList.remove('opacity-60', 'cursor-not-allowed');
+        }
+    };
+
+    if (informeWordToastTimer) {
+        clearTimeout(informeWordToastTimer);
+    }
+    informeWordToastTimer = setTimeout(finalizarAviso, 12000);
+    window.addEventListener('focus', finalizarAviso, { once: true });
+    window.addEventListener('pageshow', finalizarAviso, { once: true });
+
+    const { desde, hasta, modoAnio, categoria, tipus } = obtenerFiltrosActuales();
     const startDate = `${desde}-01-01`;
     const endDate   = `${hasta}-12-31`;
-    const url = apiUrl('/persons/informe-word-persona') +
-        '?personUuid='     + encodeURIComponent(personaTopSeleccionada.personaUuid) +
-        '&startDate='      + encodeURIComponent(startDate) +
-        '&endDate='        + encodeURIComponent(endDate) +
-        '&projectFilter=all' +
-        '&lang=ca' +
-        '&onlyAwards=true';
+    const params = new URLSearchParams({
+        personUuid: personaTopSeleccionada.personaUuid,
+        startDate,
+        endDate,
+        projectFilter: 'all',
+        lang: 'ca',
+        onlyAwards: 'true',
+        modoAnio: modoAnio || 'awardDate'
+    });
+    appendFilterParams(params, { categoria, tipus });
+    const url = apiUrl('/persons/informe-word-persona') + '?' + params.toString();
     const a = document.createElement('a');
     a.href = url;
     a.download = '';

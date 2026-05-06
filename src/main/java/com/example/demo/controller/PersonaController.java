@@ -3353,6 +3353,9 @@ public class PersonaController {
             @RequestParam(required = false, defaultValue = "all") String projectFilter,
             @RequestParam(required = false, defaultValue = "ca") String lang,
             @RequestParam(required = false, defaultValue = "false") boolean onlyAwards,
+            @RequestParam(required = false, defaultValue = "awardDate") String modoAnio,
+            @RequestParam(required = false) List<String> categoria,
+            @RequestParam(required = false) List<String> tipus,
             HttpServletResponse response) throws Exception {
 
         // 1. Fetch person name
@@ -3370,43 +3373,47 @@ public class PersonaController {
             }
         }
 
-        Date startDateD = Date.from(LocalDate.parse(startDate).atStartOfDay(ZoneId.of("UTC")).toInstant());
-        Date endDateD   = Date.from(LocalDate.parse(endDate).atStartOfDay(ZoneId.of("UTC")).toInstant());
-
-        // 2. Competitive awards where this person is awardHolder
-        // Date filter: actualPeriod.startDate within [startDate, endDate] (mirrors reference query)
-        // Same collaborator UUID used by the table (UAB as funding collaborator)
+        // 2. Resolve awards using the exact same backend source as the awards table
         final String UAB_COLLABORATOR_UUID = "84443078-1a60-462d-9d0a-b04312afd9eb";
 
-        // Workflow: validated OR closed
-        Document awardFilter = new Document()
-            .append("workflow.step", new Document("$in", Arrays.asList("validated", "closed")))
-            .append("categoria", new Document("$regex", "^Ajudes competitives"))
-            .append("awardHolders.person.uuid", personUuid)
-            .append("fundings.fundingCollaborators.collaborator.uuid", UAB_COLLABORATOR_UUID)
-            .append("actualPeriod.startDate", new Document("$gte", startDateD).append("$lte", endDateD));
-        List<Document> awardsRaw = new ArrayList<>();
-        mongoTemplate.getDb().getCollection("Awards")
-            .find(awardFilter)
-            .sort(new Document("actualPeriod.startDate", -1))
-            .into(awardsRaw);
+        int desdeYear = LocalDate.parse(startDate).getYear();
+        int hastaYear = LocalDate.parse(endDate).getYear();
 
-        // 3. Convenios where this person is awardHolder
-        Document conveniFilter = new Document()
-            .append("workflow.step", new Document("$in", Arrays.asList("validated", "closed")))
-            .append("type.term.ca_ES", "Concessió conveni")
-            .append("awardHolders.person.uuid", personUuid)
-            .append("fundings.fundingCollaborators.collaborator.uuid", UAB_COLLABORATOR_UUID)
-            .append("actualPeriod.startDate", new Document("$gte", startDateD).append("$lte", endDateD));
-        List<Document> convenisRaw = new ArrayList<>();
-        mongoTemplate.getDb().getCollection("Awards")
-            .find(conveniFilter)
-            .sort(new Document("actualPeriod.startDate", -1))
-            .into(convenisRaw);
+        List<Document> rowsAwardsTable = awardService.getAwardsByPersona(
+                personUuid,
+                desdeYear,
+                hastaYear,
+                UAB_COLLABORATOR_UUID,
+                null,
+                modoAnio,
+                categoria,
+                tipus
+        );
 
-        List<Document> allAwards = new ArrayList<>();
-        allAwards.addAll(awardsRaw);
-        allAwards.addAll(convenisRaw);
+        List<String> orderedAwardUuids = rowsAwardsTable.stream()
+                .map(r -> r.getString("awardUuid"))
+                .filter(u -> u != null && !u.isBlank())
+                .distinct()
+                .collect(Collectors.toList());
+
+        Map<String, Document> awardsByUuid = new HashMap<>();
+        if (!orderedAwardUuids.isEmpty()) {
+            List<Document> rawAwards = new ArrayList<>();
+            mongoTemplate.getDb().getCollection("Awards")
+                    .find(new Document("uuid", new Document("$in", orderedAwardUuids)))
+                    .into(rawAwards);
+            for (Document aw : rawAwards) {
+                String awUuid = aw.getString("uuid");
+                if (awUuid != null && !awUuid.isBlank()) {
+                    awardsByUuid.put(awUuid, aw);
+                }
+            }
+        }
+
+        List<Document> allAwards = orderedAwardUuids.stream()
+                .map(awardsByUuid::get)
+                .filter(aw -> aw != null)
+                .collect(Collectors.toCollection(ArrayList::new));
 
         if ("ipcoip".equalsIgnoreCase(projectFilter)) {
             allAwards = allAwards.stream()
@@ -3414,18 +3421,7 @@ public class PersonaController {
                 .collect(Collectors.toCollection(ArrayList::new));
         }
 
-        allAwards.sort((a, b) -> {
-            Document aPeriod = (Document) a.get("actualPeriod");
-            Document bPeriod = (Document) b.get("actualPeriod");
-            LocalDate aStart = aPeriod != null ? parseDate(aPeriod.get("startDate")) : null;
-            LocalDate bStart = bPeriod != null ? parseDate(bPeriod.get("startDate")) : null;
-            if (aStart == null && bStart == null) return 0;
-            if (aStart == null) return 1;
-            if (bStart == null) return -1;
-            return bStart.compareTo(aStart);
-        });
-
-        // 4. Batch-fetch funder names
+        // 3. Batch-fetch funder names
         Set<String> allFunderUuids = new HashSet<>();
         for (Document award : allAwards) {
             @SuppressWarnings("unchecked")
@@ -3450,8 +3446,7 @@ public class PersonaController {
                 });
         }
 
-        int desdeYear = LocalDate.parse(startDate).getYear();
-        int hastaYear = LocalDate.parse(endDate).getYear();
+        
         List<Document> rowsResumenAll = awardService.getPersonaResumen(
                 UAB_COLLABORATOR_UUID,
                 null,
