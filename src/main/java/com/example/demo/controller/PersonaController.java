@@ -2,7 +2,9 @@ package com.example.demo.controller;
 
 import com.example.demo.model.Organizacion;
 import com.example.demo.model.Persona;
+import com.example.demo.service.AwardService;
 import jakarta.servlet.http.HttpServletResponse;
+import org.apache.poi.util.Units;
 import org.apache.poi.xwpf.usermodel.*;
 import org.bson.Document;
 import org.springframework.data.domain.Page;
@@ -18,8 +20,16 @@ import org.springframework.data.support.PageableExecutionUtils;
 import org.springframework.data.web.PagedModel;
 import org.springframework.web.bind.annotation.*;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.awt.Color;
+import java.awt.Font;
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
+import java.awt.BasicStroke;
+import java.awt.image.BufferedImage;
 import java.math.BigInteger;
 import java.text.Normalizer;
 import java.time.LocalDate;
@@ -40,6 +50,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import javax.imageio.ImageIO;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTBookmark;
 import org.w3c.dom.Node;
 
@@ -49,10 +60,12 @@ import org.w3c.dom.Node;
 public class PersonaController {
 
     private final MongoTemplate mongoTemplate;
+    private final AwardService awardService;
 
     // Constructor para inyectar las dependencias (Soluciona el error de inicialización)
-    public PersonaController(MongoTemplate mongoTemplate) {
+    public PersonaController(MongoTemplate mongoTemplate, AwardService awardService) {
         this.mongoTemplate = mongoTemplate;
+        this.awardService = awardService;
     }
 
     /** DEBUG TEMPORAL: dump identifiers from Awards (optionally filter by orgUuid) */
@@ -2619,6 +2632,247 @@ public class PersonaController {
         run.addBreak();
     }
 
+    private void appendProjectesPerAnyChart(XWPFDocument doc, List<Document> rowsPersonaResumen, String lang) throws Exception {
+        Map<Integer, YearMetrics> perAny = calcularSeriesProjectesPerAny(rowsPersonaResumen);
+        if (perAny.isEmpty()) {
+            return;
+        }
+
+        XWPFParagraph pageBreakP = doc.createParagraph();
+        XWPFRun pageBreakRun = pageBreakP.createRun();
+        pageBreakRun.addBreak(BreakType.PAGE);
+
+        XWPFParagraph titleP = doc.createParagraph();
+        applyProjectParagraphStyle(titleP);
+        titleP.setAlignment(ParagraphAlignment.LEFT);
+        {
+            org.openxmlformats.schemas.wordprocessingml.x2006.main.CTPPr ppr = titleP.getCTP().getPPr();
+            org.openxmlformats.schemas.wordprocessingml.x2006.main.CTInd ind = ppr.isSetInd() ? ppr.getInd() : ppr.addNewInd();
+            ind.setLeft(BigInteger.valueOf(-714));
+        }
+        XWPFRun titleRun = createProjectRun(titleP, true, false);
+        titleRun.setText("Ajuts per any");
+        titleRun.addBreak();
+
+        BufferedImage chart = construirGraficoProjectesPerAny(perAny);
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        ImageIO.write(chart, "png", baos);
+        byte[] bytes = baos.toByteArray();
+
+        XWPFParagraph imgP = doc.createParagraph();
+        applyProjectParagraphStyle(imgP);
+        imgP.setAlignment(ParagraphAlignment.LEFT);
+        {
+            org.openxmlformats.schemas.wordprocessingml.x2006.main.CTPPr ppr = imgP.getCTP().getPPr();
+            org.openxmlformats.schemas.wordprocessingml.x2006.main.CTInd ind = ppr.isSetInd() ? ppr.getInd() : ppr.addNewInd();
+            ind.setLeft(BigInteger.valueOf(-714));
+        }
+        XWPFRun imgRun = imgP.createRun();
+        imgRun.addPicture(
+                new ByteArrayInputStream(bytes),
+                org.apache.poi.xwpf.usermodel.Document.PICTURE_TYPE_PNG,
+                "ajuts-per-any.png",
+                Units.toEMU(520),
+                Units.toEMU(300)
+        );
+        imgRun.addBreak();
+    }
+
+    private Map<Integer, YearMetrics> calcularSeriesProjectesPerAny(List<Document> rowsPersonaResumen) {
+        Map<Integer, YearMetrics> perAny = new java.util.TreeMap<>();
+        if (rowsPersonaResumen == null) {
+            return perAny;
+        }
+
+        for (Document row : rowsPersonaResumen) {
+            if (row == null) {
+                continue;
+            }
+
+            Object anyoObj = row.get("Año");
+            if (!(anyoObj instanceof Number)) {
+                continue;
+            }
+            int year = ((Number) anyoObj).intValue();
+
+            YearMetrics ym = perAny.computeIfAbsent(year, k -> new YearMetrics());
+
+            int proyIp = toInt(row.get("Proyectos_IP"));
+            int proyCoip = toInt(row.get("Proyectos_CoIP"));
+            int proyMiembro = toInt(row.get("Proyectos_Miembro"));
+            int total = proyIp + proyCoip + proyMiembro;
+
+            ym.totalProjects += total;
+            String categoria = asString(row.get("FunderType"));
+            if (categoria == null || categoria.isBlank()) categoria = "Desconegut";
+            ym.categoriaCounts.put(categoria, ym.categoriaCounts.getOrDefault(categoria, 0) + total);
+            ym.importePonderat += toDouble(row.get("Importe_Ponderado (€)"));
+        }
+        return perAny;
+    }
+
+    private BufferedImage construirGraficoProjectesPerAny(Map<Integer, YearMetrics> perAny) {
+        final int width = 1400;
+        final int height = 760;
+        final int left = 90;
+        final int right = 90;
+        final int top = 40;
+        final int bottom = 120;
+
+        BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = image.createGraphics();
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+
+        g.setColor(Color.WHITE);
+        g.fillRect(0, 0, width, height);
+
+        int chartW = width - left - right;
+        int chartH = height - top - bottom;
+        List<Integer> years = new ArrayList<>(perAny.keySet());
+
+        List<String> categories = perAny.values().stream()
+                .flatMap(v -> v.categoriaCounts.keySet().stream())
+                .distinct()
+                .sorted()
+                .collect(Collectors.toList());
+
+        int maxProjects = perAny.values().stream().mapToInt(v -> v.totalProjects).max().orElse(1);
+        double maxImport = perAny.values().stream().mapToDouble(v -> v.importePonderat).max().orElse(1d);
+        int yTicks = Math.max(2, Math.min(6, maxProjects));
+
+        g.setFont(new Font("Calibri", Font.PLAIN, 13));
+        g.setColor(new Color(220, 226, 232));
+        for (int i = 0; i <= yTicks; i++) {
+            int v = (int) Math.round((double) i * maxProjects / yTicks);
+            int y = top + chartH - (int) Math.round((double) v * chartH / Math.max(1, maxProjects));
+            g.drawLine(left, y, left + chartW, y);
+            g.setColor(new Color(89, 100, 115));
+            g.drawString(String.valueOf(v), left - 28, y + 5);
+            g.setColor(new Color(220, 226, 232));
+        }
+
+        int n = Math.max(1, years.size());
+        int slot = chartW / n;
+        int barW = Math.max(12, (int) (slot * 0.58));
+
+        for (int i = 0; i < years.size(); i++) {
+            int year = years.get(i);
+            YearMetrics ym = perAny.get(year);
+            int x = left + i * slot + (slot - barW) / 2;
+            int yBase = top + chartH;
+
+            for (String cat : categories) {
+                int value = ym.categoriaCounts.getOrDefault(cat, 0);
+                if (value <= 0) continue;
+                int h = (int) Math.round((double) value * chartH / Math.max(1, maxProjects));
+                int y = yBase - h;
+                g.setColor(colorCategoria(cat));
+                g.fillRect(x, y, barW, h);
+                yBase = y;
+            }
+
+            g.setColor(new Color(42, 48, 55));
+            g.drawString(String.valueOf(year), x + Math.max(2, barW / 2 - 14), top + chartH + 26);
+        }
+
+        g.setColor(new Color(224, 82, 82));
+        g.setStroke(new BasicStroke(2.0f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND, 10f, new float[]{8f, 6f}, 0f));
+        int prevX = -1;
+        int prevY = -1;
+        for (int i = 0; i < years.size(); i++) {
+            int year = years.get(i);
+            YearMetrics ym = perAny.get(year);
+            int x = left + i * slot + slot / 2;
+            int y = top + chartH - (int) Math.round((ym.importePonderat / Math.max(1d, maxImport)) * chartH);
+            if (prevX >= 0) {
+                g.drawLine(prevX, prevY, x, y);
+            }
+            g.fillOval(x - 4, y - 4, 8, 8);
+            prevX = x;
+            prevY = y;
+        }
+
+        g.setStroke(new BasicStroke(1f));
+        g.setColor(new Color(89, 100, 115));
+        g.drawString("Projectes", left - 8, top - 10);
+        g.drawString("Import (€)", left + chartW - 56, top - 10);
+
+        g.setColor(new Color(151, 160, 170));
+        g.drawLine(left, top + chartH, left + chartW, top + chartH);
+        g.drawLine(left, top, left, top + chartH);
+
+        drawLegend(g, left, top + chartH + 42, categories);
+
+        g.dispose();
+        return image;
+    }
+
+    private Color colorCategoria(String categoria) {
+        List<String> paletteHex = List.of("#008037", "#F88C12", "#004D5E", "#596473", "#004d21", "#00a34f", "#fab84c", "#006b7a", "#8a99a8", "#2a3037");
+        String raw = categoria == null ? "" : categoria;
+        String lowered = raw.toLowerCase();
+        String key = Normalizer.normalize(lowered, Normalizer.Form.NFD).replaceAll("\\p{M}", "");
+
+        if ("publica".equals(key)) return Color.decode("#008037");
+        if ("privada".equals(key)) return Color.decode("#F88C12");
+
+        int h = 0;
+        for (int i = 0; i < raw.length(); i++) {
+            h = 31 * h + raw.charAt(i);
+        }
+        return Color.decode(paletteHex.get(Math.floorMod(Math.abs(h), paletteHex.size())));
+    }
+
+    private void drawLegend(Graphics2D g, int startX, int y, List<String> categories) {
+        g.setFont(new Font("Calibri", Font.PLAIN, 12));
+        int x = startX;
+        for (String cat : categories) {
+            g.setColor(colorCategoria(cat));
+            g.fillRect(x, y - 10, 14, 10);
+            g.setColor(new Color(42, 48, 55));
+            g.drawString(cat, x + 18, y);
+            x += 18 + Math.max(40, cat.length() * 7);
+        }
+
+        g.setColor(new Color(224, 82, 82));
+        g.setStroke(new BasicStroke(2.0f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND, 10f, new float[]{8f, 6f}, 0f));
+        g.drawLine(startX, y + 20, startX + 18, y + 20);
+        g.setStroke(new BasicStroke(1f));
+        g.setColor(new Color(42, 48, 55));
+        g.drawString("Import ponderat (€)", startX + 24, y + 24);
+    }
+
+    private static class YearMetrics {
+        int totalProjects = 0;
+        double importePonderat = 0d;
+        Map<String, Integer> categoriaCounts = new LinkedHashMap<>();
+    }
+
+    private int toInt(Object value) {
+        if (value instanceof Number n) return n.intValue();
+        if (value == null) return 0;
+        try {
+            return (int) Math.round(Double.parseDouble(String.valueOf(value)));
+        } catch (Exception ignored) {
+            return 0;
+        }
+    }
+
+    private double toDouble(Object value) {
+        if (value instanceof Number n) return n.doubleValue();
+        if (value == null) return 0d;
+        try {
+            return Double.parseDouble(String.valueOf(value));
+        } catch (Exception ignored) {
+            return 0d;
+        }
+    }
+
+    private String asString(Object value) {
+        return value == null ? "" : String.valueOf(value);
+    }
+
     /** Formats an amount as "227.000,00 €" (Catalan/Spanish locale). */
     private String formatImport(double amount) {
         if (amount == 0) return "";
@@ -2739,6 +2993,7 @@ public class PersonaController {
             @RequestParam(required = false, defaultValue = "2050-12-31") String endDate,
             @RequestParam(required = false, defaultValue = "all") String projectFilter,
             @RequestParam(required = false, defaultValue = "ca") String lang,
+            @RequestParam(required = false, defaultValue = "false") boolean onlyAwards,
             HttpServletResponse response) throws Exception {
 
         // 1. Fetch person name
@@ -2761,11 +3016,15 @@ public class PersonaController {
 
         // 2. Competitive awards where this person is awardHolder
         // Date filter: actualPeriod.startDate within [startDate, endDate] (mirrors reference query)
+        // Same collaborator UUID used by the table (UAB as funding collaborator)
+        final String UAB_COLLABORATOR_UUID = "84443078-1a60-462d-9d0a-b04312afd9eb";
+
         // Workflow: validated OR closed
         Document awardFilter = new Document()
             .append("workflow.step", new Document("$in", Arrays.asList("validated", "closed")))
             .append("categoria", new Document("$regex", "^Ajudes competitives"))
             .append("awardHolders.person.uuid", personUuid)
+            .append("fundings.fundingCollaborators.collaborator.uuid", UAB_COLLABORATOR_UUID)
             .append("actualPeriod.startDate", new Document("$gte", startDateD).append("$lte", endDateD));
         List<Document> awardsRaw = new ArrayList<>();
         mongoTemplate.getDb().getCollection("Awards")
@@ -2778,6 +3037,7 @@ public class PersonaController {
             .append("workflow.step", new Document("$in", Arrays.asList("validated", "closed")))
             .append("type.term.ca_ES", "Concessió conveni")
             .append("awardHolders.person.uuid", personUuid)
+            .append("fundings.fundingCollaborators.collaborator.uuid", UAB_COLLABORATOR_UUID)
             .append("actualPeriod.startDate", new Document("$gte", startDateD).append("$lte", endDateD));
         List<Document> convenisRaw = new ArrayList<>();
         mongoTemplate.getDb().getCollection("Awards")
@@ -2831,12 +3091,156 @@ public class PersonaController {
                 });
         }
 
-        // 5. Build Word document using the template for the selected language
+            int desdeYear = LocalDate.parse(startDate).getYear();
+            int hastaYear = LocalDate.parse(endDate).getYear();
+            List<Document> rowsForChart = awardService.getPersonaResumen(
+                UAB_COLLABORATOR_UUID,
+                null,
+                null,
+                desdeYear,
+                hastaYear,
+                "awardDate",
+                null,
+                null,
+                null
+            ).stream()
+                .filter(r -> personUuid.equals(String.valueOf(r.get("PersonaUuid"))))
+                .collect(Collectors.toList());
+
+        // 5. Build Word document
         String templateName = switch (lang) {
             case "es" -> "plantilla_certificats_castella.docx";
             case "en" -> "plantilla_certificats_angles.docx";
             default  -> "plantilla_certificats_catala.docx";
         };
+        if (onlyAwards) {
+            // Template-based document: keep header/footer, remove intro body text, and write only awards
+            InputStream tplIs = getClass().getClassLoader().getResourceAsStream(templateName);
+            try (XWPFDocument doc = new XWPFDocument(tplIs); OutputStream out = response.getOutputStream()) {
+                // Clear template body content (preserves sectPr with margins, header, footer refs)
+                {
+                    org.openxmlformats.schemas.wordprocessingml.x2006.main.CTBody b = doc.getDocument().getBody();
+                    for (int i = b.sizeOfPArray() - 1; i >= 0; i--) b.removeP(i);
+                    for (int i = b.sizeOfTblArray() - 1; i >= 0; i--) b.removeTbl(i);
+                }
+
+                if (!allAwards.isEmpty()) {
+                    XWPFParagraph awardPara = doc.createParagraph();
+                    applyProjectParagraphStyle(awardPara);
+                    int awardIdx = 1;
+                    for (Document aw : allAwards) {
+                        String awTitle = getNestedStringVal(aw, "title", "ca_ES");
+                        if (awTitle.isEmpty()) awTitle = getNestedStringVal(aw, "title", "es_ES");
+                        if (awTitle.isEmpty()) awTitle = getNestedStringVal(aw, "title", "en_GB");
+
+                        List<String> ipOnlyList = new ArrayList<>();
+                        List<String> coipList = new ArrayList<>();
+                        String personRole = "";
+                        @SuppressWarnings("unchecked")
+                        List<Document> holders = (List<Document>) aw.get("awardHolders");
+                        if (holders != null) {
+                            for (Document holder : holders) {
+                                Document hn = (Document) holder.get("name");
+                                Document rd = (Document) holder.get("role");
+                                Document holderPerson = (Document) holder.get("person");
+                                String holderUuid = holderPerson != null ? holderPerson.getString("uuid") : "";
+                                String fn = hn != null ? hn.getString("firstName") : "";
+                                String ln = hn != null ? hn.getString("lastName")  : "";
+                                String fullName = (ln != null ? ln : "") + (fn != null && !fn.isEmpty() ? ", " + fn : "");
+                                boolean isIp = false;
+                                boolean isPureIp = false;
+                                String roleLocalized = "";
+                                if (rd != null) {
+                                    Document td = (Document) rd.get("term");
+                                    if (td != null) {
+                                        String roleCa = td.getString("ca_ES") != null ? td.getString("ca_ES") : "";
+                                        isIp = isIpOrCoipRole(rd);
+                                        isPureIp = isIp && !normalize(roleCa).startsWith("co");
+                                        roleLocalized = switch (lang) {
+                                            case "es" -> td.getString("es_ES") != null ? td.getString("es_ES") : roleCa;
+                                            case "en" -> td.getString("en_GB") != null ? td.getString("en_GB") : roleCa;
+                                            default  -> roleCa;
+                                        };
+                                    }
+                                }
+                                if (isIp && !fullName.isBlank()) {
+                                    if (isPureIp) ipOnlyList.add(fullName); else coipList.add(fullName);
+                                }
+                                if (personUuid.equals(holderUuid)) personRole = roleLocalized;
+                            }
+                        }
+                        List<String> ipAllList = new ArrayList<>(ipOnlyList);
+                        ipAllList.addAll(coipList);
+                        String ip = String.join(" & ", ipAllList);
+
+                        String funderName = "";
+                        @SuppressWarnings("unchecked")
+                        List<Document> awFundings = (List<Document>) aw.get("fundings");
+                        if (awFundings != null && !awFundings.isEmpty()) {
+                            Document fd = (Document) awFundings.get(0).get("funder");
+                            if (fd != null) funderName = funderNames.getOrDefault(fd.getString("uuid"), "");
+                        }
+
+                        double importTotal = 0.0;
+                        double importUAB = 0.0;
+                        if (awFundings != null) {
+                            for (Document funding : awFundings) {
+                                Document amountDoc = (Document) funding.get("amount");
+                                if (amountDoc != null) { Object val = amountDoc.get("value"); if (val instanceof Number n) importTotal += n.doubleValue(); }
+                                @SuppressWarnings("unchecked")
+                                List<Document> cols = (List<Document>) funding.get("fundingCollaborators");
+                                if (cols != null) for (Document col : cols) {
+                                    Document part = (Document) col.get("institutionalPart");
+                                    if (part != null) { Object val = part.get("value"); if (val instanceof Number n) importUAB += n.doubleValue(); }
+                                }
+                            }
+                        }
+                        if (importTotal == 0) importTotal = importUAB;
+
+                        Document period = (Document) aw.get("actualPeriod");
+                        String awStart = period != null ? formatDateDash(period.get("startDate")) : "";
+                        String awEnd   = period != null ? formatDateDash(period.get("endDate"))   : "";
+
+                        String codiOficial = "";
+                        @SuppressWarnings("unchecked")
+                        List<Document> identifiers = (List<Document>) aw.get("identifiers");
+                        if (identifiers != null) {
+                            codiOficial = identifiers.stream()
+                                .filter(id -> { Document idType = (Document) id.get("type"); return idType != null && "/dk/atira/pure/upm/classifiedsource/referencecode".equals(idType.getString("uri")); })
+                                .map(id -> id.getString("id") != null ? id.getString("id") : id.getString("value"))
+                                .filter(v -> v != null && !v.isBlank())
+                                .findFirst().orElse("");
+                        }
+
+                        String lbIp     = switch (lang) { case "es" -> "Investigador principal"; case "en" -> "Principal investigator"; default -> "Investigador principal"; };
+                        String lbRol    = switch (lang) { case "es" -> "Rol"; case "en" -> "Role"; default -> "Rol"; };
+                        String lbFunder = switch (lang) { case "es" -> "Entidad financiadora"; case "en" -> "Funder"; default -> "Entitat finan\u00e7adora"; };
+                        String lbTotal  = switch (lang) { case "es" -> "Importe total"; case "en" -> "Full awarding amount"; default -> "Import total"; };
+                        String lbUAB    = switch (lang) { case "es" -> "Importe UAB"; case "en" -> "UAB awarding amount"; default -> "Import UAB"; };
+                        String lbDates  = switch (lang) { case "es" -> "Fecha de inicio/fin"; case "en" -> "Start/end dates"; default -> "Data d'inici/fi"; };
+                        String lbCode   = switch (lang) { case "es" -> "C\u00f3digo Oficial"; case "en" -> "Reference code"; default -> "Codi Oficial"; };
+
+                        addProjectLine(awardPara, awardIdx + ".- " + awTitle, true);
+                        if (!ip.isBlank()) addProjectLabelValueLine(awardPara, lbIp, ip);
+                        if (!personRole.isBlank()) addProjectLabelValueLine(awardPara, lbRol, personRole);
+                        if (!funderName.isBlank()) addProjectLabelValueLine(awardPara, lbFunder, funderName);
+                        if (importTotal > 0) addProjectLabelValueLine(awardPara, lbTotal, formatImport(importTotal));
+                        if (importUAB > 0) addProjectLabelValueLine(awardPara, lbUAB, formatImport(importUAB));
+                        addProjectLabelValueLine(awardPara, lbDates, awStart + " \u2192 " + awEnd);
+                        if (!codiOficial.isBlank()) addProjectLabelValueLine(awardPara, lbCode, codiOficial);
+                        addProjectBlankLine(awardPara);
+                        awardIdx++;
+                    }
+                }
+                appendProjectesPerAnyChart(doc, rowsForChart, lang);
+                response.setContentType("application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+                String filename = "awards-" + personName.replaceAll("[^a-zA-Z0-9\\-_]", "_") + ".docx";
+                response.setHeader("Content-Disposition", "attachment; filename=\"" + filename + "\"");
+                doc.write(out);
+            }
+            return;
+        }
+
         InputStream tplIs = getClass().getClassLoader().getResourceAsStream(templateName);
         try (XWPFDocument doc = new XWPFDocument(tplIs); OutputStream out = response.getOutputStream()) {
 
@@ -2987,6 +3391,8 @@ public class PersonaController {
                     awardIdx++;
                 }
             }
+
+            appendProjectesPerAnyChart(doc, rowsForChart, lang);
 
             // Move all newly appended paragraphs to just after the "projectes" bookmark paragraph.
             if (projectesAnchorNode != null) {

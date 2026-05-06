@@ -1604,6 +1604,32 @@ async function cargarAwardsPersona(persona) {
 }
 
 /**
+ * Genera l'informe Word de la persona seleccionada amb el mateix format que el certificat.
+ * Utilitza el rang d'anys actiu i crida l'endpoint /persons/informe-word-persona.
+ */
+function generarInformePersona() {
+    if (!personaTopSeleccionada || !personaTopSeleccionada.personaUuid) {
+        return;
+    }
+    const { desde, hasta } = obtenerFiltrosActuales();
+    const startDate = `${desde}-01-01`;
+    const endDate   = `${hasta}-12-31`;
+    const url = apiUrl('/persons/informe-word-persona') +
+        '?personUuid='     + encodeURIComponent(personaTopSeleccionada.personaUuid) +
+        '&startDate='      + encodeURIComponent(startDate) +
+        '&endDate='        + encodeURIComponent(endDate) +
+        '&projectFilter=all' +
+        '&lang=ca' +
+        '&onlyAwards=true';
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = '';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+}
+
+/**
  * Renderiza los tres gráficos principales del dashboard.
  * @param {Array<object>} filas
  */
