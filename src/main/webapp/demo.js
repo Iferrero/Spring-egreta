@@ -148,7 +148,9 @@ function renderDemoTable(rows) {
             layout: 'fitColumns',
             placeholder: 'No hi ha dades.',
             columns: cols,
-            initialSort: [ { column: 'nombre', dir: 'asc' } ]
+            initialSort: [ { column: 'nombre', dir: 'asc' } ],
+            height: '500px',
+            renderVertical: 'virtual',
         });
     } else {
         demoTable.setColumns(cols);

@@ -390,10 +390,79 @@ public class PersonaController {
             @RequestParam String orgUuid,
             @RequestParam(required = false, defaultValue = "2021-01-01") String startDate,
             @RequestParam(required = false, defaultValue = "2025-12-31") String endDate,
-            @RequestParam(required = false, defaultValue = "periode") String filtrePersonal
+            @RequestParam(required = false, defaultValue = "periode") String filtrePersonal,
+            @RequestParam(required = false) String deptUuid
         ) {
         List<Document> pipeline = new ArrayList<>();
 
+        // Helper function to extract employment with fallback
+        Document extractEmployment = new Document("$ifNull", Arrays.asList(
+            new Document("$first", new Document("$arrayElemAt", Arrays.asList(
+                new Document("$objectToArray", new Document("$ifNull", Arrays.asList(
+                    "$assoc.employmentType.term", new Document()
+                ))),
+                0
+            ))),
+            "$assoc.employmentType.term.text.value"
+        ));
+
+        // First, extract institute and department associations
+        Document deptFilter = deptUuid != null && !deptUuid.trim().isEmpty() 
+            ? new Document("$eq", Arrays.asList("$$a.organization.uuid", deptUuid))
+            : new Document("$eq", Arrays.asList("$$a.organization.uuid", ""));
+            
+        Document extractAssoc = new Document("$let", new Document()
+            .append("vars", new Document()
+                .append("instAssoc", new Document("$arrayElemAt", Arrays.asList(
+                    new Document("$filter", new Document()
+                        .append("input", "$staffOrganizationAssociations")
+                        .append("as", "a")
+                        .append("cond", new Document("$eq", Arrays.asList("$$a.organization.uuid", orgUuid)))
+                    ), 0
+                )))
+                .append("deptAssoc", new Document("$arrayElemAt", Arrays.asList(
+                    new Document("$filter", new Document()
+                        .append("input", "$staffOrganizationAssociations")
+                        .append("as", "a")
+                        .append("cond", deptFilter)
+                    ), 0
+                )))
+            )
+            .append("in", new Document("assoc", "$$instAssoc").append("deptAssoc", "$$deptAssoc"))
+        );
+
+        // Build employment-from-any-assoc before unwind (search ALL associations, not just institute ones)
+        List<String> researchTerms = Arrays.asList("Adscripció a recerca", "Adscripción a investigación", "Affiliation to research");
+        Document allAssocEmploymentMap = new Document("$map", new Document("input", "$staffOrganizationAssociations")
+            .append("as", "a")
+            .append("in", new Document("$ifNull", Arrays.asList(
+                "$$a.employmentType.term.ca_ES",
+                new Document("$ifNull", Arrays.asList(
+                    "$$a.employmentType.term.es_ES",
+                    new Document("$ifNull", Arrays.asList(
+                        "$$a.employmentType.term.en_GB",
+                        new Document("$ifNull", Arrays.asList(
+                            "$$a.employmentType.term.text.value",
+                            "$$a.employmentType.term.text"
+                        ))
+                    ))
+                ))
+            )))
+        );
+
+        Document firstNonResearchFromAllAssocs = new Document("$first", new Document("$filter",
+            new Document("input", allAssocEmploymentMap)
+                .append("as", "emp")
+                .append("cond", new Document("$and", Arrays.asList(
+                    new Document("$ne", Arrays.asList("$$emp", null)),
+                    new Document("$ne", Arrays.asList("$$emp", "")),
+                    new Document("$not", new Document("$in", Arrays.asList("$$emp", researchTerms)))
+                )))
+        ));
+
+        pipeline.add(new Document("$addFields", new Document("assoc_data", extractAssoc)
+            .append("first_non_research_all", firstNonResearchFromAllAssocs)));
+        
         pipeline.add(new Document("$unwind", "$staffOrganizationAssociations"));
 
         // Match por organización y filtro temporal (vigent vs periodo seleccionado)
@@ -425,6 +494,8 @@ public class PersonaController {
         group.put("_id", "$uuid");
         group.put("nombre", new Document("$first", new Document("$concat", List.of("$name.lastName", ", ", "$name.firstName"))));
         group.put("ultimo_contrato", new Document("$first", "$staffOrganizationAssociations"));
+        group.put("assoc_data", new Document("$first", "$assoc_data"));
+        group.put("first_non_research_all", new Document("$first", "$first_non_research_all"));
         group.put("asociaciones", new Document("$push", "$staffOrganizationAssociations"));
         pipeline.add(new Document("$group", group));
 
@@ -469,14 +540,38 @@ public class PersonaController {
                     ))))
                 )))));
 
+        Document deptEmployment = new Document("$ifNull", Arrays.asList(
+            "$assoc_data.deptAssoc.employmentType.term.ca_ES",
+            new Document("$ifNull", Arrays.asList(
+                "$assoc_data.deptAssoc.employmentType.term.es_ES",
+                new Document("$ifNull", Arrays.asList(
+                    "$assoc_data.deptAssoc.employmentType.term.en_GB",
+                    new Document("$ifNull", Arrays.asList(
+                        "$assoc_data.deptAssoc.employmentType.term.text.value",
+                        "$assoc_data.deptAssoc.employmentType.term.text"
+                    ))
+                ))
+            ))
+        ));
+
         Document empleoCond = new Document("$in", Arrays.asList(ultimoEmployment, Arrays.asList(
             "Adscripció a recerca",
             "Adscripción a investigación",
             "Affiliation to research"
         )));
+        
+        // Fallback chain when institute employment is research:
+        // 1. Department employment (if deptUuid given)
+        // 2. Any non-research employment from ALL associations (includes department associations)
+        // 3. Institute non-research employment (within institute associations)
+        // 4. Original institute employment (last resort)
         Document empleoFinal = new Document("$cond", Arrays.asList(
                 empleoCond,
-                new Document("$ifNull", Arrays.asList(firstNonResearchEmployment, ultimoEmployment)),
+                new Document("$ifNull", Arrays.asList(deptEmployment, 
+                    new Document("$ifNull", Arrays.asList("$first_non_research_all",
+                        new Document("$ifNull", Arrays.asList(firstNonResearchEmployment, ultimoEmployment))
+                    ))
+                )),
                 ultimoEmployment
         ));
 
