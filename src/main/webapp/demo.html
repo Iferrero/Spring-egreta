@@ -34,7 +34,7 @@
 
         <section class="bg-white border border-slate-200 rounded-2xl shadow-sm p-4 mb-6">
             <div class="grid grid-cols-1 lg:grid-cols-12 gap-3 items-end">
-                <div class="lg:col-span-4">
+                <div class="lg:col-span-3">
                     <label for="orgSelect" class="block text-xs font-bold text-slate-500 uppercase mb-1">Institut</label>
                     <select id="orgSelect" class="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm bg-white">
                         <option value="">Tots (tria institut)</option>
@@ -42,7 +42,15 @@
                     </select>
                 </div>
 
-                <div class="lg:col-span-6">
+                <div class="lg:col-span-3">
+                    <label for="filtrePersonalSelect" class="block text-xs font-bold text-slate-500 uppercase mb-1">Filtre personal</label>
+                    <select id="filtrePersonalSelect" class="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm bg-white">
+                        <option value="vigent">Personal vigent</option>
+                        <option value="periode" selected>Personal en el període seleccionat</option>
+                    </select>
+                </div>
+
+                <div class="lg:col-span-4">
                     <div class="flex items-center justify-between mb-1">
                         <label class="block text-xs font-bold text-slate-500 uppercase">Rang d'anys</label>
                         <span id="valorRango" class="text-xs font-bold text-indigo-600"></span>

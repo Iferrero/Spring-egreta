@@ -8,15 +8,22 @@ let latestChartOptions = { dedication: null, role: null };
 let originalChartHeights = { dedication: null, role: null };
 
 function normalizeDedication(raw) {
-    if (raw === null || raw === undefined) return 'Parcial';
+    if (raw === null || raw === undefined) return 'No informada';
     const s = String(raw).trim().toLowerCase();
-    if (s === '') return 'Parcial';
-    // If contains any digit -> Parcial
-    if (/\d/.test(s)) return 'Parcial';
+    if (s === '') return 'No informada';
+    // If a percentage appears, classify by threshold
+    const pctMatch = s.match(/(\d+(?:[\.,]\d+)?)\s*%?/);
+    if (pctMatch) {
+        const pct = Number(String(pctMatch[1]).replace(',', '.'));
+        if (!Number.isNaN(pct)) {
+            return pct >= 95 ? 'Completa' : 'Parcial';
+        }
+    }
     if (s.includes('parci') || s.includes('part') || s.includes('partial')) return 'Parcial';
     if (s.includes('comple') || s.includes('full') || s.includes('complet')) return 'Completa';
-    // default to Parcial to keep only two categories
-    return 'Parcial';
+    if (s.includes('temps complet') || s.includes('time complete') || s.includes('full-time') || s.includes('full time')) return 'Completa';
+    if (s.includes('temps parcial') || s.includes('part-time') || s.includes('part time')) return 'Parcial';
+    return 'No informada';
 }
 
 function showLoadingDemo() {
@@ -36,7 +43,10 @@ async function cargarOrganizacionesCombinadas() {
 
     try {
         showLoadingDemo();
-        const resInst = await fetch('/api/persons/institutos');
+        const institutosUrl = (typeof apiUrl === 'function')
+            ? apiUrl('/persons/institutos')
+            : '/api/persons/institutos';
+        const resInst = await fetch(institutosUrl);
         const insts = resInst.ok ? await resInst.json() : [];
 
         optInst.innerHTML = '';
@@ -348,17 +358,20 @@ function actualizarKPI(rows) {
 
 async function cargarDemoData() {
     const select = document.getElementById('orgSelect');
+    const filtrePersonalSelect = document.getElementById('filtrePersonalSelect');
     const orgVal = select.value; // formato tipo:uuid o empty
+    const filtrePersonal = filtrePersonalSelect ? filtrePersonalSelect.value : 'periode';
     const [desdeRaw, hastaRaw] = document.getElementById('sliderAnios').noUiSlider.get();
     const desde = parseInt(desdeRaw, 10);
     const hasta = parseInt(hastaRaw, 10);
 
-    // Si no se selecciona org, mostramos dummy global
+    // Si no se selecciona org, limpiamos la tabla y gráficos
     if (!orgVal) {
-        const rows = generarDatosDummy(desde, hasta);
+        const rows = [];
         renderDemoTable(rows);
         actualizarKPI(rows);
         updateDedicationChart([]);
+        updateRoleChart([]);
         return;
     }
 
@@ -368,29 +381,30 @@ async function cargarDemoData() {
         const [tipo, uuid] = orgVal.split(':');
         const startDate = `${desde}-01-01`;
         const endDate = `${hasta}-12-31`;
-        const res = await fetch(`/persons/associations/institute?orgUuid=${encodeURIComponent(uuid)}&startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}`);
+        const associationsUrl = (typeof apiUrl === 'function')
+            ? apiUrl('/persons/associations/latest')
+            : '/persons/associations/latest';
+        const res = await fetch(`${associationsUrl}?orgUuid=${encodeURIComponent(uuid)}&startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}&filtrePersonal=${encodeURIComponent(filtrePersonal)}`);
         if (!res.ok) throw new Error('endpoint no disponible');
         const data = await res.json();
 
         // El endpoint devuelve: nombre, empleo_departamento, dedicacion, inicio_instituto, fin_instituto
         function formatNombre(fullName) {
             if (!fullName) return '-';
-            if (fullName.includes(',')) return fullName;
-            const parts = fullName.trim().split(/\s+/);
-            if (parts.length === 1) return fullName;
-            const first = parts.shift();
-            const last = parts.join(' ');
-            return `${last}, ${first}`;
+            // If backend already sends a display name, keep it as-is.
+            if (fullName.includes(',')) return fullName.trim();
+            return fullName.trim().replace(/\s{2,}/g, ' ');
         }
 
         const rows = (data || []).map(d => {
-            const ded = normalizeDedication(d.dedicacion ?? d.dedicacion);
+            const dedRaw = d.dedicacion ?? d.dedicacio ?? d.dedication ?? d.empleo_dedicacion ?? d.empleo;
+            const ded = normalizeDedication(dedRaw);
             return {
                 nombre: (d.lastName && d.firstName) ? `${d.lastName}, ${d.firstName}` : formatNombre(d.nombre || '-'),
-                empleo_departamento: d.empleo_departamento || '-',
+                empleo_departamento: d.empleo || d.empleo_departamento || '-',
                 dedicacion: ded,
-                inicio_instituto: d.inicio_instituto || '-',
-                fin_instituto: d.fin_instituto || '-'
+                inicio_instituto: d.inicio_asociacion_IBB || d.inicio_instituto || '-',
+                fin_instituto: d.fin_asociacion_IBB || d.fin_instituto || '-'
             };
         });
 
@@ -399,8 +413,8 @@ async function cargarDemoData() {
             updateDedicationChart(rows);
             updateRoleChart(rows);
     } catch (e) {
-        // Fallback: datos dummy
-        const rows = generarDatosDummy(desde, hasta).map(r => ({anio: r.anio, cantidad: r.cantidad}));
+        // Fallback: tabla vacía para evitar filas sin correspondencia de columnas
+        const rows = [];
         renderDemoTable(rows);
         actualizarKPI(rows);
         updateDedicationChart([]);
@@ -419,10 +433,18 @@ window.addEventListener('DOMContentLoaded', async () => {
 
     // Actualizar automáticamente cuando cambie la organización
     const orgSelect = document.getElementById('orgSelect');
+    const filtrePersonalSelect = document.getElementById('filtrePersonalSelect');
     orgSelect.addEventListener('change', () => {
         clearTimeout(debounceTimer);
         debounceTimer = setTimeout(cargarDemoData, 300);
     });
+
+    if (filtrePersonalSelect) {
+        filtrePersonalSelect.addEventListener('change', () => {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(cargarDemoData, 300);
+        });
+    }
 
     // Carga inicial
     cargarDemoData();

@@ -291,7 +291,7 @@ public class PersonaController {
         // Group by person uuid
         Document group = new Document();
         group.put("_id", "$uuid");
-        group.put("nombre", new Document("$first", new Document("$concat", List.of("$name.firstName", " ", "$name.lastName"))));
+        group.put("nombre", new Document("$first", new Document("$concat", List.of("$name.lastName", ", ", "$name.firstName"))));
         group.put("asociaciones", new Document("$push", "$assoc"));
         pipeline.add(new Document("$group", group));
 
@@ -310,13 +310,53 @@ public class PersonaController {
         // unwind ibb_assoc (si no existe, la agregación descartará)
         pipeline.add(new Document("$unwind", "$ibb_assoc"));
 
-        // empleo_final calc
-        Document cond = new Document();
-        cond.put("$eq", List.of("$ibb_assoc.employmentType.term.es_ES", "Adscripción a investigación"));
+        // empleo_final calc (multilingual fallback + replace research-affiliation by dept role when available)
+        Document ibbEmployment = new Document("$ifNull", Arrays.asList(
+            "$ibb_assoc.employmentType.term.ca_ES",
+            new Document("$ifNull", Arrays.asList(
+                "$ibb_assoc.employmentType.term.es_ES",
+                new Document("$ifNull", Arrays.asList(
+                    "$ibb_assoc.employmentType.term.en_GB",
+                    new Document("$ifNull", Arrays.asList(
+                        "$ibb_assoc.employmentType.term.text.value",
+                        "$ibb_assoc.employmentType.term.text"
+                    ))
+                ))
+            ))
+        ));
 
-        Document empleoFinal = new Document("$cond", List.of(cond,
-            new Document("$arrayElemAt", List.of("$dept_assoc.employmentType.term.es_ES", 0)),
-            "$ibb_assoc.employmentType.term.es_ES"
+        Document deptEmployment = new Document("$first", new Document("$filter",
+            new Document("input", new Document("$map", new Document("input", "$dept_assoc")
+                .append("as", "d")
+                .append("in", new Document("$ifNull", Arrays.asList(
+                    "$$d.employmentType.term.ca_ES",
+                    new Document("$ifNull", Arrays.asList(
+                        "$$d.employmentType.term.es_ES",
+                        new Document("$ifNull", Arrays.asList(
+                            "$$d.employmentType.term.en_GB",
+                            new Document("$ifNull", Arrays.asList(
+                                "$$d.employmentType.term.text.value",
+                                "$$d.employmentType.term.text"
+                            ))
+                        ))
+                    ))
+                )))))
+                .append("as", "emp")
+                .append("cond", new Document("$and", Arrays.asList(
+                    new Document("$ne", Arrays.asList("$$emp", null)),
+                    new Document("$ne", Arrays.asList("$$emp", ""))
+                )))));
+
+        Document cond = new Document("$in", Arrays.asList(ibbEmployment, Arrays.asList(
+            "Adscripció a recerca",
+            "Adscripción a investigación",
+            "Affiliation to research"
+        )));
+
+        Document empleoFinal = new Document("$cond", Arrays.asList(
+            cond,
+            new Document("$ifNull", Arrays.asList(deptEmployment, ibbEmployment)),
+            ibbEmployment
         ));
 
         pipeline.add(new Document("$addFields", new Document("empleo_final", empleoFinal)));
@@ -326,6 +366,7 @@ public class PersonaController {
         project.put("_id", 0);
         project.put("nombre", 1);
         project.put("empleo", "$empleo_final");
+        project.put("dedicacion", buildDedicationExpr("$ibb_assoc"));
         project.put("inicio_asociacion_IBB", "$ibb_assoc.period.startDate");
         project.put("fin_asociacion_IBB", "$ibb_assoc.period.endDate");
         pipeline.add(new Document("$project", project));
@@ -348,22 +389,33 @@ public class PersonaController {
         public List<Map> getLatestAssociations(
             @RequestParam String orgUuid,
             @RequestParam(required = false, defaultValue = "2021-01-01") String startDate,
-            @RequestParam(required = false, defaultValue = "2025-12-31") String endDate
+            @RequestParam(required = false, defaultValue = "2025-12-31") String endDate,
+            @RequestParam(required = false, defaultValue = "periode") String filtrePersonal
         ) {
         List<Document> pipeline = new ArrayList<>();
 
         pipeline.add(new Document("$unwind", "$staffOrganizationAssociations"));
 
-        // Match por organización y por rango de fechas del slider
-        Document assocMatch = new Document();
-        assocMatch.put("$and", List.of(
-            new Document("staffOrganizationAssociations.organization.uuid", orgUuid),
-            new Document("staffOrganizationAssociations.period.startDate", new Document("$lte", endDate)),
-            new Document("$or", List.of(
+        // Match por organización y filtro temporal (vigent vs periodo seleccionado)
+        String today = LocalDate.now().toString();
+        List<Document> matchConditions = new ArrayList<>();
+        matchConditions.add(new Document("staffOrganizationAssociations.organization.uuid", orgUuid));
+
+        if ("vigent".equalsIgnoreCase(filtrePersonal)) {
+            matchConditions.add(new Document("staffOrganizationAssociations.period.startDate", new Document("$lte", today)));
+            matchConditions.add(new Document("$or", List.of(
+                new Document("staffOrganizationAssociations.period.endDate", null),
+                new Document("staffOrganizationAssociations.period.endDate", new Document("$gte", today))
+            )));
+        } else {
+            matchConditions.add(new Document("staffOrganizationAssociations.period.startDate", new Document("$lte", endDate)));
+            matchConditions.add(new Document("$or", List.of(
                 new Document("staffOrganizationAssociations.period.endDate", null),
                 new Document("staffOrganizationAssociations.period.endDate", new Document("$gte", startDate))
-            ))
-        ));
+            )));
+        }
+
+        Document assocMatch = new Document("$and", matchConditions);
 
         pipeline.add(new Document("$match", assocMatch));
 
@@ -371,15 +423,61 @@ public class PersonaController {
 
         Document group = new Document();
         group.put("_id", "$uuid");
-        group.put("nombre", new Document("$first", new Document("$concat", List.of("$name.firstName", " ", "$name.lastName"))));
+        group.put("nombre", new Document("$first", new Document("$concat", List.of("$name.lastName", ", ", "$name.firstName"))));
         group.put("ultimo_contrato", new Document("$first", "$staffOrganizationAssociations"));
         group.put("asociaciones", new Document("$push", "$staffOrganizationAssociations"));
         pipeline.add(new Document("$group", group));
 
-        Document empleoCond = new Document("$eq", List.of("$ultimo_contrato.employmentType.term.ca_ES", "Adscripció a recerca"));
-        Document empleoFinal = new Document("$cond", List.of(empleoCond,
-                new Document("$arrayElemAt", List.of("$asociaciones.employmentType.term.ca_ES", 1)),
-                "$ultimo_contrato.employmentType.term.ca_ES"
+        Document ultimoEmployment = new Document("$ifNull", Arrays.asList(
+            "$ultimo_contrato.employmentType.term.ca_ES",
+            new Document("$ifNull", Arrays.asList(
+                "$ultimo_contrato.employmentType.term.es_ES",
+                new Document("$ifNull", Arrays.asList(
+                    "$ultimo_contrato.employmentType.term.en_GB",
+                    new Document("$ifNull", Arrays.asList(
+                        "$ultimo_contrato.employmentType.term.text.value",
+                        "$ultimo_contrato.employmentType.term.text"
+                    ))
+                ))
+            ))
+        ));
+
+        Document firstNonResearchEmployment = new Document("$first", new Document("$filter",
+            new Document("input", new Document("$map", new Document("input", "$asociaciones")
+                .append("as", "a")
+                .append("in", new Document("$ifNull", Arrays.asList(
+                    "$$a.employmentType.term.ca_ES",
+                    new Document("$ifNull", Arrays.asList(
+                        "$$a.employmentType.term.es_ES",
+                        new Document("$ifNull", Arrays.asList(
+                            "$$a.employmentType.term.en_GB",
+                            new Document("$ifNull", Arrays.asList(
+                                "$$a.employmentType.term.text.value",
+                                "$$a.employmentType.term.text"
+                            ))
+                        ))
+                    ))
+                )))))
+                .append("as", "emp")
+                .append("cond", new Document("$and", Arrays.asList(
+                    new Document("$ne", Arrays.asList("$$emp", null)),
+                    new Document("$ne", Arrays.asList("$$emp", "")),
+                    new Document("$not", new Document("$in", Arrays.asList("$$emp", Arrays.asList(
+                        "Adscripció a recerca",
+                        "Adscripción a investigación",
+                        "Affiliation to research"
+                    ))))
+                )))));
+
+        Document empleoCond = new Document("$in", Arrays.asList(ultimoEmployment, Arrays.asList(
+            "Adscripció a recerca",
+            "Adscripción a investigación",
+            "Affiliation to research"
+        )));
+        Document empleoFinal = new Document("$cond", Arrays.asList(
+                empleoCond,
+                new Document("$ifNull", Arrays.asList(firstNonResearchEmployment, ultimoEmployment)),
+                ultimoEmployment
         ));
 
         pipeline.add(new Document("$addFields", new Document("empleo_final", empleoFinal)));
@@ -388,6 +486,7 @@ public class PersonaController {
         project.put("_id", 0);
         project.put("nombre", 1);
         project.put("empleo", "$empleo_final");
+        project.put("dedicacion", buildDedicationExpr("$ultimo_contrato"));
         project.put("inicio_asociacion_IBB", "$ultimo_contrato.period.startDate");
         project.put("fin_asociacion_IBB", "$ultimo_contrato.period.endDate");
         pipeline.add(new Document("$project", project));
@@ -398,6 +497,71 @@ public class PersonaController {
         mongoTemplate.getDb().getCollection("Persons").aggregate(pipeline).forEach(d -> results.add(d));
         return results;
     }
+
+        private Document buildDedicationExpr(String assocVarPath) {
+        Document dedicationGroupsInput = new Document("$ifNull", Arrays.asList(
+            assocVarPath + ".keywordGroups",
+            new Document("$ifNull", Arrays.asList(assocVarPath + ".keyworGroups", List.of()))
+        ));
+
+        Document dedicationGroup = new Document("$first", new Document("$filter",
+            new Document("input", dedicationGroupsInput)
+                .append("as", "kg")
+                .append("cond", new Document("$or", Arrays.asList(
+                    new Document("$eq", Arrays.asList("$$kg.logicalName", "/uab/persons/staff/dedication")),
+                    new Document("$eq", Arrays.asList("$$kg.logicalName", "/uab/persons/staff/assigment_dedication")),
+                    new Document("$eq", Arrays.asList("$$kg.logicalName", "uab/persons/staff/dedication")),
+                    new Document("$eq", Arrays.asList("$$kg.logicalName", "uab/persons/staff/assigment_dedication")),
+                    new Document("$eq", Arrays.asList("$$kg.logicalname", "/uab/persons/staff/dedication"))
+                )))));
+
+        Document dedicationItem = new Document("$first", new Document("$ifNull", Arrays.asList(
+            "$$dedicationGroup.classifitications",
+            new Document("$ifNull", Arrays.asList(
+                "$$dedicationGroup.classifications",
+                new Document("$ifNull", Arrays.asList(
+                    "$$dedicationGroup.keywords",
+                    new Document("$ifNull", Arrays.asList("$$dedicationGroup.keywordContainers", List.of()))
+                ))
+            ))
+        )));
+
+        Document dedicationValue = new Document("$ifNull", Arrays.asList(
+            "$$dedicationItem.term.ca_ES",
+            new Document("$ifNull", Arrays.asList(
+                "$$dedicationItem.term.es_ES",
+                new Document("$ifNull", Arrays.asList(
+                    "$$dedicationItem.term.en_GB",
+                    new Document("$ifNull", Arrays.asList(
+                        "$$dedicationItem.description.ca_ES",
+                        new Document("$ifNull", Arrays.asList(
+                            "$$dedicationItem.description.es_ES",
+                            new Document("$ifNull", Arrays.asList(
+                                "$$dedicationItem.description.en_GB",
+                                new Document("$ifNull", Arrays.asList(
+                                    "$$dedicationItem.text.value",
+                                    new Document("$ifNull", Arrays.asList(
+                                        "$$dedicationItem.value",
+                                        new Document("$ifNull", Arrays.asList(
+                                            "$$dedicationGroup.name.ca_ES",
+                                            new Document("$ifNull", Arrays.asList(
+                                                "$$dedicationGroup.name.es_ES",
+                                                "$$dedicationGroup.name.en_GB"
+                                            ))
+                                        ))
+                                    ))
+                                ))
+                            ))
+                        ))
+                    ))
+                ))
+            ))
+        ));
+
+        return new Document("$let", new Document("vars", new Document("dedicationGroup", dedicationGroup))
+            .append("in", new Document("$let", new Document("vars", new Document("dedicationItem", dedicationItem))
+                .append("in", dedicationValue))));
+        }
 
 
 
@@ -3587,7 +3751,6 @@ public class PersonaController {
                         awardIdx++;
                     }
                 }
-                appendProjectesPerAnyChart(doc, rowsForChart, lang);
                 response.setContentType("application/vnd.openxmlformats-officedocument.wordprocessingml.document");
                 String filename = "awards-" + personName.replaceAll("[^a-zA-Z0-9\\-_]", "_") + ".docx";
                 response.setHeader("Content-Disposition", "attachment; filename=\"" + filename + "\"");
@@ -3746,9 +3909,6 @@ public class PersonaController {
                     awardIdx++;
                 }
             }
-
-            appendProjectesPerAnyChart(doc, rowsForChart, lang);
-
             // Move all newly appended paragraphs to just after the "projectes" bookmark paragraph.
             if (projectesAnchorNode != null) {
                 Node bodyNode = projectesAnchorNode.getParentNode();
