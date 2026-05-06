@@ -2651,7 +2651,7 @@ public class PersonaController {
             ind.setLeft(BigInteger.valueOf(-714));
         }
         XWPFRun titleRun = createProjectRun(titleP, true, false);
-        titleRun.setText("Ajuts per any");
+        titleRun.setText("Projectes per any");
         titleRun.addBreak();
 
         BufferedImage chart = construirGraficoProjectesPerAny(perAny);
@@ -2739,22 +2739,31 @@ public class PersonaController {
 
         int maxProjects = perAny.values().stream().mapToInt(v -> v.totalProjects).max().orElse(1);
         double maxImport = perAny.values().stream().mapToDouble(v -> v.importePonderat).max().orElse(1d);
-        int yTicks = Math.max(2, Math.min(6, maxProjects));
+        
+        // Calcular ticks automáticos: project axis drives intervals, import axis syncs
+        int[] projectTicks = calcularTicksProyectos(maxProjects, 6);
+        int projectIntervals = projectTicks.length - 1;
+        double[] importTicks = calcularTicksAutomaticos(maxImport, projectIntervals);
 
         g.setFont(new Font("Calibri", Font.PLAIN, 13));
         g.setColor(new Color(220, 226, 232));
-        for (int i = 0; i <= yTicks; i++) {
-            int v = (int) Math.round((double) i * maxProjects / yTicks);
-            int y = top + chartH - (int) Math.round((double) v * chartH / Math.max(1, maxProjects));
+        for (int i = 0; i < projectTicks.length; i++) {
+            int projectTickVal = projectTicks[i];
+            double importTickVal = i < importTicks.length ? importTicks[i] : importTicks[importTicks.length - 1];
+            
+            int y = top + chartH - (int) Math.round((double) projectTickVal * chartH / projectTicks[projectTicks.length - 1]);
             g.drawLine(left, y, left + chartW, y);
             g.setColor(new Color(89, 100, 115));
-            g.drawString(String.valueOf(v), left - 28, y + 5);
+            g.drawString(String.valueOf(projectTickVal), left - 28, y + 5);
+            String importeTickLabel = formatCompactAxis(importTickVal);
+            g.drawString(importeTickLabel, left + chartW + 12, y + 5);
             g.setColor(new Color(220, 226, 232));
         }
 
         int n = Math.max(1, years.size());
         int slot = chartW / n;
-        int barW = Math.max(12, (int) (slot * 0.58));
+        // ECharts default barCategoryGap is 20%, so bar occupies 80% of the slot
+        int barW = Math.max(12, (int) (slot * 0.80));
 
         for (int i = 0; i < years.size(); i++) {
             int year = years.get(i);
@@ -2765,7 +2774,7 @@ public class PersonaController {
             for (String cat : categories) {
                 int value = ym.categoriaCounts.getOrDefault(cat, 0);
                 if (value <= 0) continue;
-                int h = (int) Math.round((double) value * chartH / Math.max(1, maxProjects));
+                int h = (int) Math.round((double) value * chartH / projectTicks[projectTicks.length - 1]);
                 int y = yBase - h;
                 g.setColor(colorCategoria(cat));
                 g.fillRect(x, y, barW, h);
@@ -2778,19 +2787,27 @@ public class PersonaController {
 
         g.setColor(new Color(224, 82, 82));
         g.setStroke(new BasicStroke(2.0f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND, 10f, new float[]{8f, 6f}, 0f));
-        int prevX = -1;
-        int prevY = -1;
+        
+        // Collect points for smooth curve
+        int[] importXPoints = new int[years.size()];
+        int[] importYPoints = new int[years.size()];
         for (int i = 0; i < years.size(); i++) {
             int year = years.get(i);
             YearMetrics ym = perAny.get(year);
             int x = left + i * slot + slot / 2;
-            int y = top + chartH - (int) Math.round((ym.importePonderat / Math.max(1d, maxImport)) * chartH);
-            if (prevX >= 0) {
-                g.drawLine(prevX, prevY, x, y);
-            }
-            g.fillOval(x - 4, y - 4, 8, 8);
-            prevX = x;
-            prevY = y;
+            int y = top + chartH - (int) Math.round((ym.importePonderat / importTicks[importTicks.length - 1]) * chartH);
+            importXPoints[i] = x;
+            importYPoints[i] = y;
+        }
+        
+        // Draw smooth curve for imports (clipped to chart area to prevent overshoot)
+        // Draw smooth curve for imports (control points clamped to chart area)
+        drawSmoothCurve(g, importXPoints, importYPoints, new Color(224, 82, 82), 2.0f, true, top, top + chartH);
+        
+        // Draw symbols on curve
+        for (int i = 0; i < years.size(); i++) {
+            g.setColor(new Color(224, 82, 82));
+            g.fillOval(importXPoints[i] - 4, importYPoints[i] - 4, 8, 8);
         }
 
         g.setStroke(new BasicStroke(1f));
@@ -2801,6 +2818,7 @@ public class PersonaController {
         g.setColor(new Color(151, 160, 170));
         g.drawLine(left, top + chartH, left + chartW, top + chartH);
         g.drawLine(left, top, left, top + chartH);
+        g.drawLine(left + chartW, top, left + chartW, top + chartH);
 
         drawLegend(g, left, top + chartH + 42, categories);
 
@@ -2849,6 +2867,18 @@ public class PersonaController {
         Map<String, Integer> categoriaCounts = new LinkedHashMap<>();
     }
 
+    private static class EvolucioPoint {
+        final int anio;
+        final double personaImporte;
+        final double deptoMedia;
+
+        EvolucioPoint(int anio, double personaImporte, double deptoMedia) {
+            this.anio = anio;
+            this.personaImporte = personaImporte;
+            this.deptoMedia = deptoMedia;
+        }
+    }
+
     private int toInt(Object value) {
         if (value instanceof Number n) return n.intValue();
         if (value == null) return 0;
@@ -2877,6 +2907,335 @@ public class PersonaController {
     private String formatImport(double amount) {
         if (amount == 0) return "";
         return String.format(Locale.GERMAN, "%,.2f €", amount);
+    }
+
+    private String formatCompactAxis(double value) {
+        double abs = Math.abs(value);
+        if (abs >= 1_000_000) {
+            return String.format(Locale.GERMAN, "%.1fM", value / 1_000_000d);
+        }
+        if (abs >= 1_000) {
+            return String.format(Locale.GERMAN, "%.1fk", value / 1_000d);
+        }
+        return String.format(Locale.GERMAN, "%.0f", value);
+    }
+
+    private void appendEvolucioPersonaDeptChart(XWPFDocument doc, List<Document> rowsResumenAll, String personUuid, String lang) throws Exception {
+        List<EvolucioPoint> points = calcularEvolucioPersonaDept(rowsResumenAll, personUuid);
+        if (points.isEmpty()) {
+            return;
+        }
+
+        XWPFParagraph titleP = doc.createParagraph();
+        applyProjectParagraphStyle(titleP);
+        titleP.setAlignment(ParagraphAlignment.LEFT);
+        {
+            org.openxmlformats.schemas.wordprocessingml.x2006.main.CTPPr ppr = titleP.getCTP().getPPr();
+            org.openxmlformats.schemas.wordprocessingml.x2006.main.CTInd ind = ppr.isSetInd() ? ppr.getInd() : ppr.addNewInd();
+            ind.setLeft(BigInteger.valueOf(-714));
+        }
+        XWPFRun titleRun = createProjectRun(titleP, true, false);
+        String title = switch (lang) {
+            case "es" -> "Evolución investigador vs media departamento";
+            case "en" -> "Researcher trend vs department average";
+            default -> "Evolució investigador vs mitja departament";
+        };
+        titleRun.setText(title);
+        titleRun.addBreak();
+
+        BufferedImage chart = construirGraficoEvolucioPersonaDept(points);
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        ImageIO.write(chart, "png", baos);
+        byte[] bytes = baos.toByteArray();
+
+        XWPFParagraph imgP = doc.createParagraph();
+        applyProjectParagraphStyle(imgP);
+        imgP.setAlignment(ParagraphAlignment.LEFT);
+        {
+            org.openxmlformats.schemas.wordprocessingml.x2006.main.CTPPr ppr = imgP.getCTP().getPPr();
+            org.openxmlformats.schemas.wordprocessingml.x2006.main.CTInd ind = ppr.isSetInd() ? ppr.getInd() : ppr.addNewInd();
+            ind.setLeft(BigInteger.valueOf(-714));
+        }
+        XWPFRun imgRun = imgP.createRun();
+        imgRun.addPicture(
+                new ByteArrayInputStream(bytes),
+                org.apache.poi.xwpf.usermodel.Document.PICTURE_TYPE_PNG,
+                "evolucio-investigador-departament.png",
+                Units.toEMU(520),
+                Units.toEMU(280)
+        );
+        imgRun.addBreak();
+    }
+
+    private List<EvolucioPoint> calcularEvolucioPersonaDept(List<Document> rowsResumenAll, String personUuid) {
+        if (rowsResumenAll == null || rowsResumenAll.isEmpty() || personUuid == null || personUuid.isBlank()) {
+            return Collections.emptyList();
+        }
+
+        Set<Integer> aniosSet = new java.util.TreeSet<>();
+        Map<Integer, Double> personaPorAnio = new HashMap<>();
+        Map<Integer, Map<String, Double>> deptoPorAnioPersona = new HashMap<>();
+
+        for (Document row : rowsResumenAll) {
+            if (row == null) continue;
+            Object anyoObj = row.get("Año");
+            if (!(anyoObj instanceof Number)) continue;
+
+            int anio = ((Number) anyoObj).intValue();
+            aniosSet.add(anio);
+
+            String rowPersonaUuid = asString(row.get("PersonaUuid")).trim();
+            double impPond = toDouble(row.get("Importe_Ponderado (€)"));
+
+            // Acumular datos del investigador actual
+            if (personUuid.trim().equals(rowPersonaUuid)) {
+                personaPorAnio.put(anio, personaPorAnio.getOrDefault(anio, 0d) + impPond);
+            }
+
+            // Agrupar por persona para calcular media del departamento
+            Map<String, Double> importesPorPersona = deptoPorAnioPersona.computeIfAbsent(anio, k -> new HashMap<>());
+            importesPorPersona.put(rowPersonaUuid, importesPorPersona.getOrDefault(rowPersonaUuid, 0d) + impPond);
+        }
+
+        List<EvolucioPoint> points = new ArrayList<>();
+        for (Integer anio : aniosSet) {
+            double personaImporte = personaPorAnio.getOrDefault(anio, 0d);
+            Map<String, Double> importesPorPersona = deptoPorAnioPersona.getOrDefault(anio, Collections.emptyMap());
+
+            // Calcular suma y contar solo personas con importe > 0
+            double sumaValidos = 0d;
+            int countValidos = 0;
+            for (double v : importesPorPersona.values()) {
+                if (v > 0) {
+                    sumaValidos += v;
+                    countValidos++;
+                }
+            }
+
+            // Media del departamento = suma / cantidad de personas distintas
+            double deptoMedia = countValidos > 0 ? (sumaValidos / countValidos) : 0d;
+            points.add(new EvolucioPoint(anio, personaImporte, deptoMedia));
+        }
+        return points;
+    }
+
+    private BufferedImage construirGraficoEvolucioPersonaDept(List<EvolucioPoint> points) {
+        final int width = 1400;
+        final int height = 720;
+        final int left = 120;
+        final int right = 60;
+        final int top = 60;
+        final int bottom = 120;
+
+        BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = image.createGraphics();
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+
+        g.setColor(Color.WHITE);
+        g.fillRect(0, 0, width, height);
+
+        int chartW = width - left - right;
+        int chartH = height - top - bottom;
+        int n = points.size();
+        if (n == 0) {
+            g.dispose();
+            return image;
+        }
+
+        double maxPersona = points.stream().mapToDouble(p -> p.personaImporte).max().orElse(1d);
+        double maxDepto = points.stream().mapToDouble(p -> p.deptoMedia).max().orElse(1d);
+        double maxVal = Math.max(maxPersona, maxDepto);
+        if (maxVal <= 0) maxVal = 1d;
+
+        // Calcular ticks como lo hace ECharts: redondear al siguiente intervalo "bonito"
+        double[] ticks = calcularTicksAutomaticos(maxVal, 6);
+        int yTicks = ticks.length - 1;
+        double tickMax = ticks[ticks.length - 1];
+
+        g.setFont(new Font("Calibri", Font.PLAIN, 12));
+        for (int i = 0; i < ticks.length; i++) {
+            double v = ticks[i];
+            int y = top + chartH - (int) Math.round((v / tickMax) * chartH);
+            g.setColor(new Color(220, 226, 232));
+            g.drawLine(left, y, left + chartW, y);
+
+            String valLabel = formatImportAxisValue(v);
+            g.setColor(new Color(89, 100, 115));
+            g.drawString(valLabel + " €", left - 80, y + 5);
+        }
+
+        g.setColor(new Color(151, 160, 170));
+        g.drawLine(left, top, left, top + chartH);
+        g.drawLine(left, top + chartH, left + chartW, top + chartH);
+
+        int step = n > 1 ? chartW / (n - 1) : 0;
+        int[] xPoints = new int[n];
+        int[] yPersona = new int[n];
+        int[] yDepto = new int[n];
+        for (int i = 0; i < n; i++) {
+            EvolucioPoint p = points.get(i);
+            int x = left + (n > 1 ? i * step : chartW / 2);
+            int yP = top + chartH - (int) Math.round((p.personaImporte / tickMax) * chartH);
+            int yD = top + chartH - (int) Math.round((p.deptoMedia / tickMax) * chartH);
+            xPoints[i] = x;
+            yPersona[i] = yP;
+            yDepto[i] = yD;
+
+            g.setColor(new Color(42, 48, 55));
+            g.setFont(new Font("Calibri", Font.PLAIN, 11));
+            g.drawString(String.valueOf(p.anio), x - 10, top + chartH + 22);
+        }
+
+        // Clip to chart area to prevent Catmull-Rom overshoot outside axis bounds
+        // Draw smooth curves (control points clamped to chart area)
+        drawSmoothCurve(g, xPoints, yPersona, Color.decode("#008037"), 3f, false, top, top + chartH);
+        drawSmoothCurve(g, xPoints, yDepto, Color.decode("#004D5E"), 3f, true, top, top + chartH);
+
+        g.setFont(new Font("Calibri", Font.PLAIN, 12));
+        int legendY = top - 18;
+        int legendX = left + 20;
+
+        g.setColor(new Color(0, 128, 55));
+        g.setStroke(new BasicStroke(3f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+        g.drawLine(legendX, legendY, legendX + 20, legendY);
+        for (int i = 0; i < n; i++) {
+            g.fillOval(xPoints[i] - 3, yPersona[i] - 3, 6, 6);
+        }
+        g.setColor(new Color(42, 48, 55));
+        g.setFont(new Font("Calibri", Font.PLAIN, 12));
+        g.drawString("Investigador", legendX + 28, legendY + 4);
+
+        int legend2X = legendX + 160;
+        g.setColor(new Color(0, 77, 94));
+        g.setStroke(new BasicStroke(3f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND, 10f, new float[]{10f, 6f}, 0f));
+        g.drawLine(legend2X, legendY, legend2X + 20, legendY);
+        for (int i = 0; i < n; i++) {
+            g.fillRect(xPoints[i] - 3, yDepto[i] - 3, 6, 6);
+        }
+        g.setColor(new Color(42, 48, 55));
+        g.drawString("Mitja Dept.", legend2X + 28, legendY + 4);
+
+        g.dispose();
+        return image;
+    }
+
+   
+    private void drawSmoothCurve(Graphics2D g, int[] xPoints, int[] yPoints, Color color, float strokeWidth, boolean dashed) {
+        drawSmoothCurve(g, xPoints, yPoints, color, strokeWidth, dashed, Integer.MIN_VALUE, Integer.MAX_VALUE);
+    }
+
+    private void drawSmoothCurve(Graphics2D g, int[] xPoints, int[] yPoints, Color color, float strokeWidth, boolean dashed, int yMin, int yMax) {
+        if (xPoints.length < 2) return;
+        g.setColor(color);
+        if (dashed) {
+            g.setStroke(new BasicStroke(strokeWidth, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND, 10f, new float[]{10f, 6f}, 0f));
+        } else {
+            g.setStroke(new BasicStroke(strokeWidth, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+        }
+
+        java.awt.geom.Path2D.Double path = new java.awt.geom.Path2D.Double();
+        if (xPoints.length == 2) {
+            g.drawLine(xPoints[0], yPoints[0], xPoints[1], yPoints[1]);
+        } else {
+            path.moveTo(xPoints[0], yPoints[0]);
+            for (int i = 0; i < xPoints.length - 1; i++) {
+                int x1 = xPoints[i],  y1 = yPoints[i];
+                int x2 = xPoints[i + 1], y2 = yPoints[i + 1];
+
+                double cp1x, cp1y, cp2x, cp2y;
+
+                if (i == 0) {
+                    cp1x = x1 + (x2 - x1) / 3.0;
+                    cp1y = y1 + (y2 - y1) / 3.0;
+                    int x3 = i + 2 < xPoints.length ? xPoints[i + 2] : x2;
+                    int y3 = i + 2 < yPoints.length ? yPoints[i + 2] : y2;
+                    cp2x = x2 - (x3 - x1) / 6.0;
+                    cp2y = y2 - (y3 - y1) / 6.0;
+                } else if (i == xPoints.length - 2) {
+                    int x0 = xPoints[i - 1], y0 = yPoints[i - 1];
+                    cp1x = x1 + (x2 - x0) / 6.0;
+                    cp1y = y1 + (y2 - y0) / 6.0;
+                    cp2x = x2 - (x2 - x1) / 3.0;
+                    cp2y = y2 - (y2 - y1) / 3.0;
+                } else {
+                    int x0 = xPoints[i - 1], y0 = yPoints[i - 1];
+                    int x3 = xPoints[i + 2], y3 = yPoints[i + 2];
+                    cp1x = x1 + (x2 - x0) / 6.0;
+                    cp1y = y1 + (y2 - y0) / 6.0;
+                    cp2x = x2 - (x3 - x1) / 6.0;
+                    cp2y = y2 - (y3 - y1) / 6.0;
+                }
+
+                // Clamp control point Y to chart bounds so the spline never exits the axis area
+                cp1y = Math.max(yMin, Math.min(yMax, cp1y));
+                cp2y = Math.max(yMin, Math.min(yMax, cp2y));
+
+                path.curveTo(cp1x, cp1y, cp2x, cp2y, x2, y2);
+            }
+            g.draw(path);
+        }
+    }
+
+    private double[] calcularTicksAutomaticos(double maxVal, int numIntervals) {
+        if (maxVal <= 0) maxVal = 1d;
+        
+        // Calcular el intervalo "bonito" (500k, 1M, etc.)
+        double magnitude = Math.pow(10, Math.floor(Math.log10(maxVal)));
+        double normalized = maxVal / magnitude;
+        
+        double step;
+        if (normalized <= 1) {
+            step = 0.1 * magnitude;
+        } else if (normalized <= 2) {
+            step = 0.2 * magnitude;
+        } else if (normalized <= 5) {
+            step = 0.5 * magnitude;
+        } else {
+            step = 1 * magnitude;
+        }
+        
+        // Redondear el máximo al siguiente múltiplo de step
+        double tickMax = Math.ceil(maxVal / step) * step;
+        
+        // Generar ticks
+        double[] ticks = new double[numIntervals + 1];
+        for (int i = 0; i <= numIntervals; i++) {
+            ticks[i] = (double) i * tickMax / numIntervals;
+        }
+        return ticks;
+    }
+
+    private int[] calcularTicksProyectos(int maxProjects, int numIntervals) {
+        if (maxProjects <= 0) maxProjects = 1;
+        
+        // Find the smallest nice integer step such that ceil(max/step) <= numIntervals
+        int[] candidateSteps = {1, 2, 5, 10, 20, 25, 50, 100, 200, 500};
+        int step = candidateSteps[candidateSteps.length - 1];
+        for (int s : candidateSteps) {
+            int tickMax = (int) Math.ceil((double) maxProjects / s) * s;
+            if (tickMax / s <= numIntervals) {
+                step = s;
+                break;
+            }
+        }
+        
+        int tickMax = (int) Math.ceil((double) maxProjects / step) * step;
+        int actualIntervals = tickMax / step;
+        
+        // Generate evenly spaced integer ticks
+        int[] ticks = new int[actualIntervals + 1];
+        for (int i = 0; i <= actualIntervals; i++) {
+            ticks[i] = i * step;
+        }
+        return ticks;
+    }
+
+    private String formatImportAxisValue(double value) {
+        if (Math.abs(value) >= 1000) {
+            return String.format(Locale.GERMAN, "%,.0f", value);
+        }
+        return String.format(Locale.GERMAN, "%.0f", value);
     }
 
     /** Converts a date value (Date or ISO string) to DD-MM-YYYY format with dashes. */
@@ -3091,9 +3450,9 @@ public class PersonaController {
                 });
         }
 
-            int desdeYear = LocalDate.parse(startDate).getYear();
-            int hastaYear = LocalDate.parse(endDate).getYear();
-            List<Document> rowsForChart = awardService.getPersonaResumen(
+        int desdeYear = LocalDate.parse(startDate).getYear();
+        int hastaYear = LocalDate.parse(endDate).getYear();
+        List<Document> rowsResumenAll = awardService.getPersonaResumen(
                 UAB_COLLABORATOR_UUID,
                 null,
                 null,
@@ -3103,7 +3462,8 @@ public class PersonaController {
                 null,
                 null,
                 null
-            ).stream()
+            );
+        List<Document> rowsForChart = rowsResumenAll.stream()
                 .filter(r -> personUuid.equals(String.valueOf(r.get("PersonaUuid"))))
                 .collect(Collectors.toList());
 
