@@ -2125,7 +2125,7 @@ function renderGraficos(filas) {
             { name: 'Líders',         color: COLOR_LIDERS,         items: [] },
             { name: 'Especialistes',  color: COLOR_ESPECIALISTES,  items: [] },
             { name: 'Dinamitzadors',  color: COLOR_FORMIGUES,      items: [] },
-            { name: 'Altres',         color: COLOR_ALTRES,         items: [] },
+            { name: 'Perfils en Creixement',         color: COLOR_ALTRES,         items: [] },
             { name: 'Sense ajuts',   color: COLOR_SENSE_AWARDS,   items: [] }
         ];
         for (const d of datosLiderazgo) {
