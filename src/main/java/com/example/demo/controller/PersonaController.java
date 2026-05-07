@@ -18,6 +18,7 @@ import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.data.support.PageableExecutionUtils;
 import org.springframework.data.web.PagedModel;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.ByteArrayInputStream;
@@ -63,6 +64,7 @@ public class PersonaController {
     private final AwardService awardService;
 
     // Constructor para inyectar las dependencias (Soluciona el error de inicialización)
+    @Autowired
     public PersonaController(MongoTemplate mongoTemplate, AwardService awardService) {
         this.mongoTemplate = mongoTemplate;
         this.awardService = awardService;

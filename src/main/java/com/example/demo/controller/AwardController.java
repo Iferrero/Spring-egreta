@@ -34,6 +34,7 @@ import jakarta.servlet.http.HttpServletResponse;
 
 import org.apache.poi.xwpf.usermodel.*;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.*;
+import org.springframework.beans.factory.annotation.Autowired;
 
 @RestController
 @RequestMapping({"/api/awards", "/awards", "/otr/api/awards"})
@@ -45,6 +46,7 @@ public class AwardController {
     private final MongoTemplate mongoTemplate;
     private final ResearchOutputJournalLinkService researchOutputService;
 
+    @Autowired
     public AwardController(AwardRepository repository,
                            AwardService service,
                            MongoTemplate mongoTemplate,
@@ -106,9 +108,27 @@ public class AwardController {
     public List<Document> getPowerTable(
             @RequestParam(required = false) Integer desde,
             @RequestParam(required = false) Integer hasta,
-            @RequestParam(defaultValue = "awardDate") String modoAnio) {
+            @RequestParam(defaultValue = "awardDate") String modoAnio,
+            @RequestParam(required = false) String collaboratorUuid) {
 
-        return service.getPowerTable(desde, hasta, modoAnio);
+        return service.getPowerTable(desde, hasta, modoAnio, collaboratorUuid);
+    }
+
+    @GetMapping("/stats/llista-ajuts-institut")
+    public List<Document> getLlistaAjutsInstitut(
+            @RequestParam String collaboratorUuid,
+            @RequestParam(required = false) Integer desde,
+            @RequestParam(required = false) Integer hasta) {
+
+        return service.getAwardsLlistaInstitut(collaboratorUuid, desde, hasta);
+    }
+
+    @GetMapping("/stats/ips-institut")
+    public List<Document> getIpsInstitut(
+            @RequestParam String collaboratorUuid,
+            @RequestParam(required = false) Integer desde,
+            @RequestParam(required = false) Integer hasta) {
+        return service.getIpsInstitut(collaboratorUuid, desde, hasta);
     }
 
     @GetMapping("/stats/powertable/category-debug")

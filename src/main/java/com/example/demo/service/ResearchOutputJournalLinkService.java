@@ -7,6 +7,7 @@ import org.bson.Document;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.web.util.HtmlUtils;
 
@@ -42,6 +43,7 @@ public class ResearchOutputJournalLinkService {
     private record CacheEntry(Map<String, Object> data, long expiresAtMs) {}
     private record JournalCacheEntry(Optional<Journal> journal, long expiresAtMs) {}
 
+    @Autowired
     public ResearchOutputJournalLinkService(
             MongoTemplate mongoTemplate,
             JournalRepository journalRepository,

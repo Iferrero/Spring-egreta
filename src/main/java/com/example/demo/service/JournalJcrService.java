@@ -3,6 +3,7 @@ package com.example.demo.service;
 import com.example.demo.model.Jcr;
 import com.example.demo.model.Journal;
 import com.example.demo.repository.JournalRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
@@ -31,6 +32,7 @@ public class JournalJcrService {
 
     private record CacheEntry(List<Jcr> data, long expiresAtMs) {}
 
+    @Autowired
     public JournalJcrService(
             JournalRepository journalRepository,
             @Qualifier("jcrMongoTemplate") MongoTemplate jcrMongoTemplate) {

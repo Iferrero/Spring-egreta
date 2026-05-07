@@ -218,5 +218,37 @@ public MongoPipelineBuilder matchManagingOrg(String deptUuid) {
     return this;
 }
 
+/**
+ * Replaces the placeholder __MANAGING_UUID__ in all $match stages that use $or
+ * with managingOrganization.uuid / coManagingOrganizations.uuid conditions.
+ */
+public MongoPipelineBuilder replaceManagingUuid(String uuid) {
+    if (uuid == null || uuid.isBlank()) {
+        return this;
+    }
+
+    for (Document stage : pipeline) {
+        Document match = stage.get("$match", Document.class);
+        if (match == null) continue;
+
+        List<?> orList = (List<?>) match.get("$or");
+        if (orList == null) continue;
+
+        for (Object condition : orList) {
+            if (!(condition instanceof Document cond)) continue;
+            if (cond.containsKey("managingOrganization.uuid")
+                    && "__MANAGING_UUID__".equals(cond.get("managingOrganization.uuid"))) {
+                cond.put("managingOrganization.uuid", uuid);
+            }
+            if (cond.containsKey("coManagingOrganizations.uuid")
+                    && "__MANAGING_UUID__".equals(cond.get("coManagingOrganizations.uuid"))) {
+                cond.put("coManagingOrganizations.uuid", uuid);
+            }
+        }
+    }
+
+    return this;
+}
+
 
 }

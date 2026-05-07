@@ -6,6 +6,7 @@ import com.example.demo.repository.PublicacionRepository;
 import com.example.demo.service.ResearchOutputJournalLinkService;
 
 // 2. Spring Web (Anotaciones del Controlador)
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
 // 3. Spring Data - Paginación y Ordenación
@@ -41,6 +42,7 @@ public class PublicacionController {
     private final MongoTemplate mongoTemplate;
     private final ResearchOutputJournalLinkService researchOutputJournalLinkService;
 
+    @Autowired
     public PublicacionController(
             PublicacionRepository repository,
             MongoTemplate mongoTemplate,

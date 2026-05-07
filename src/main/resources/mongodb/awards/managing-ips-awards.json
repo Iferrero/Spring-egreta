@@ -1,0 +1,105 @@
+{
+  "collection": "Awards",
+  "pipeline": [
+    {
+      "$match": {
+        "workflow.step": { "$in": ["validated", "closed"] }
+      }
+    },
+    {
+      "$match": {
+        "$or": [
+          { "managingOrganization.uuid": "__MANAGING_UUID__" },
+          { "coManagingOrganizations.uuid": "__MANAGING_UUID__" }
+        ]
+      }
+    },
+    {
+      "$unwind": "$awardHolders"
+    },
+    {
+      "$match": {
+        "$or": [
+          { "awardHolders.role.term.ca_ES": { "$in": ["Investigador/a Principal", "Co-Investigador/a Principal"] } },
+          { "awardHolders.role.term.es_ES": { "$in": ["Investigador/a principal", "Investigador/a Principal", "Co-Investigador/a Principal", "Co-Investigador/a principal"] } },
+          { "awardHolders.role.term.en_GB": { "$in": ["Principal Investigator", "Co-Principal Investigator"] } }
+        ]
+      }
+    },
+    {
+      "$addFields": {
+        "esIP": {
+          "$or": [
+            { "$eq": ["$awardHolders.role.term.ca_ES", "Investigador/a Principal"] },
+            { "$eq": ["$awardHolders.role.term.es_ES", "Investigador/a principal"] },
+            { "$eq": ["$awardHolders.role.term.es_ES", "Investigador/a Principal"] },
+            { "$eq": ["$awardHolders.role.term.en_GB", "Principal Investigator"] }
+          ]
+        },
+        "esCoIP": {
+          "$or": [
+            { "$eq": ["$awardHolders.role.term.ca_ES", "Co-Investigador/a Principal"] },
+            { "$eq": ["$awardHolders.role.term.es_ES", "Co-Investigador/a Principal"] },
+            { "$eq": ["$awardHolders.role.term.es_ES", "Co-Investigador/a principal"] },
+            { "$eq": ["$awardHolders.role.term.en_GB", "Co-Principal Investigator"] }
+          ]
+        },
+        "holderPersonUuid": "$awardHolders.person.uuid",
+        "holderFirstName":  { "$ifNull": ["$awardHolders.name.firstName",  ""] },
+        "holderLastName":   { "$ifNull": ["$awardHolders.name.lastName",    ""] }
+      }
+    },
+    {
+      "$group": {
+        "_id": "$holderPersonUuid",
+        "nombre": {
+          "$first": {
+            "$cond": [
+              { "$and": [
+                { "$ne": ["$holderLastName",  ""] },
+                { "$ne": ["$holderFirstName", ""] }
+              ]},
+              { "$concat": ["$holderLastName", ", ", "$holderFirstName"] },
+              { "$cond": [
+                { "$ne": ["$holderLastName", ""] },
+                "$holderLastName",
+                "$holderFirstName"
+              ]}
+            ]
+          }
+        },
+        "nAwardsIP": {
+          "$sum": {
+            "$cond": [
+              { "$and": [{ "$eq": ["$esIP", true] }, { "$eq": ["$esCoIP", false] }] },
+              1, 0
+            ]
+          }
+        },
+        "nAwardsCoIP": {
+          "$sum": { "$cond": [{ "$eq": ["$esCoIP", true] }, 1, 0] }
+        }
+      }
+    },
+    {
+      "$match": {
+        "$or": [
+          { "nAwardsIP":   { "$gt": 0 } },
+          { "nAwardsCoIP": { "$gt": 0 } }
+        ]
+      }
+    },
+    {
+      "$project": {
+        "_id": 0,
+        "personUuid": "$_id",
+        "nombre": 1,
+        "nAwardsIP": 1,
+        "nAwardsCoIP": 1
+      }
+    },
+    {
+      "$sort": { "nAwardsIP": -1, "nAwardsCoIP": -1, "nombre": 1 }
+    }
+  ]
+}
