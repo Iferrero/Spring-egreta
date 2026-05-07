@@ -318,28 +318,33 @@ public List<Map> statsAnios() {
 
         pipeline.add(new Document("$project", new Document()
             .append("publicationUuid", 1)
+            .append("publicationYear", 1)
             .append("personUuid", 1)
             .append("tipoPublicacion", 1)
             .append("persona", personaExpr)));
 
         pipeline.add(new Document("$group", new Document("_id", new Document()
                 .append("publicationUuid", "$publicationUuid")
+            .append("publicationYear", "$publicationYear")
                 .append("personUuid", "$personUuid")
                 .append("tipoPublicacion", "$tipoPublicacion")
                 .append("persona", "$persona"))));
 
         pipeline.add(new Document("$group", new Document("_id", new Document()
+            .append("publicationYear", "$_id.publicationYear")
                 .append("personUuid", "$_id.personUuid")
                 .append("persona", "$_id.persona")
                 .append("tipoPublicacion", "$_id.tipoPublicacion"))
                 .append("totalPublicaciones", new Document("$sum", 1))));
 
         pipeline.add(new Document("$project", new Document("_id", 0)
+            .append("anio", "$_id.publicationYear")
                 .append("person_uuid", "$_id.personUuid")
                 .append("nombre", "$_id.persona")
                 .append("tipo_publicacion", "$_id.tipoPublicacion")
                 .append("num_publicaciones", "$totalPublicaciones")
                 // Alias para el frontend actual
+            .append("publicationYear", "$_id.publicationYear")
                 .append("personaUuid", "$_id.personUuid")
                 .append("persona", "$_id.persona")
                 .append("tipoPublicacion", "$_id.tipoPublicacion")

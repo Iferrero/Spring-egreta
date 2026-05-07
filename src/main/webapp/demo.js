@@ -27,6 +27,17 @@ function esAcademic(empleo) {
     return PDI_KEYWORDS.some(k => s.includes(k));
 }
 
+function filtrarRowsAcademic(rows, filtre) {
+    const source = rows || [];
+    if (filtre === 'pdi') {
+        return source.filter(r => esAcademic(r.empleo_departamento));
+    }
+    if (filtre === 'pas') {
+        return source.filter(r => !esAcademic(r.empleo_departamento));
+    }
+    return source;
+}
+
 function aplicarFiltreAcademic(filtre) {
     filtreAcademic = filtre;
 
@@ -42,16 +53,11 @@ function aplicarFiltreAcademic(filtre) {
 
     if (!demoTable) return;
 
-    let filtered;
-    if (filtre === 'pdi') {
-        filtered = personalDataCompleta.filter(r => esAcademic(r.empleo_departamento));
-    } else if (filtre === 'pas') {
-        filtered = personalDataCompleta.filter(r => !esAcademic(r.empleo_departamento));
-    } else {
-        filtered = personalDataCompleta;
-    }
+    const filtered = filtrarRowsAcademic(personalDataCompleta, filtre);
 
     demoTable.setData(filtered);
+    updateDedicationChart(filtered);
+    updateRoleChart(filtered);
 }
 
 function greenColorScaleGenerator(values) {
@@ -223,9 +229,7 @@ function renderDemoTable(rows) {
 
     personalDataCompleta = rows || [];
     // Apply current academic filter
-    let toShow = personalDataCompleta;
-    if (filtreAcademic === 'pdi') toShow = personalDataCompleta.filter(r => esAcademic(r.empleo_departamento));
-    else if (filtreAcademic === 'pas') toShow = personalDataCompleta.filter(r => !esAcademic(r.empleo_departamento));
+    const toShow = filtrarRowsAcademic(personalDataCompleta, filtreAcademic);
     demoTable.setData(toShow);
 }
 
@@ -482,8 +486,9 @@ async function cargarDemoData() {
 
         renderDemoTable(rows);
         actualizarKPI(rows);
-            updateDedicationChart(rows);
-            updateRoleChart(rows);
+        const rowsFiltrades = filtrarRowsAcademic(rows, filtreAcademic);
+        updateDedicationChart(rowsFiltrades);
+        updateRoleChart(rowsFiltrades);
     } catch (e) {
         // Fallback: tabla vacía para evitar filas sin correspondencia de columnas
         const rows = [];
