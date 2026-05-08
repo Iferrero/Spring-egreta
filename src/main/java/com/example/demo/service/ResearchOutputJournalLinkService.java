@@ -2,7 +2,9 @@ package com.example.demo.service;
 
 import com.example.demo.model.Jcr;
 import com.example.demo.model.Journal;
+import com.example.demo.model.Publisher;
 import com.example.demo.repository.JournalRepository;
+import com.example.demo.repository.PublisherRepository;
 import org.bson.Document;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
@@ -36,9 +38,11 @@ public class ResearchOutputJournalLinkService {
 
     private final MongoTemplate mongoTemplate;
     private final JournalRepository journalRepository;
+    private final PublisherRepository publisherRepository;
     private final JournalJcrService journalJcrService;
     private final Map<String, CacheEntry> quartilesDashboardCache = new ConcurrentHashMap<>();
     private final Map<String, JournalCacheEntry> journalUuidCache = new ConcurrentHashMap<>();
+    private final Map<String, String> publisherNameCache = new ConcurrentHashMap<>();
 
     private record CacheEntry(Map<String, Object> data, long expiresAtMs) {}
     private record JournalCacheEntry(Optional<Journal> journal, long expiresAtMs) {}
@@ -47,10 +51,21 @@ public class ResearchOutputJournalLinkService {
     public ResearchOutputJournalLinkService(
             MongoTemplate mongoTemplate,
             JournalRepository journalRepository,
+            PublisherRepository publisherRepository,
             JournalJcrService journalJcrService) {
         this.mongoTemplate = mongoTemplate;
         this.journalRepository = journalRepository;
+        this.publisherRepository = publisherRepository;
         this.journalJcrService = journalJcrService;
+    }
+
+    /** Resolves publisher name from UUID via DB lookup with in-memory cache. */
+    private String resolvePublisherName(String uuid) {
+        if (uuid == null || uuid.isBlank()) return null;
+        return publisherNameCache.computeIfAbsent(uuid, u ->
+                publisherRepository.findByUuid(u)
+                        .map(Publisher::getName)
+                        .orElse(null));
     }
 
     public Optional<Map<String, Object>> linkByPublicationUuid(String publicationUuid) {
@@ -77,7 +92,50 @@ public class ResearchOutputJournalLinkService {
         Integer day = extractDatePart(publication, "day");
         Integer month = extractDatePart(publication, "month");
         String title = nestedString(publication, "title", "value");
-        String journalTitle = extractJournalTitle(publication, Optional.empty());
+
+        // Determine publication type (ca_ES preferred, fallback to en_GB)
+        String typeKey = findFirstString(publication,
+                List.of("type", "term", "ca_ES"),
+                List.of("type", "term", "en_GB"));
+        if (typeKey == null) typeKey = "";
+
+        // ── Book chapter (Capítol, Pròleg/epíleg, Entrada enciclopèdia…) ──
+        if (typeKey.contains("apítol") || typeKey.contains("ròleg") || typeKey.contains("pÃleg")
+                || typeKey.contains("Entrada") || typeKey.contains("Antologia")) {
+            return buildChapterApa(authors, year, title, publication);
+        }
+
+        // ── Book (Llibre, Llibre d'Actes, Informe oficial, Document de treball…) ──
+        if (typeKey.contains("Llibre") || typeKey.contains("Informe") || typeKey.contains("Treball")
+                || typeKey.contains("treball") || typeKey.contains("Bases de Dades")
+                || typeKey.contains("Traducció") || typeKey.contains("TraducciÃ³")) {
+            return buildBookApa(authors, year, title, publication);
+        }
+
+        // ── Conference contribution ──
+        if (typeKey.contains("congressos") || typeKey.contains("conferència")
+                || typeKey.contains("Resum en actes") || typeKey.contains("Pòster")) {
+            return buildConferenceApa(authors, year, title, publication);
+        }
+
+        // ── Other contributions without a journal source ──
+        if (typeKey.contains("Altres") || typeKey.contains("Comentari") || typeKey.contains("reflexi")
+                || typeKey.contains("Patent") || typeKey.contains("Programari")
+                || typeKey.contains("Editorial")) {
+            return buildOtherApa(authors, day, month, year, title, publication);
+        }
+
+        // ── Default: journal article (Article, Article de revisió, Preprint, Ressenya…) ──
+        String journalUuid = findFirstString(publication,
+                List.of("journalAssociation", "journal", "uuid"),
+                List.of("journal", "uuid"),
+                List.of("publicationChannel", "journal", "uuid")
+        );
+        Optional<Journal> journalOpt = Optional.empty();
+        if (journalUuid != null && !journalUuid.isBlank()) {
+            journalOpt = findJournalByUuidCached(journalUuid);
+        }
+        String journalTitle = extractJournalTitle(publication, journalOpt);
         String volume = findFirstString(publication, List.of("journalAssociation", "volume"), List.of("volume"));
         String issue = findFirstString(publication, List.of("journalAssociation", "journalNumber"),
                 List.of("journalAssociation", "issue"), List.of("issue"));
@@ -85,6 +143,207 @@ public class ResearchOutputJournalLinkService {
         String articleNumber = findFirstString(publication, List.of("journalAssociation", "articleNumber"),
                 List.of("articleNumber"));
         return buildCitationApa(authors, day, month, year, journalTitle, volume, issue, pages, articleNumber, title);
+    }
+
+    /**
+     * APA for book chapters:
+     * Authors (Year). Chapter title. In F. Editor & G. Editor (Eds.), *Book title* (pp. pages). Publisher.
+     */
+    @SuppressWarnings("unchecked")
+    private String buildChapterApa(String authors, Integer year, String title, Document pub) {
+        String safeAuthors = sanitizeHtmlText(authors);
+        if (safeAuthors == null || safeAuthors.isBlank()) safeAuthors = "Autor desconegut";
+        String safeYear = year == null ? "s. d." : String.valueOf(year);
+        String safeTitle = sanitizeHtmlText(title);
+        if (safeTitle == null || safeTitle.isBlank()) safeTitle = "Títol desconegut";
+
+        // Book title: PURE stores it as top-level "hostPublicationTitle.value"
+        String bookTitle = findFirstString(pub,
+                List.of("hostPublicationTitle", "value"),
+                List.of("bookTitle"),
+                List.of("series", "name", "value"));
+
+        // Pages: top-level field in PURE
+        String pages = findFirstString(pub,
+                List.of("pages"),
+                List.of("journalAssociation", "pages"));
+
+        // Editors of the host book: PURE stores as "hostPublicationEditors" array [{firstName, lastName}]
+        String editors = null;
+        Object editorsRaw = pub.get("hostPublicationEditors");
+        if (editorsRaw instanceof List<?> edList && !edList.isEmpty()) {
+            List<String> edNames = new ArrayList<>();
+            for (Object item : edList) {
+                if (item instanceof Document edDoc) {
+                    String lastName = edDoc.getString("lastName");
+                    String firstName = edDoc.getString("firstName");
+                    if (lastName != null && !lastName.isBlank()) {
+                        String abbrev = (firstName != null && !firstName.isBlank())
+                                ? lastName + ", " + firstName.trim().substring(0, 1) + "."
+                                : lastName;
+                        edNames.add(abbrev);
+                    }
+                }
+            }
+            if (!edNames.isEmpty()) {
+                String edLabel = edNames.size() == 1 ? "Ed." : "Eds.";
+                editors = String.join(", ", edNames) + " (" + edLabel + ")";
+            }
+        }
+
+        // Publisher: resolve from UUID reference via Publishers collection
+        String publisherUuid = nestedString(pub, "publisher", "uuid");
+        String publisher = resolvePublisherName(publisherUuid);
+
+        StringBuilder sb = new StringBuilder();
+        sb.append(safeAuthors).append(" (").append(safeYear).append("). ").append(safeTitle).append(".");
+        if (bookTitle != null && !bookTitle.isBlank()) {
+            sb.append(" In ");
+            if (editors != null) {
+                sb.append(sanitizeHtmlText(editors)).append(", ");
+            }
+            sb.append("*").append(sanitizeHtmlText(bookTitle)).append("*");
+            if (pages != null && !pages.isBlank()) {
+                sb.append(" (pp. ").append(pages).append(")");
+            }
+            sb.append(".");
+        }
+        if (publisher != null && !publisher.isBlank()) {
+            sb.append(" ").append(sanitizeHtmlText(publisher)).append(".");
+        }
+        return sb.toString();
+    }
+
+    /**
+     * APA for books:
+     * Authors (Year). *Title* (ed.). Publisher.
+     */
+    private String buildBookApa(String authors, Integer year, String title, Document pub) {
+        String safeAuthors = sanitizeHtmlText(authors);
+        if (safeAuthors == null || safeAuthors.isBlank()) safeAuthors = "Autor desconegut";
+        String safeYear = year == null ? "s. d." : String.valueOf(year);
+
+        // Combine title + subtitle (PURE stores them separately)
+        String mainTitle = sanitizeHtmlText(title);
+        if (mainTitle == null || mainTitle.isBlank()) mainTitle = "Títol desconegut";
+        // Remove trailing colon/space that PURE uses as title/subtitle separator
+        mainTitle = mainTitle.stripTrailing().replaceAll("[:\\s]+$", "").stripTrailing();
+        String subTitle = findFirstString(pub, List.of("subTitle", "value"));
+        String safeTitle = (subTitle != null && !subTitle.isBlank())
+                ? mainTitle + ": " + sanitizeHtmlText(subTitle)
+                : mainTitle;
+
+        // Publisher: resolve from UUID reference via Publishers collection
+        String publisherUuid = nestedString(pub, "publisher", "uuid");
+        String publisher = resolvePublisherName(publisherUuid);
+        if (publisher == null) {
+            publisher = findFirstString(pub, List.of("placeOfPublication"), List.of("place", "name"));
+        }
+
+        String edition = findFirstString(pub, List.of("edition"));
+
+        StringBuilder sb = new StringBuilder();
+        sb.append(safeAuthors).append(" (").append(safeYear).append("). ").append(safeTitle);
+        if (edition != null && !edition.isBlank()) {
+            sb.append(" (").append(sanitizeHtmlText(edition)).append(" ed.)");
+        }
+        sb.append(".");
+        if (publisher != null && !publisher.isBlank()) {
+            sb.append(" ").append(sanitizeHtmlText(publisher)).append(".");
+        }
+        return sb.toString();
+    }
+
+    /**
+     * APA for conference contributions:
+     * Authors (Year). Title. In Conference name (pp. pages). Publisher.
+     */
+    private String buildConferenceApa(String authors, Integer year, String title, Document pub) {
+        String safeAuthors = sanitizeHtmlText(authors);
+        if (safeAuthors == null || safeAuthors.isBlank()) safeAuthors = "Autor desconegut";
+        String safeYear = year == null ? "s. d." : String.valueOf(year);
+        String safeTitle = sanitizeHtmlText(title);
+        if (safeTitle == null || safeTitle.isBlank()) safeTitle = "Títol desconegut";
+
+        String conferenceName = findFirstString(pub,
+                List.of("event", "name", "value"),
+                List.of("event", "name"),
+                List.of("hostPublicationTitle", "value"),
+                List.of("journalAssociation", "journal", "title", "value"));
+
+        String pages = findFirstString(pub,
+                List.of("pages"),
+                List.of("journalAssociation", "pages"));
+
+        // Publisher: resolve from UUID reference via Publishers collection
+        String publisherUuid = nestedString(pub, "publisher", "uuid");
+        String publisher = resolvePublisherName(publisherUuid);
+        if (publisher == null) {
+            publisher = findFirstString(pub, List.of("placeOfPublication"));
+        }
+
+        StringBuilder sb = new StringBuilder();
+        sb.append(safeAuthors).append(" (").append(safeYear).append("). ").append(safeTitle).append(".");
+        if (conferenceName != null && !conferenceName.isBlank()) {
+            sb.append(" In ").append(sanitizeHtmlText(conferenceName));
+            if (pages != null && !pages.isBlank()) {
+                sb.append(" (pp. ").append(pages).append(")");
+            }
+            sb.append(".");
+        }
+        if (publisher != null && !publisher.isBlank()) {
+            sb.append(" ").append(sanitizeHtmlText(publisher)).append(".");
+        }
+        return sb.toString();
+    }
+
+    /**
+     * APA for other contributions (Altres contribucions, Comentari, Editorial, Patent, Programari…):
+     * Authors (Year, Month Day). Title. DOI or [Arxiu en línia].
+     */
+    @SuppressWarnings("unchecked")
+    private static String buildOtherApa(String authors, Integer day, Integer month, Integer year, String title, Document pub) {
+        String safeAuthors = sanitizeHtmlText(authors);
+        if (safeAuthors == null || safeAuthors.isBlank()) safeAuthors = "Autor desconegut";
+        String safeTitle = sanitizeHtmlText(title);
+        if (safeTitle == null || safeTitle.isBlank()) safeTitle = "Títol desconegut";
+
+        // Build date: (Year) or (Year, Month Day)
+        String datePart;
+        if (year == null) {
+            datePart = "s. d.";
+        } else if (month != null && day != null) {
+            String[] months = {"gener", "febrer", "març", "abril", "maig", "juny",
+                               "juliol", "agost", "setembre", "octubre", "novembre", "desembre"};
+            String monthName = (month >= 1 && month <= 12) ? months[month - 1] : String.valueOf(month);
+            datePart = year + ", " + day + " de " + monthName;
+        } else if (month != null) {
+            String[] months = {"gener", "febrer", "març", "abril", "maig", "juny",
+                               "juliol", "agost", "setembre", "octubre", "novembre", "desembre"};
+            String monthName = (month >= 1 && month <= 12) ? months[month - 1] : String.valueOf(month);
+            datePart = year + ", " + monthName;
+        } else {
+            datePart = String.valueOf(year);
+        }
+
+        // Extract DOI from electronicVersions array
+        String doi = null;
+        Object evRaw = pub.get("electronicVersions");
+        if (evRaw instanceof List<?> evList) {
+            for (Object item : evList) {
+                if (item instanceof Document evDoc) {
+                    String d = evDoc.getString("doi");
+                    if (d != null && !d.isBlank()) { doi = d.trim(); break; }
+                }
+            }
+        }
+
+        StringBuilder sb = new StringBuilder();
+        sb.append(safeAuthors).append(" (").append(datePart).append("). ").append(safeTitle).append(".");
+        if (doi != null) {
+            sb.append(" https://doi.org/").append(doi);
+        }
+        return sb.toString();
     }
 
     public Map<String, Object> quartilesDashboardByDepartment(String deptUuid, Integer desde, Integer hasta, String filtrePersonal, String personUuid) {

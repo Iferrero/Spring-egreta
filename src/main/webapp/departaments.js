@@ -534,36 +534,40 @@ function construirPublicacionsPivot(data) {
     const tipos = Array.from(new Set(
         rowsRaw.map(item => String(item.tipoPublicacion || item.tipo_publicacion || 'Sense tipus').trim() || 'Sense tipus')
     )).sort((a, b) => a.localeCompare(b, 'ca', { sensitivity: 'base' }));
+    const anios = Array.from(new Set(
+        rowsRaw
+            .map(item => Number(item.anio ?? item.anyo ?? item.publicationYear ?? 0))
+            .filter(anio => Number.isFinite(anio) && anio > 0)
+    )).sort((a, b) => a - b);
 
-    const fieldByTipo = new Map();
-    tipos.forEach((tipo, index) => { fieldByTipo.set(tipo, `tipo_${index}`); });
+    const fieldByAnio = new Map();
+    anios.forEach(anio => { fieldByAnio.set(anio, `anio_${anio}`); });
 
-    const porPersona = new Map();
+    const porTipo = new Map();
     rowsRaw.forEach(item => {
-        const personaUuid = String(item.personaUuid || item.person_uuid || '').trim();
-        const personaNombre = String(item.persona || item.nombre || '').trim();
-        const persona = personaNombre || personaUuid || '-';
         const tipo = String(item.tipoPublicacion || item.tipo_publicacion || 'Sense tipus').trim() || 'Sense tipus';
+        const anio = Number(item.anio ?? item.anyo ?? item.publicationYear ?? 0);
         const total = Number(item.totalPublicaciones ?? item.num_publicaciones ?? 0);
-        const key = personaUuid || `nom:${persona.toLowerCase()}`;
 
-        if (!porPersona.has(key)) {
-            const base = { persona, personaUuid, __total: 0 };
-            tipos.forEach(t => { base[fieldByTipo.get(t)] = 0; });
-            porPersona.set(key, base);
+        if (!porTipo.has(tipo)) {
+            const base = { tipo, __total: 0 };
+            anios.forEach(year => { base[fieldByAnio.get(year)] = 0; });
+            porTipo.set(tipo, base);
         }
 
-        const row = porPersona.get(key);
-        const field = fieldByTipo.get(tipo);
-        row[field] = Number(row[field] || 0) + total;
+        const row = porTipo.get(tipo);
+        const field = fieldByAnio.get(anio);
+        if (field) {
+            row[field] = Number(row[field] || 0) + total;
+        }
         row.__total = Number(row.__total || 0) + total;
     });
 
     const columns = [
-        { title: 'Persona', field: 'persona', sorter: 'string', headerFilter: 'input', headerFilterPlaceholder: 'Buscar persona...', widthGrow: 2 },
-        ...tipos.map(tipo => ({
-            title: tipo,
-            field: fieldByTipo.get(tipo),
+        { title: 'Tipus', field: 'tipo', sorter: 'string', headerFilter: 'input', headerFilterPlaceholder: 'Buscar tipus...', widthGrow: 2 },
+        ...anios.map(anio => ({
+            title: String(anio),
+            field: fieldByAnio.get(anio),
             sorter: 'number',
             hozAlign: 'right',
             bottomCalc: 'sum'
@@ -571,8 +575,8 @@ function construirPublicacionsPivot(data) {
         { title: 'Total', field: '__total', sorter: 'number', hozAlign: 'right', bottomCalc: 'sum' }
     ];
 
-    const rows = Array.from(porPersona.values())
-        .sort((a, b) => String(a.persona || '').localeCompare(String(b.persona || ''), 'ca', { sensitivity: 'base' }));
+    const rows = Array.from(porTipo.values())
+        .sort((a, b) => String(a.tipo || '').localeCompare(String(b.tipo || ''), 'ca', { sensitivity: 'base' }));
 
     return { columns, rows };
 }
@@ -596,6 +600,43 @@ function renderPublicacionsTable(data) {
     }
 }
 
+function renderPublicacionsApaTable(data) {
+    const el = document.getElementById('publicacions-apa-table');
+    if (!el) return;
+
+    const columns = [
+        { title: 'Any', field: 'year', sorter: 'number', width: 70, hozAlign: 'center' },
+        { title: 'Tipus', field: 'tipo', sorter: 'string', width: 160 },
+        {
+            title: 'Referència APA',
+            field: 'apa',
+            sorter: 'string',
+            variableHeight: true,
+            formatter: function(cell) {
+                const div = document.createElement('div');
+                div.style.whiteSpace = 'normal';
+                div.style.lineHeight = '1.5';
+                div.style.padding = '4px 0';
+                div.textContent = cell.getValue() || '';
+                return div;
+            }
+        }
+    ];
+
+    if (!publicacionsApaTable) {
+        publicacionsApaTable = new Tabulator(el, {
+            data: data || [],
+            layout: 'fitColumns',
+            placeholder: 'No hi ha publicacions en el període seleccionat.',
+            columns,
+            maxHeight: '640px'
+        });
+    } else {
+        publicacionsApaTable.setColumns(columns);
+        publicacionsApaTable.setData(data || []);
+    }
+}
+
 async function cargarPublicacionsData() {
     const select = document.getElementById('orgSelect');
     const orgVal = select.value;
@@ -605,6 +646,7 @@ async function cargarPublicacionsData() {
     if (!orgVal) {
         if (loadingEl) loadingEl.classList.add('hidden');
         if (publicacionsTable) publicacionsTable.setData([]);
+        if (publicacionsApaTable) publicacionsApaTable.setData([]);
         return;
     }
 
@@ -619,13 +661,18 @@ async function cargarPublicacionsData() {
         if (loadingEl) loadingEl.classList.remove('hidden');
         if (wrapperEl) wrapperEl.classList.add('hidden');
 
-        const res = await apiFetch(`/pure/stats/persona-resumen?${params.toString()}`);
-        if (!res.ok) throw new Error('Error carregant publicacions');
-        const data = await res.json();
+        const [resPivot, resApa] = await Promise.all([
+            apiFetch(`/pure/stats/tipos-por-anio?${params.toString()}`),
+            apiFetch(`/pure/stats/apa-list?${params.toString()}`)
+        ]);
+        if (!resPivot.ok) throw new Error('Error carregant publicacions');
+        const dataPivot = await resPivot.json();
+        const dataApa = resApa.ok ? await resApa.json() : [];
 
         if (loadingEl) loadingEl.classList.add('hidden');
         if (wrapperEl) wrapperEl.classList.remove('hidden');
-        renderPublicacionsTable(data || []);
+        renderPublicacionsTable(dataPivot || []);
+        renderPublicacionsApaTable(dataApa || []);
     } catch (e) {
         if (loadingEl) loadingEl.classList.add('hidden');
         if (wrapperEl) wrapperEl.classList.remove('hidden');
@@ -735,6 +782,7 @@ let directorsTable = null;
 let llistaData = [];
 let selectedDirectorUuid = null;
 let publicacionsTable = null;
+let publicacionsApaTable = null;
 
 // ---- Llista d'ajuts de l'institut ----
 let ajutsLlistaTable = null;
