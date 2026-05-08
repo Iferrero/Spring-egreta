@@ -1,0 +1,97 @@
+{
+  "collection": "Awards",
+  "pipeline": [
+    {
+      "$match": {
+        "workflow.step": { "$in": ["validated", "closed"] }
+      }
+    },
+    {
+      "$match": {
+        "$or": [
+          { "managingOrganization.uuid": "__MANAGING_UUID__" },
+          { "coManagingOrganizations.uuid": "__MANAGING_UUID__" }
+        ]
+      }
+    },
+    {
+      "$addFields": {
+        "anio": {
+          "$year": "$awardDate"
+        }
+      }
+    },
+    {
+      "$unwind": {
+        "path": "$fundings",
+        "preserveNullAndEmptyArrays": true
+      }
+    },
+    {
+      "$unwind": {
+        "path": "$fundings.fundingCollaborators",
+        "preserveNullAndEmptyArrays": true
+      }
+    },
+    {
+      "$addFields": {
+        "importe": {
+          "$convert": {
+            "input": "$fundings.fundingCollaborators.institutionalPart.value",
+            "to": "double",
+            "onError": 0,
+            "onNull": 0
+          }
+        }
+      }
+    },
+    {
+      "$group": {
+        "_id": {
+          "awardUuid": "$uuid",
+          "anio": "$anio",
+          "tipo": "$type.term.ca_ES",
+          "categoria": "$categoria"
+        },
+        "totalImporte": { "$sum": "$importe" }
+      }
+    },
+    {
+      "$addFields": {
+        "categoriaFinal": {
+          "$ifNull": ["$_id.categoria", "Sense categoria"]
+        }
+      }
+    },
+    {
+      "$group": {
+        "_id": {
+          "anio": "$_id.anio",
+          "tipo": "$_id.tipo",
+          "categoria": "$categoriaFinal"
+        },
+        "ajuts": { "$sum": 1 },
+        "import": { "$sum": "$totalImporte" }
+      }
+    },
+    {
+      "$project": {
+        "_id": 0,
+        "anio": "$_id.anio",
+        "categoria": "$_id.categoria",
+        "tipo": "$_id.tipo",
+        "ajuts": "$ajuts",
+        "import": {
+          "$round": ["$import", 2]
+        }
+      }
+    },
+    {
+      "$sort": {
+        "anio": 1,
+        "categoria": 1,
+        "tipo": 1
+      }
+    }
+  ]
+}

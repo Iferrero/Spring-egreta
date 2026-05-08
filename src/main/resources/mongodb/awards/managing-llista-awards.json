@@ -1,0 +1,85 @@
+{
+  "collection": "Awards",
+  "pipeline": [
+    {
+      "$match": {
+        "workflow.step": { "$in": ["validated", "closed"] }
+      }
+    },
+    {
+      "$match": {
+        "$or": [
+          { "managingOrganization.uuid": "__MANAGING_UUID__" },
+          { "coManagingOrganizations.uuid": "__MANAGING_UUID__" }
+        ]
+      }
+    },
+    {
+      "$addFields": {
+        "anyo": { "$year": "$awardDate" }
+      }
+    },
+    {
+      "$unwind": {
+        "path": "$fundings",
+        "preserveNullAndEmptyArrays": true
+      }
+    },
+    {
+      "$unwind": {
+        "path": "$fundings.fundingCollaborators",
+        "preserveNullAndEmptyArrays": true
+      }
+    },
+    {
+      "$addFields": {
+        "importe_partida": {
+          "$convert": {
+            "input": "$fundings.fundingCollaborators.institutionalPart.value",
+            "to": "double",
+            "onError": 0,
+            "onNull": 0
+          }
+        }
+      }
+    },
+    {
+      "$group": {
+        "_id": {
+          "awardUuid": "$uuid",
+          "pureId": "$pureId",
+          "anyo": "$anyo",
+          "titulo": {
+            "$ifNull": ["$title.es_ES", { "$ifNull": ["$title.en_GB", "Sense títol"] }]
+          },
+          "tipoAward": "$type.term.ca_ES",
+          "categoria": "$categoria",
+          "vigenciaInicio": "$actualPeriod.startDate",
+          "vigenciaFin": "$actualPeriod.endDate"
+        },
+        "institutionalPart": { "$sum": "$importe_partida" },
+        "awardHoldersUuids": { "$first": { "$map": { "input": { "$ifNull": ["$awardHolders", []] }, "as": "h", "in": "$$h.person.uuid" } } },
+        "awardHolders": { "$first": "$awardHolders" }
+      }
+    },
+    {
+      "$project": {
+        "_id": 0,
+        "awardUuid": "$_id.awardUuid",
+        "pureId": "$_id.pureId",
+        "anyo": "$_id.anyo",
+        "titulo": "$_id.titulo",
+        "tipoAward": "$_id.tipoAward",
+        "categoria": "$_id.categoria",
+        "vigenciaInicio": "$_id.vigenciaInicio",
+        "vigenciaFin": "$_id.vigenciaFin",
+        "institutionalPart": 1,
+        "awardHoldersUuids": 1,
+        "awardHolders": 1
+      }
+    },
+    {
+      "$sort": { "anyo": -1, "titulo": 1 }
+    }
+  ]
+}

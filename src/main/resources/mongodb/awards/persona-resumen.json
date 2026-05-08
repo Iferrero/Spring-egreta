@@ -2,7 +2,7 @@
     "collection": "Awards",
     "pipeline": [{
             "$match": {
-                "workflow.step": "validated"
+                "workflow.step": { "$in": ["validated", "closed"] }
             }
         }, {
             "$match": {

@@ -787,6 +787,7 @@ const UAB_COLORS = {
 let tablaResumen = null;
 let tablaAwards = null;
 let tablaCrecimiento = null;
+let informeWordToastTimer = null;
 
 /**
  * Formatea importes con locale catalán y 2 decimales.
@@ -1066,6 +1067,24 @@ function ocultarOverlayCargando() {
     const overlay = document.getElementById('loadingOverlay');
     if (!overlay) return;
     overlay.classList.add('hidden');
+}
+
+function mostrarAvisoGenerandoInformeWord() {
+    let toast = document.getElementById('wordReportToast');
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'wordReportToast';
+        toast.className = 'fixed bottom-5 right-5 z-50 bg-white border border-slate-200 shadow-lg rounded-xl px-4 py-3 text-sm text-slate-700 flex items-center gap-2';
+        toast.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-[#4F81BD]"></i><span>Generant informe Word...</span>';
+        document.body.appendChild(toast);
+    }
+    toast.classList.remove('hidden');
+}
+
+function ocultarAvisoGenerandoInformeWord() {
+    const toast = document.getElementById('wordReportToast');
+    if (!toast) return;
+    toast.classList.add('hidden');
 }
 
 /**
@@ -1604,6 +1623,59 @@ async function cargarAwardsPersona(persona) {
 }
 
 /**
+ * Genera l'informe Word de la persona seleccionada amb el mateix format que el certificat.
+ * Utilitza el rang d'anys actiu i crida l'endpoint /persons/informe-word-persona.
+ */
+function generarInformePersona() {
+    if (!personaTopSeleccionada || !personaTopSeleccionada.personaUuid) {
+        return;
+    }
+    const botonInforme = document.getElementById('btnGenerarInformeAwards');
+    if (botonInforme) {
+        botonInforme.disabled = true;
+        botonInforme.classList.add('opacity-60', 'cursor-not-allowed');
+    }
+
+    mostrarAvisoGenerandoInformeWord();
+
+    const finalizarAviso = () => {
+        ocultarAvisoGenerandoInformeWord();
+        if (botonInforme) {
+            botonInforme.disabled = false;
+            botonInforme.classList.remove('opacity-60', 'cursor-not-allowed');
+        }
+    };
+
+    if (informeWordToastTimer) {
+        clearTimeout(informeWordToastTimer);
+    }
+    informeWordToastTimer = setTimeout(finalizarAviso, 12000);
+    window.addEventListener('focus', finalizarAviso, { once: true });
+    window.addEventListener('pageshow', finalizarAviso, { once: true });
+
+    const { desde, hasta, modoAnio, categoria, tipus } = obtenerFiltrosActuales();
+    const startDate = `${desde}-01-01`;
+    const endDate   = `${hasta}-12-31`;
+    const params = new URLSearchParams({
+        personUuid: personaTopSeleccionada.personaUuid,
+        startDate,
+        endDate,
+        projectFilter: 'all',
+        lang: 'ca',
+        onlyAwards: 'true',
+        modoAnio: modoAnio || 'awardDate'
+    });
+    appendFilterParams(params, { categoria, tipus });
+    const url = apiUrl('/persons/informe-word-persona') + '?' + params.toString();
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = '';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+}
+
+/**
  * Renderiza los tres gráficos principales del dashboard.
  * @param {Array<object>} filas
  */
@@ -2053,7 +2125,7 @@ function renderGraficos(filas) {
             { name: 'Líders',         color: COLOR_LIDERS,         items: [] },
             { name: 'Especialistes',  color: COLOR_ESPECIALISTES,  items: [] },
             { name: 'Dinamitzadors',  color: COLOR_FORMIGUES,      items: [] },
-            { name: 'Altres',         color: COLOR_ALTRES,         items: [] },
+            { name: 'Perfils en Creixement',         color: COLOR_ALTRES,         items: [] },
             { name: 'Sense ajuts',   color: COLOR_SENSE_AWARDS,   items: [] }
         ];
         for (const d of datosLiderazgo) {

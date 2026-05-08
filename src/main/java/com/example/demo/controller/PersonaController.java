@@ -2,7 +2,9 @@ package com.example.demo.controller;
 
 import com.example.demo.model.Organizacion;
 import com.example.demo.model.Persona;
+import com.example.demo.service.AwardService;
 import jakarta.servlet.http.HttpServletResponse;
+import org.apache.poi.util.Units;
 import org.apache.poi.xwpf.usermodel.*;
 import org.bson.Document;
 import org.springframework.data.domain.Page;
@@ -16,10 +18,19 @@ import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.data.support.PageableExecutionUtils;
 import org.springframework.data.web.PagedModel;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.awt.Color;
+import java.awt.Font;
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
+import java.awt.BasicStroke;
+import java.awt.image.BufferedImage;
 import java.math.BigInteger;
 import java.text.Normalizer;
 import java.time.LocalDate;
@@ -40,6 +51,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import javax.imageio.ImageIO;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTBookmark;
 import org.w3c.dom.Node;
 
@@ -49,10 +61,13 @@ import org.w3c.dom.Node;
 public class PersonaController {
 
     private final MongoTemplate mongoTemplate;
+    private final AwardService awardService;
 
     // Constructor para inyectar las dependencias (Soluciona el error de inicialización)
-    public PersonaController(MongoTemplate mongoTemplate) {
+    @Autowired
+    public PersonaController(MongoTemplate mongoTemplate, AwardService awardService) {
         this.mongoTemplate = mongoTemplate;
+        this.awardService = awardService;
     }
 
     /** DEBUG TEMPORAL: dump identifiers from Awards (optionally filter by orgUuid) */
@@ -278,7 +293,7 @@ public class PersonaController {
         // Group by person uuid
         Document group = new Document();
         group.put("_id", "$uuid");
-        group.put("nombre", new Document("$first", new Document("$concat", List.of("$name.firstName", " ", "$name.lastName"))));
+        group.put("nombre", new Document("$first", new Document("$concat", List.of("$name.lastName", ", ", "$name.firstName"))));
         group.put("asociaciones", new Document("$push", "$assoc"));
         pipeline.add(new Document("$group", group));
 
@@ -297,13 +312,53 @@ public class PersonaController {
         // unwind ibb_assoc (si no existe, la agregación descartará)
         pipeline.add(new Document("$unwind", "$ibb_assoc"));
 
-        // empleo_final calc
-        Document cond = new Document();
-        cond.put("$eq", List.of("$ibb_assoc.employmentType.term.es_ES", "Adscripción a investigación"));
+        // empleo_final calc (multilingual fallback + replace research-affiliation by dept role when available)
+        Document ibbEmployment = new Document("$ifNull", Arrays.asList(
+            "$ibb_assoc.employmentType.term.ca_ES",
+            new Document("$ifNull", Arrays.asList(
+                "$ibb_assoc.employmentType.term.es_ES",
+                new Document("$ifNull", Arrays.asList(
+                    "$ibb_assoc.employmentType.term.en_GB",
+                    new Document("$ifNull", Arrays.asList(
+                        "$ibb_assoc.employmentType.term.text.value",
+                        "$ibb_assoc.employmentType.term.text"
+                    ))
+                ))
+            ))
+        ));
 
-        Document empleoFinal = new Document("$cond", List.of(cond,
-            new Document("$arrayElemAt", List.of("$dept_assoc.employmentType.term.es_ES", 0)),
-            "$ibb_assoc.employmentType.term.es_ES"
+        Document deptEmployment = new Document("$first", new Document("$filter",
+            new Document("input", new Document("$map", new Document("input", "$dept_assoc")
+                .append("as", "d")
+                .append("in", new Document("$ifNull", Arrays.asList(
+                    "$$d.employmentType.term.ca_ES",
+                    new Document("$ifNull", Arrays.asList(
+                        "$$d.employmentType.term.es_ES",
+                        new Document("$ifNull", Arrays.asList(
+                            "$$d.employmentType.term.en_GB",
+                            new Document("$ifNull", Arrays.asList(
+                                "$$d.employmentType.term.text.value",
+                                "$$d.employmentType.term.text"
+                            ))
+                        ))
+                    ))
+                )))))
+                .append("as", "emp")
+                .append("cond", new Document("$and", Arrays.asList(
+                    new Document("$ne", Arrays.asList("$$emp", null)),
+                    new Document("$ne", Arrays.asList("$$emp", ""))
+                )))));
+
+        Document cond = new Document("$in", Arrays.asList(ibbEmployment, Arrays.asList(
+            "Adscripció a recerca",
+            "Adscripción a investigación",
+            "Affiliation to research"
+        )));
+
+        Document empleoFinal = new Document("$cond", Arrays.asList(
+            cond,
+            new Document("$ifNull", Arrays.asList(deptEmployment, ibbEmployment)),
+            ibbEmployment
         ));
 
         pipeline.add(new Document("$addFields", new Document("empleo_final", empleoFinal)));
@@ -313,6 +368,7 @@ public class PersonaController {
         project.put("_id", 0);
         project.put("nombre", 1);
         project.put("empleo", "$empleo_final");
+        project.put("dedicacion", buildDedicationExpr("$ibb_assoc"));
         project.put("inicio_asociacion_IBB", "$ibb_assoc.period.startDate");
         project.put("fin_asociacion_IBB", "$ibb_assoc.period.endDate");
         pipeline.add(new Document("$project", project));
@@ -335,22 +391,102 @@ public class PersonaController {
         public List<Map> getLatestAssociations(
             @RequestParam String orgUuid,
             @RequestParam(required = false, defaultValue = "2021-01-01") String startDate,
-            @RequestParam(required = false, defaultValue = "2025-12-31") String endDate
+            @RequestParam(required = false, defaultValue = "2025-12-31") String endDate,
+            @RequestParam(required = false, defaultValue = "periode") String filtrePersonal,
+            @RequestParam(required = false) String deptUuid
         ) {
         List<Document> pipeline = new ArrayList<>();
 
+        // Helper function to extract employment with fallback
+        Document extractEmployment = new Document("$ifNull", Arrays.asList(
+            new Document("$first", new Document("$arrayElemAt", Arrays.asList(
+                new Document("$objectToArray", new Document("$ifNull", Arrays.asList(
+                    "$assoc.employmentType.term", new Document()
+                ))),
+                0
+            ))),
+            "$assoc.employmentType.term.text.value"
+        ));
+
+        // First, extract institute and department associations
+        Document deptFilter = deptUuid != null && !deptUuid.trim().isEmpty() 
+            ? new Document("$eq", Arrays.asList("$$a.organization.uuid", deptUuid))
+            : new Document("$eq", Arrays.asList("$$a.organization.uuid", ""));
+            
+        Document extractAssoc = new Document("$let", new Document()
+            .append("vars", new Document()
+                .append("instAssoc", new Document("$arrayElemAt", Arrays.asList(
+                    new Document("$filter", new Document()
+                        .append("input", "$staffOrganizationAssociations")
+                        .append("as", "a")
+                        .append("cond", new Document("$eq", Arrays.asList("$$a.organization.uuid", orgUuid)))
+                    ), 0
+                )))
+                .append("deptAssoc", new Document("$arrayElemAt", Arrays.asList(
+                    new Document("$filter", new Document()
+                        .append("input", "$staffOrganizationAssociations")
+                        .append("as", "a")
+                        .append("cond", deptFilter)
+                    ), 0
+                )))
+            )
+            .append("in", new Document("assoc", "$$instAssoc").append("deptAssoc", "$$deptAssoc"))
+        );
+
+        // Build employment-from-any-assoc before unwind (search ALL associations, not just institute ones)
+        List<String> researchTerms = Arrays.asList("Adscripció a recerca", "Adscripción a investigación", "Affiliation to research");
+        Document allAssocEmploymentMap = new Document("$map", new Document("input", "$staffOrganizationAssociations")
+            .append("as", "a")
+            .append("in", new Document("$ifNull", Arrays.asList(
+                "$$a.employmentType.term.ca_ES",
+                new Document("$ifNull", Arrays.asList(
+                    "$$a.employmentType.term.es_ES",
+                    new Document("$ifNull", Arrays.asList(
+                        "$$a.employmentType.term.en_GB",
+                        new Document("$ifNull", Arrays.asList(
+                            "$$a.employmentType.term.text.value",
+                            "$$a.employmentType.term.text"
+                        ))
+                    ))
+                ))
+            )))
+        );
+
+        Document firstNonResearchFromAllAssocs = new Document("$first", new Document("$filter",
+            new Document("input", allAssocEmploymentMap)
+                .append("as", "emp")
+                .append("cond", new Document("$and", Arrays.asList(
+                    new Document("$ne", Arrays.asList("$$emp", null)),
+                    new Document("$ne", Arrays.asList("$$emp", "")),
+                    new Document("$not", new Document("$in", Arrays.asList("$$emp", researchTerms)))
+                )))
+        ));
+
+        pipeline.add(new Document("$addFields", new Document("assoc_data", extractAssoc)
+            .append("first_non_research_all", firstNonResearchFromAllAssocs)));
+        
         pipeline.add(new Document("$unwind", "$staffOrganizationAssociations"));
 
-        // Match por organización y por rango de fechas del slider
-        Document assocMatch = new Document();
-        assocMatch.put("$and", List.of(
-            new Document("staffOrganizationAssociations.organization.uuid", orgUuid),
-            new Document("staffOrganizationAssociations.period.startDate", new Document("$lte", endDate)),
-            new Document("$or", List.of(
+        // Match por organización y filtro temporal (vigent vs periodo seleccionado)
+        String today = LocalDate.now().toString();
+        List<Document> matchConditions = new ArrayList<>();
+        matchConditions.add(new Document("staffOrganizationAssociations.organization.uuid", orgUuid));
+
+        if ("vigent".equalsIgnoreCase(filtrePersonal)) {
+            matchConditions.add(new Document("staffOrganizationAssociations.period.startDate", new Document("$lte", today)));
+            matchConditions.add(new Document("$or", List.of(
+                new Document("staffOrganizationAssociations.period.endDate", null),
+                new Document("staffOrganizationAssociations.period.endDate", new Document("$gte", today))
+            )));
+        } else {
+            matchConditions.add(new Document("staffOrganizationAssociations.period.startDate", new Document("$lte", endDate)));
+            matchConditions.add(new Document("$or", List.of(
                 new Document("staffOrganizationAssociations.period.endDate", null),
                 new Document("staffOrganizationAssociations.period.endDate", new Document("$gte", startDate))
-            ))
-        ));
+            )));
+        }
+
+        Document assocMatch = new Document("$and", matchConditions);
 
         pipeline.add(new Document("$match", assocMatch));
 
@@ -358,15 +494,87 @@ public class PersonaController {
 
         Document group = new Document();
         group.put("_id", "$uuid");
-        group.put("nombre", new Document("$first", new Document("$concat", List.of("$name.firstName", " ", "$name.lastName"))));
+        group.put("nombre", new Document("$first", new Document("$concat", List.of("$name.lastName", ", ", "$name.firstName"))));
         group.put("ultimo_contrato", new Document("$first", "$staffOrganizationAssociations"));
+        group.put("assoc_data", new Document("$first", "$assoc_data"));
+        group.put("first_non_research_all", new Document("$first", "$first_non_research_all"));
         group.put("asociaciones", new Document("$push", "$staffOrganizationAssociations"));
         pipeline.add(new Document("$group", group));
 
-        Document empleoCond = new Document("$eq", List.of("$ultimo_contrato.employmentType.term.ca_ES", "Adscripció a recerca"));
-        Document empleoFinal = new Document("$cond", List.of(empleoCond,
-                new Document("$arrayElemAt", List.of("$asociaciones.employmentType.term.ca_ES", 1)),
-                "$ultimo_contrato.employmentType.term.ca_ES"
+        Document ultimoEmployment = new Document("$ifNull", Arrays.asList(
+            "$ultimo_contrato.employmentType.term.ca_ES",
+            new Document("$ifNull", Arrays.asList(
+                "$ultimo_contrato.employmentType.term.es_ES",
+                new Document("$ifNull", Arrays.asList(
+                    "$ultimo_contrato.employmentType.term.en_GB",
+                    new Document("$ifNull", Arrays.asList(
+                        "$ultimo_contrato.employmentType.term.text.value",
+                        "$ultimo_contrato.employmentType.term.text"
+                    ))
+                ))
+            ))
+        ));
+
+        Document firstNonResearchEmployment = new Document("$first", new Document("$filter",
+            new Document("input", new Document("$map", new Document("input", "$asociaciones")
+                .append("as", "a")
+                .append("in", new Document("$ifNull", Arrays.asList(
+                    "$$a.employmentType.term.ca_ES",
+                    new Document("$ifNull", Arrays.asList(
+                        "$$a.employmentType.term.es_ES",
+                        new Document("$ifNull", Arrays.asList(
+                            "$$a.employmentType.term.en_GB",
+                            new Document("$ifNull", Arrays.asList(
+                                "$$a.employmentType.term.text.value",
+                                "$$a.employmentType.term.text"
+                            ))
+                        ))
+                    ))
+                )))))
+                .append("as", "emp")
+                .append("cond", new Document("$and", Arrays.asList(
+                    new Document("$ne", Arrays.asList("$$emp", null)),
+                    new Document("$ne", Arrays.asList("$$emp", "")),
+                    new Document("$not", new Document("$in", Arrays.asList("$$emp", Arrays.asList(
+                        "Adscripció a recerca",
+                        "Adscripción a investigación",
+                        "Affiliation to research"
+                    ))))
+                )))));
+
+        Document deptEmployment = new Document("$ifNull", Arrays.asList(
+            "$assoc_data.deptAssoc.employmentType.term.ca_ES",
+            new Document("$ifNull", Arrays.asList(
+                "$assoc_data.deptAssoc.employmentType.term.es_ES",
+                new Document("$ifNull", Arrays.asList(
+                    "$assoc_data.deptAssoc.employmentType.term.en_GB",
+                    new Document("$ifNull", Arrays.asList(
+                        "$assoc_data.deptAssoc.employmentType.term.text.value",
+                        "$assoc_data.deptAssoc.employmentType.term.text"
+                    ))
+                ))
+            ))
+        ));
+
+        Document empleoCond = new Document("$in", Arrays.asList(ultimoEmployment, Arrays.asList(
+            "Adscripció a recerca",
+            "Adscripción a investigación",
+            "Affiliation to research"
+        )));
+        
+        // Fallback chain when institute employment is research:
+        // 1. Department employment (if deptUuid given)
+        // 2. Any non-research employment from ALL associations (includes department associations)
+        // 3. Institute non-research employment (within institute associations)
+        // 4. Original institute employment (last resort)
+        Document empleoFinal = new Document("$cond", Arrays.asList(
+                empleoCond,
+                new Document("$ifNull", Arrays.asList(deptEmployment, 
+                    new Document("$ifNull", Arrays.asList("$first_non_research_all",
+                        new Document("$ifNull", Arrays.asList(firstNonResearchEmployment, ultimoEmployment))
+                    ))
+                )),
+                ultimoEmployment
         ));
 
         pipeline.add(new Document("$addFields", new Document("empleo_final", empleoFinal)));
@@ -375,6 +583,7 @@ public class PersonaController {
         project.put("_id", 0);
         project.put("nombre", 1);
         project.put("empleo", "$empleo_final");
+        project.put("dedicacion", buildDedicationExpr("$ultimo_contrato"));
         project.put("inicio_asociacion_IBB", "$ultimo_contrato.period.startDate");
         project.put("fin_asociacion_IBB", "$ultimo_contrato.period.endDate");
         pipeline.add(new Document("$project", project));
@@ -385,6 +594,71 @@ public class PersonaController {
         mongoTemplate.getDb().getCollection("Persons").aggregate(pipeline).forEach(d -> results.add(d));
         return results;
     }
+
+        private Document buildDedicationExpr(String assocVarPath) {
+        Document dedicationGroupsInput = new Document("$ifNull", Arrays.asList(
+            assocVarPath + ".keywordGroups",
+            new Document("$ifNull", Arrays.asList(assocVarPath + ".keyworGroups", List.of()))
+        ));
+
+        Document dedicationGroup = new Document("$first", new Document("$filter",
+            new Document("input", dedicationGroupsInput)
+                .append("as", "kg")
+                .append("cond", new Document("$or", Arrays.asList(
+                    new Document("$eq", Arrays.asList("$$kg.logicalName", "/uab/persons/staff/dedication")),
+                    new Document("$eq", Arrays.asList("$$kg.logicalName", "/uab/persons/staff/assigment_dedication")),
+                    new Document("$eq", Arrays.asList("$$kg.logicalName", "uab/persons/staff/dedication")),
+                    new Document("$eq", Arrays.asList("$$kg.logicalName", "uab/persons/staff/assigment_dedication")),
+                    new Document("$eq", Arrays.asList("$$kg.logicalname", "/uab/persons/staff/dedication"))
+                )))));
+
+        Document dedicationItem = new Document("$first", new Document("$ifNull", Arrays.asList(
+            "$$dedicationGroup.classifitications",
+            new Document("$ifNull", Arrays.asList(
+                "$$dedicationGroup.classifications",
+                new Document("$ifNull", Arrays.asList(
+                    "$$dedicationGroup.keywords",
+                    new Document("$ifNull", Arrays.asList("$$dedicationGroup.keywordContainers", List.of()))
+                ))
+            ))
+        )));
+
+        Document dedicationValue = new Document("$ifNull", Arrays.asList(
+            "$$dedicationItem.term.ca_ES",
+            new Document("$ifNull", Arrays.asList(
+                "$$dedicationItem.term.es_ES",
+                new Document("$ifNull", Arrays.asList(
+                    "$$dedicationItem.term.en_GB",
+                    new Document("$ifNull", Arrays.asList(
+                        "$$dedicationItem.description.ca_ES",
+                        new Document("$ifNull", Arrays.asList(
+                            "$$dedicationItem.description.es_ES",
+                            new Document("$ifNull", Arrays.asList(
+                                "$$dedicationItem.description.en_GB",
+                                new Document("$ifNull", Arrays.asList(
+                                    "$$dedicationItem.text.value",
+                                    new Document("$ifNull", Arrays.asList(
+                                        "$$dedicationItem.value",
+                                        new Document("$ifNull", Arrays.asList(
+                                            "$$dedicationGroup.name.ca_ES",
+                                            new Document("$ifNull", Arrays.asList(
+                                                "$$dedicationGroup.name.es_ES",
+                                                "$$dedicationGroup.name.en_GB"
+                                            ))
+                                        ))
+                                    ))
+                                ))
+                            ))
+                        ))
+                    ))
+                ))
+            ))
+        ));
+
+        return new Document("$let", new Document("vars", new Document("dedicationGroup", dedicationGroup))
+            .append("in", new Document("$let", new Document("vars", new Document("dedicationItem", dedicationItem))
+                .append("in", dedicationValue))));
+        }
 
 
 
@@ -2619,10 +2893,610 @@ public class PersonaController {
         run.addBreak();
     }
 
+    private void appendProjectesPerAnyChart(XWPFDocument doc, List<Document> rowsPersonaResumen, String lang) throws Exception {
+        Map<Integer, YearMetrics> perAny = calcularSeriesProjectesPerAny(rowsPersonaResumen);
+        if (perAny.isEmpty()) {
+            return;
+        }
+
+        XWPFParagraph pageBreakP = doc.createParagraph();
+        XWPFRun pageBreakRun = pageBreakP.createRun();
+        pageBreakRun.addBreak(BreakType.PAGE);
+
+        XWPFParagraph titleP = doc.createParagraph();
+        applyProjectParagraphStyle(titleP);
+        titleP.setAlignment(ParagraphAlignment.LEFT);
+        {
+            org.openxmlformats.schemas.wordprocessingml.x2006.main.CTPPr ppr = titleP.getCTP().getPPr();
+            org.openxmlformats.schemas.wordprocessingml.x2006.main.CTInd ind = ppr.isSetInd() ? ppr.getInd() : ppr.addNewInd();
+            ind.setLeft(BigInteger.valueOf(-714));
+        }
+        XWPFRun titleRun = createProjectRun(titleP, true, false);
+        titleRun.setText("Projectes per any");
+        titleRun.addBreak();
+
+        BufferedImage chart = construirGraficoProjectesPerAny(perAny);
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        ImageIO.write(chart, "png", baos);
+        byte[] bytes = baos.toByteArray();
+
+        XWPFParagraph imgP = doc.createParagraph();
+        applyProjectParagraphStyle(imgP);
+        imgP.setAlignment(ParagraphAlignment.LEFT);
+        {
+            org.openxmlformats.schemas.wordprocessingml.x2006.main.CTPPr ppr = imgP.getCTP().getPPr();
+            org.openxmlformats.schemas.wordprocessingml.x2006.main.CTInd ind = ppr.isSetInd() ? ppr.getInd() : ppr.addNewInd();
+            ind.setLeft(BigInteger.valueOf(-714));
+        }
+        XWPFRun imgRun = imgP.createRun();
+        imgRun.addPicture(
+                new ByteArrayInputStream(bytes),
+                org.apache.poi.xwpf.usermodel.Document.PICTURE_TYPE_PNG,
+                "ajuts-per-any.png",
+                Units.toEMU(520),
+                Units.toEMU(300)
+        );
+        imgRun.addBreak();
+    }
+
+    private Map<Integer, YearMetrics> calcularSeriesProjectesPerAny(List<Document> rowsPersonaResumen) {
+        Map<Integer, YearMetrics> perAny = new java.util.TreeMap<>();
+        if (rowsPersonaResumen == null) {
+            return perAny;
+        }
+
+        for (Document row : rowsPersonaResumen) {
+            if (row == null) {
+                continue;
+            }
+
+            Object anyoObj = row.get("Año");
+            if (!(anyoObj instanceof Number)) {
+                continue;
+            }
+            int year = ((Number) anyoObj).intValue();
+
+            YearMetrics ym = perAny.computeIfAbsent(year, k -> new YearMetrics());
+
+            int proyIp = toInt(row.get("Proyectos_IP"));
+            int proyCoip = toInt(row.get("Proyectos_CoIP"));
+            int proyMiembro = toInt(row.get("Proyectos_Miembro"));
+            int total = proyIp + proyCoip + proyMiembro;
+
+            ym.totalProjects += total;
+            String categoria = asString(row.get("FunderType"));
+            if (categoria == null || categoria.isBlank()) categoria = "Desconegut";
+            ym.categoriaCounts.put(categoria, ym.categoriaCounts.getOrDefault(categoria, 0) + total);
+            ym.importePonderat += toDouble(row.get("Importe_Ponderado (€)"));
+        }
+        return perAny;
+    }
+
+    private BufferedImage construirGraficoProjectesPerAny(Map<Integer, YearMetrics> perAny) {
+        final int width = 1400;
+        final int height = 760;
+        final int left = 90;
+        final int right = 90;
+        final int top = 40;
+        final int bottom = 120;
+
+        BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = image.createGraphics();
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+
+        g.setColor(Color.WHITE);
+        g.fillRect(0, 0, width, height);
+
+        int chartW = width - left - right;
+        int chartH = height - top - bottom;
+        List<Integer> years = new ArrayList<>(perAny.keySet());
+
+        List<String> categories = perAny.values().stream()
+                .flatMap(v -> v.categoriaCounts.keySet().stream())
+                .distinct()
+                .sorted()
+                .collect(Collectors.toList());
+
+        int maxProjects = perAny.values().stream().mapToInt(v -> v.totalProjects).max().orElse(1);
+        double maxImport = perAny.values().stream().mapToDouble(v -> v.importePonderat).max().orElse(1d);
+        
+        // Calcular ticks automáticos: project axis drives intervals, import axis syncs
+        int[] projectTicks = calcularTicksProyectos(maxProjects, 6);
+        int projectIntervals = projectTicks.length - 1;
+        double[] importTicks = calcularTicksAutomaticos(maxImport, projectIntervals);
+
+        g.setFont(new Font("Calibri", Font.PLAIN, 13));
+        g.setColor(new Color(220, 226, 232));
+        for (int i = 0; i < projectTicks.length; i++) {
+            int projectTickVal = projectTicks[i];
+            double importTickVal = i < importTicks.length ? importTicks[i] : importTicks[importTicks.length - 1];
+            
+            int y = top + chartH - (int) Math.round((double) projectTickVal * chartH / projectTicks[projectTicks.length - 1]);
+            g.drawLine(left, y, left + chartW, y);
+            g.setColor(new Color(89, 100, 115));
+            g.drawString(String.valueOf(projectTickVal), left - 28, y + 5);
+            String importeTickLabel = formatCompactAxis(importTickVal);
+            g.drawString(importeTickLabel, left + chartW + 12, y + 5);
+            g.setColor(new Color(220, 226, 232));
+        }
+
+        int n = Math.max(1, years.size());
+        int slot = chartW / n;
+        // ECharts default barCategoryGap is 20%, so bar occupies 80% of the slot
+        int barW = Math.max(12, (int) (slot * 0.80));
+
+        for (int i = 0; i < years.size(); i++) {
+            int year = years.get(i);
+            YearMetrics ym = perAny.get(year);
+            int x = left + i * slot + (slot - barW) / 2;
+            int yBase = top + chartH;
+
+            for (String cat : categories) {
+                int value = ym.categoriaCounts.getOrDefault(cat, 0);
+                if (value <= 0) continue;
+                int h = (int) Math.round((double) value * chartH / projectTicks[projectTicks.length - 1]);
+                int y = yBase - h;
+                g.setColor(colorCategoria(cat));
+                g.fillRect(x, y, barW, h);
+                yBase = y;
+            }
+
+            g.setColor(new Color(42, 48, 55));
+            g.drawString(String.valueOf(year), x + Math.max(2, barW / 2 - 14), top + chartH + 26);
+        }
+
+        g.setColor(new Color(224, 82, 82));
+        g.setStroke(new BasicStroke(2.0f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND, 10f, new float[]{8f, 6f}, 0f));
+        
+        // Collect points for smooth curve
+        int[] importXPoints = new int[years.size()];
+        int[] importYPoints = new int[years.size()];
+        for (int i = 0; i < years.size(); i++) {
+            int year = years.get(i);
+            YearMetrics ym = perAny.get(year);
+            int x = left + i * slot + slot / 2;
+            int y = top + chartH - (int) Math.round((ym.importePonderat / importTicks[importTicks.length - 1]) * chartH);
+            importXPoints[i] = x;
+            importYPoints[i] = y;
+        }
+        
+        // Draw smooth curve for imports (clipped to chart area to prevent overshoot)
+        // Draw smooth curve for imports (control points clamped to chart area)
+        drawSmoothCurve(g, importXPoints, importYPoints, new Color(224, 82, 82), 2.0f, true, top, top + chartH);
+        
+        // Draw symbols on curve
+        for (int i = 0; i < years.size(); i++) {
+            g.setColor(new Color(224, 82, 82));
+            g.fillOval(importXPoints[i] - 4, importYPoints[i] - 4, 8, 8);
+        }
+
+        g.setStroke(new BasicStroke(1f));
+        g.setColor(new Color(89, 100, 115));
+        g.drawString("Projectes", left - 8, top - 10);
+        g.drawString("Import (€)", left + chartW - 56, top - 10);
+
+        g.setColor(new Color(151, 160, 170));
+        g.drawLine(left, top + chartH, left + chartW, top + chartH);
+        g.drawLine(left, top, left, top + chartH);
+        g.drawLine(left + chartW, top, left + chartW, top + chartH);
+
+        drawLegend(g, left, top + chartH + 42, categories);
+
+        g.dispose();
+        return image;
+    }
+
+    private Color colorCategoria(String categoria) {
+        List<String> paletteHex = List.of("#008037", "#F88C12", "#004D5E", "#596473", "#004d21", "#00a34f", "#fab84c", "#006b7a", "#8a99a8", "#2a3037");
+        String raw = categoria == null ? "" : categoria;
+        String lowered = raw.toLowerCase();
+        String key = Normalizer.normalize(lowered, Normalizer.Form.NFD).replaceAll("\\p{M}", "");
+
+        if ("publica".equals(key)) return Color.decode("#008037");
+        if ("privada".equals(key)) return Color.decode("#F88C12");
+
+        int h = 0;
+        for (int i = 0; i < raw.length(); i++) {
+            h = 31 * h + raw.charAt(i);
+        }
+        return Color.decode(paletteHex.get(Math.floorMod(Math.abs(h), paletteHex.size())));
+    }
+
+    private void drawLegend(Graphics2D g, int startX, int y, List<String> categories) {
+        g.setFont(new Font("Calibri", Font.PLAIN, 12));
+        int x = startX;
+        for (String cat : categories) {
+            g.setColor(colorCategoria(cat));
+            g.fillRect(x, y - 10, 14, 10);
+            g.setColor(new Color(42, 48, 55));
+            g.drawString(cat, x + 18, y);
+            x += 18 + Math.max(40, cat.length() * 7);
+        }
+
+        g.setColor(new Color(224, 82, 82));
+        g.setStroke(new BasicStroke(2.0f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND, 10f, new float[]{8f, 6f}, 0f));
+        g.drawLine(startX, y + 20, startX + 18, y + 20);
+        g.setStroke(new BasicStroke(1f));
+        g.setColor(new Color(42, 48, 55));
+        g.drawString("Import ponderat (€)", startX + 24, y + 24);
+    }
+
+    private static class YearMetrics {
+        int totalProjects = 0;
+        double importePonderat = 0d;
+        Map<String, Integer> categoriaCounts = new LinkedHashMap<>();
+    }
+
+    private static class EvolucioPoint {
+        final int anio;
+        final double personaImporte;
+        final double deptoMedia;
+
+        EvolucioPoint(int anio, double personaImporte, double deptoMedia) {
+            this.anio = anio;
+            this.personaImporte = personaImporte;
+            this.deptoMedia = deptoMedia;
+        }
+    }
+
+    private int toInt(Object value) {
+        if (value instanceof Number n) return n.intValue();
+        if (value == null) return 0;
+        try {
+            return (int) Math.round(Double.parseDouble(String.valueOf(value)));
+        } catch (Exception ignored) {
+            return 0;
+        }
+    }
+
+    private double toDouble(Object value) {
+        if (value instanceof Number n) return n.doubleValue();
+        if (value == null) return 0d;
+        try {
+            return Double.parseDouble(String.valueOf(value));
+        } catch (Exception ignored) {
+            return 0d;
+        }
+    }
+
+    private String asString(Object value) {
+        return value == null ? "" : String.valueOf(value);
+    }
+
     /** Formats an amount as "227.000,00 €" (Catalan/Spanish locale). */
     private String formatImport(double amount) {
         if (amount == 0) return "";
         return String.format(Locale.GERMAN, "%,.2f €", amount);
+    }
+
+    private String formatCompactAxis(double value) {
+        double abs = Math.abs(value);
+        if (abs >= 1_000_000) {
+            return String.format(Locale.GERMAN, "%.1fM", value / 1_000_000d);
+        }
+        if (abs >= 1_000) {
+            return String.format(Locale.GERMAN, "%.1fk", value / 1_000d);
+        }
+        return String.format(Locale.GERMAN, "%.0f", value);
+    }
+
+    private void appendEvolucioPersonaDeptChart(XWPFDocument doc, List<Document> rowsResumenAll, String personUuid, String lang) throws Exception {
+        List<EvolucioPoint> points = calcularEvolucioPersonaDept(rowsResumenAll, personUuid);
+        if (points.isEmpty()) {
+            return;
+        }
+
+        XWPFParagraph titleP = doc.createParagraph();
+        applyProjectParagraphStyle(titleP);
+        titleP.setAlignment(ParagraphAlignment.LEFT);
+        {
+            org.openxmlformats.schemas.wordprocessingml.x2006.main.CTPPr ppr = titleP.getCTP().getPPr();
+            org.openxmlformats.schemas.wordprocessingml.x2006.main.CTInd ind = ppr.isSetInd() ? ppr.getInd() : ppr.addNewInd();
+            ind.setLeft(BigInteger.valueOf(-714));
+        }
+        XWPFRun titleRun = createProjectRun(titleP, true, false);
+        String title = switch (lang) {
+            case "es" -> "Evolución investigador vs media departamento";
+            case "en" -> "Researcher trend vs department average";
+            default -> "Evolució investigador vs mitja departament";
+        };
+        titleRun.setText(title);
+        titleRun.addBreak();
+
+        BufferedImage chart = construirGraficoEvolucioPersonaDept(points);
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        ImageIO.write(chart, "png", baos);
+        byte[] bytes = baos.toByteArray();
+
+        XWPFParagraph imgP = doc.createParagraph();
+        applyProjectParagraphStyle(imgP);
+        imgP.setAlignment(ParagraphAlignment.LEFT);
+        {
+            org.openxmlformats.schemas.wordprocessingml.x2006.main.CTPPr ppr = imgP.getCTP().getPPr();
+            org.openxmlformats.schemas.wordprocessingml.x2006.main.CTInd ind = ppr.isSetInd() ? ppr.getInd() : ppr.addNewInd();
+            ind.setLeft(BigInteger.valueOf(-714));
+        }
+        XWPFRun imgRun = imgP.createRun();
+        imgRun.addPicture(
+                new ByteArrayInputStream(bytes),
+                org.apache.poi.xwpf.usermodel.Document.PICTURE_TYPE_PNG,
+                "evolucio-investigador-departament.png",
+                Units.toEMU(520),
+                Units.toEMU(280)
+        );
+        imgRun.addBreak();
+    }
+
+    private List<EvolucioPoint> calcularEvolucioPersonaDept(List<Document> rowsResumenAll, String personUuid) {
+        if (rowsResumenAll == null || rowsResumenAll.isEmpty() || personUuid == null || personUuid.isBlank()) {
+            return Collections.emptyList();
+        }
+
+        Set<Integer> aniosSet = new java.util.TreeSet<>();
+        Map<Integer, Double> personaPorAnio = new HashMap<>();
+        Map<Integer, Map<String, Double>> deptoPorAnioPersona = new HashMap<>();
+
+        for (Document row : rowsResumenAll) {
+            if (row == null) continue;
+            Object anyoObj = row.get("Año");
+            if (!(anyoObj instanceof Number)) continue;
+
+            int anio = ((Number) anyoObj).intValue();
+            aniosSet.add(anio);
+
+            String rowPersonaUuid = asString(row.get("PersonaUuid")).trim();
+            double impPond = toDouble(row.get("Importe_Ponderado (€)"));
+
+            // Acumular datos del investigador actual
+            if (personUuid.trim().equals(rowPersonaUuid)) {
+                personaPorAnio.put(anio, personaPorAnio.getOrDefault(anio, 0d) + impPond);
+            }
+
+            // Agrupar por persona para calcular media del departamento
+            Map<String, Double> importesPorPersona = deptoPorAnioPersona.computeIfAbsent(anio, k -> new HashMap<>());
+            importesPorPersona.put(rowPersonaUuid, importesPorPersona.getOrDefault(rowPersonaUuid, 0d) + impPond);
+        }
+
+        List<EvolucioPoint> points = new ArrayList<>();
+        for (Integer anio : aniosSet) {
+            double personaImporte = personaPorAnio.getOrDefault(anio, 0d);
+            Map<String, Double> importesPorPersona = deptoPorAnioPersona.getOrDefault(anio, Collections.emptyMap());
+
+            // Calcular suma y contar solo personas con importe > 0
+            double sumaValidos = 0d;
+            int countValidos = 0;
+            for (double v : importesPorPersona.values()) {
+                if (v > 0) {
+                    sumaValidos += v;
+                    countValidos++;
+                }
+            }
+
+            // Media del departamento = suma / cantidad de personas distintas
+            double deptoMedia = countValidos > 0 ? (sumaValidos / countValidos) : 0d;
+            points.add(new EvolucioPoint(anio, personaImporte, deptoMedia));
+        }
+        return points;
+    }
+
+    private BufferedImage construirGraficoEvolucioPersonaDept(List<EvolucioPoint> points) {
+        final int width = 1400;
+        final int height = 720;
+        final int left = 120;
+        final int right = 60;
+        final int top = 60;
+        final int bottom = 120;
+
+        BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = image.createGraphics();
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+
+        g.setColor(Color.WHITE);
+        g.fillRect(0, 0, width, height);
+
+        int chartW = width - left - right;
+        int chartH = height - top - bottom;
+        int n = points.size();
+        if (n == 0) {
+            g.dispose();
+            return image;
+        }
+
+        double maxPersona = points.stream().mapToDouble(p -> p.personaImporte).max().orElse(1d);
+        double maxDepto = points.stream().mapToDouble(p -> p.deptoMedia).max().orElse(1d);
+        double maxVal = Math.max(maxPersona, maxDepto);
+        if (maxVal <= 0) maxVal = 1d;
+
+        // Calcular ticks como lo hace ECharts: redondear al siguiente intervalo "bonito"
+        double[] ticks = calcularTicksAutomaticos(maxVal, 6);
+        int yTicks = ticks.length - 1;
+        double tickMax = ticks[ticks.length - 1];
+
+        g.setFont(new Font("Calibri", Font.PLAIN, 12));
+        for (int i = 0; i < ticks.length; i++) {
+            double v = ticks[i];
+            int y = top + chartH - (int) Math.round((v / tickMax) * chartH);
+            g.setColor(new Color(220, 226, 232));
+            g.drawLine(left, y, left + chartW, y);
+
+            String valLabel = formatImportAxisValue(v);
+            g.setColor(new Color(89, 100, 115));
+            g.drawString(valLabel + " €", left - 80, y + 5);
+        }
+
+        g.setColor(new Color(151, 160, 170));
+        g.drawLine(left, top, left, top + chartH);
+        g.drawLine(left, top + chartH, left + chartW, top + chartH);
+
+        int step = n > 1 ? chartW / (n - 1) : 0;
+        int[] xPoints = new int[n];
+        int[] yPersona = new int[n];
+        int[] yDepto = new int[n];
+        for (int i = 0; i < n; i++) {
+            EvolucioPoint p = points.get(i);
+            int x = left + (n > 1 ? i * step : chartW / 2);
+            int yP = top + chartH - (int) Math.round((p.personaImporte / tickMax) * chartH);
+            int yD = top + chartH - (int) Math.round((p.deptoMedia / tickMax) * chartH);
+            xPoints[i] = x;
+            yPersona[i] = yP;
+            yDepto[i] = yD;
+
+            g.setColor(new Color(42, 48, 55));
+            g.setFont(new Font("Calibri", Font.PLAIN, 11));
+            g.drawString(String.valueOf(p.anio), x - 10, top + chartH + 22);
+        }
+
+        // Clip to chart area to prevent Catmull-Rom overshoot outside axis bounds
+        // Draw smooth curves (control points clamped to chart area)
+        drawSmoothCurve(g, xPoints, yPersona, Color.decode("#008037"), 3f, false, top, top + chartH);
+        drawSmoothCurve(g, xPoints, yDepto, Color.decode("#004D5E"), 3f, true, top, top + chartH);
+
+        g.setFont(new Font("Calibri", Font.PLAIN, 12));
+        int legendY = top - 18;
+        int legendX = left + 20;
+
+        g.setColor(new Color(0, 128, 55));
+        g.setStroke(new BasicStroke(3f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+        g.drawLine(legendX, legendY, legendX + 20, legendY);
+        for (int i = 0; i < n; i++) {
+            g.fillOval(xPoints[i] - 3, yPersona[i] - 3, 6, 6);
+        }
+        g.setColor(new Color(42, 48, 55));
+        g.setFont(new Font("Calibri", Font.PLAIN, 12));
+        g.drawString("Investigador", legendX + 28, legendY + 4);
+
+        int legend2X = legendX + 160;
+        g.setColor(new Color(0, 77, 94));
+        g.setStroke(new BasicStroke(3f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND, 10f, new float[]{10f, 6f}, 0f));
+        g.drawLine(legend2X, legendY, legend2X + 20, legendY);
+        for (int i = 0; i < n; i++) {
+            g.fillRect(xPoints[i] - 3, yDepto[i] - 3, 6, 6);
+        }
+        g.setColor(new Color(42, 48, 55));
+        g.drawString("Mitja Dept.", legend2X + 28, legendY + 4);
+
+        g.dispose();
+        return image;
+    }
+
+   
+    private void drawSmoothCurve(Graphics2D g, int[] xPoints, int[] yPoints, Color color, float strokeWidth, boolean dashed) {
+        drawSmoothCurve(g, xPoints, yPoints, color, strokeWidth, dashed, Integer.MIN_VALUE, Integer.MAX_VALUE);
+    }
+
+    private void drawSmoothCurve(Graphics2D g, int[] xPoints, int[] yPoints, Color color, float strokeWidth, boolean dashed, int yMin, int yMax) {
+        if (xPoints.length < 2) return;
+        g.setColor(color);
+        if (dashed) {
+            g.setStroke(new BasicStroke(strokeWidth, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND, 10f, new float[]{10f, 6f}, 0f));
+        } else {
+            g.setStroke(new BasicStroke(strokeWidth, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+        }
+
+        java.awt.geom.Path2D.Double path = new java.awt.geom.Path2D.Double();
+        if (xPoints.length == 2) {
+            g.drawLine(xPoints[0], yPoints[0], xPoints[1], yPoints[1]);
+        } else {
+            path.moveTo(xPoints[0], yPoints[0]);
+            for (int i = 0; i < xPoints.length - 1; i++) {
+                int x1 = xPoints[i],  y1 = yPoints[i];
+                int x2 = xPoints[i + 1], y2 = yPoints[i + 1];
+
+                double cp1x, cp1y, cp2x, cp2y;
+
+                if (i == 0) {
+                    cp1x = x1 + (x2 - x1) / 3.0;
+                    cp1y = y1 + (y2 - y1) / 3.0;
+                    int x3 = i + 2 < xPoints.length ? xPoints[i + 2] : x2;
+                    int y3 = i + 2 < yPoints.length ? yPoints[i + 2] : y2;
+                    cp2x = x2 - (x3 - x1) / 6.0;
+                    cp2y = y2 - (y3 - y1) / 6.0;
+                } else if (i == xPoints.length - 2) {
+                    int x0 = xPoints[i - 1], y0 = yPoints[i - 1];
+                    cp1x = x1 + (x2 - x0) / 6.0;
+                    cp1y = y1 + (y2 - y0) / 6.0;
+                    cp2x = x2 - (x2 - x1) / 3.0;
+                    cp2y = y2 - (y2 - y1) / 3.0;
+                } else {
+                    int x0 = xPoints[i - 1], y0 = yPoints[i - 1];
+                    int x3 = xPoints[i + 2], y3 = yPoints[i + 2];
+                    cp1x = x1 + (x2 - x0) / 6.0;
+                    cp1y = y1 + (y2 - y0) / 6.0;
+                    cp2x = x2 - (x3 - x1) / 6.0;
+                    cp2y = y2 - (y3 - y1) / 6.0;
+                }
+
+                // Clamp control point Y to chart bounds so the spline never exits the axis area
+                cp1y = Math.max(yMin, Math.min(yMax, cp1y));
+                cp2y = Math.max(yMin, Math.min(yMax, cp2y));
+
+                path.curveTo(cp1x, cp1y, cp2x, cp2y, x2, y2);
+            }
+            g.draw(path);
+        }
+    }
+
+    private double[] calcularTicksAutomaticos(double maxVal, int numIntervals) {
+        if (maxVal <= 0) maxVal = 1d;
+        
+        // Calcular el intervalo "bonito" (500k, 1M, etc.)
+        double magnitude = Math.pow(10, Math.floor(Math.log10(maxVal)));
+        double normalized = maxVal / magnitude;
+        
+        double step;
+        if (normalized <= 1) {
+            step = 0.1 * magnitude;
+        } else if (normalized <= 2) {
+            step = 0.2 * magnitude;
+        } else if (normalized <= 5) {
+            step = 0.5 * magnitude;
+        } else {
+            step = 1 * magnitude;
+        }
+        
+        // Redondear el máximo al siguiente múltiplo de step
+        double tickMax = Math.ceil(maxVal / step) * step;
+        
+        // Generar ticks
+        double[] ticks = new double[numIntervals + 1];
+        for (int i = 0; i <= numIntervals; i++) {
+            ticks[i] = (double) i * tickMax / numIntervals;
+        }
+        return ticks;
+    }
+
+    private int[] calcularTicksProyectos(int maxProjects, int numIntervals) {
+        if (maxProjects <= 0) maxProjects = 1;
+        
+        // Find the smallest nice integer step such that ceil(max/step) <= numIntervals
+        int[] candidateSteps = {1, 2, 5, 10, 20, 25, 50, 100, 200, 500};
+        int step = candidateSteps[candidateSteps.length - 1];
+        for (int s : candidateSteps) {
+            int tickMax = (int) Math.ceil((double) maxProjects / s) * s;
+            if (tickMax / s <= numIntervals) {
+                step = s;
+                break;
+            }
+        }
+        
+        int tickMax = (int) Math.ceil((double) maxProjects / step) * step;
+        int actualIntervals = tickMax / step;
+        
+        // Generate evenly spaced integer ticks
+        int[] ticks = new int[actualIntervals + 1];
+        for (int i = 0; i <= actualIntervals; i++) {
+            ticks[i] = i * step;
+        }
+        return ticks;
+    }
+
+    private String formatImportAxisValue(double value) {
+        if (Math.abs(value) >= 1000) {
+            return String.format(Locale.GERMAN, "%,.0f", value);
+        }
+        return String.format(Locale.GERMAN, "%.0f", value);
     }
 
     /** Converts a date value (Date or ISO string) to DD-MM-YYYY format with dashes. */
@@ -2739,6 +3613,10 @@ public class PersonaController {
             @RequestParam(required = false, defaultValue = "2050-12-31") String endDate,
             @RequestParam(required = false, defaultValue = "all") String projectFilter,
             @RequestParam(required = false, defaultValue = "ca") String lang,
+            @RequestParam(required = false, defaultValue = "false") boolean onlyAwards,
+            @RequestParam(required = false, defaultValue = "awardDate") String modoAnio,
+            @RequestParam(required = false) List<String> categoria,
+            @RequestParam(required = false) List<String> tipus,
             HttpServletResponse response) throws Exception {
 
         // 1. Fetch person name
@@ -2756,38 +3634,47 @@ public class PersonaController {
             }
         }
 
-        Date startDateD = Date.from(LocalDate.parse(startDate).atStartOfDay(ZoneId.of("UTC")).toInstant());
-        Date endDateD   = Date.from(LocalDate.parse(endDate).atStartOfDay(ZoneId.of("UTC")).toInstant());
+        // 2. Resolve awards using the exact same backend source as the awards table
+        final String UAB_COLLABORATOR_UUID = "84443078-1a60-462d-9d0a-b04312afd9eb";
 
-        // 2. Competitive awards where this person is awardHolder
-        // Date filter: actualPeriod.startDate within [startDate, endDate] (mirrors reference query)
-        // Workflow: validated OR closed
-        Document awardFilter = new Document()
-            .append("workflow.step", new Document("$in", Arrays.asList("validated", "closed")))
-            .append("categoria", new Document("$regex", "^Ajudes competitives"))
-            .append("awardHolders.person.uuid", personUuid)
-            .append("actualPeriod.startDate", new Document("$gte", startDateD).append("$lte", endDateD));
-        List<Document> awardsRaw = new ArrayList<>();
-        mongoTemplate.getDb().getCollection("Awards")
-            .find(awardFilter)
-            .sort(new Document("actualPeriod.startDate", -1))
-            .into(awardsRaw);
+        int desdeYear = LocalDate.parse(startDate).getYear();
+        int hastaYear = LocalDate.parse(endDate).getYear();
 
-        // 3. Convenios where this person is awardHolder
-        Document conveniFilter = new Document()
-            .append("workflow.step", new Document("$in", Arrays.asList("validated", "closed")))
-            .append("type.term.ca_ES", "Concessió conveni")
-            .append("awardHolders.person.uuid", personUuid)
-            .append("actualPeriod.startDate", new Document("$gte", startDateD).append("$lte", endDateD));
-        List<Document> convenisRaw = new ArrayList<>();
-        mongoTemplate.getDb().getCollection("Awards")
-            .find(conveniFilter)
-            .sort(new Document("actualPeriod.startDate", -1))
-            .into(convenisRaw);
+        List<Document> rowsAwardsTable = awardService.getAwardsByPersona(
+                personUuid,
+                desdeYear,
+                hastaYear,
+                UAB_COLLABORATOR_UUID,
+                null,
+                modoAnio,
+                categoria,
+                tipus
+        );
 
-        List<Document> allAwards = new ArrayList<>();
-        allAwards.addAll(awardsRaw);
-        allAwards.addAll(convenisRaw);
+        List<String> orderedAwardUuids = rowsAwardsTable.stream()
+                .map(r -> r.getString("awardUuid"))
+                .filter(u -> u != null && !u.isBlank())
+                .distinct()
+                .collect(Collectors.toList());
+
+        Map<String, Document> awardsByUuid = new HashMap<>();
+        if (!orderedAwardUuids.isEmpty()) {
+            List<Document> rawAwards = new ArrayList<>();
+            mongoTemplate.getDb().getCollection("Awards")
+                    .find(new Document("uuid", new Document("$in", orderedAwardUuids)))
+                    .into(rawAwards);
+            for (Document aw : rawAwards) {
+                String awUuid = aw.getString("uuid");
+                if (awUuid != null && !awUuid.isBlank()) {
+                    awardsByUuid.put(awUuid, aw);
+                }
+            }
+        }
+
+        List<Document> allAwards = orderedAwardUuids.stream()
+                .map(awardsByUuid::get)
+                .filter(aw -> aw != null)
+                .collect(Collectors.toCollection(ArrayList::new));
 
         if ("ipcoip".equalsIgnoreCase(projectFilter)) {
             allAwards = allAwards.stream()
@@ -2795,18 +3682,7 @@ public class PersonaController {
                 .collect(Collectors.toCollection(ArrayList::new));
         }
 
-        allAwards.sort((a, b) -> {
-            Document aPeriod = (Document) a.get("actualPeriod");
-            Document bPeriod = (Document) b.get("actualPeriod");
-            LocalDate aStart = aPeriod != null ? parseDate(aPeriod.get("startDate")) : null;
-            LocalDate bStart = bPeriod != null ? parseDate(bPeriod.get("startDate")) : null;
-            if (aStart == null && bStart == null) return 0;
-            if (aStart == null) return 1;
-            if (bStart == null) return -1;
-            return bStart.compareTo(aStart);
-        });
-
-        // 4. Batch-fetch funder names
+        // 3. Batch-fetch funder names
         Set<String> allFunderUuids = new HashSet<>();
         for (Document award : allAwards) {
             @SuppressWarnings("unchecked")
@@ -2831,12 +3707,155 @@ public class PersonaController {
                 });
         }
 
-        // 5. Build Word document using the template for the selected language
+        
+        List<Document> rowsResumenAll = awardService.getPersonaResumen(
+                UAB_COLLABORATOR_UUID,
+                null,
+                null,
+                desdeYear,
+                hastaYear,
+                "awardDate",
+                null,
+                null,
+                null
+            );
+        List<Document> rowsForChart = rowsResumenAll.stream()
+                .filter(r -> personUuid.equals(String.valueOf(r.get("PersonaUuid"))))
+                .collect(Collectors.toList());
+
+        // 5. Build Word document
         String templateName = switch (lang) {
             case "es" -> "plantilla_certificats_castella.docx";
             case "en" -> "plantilla_certificats_angles.docx";
             default  -> "plantilla_certificats_catala.docx";
         };
+        if (onlyAwards) {
+            // Template-based document: keep header/footer, remove intro body text, and write only awards
+            InputStream tplIs = getClass().getClassLoader().getResourceAsStream(templateName);
+            try (XWPFDocument doc = new XWPFDocument(tplIs); OutputStream out = response.getOutputStream()) {
+                // Clear template body content (preserves sectPr with margins, header, footer refs)
+                {
+                    org.openxmlformats.schemas.wordprocessingml.x2006.main.CTBody b = doc.getDocument().getBody();
+                    for (int i = b.sizeOfPArray() - 1; i >= 0; i--) b.removeP(i);
+                    for (int i = b.sizeOfTblArray() - 1; i >= 0; i--) b.removeTbl(i);
+                }
+
+                if (!allAwards.isEmpty()) {
+                    XWPFParagraph awardPara = doc.createParagraph();
+                    applyProjectParagraphStyle(awardPara);
+                    int awardIdx = 1;
+                    for (Document aw : allAwards) {
+                        String awTitle = getNestedStringVal(aw, "title", "ca_ES");
+                        if (awTitle.isEmpty()) awTitle = getNestedStringVal(aw, "title", "es_ES");
+                        if (awTitle.isEmpty()) awTitle = getNestedStringVal(aw, "title", "en_GB");
+
+                        List<String> ipOnlyList = new ArrayList<>();
+                        List<String> coipList = new ArrayList<>();
+                        String personRole = "";
+                        @SuppressWarnings("unchecked")
+                        List<Document> holders = (List<Document>) aw.get("awardHolders");
+                        if (holders != null) {
+                            for (Document holder : holders) {
+                                Document hn = (Document) holder.get("name");
+                                Document rd = (Document) holder.get("role");
+                                Document holderPerson = (Document) holder.get("person");
+                                String holderUuid = holderPerson != null ? holderPerson.getString("uuid") : "";
+                                String fn = hn != null ? hn.getString("firstName") : "";
+                                String ln = hn != null ? hn.getString("lastName")  : "";
+                                String fullName = (ln != null ? ln : "") + (fn != null && !fn.isEmpty() ? ", " + fn : "");
+                                boolean isIp = false;
+                                boolean isPureIp = false;
+                                String roleLocalized = "";
+                                if (rd != null) {
+                                    Document td = (Document) rd.get("term");
+                                    if (td != null) {
+                                        String roleCa = td.getString("ca_ES") != null ? td.getString("ca_ES") : "";
+                                        isIp = isIpOrCoipRole(rd);
+                                        isPureIp = isIp && !normalize(roleCa).startsWith("co");
+                                        roleLocalized = switch (lang) {
+                                            case "es" -> td.getString("es_ES") != null ? td.getString("es_ES") : roleCa;
+                                            case "en" -> td.getString("en_GB") != null ? td.getString("en_GB") : roleCa;
+                                            default  -> roleCa;
+                                        };
+                                    }
+                                }
+                                if (isIp && !fullName.isBlank()) {
+                                    if (isPureIp) ipOnlyList.add(fullName); else coipList.add(fullName);
+                                }
+                                if (personUuid.equals(holderUuid)) personRole = roleLocalized;
+                            }
+                        }
+                        List<String> ipAllList = new ArrayList<>(ipOnlyList);
+                        ipAllList.addAll(coipList);
+                        String ip = String.join(" & ", ipAllList);
+
+                        String funderName = "";
+                        @SuppressWarnings("unchecked")
+                        List<Document> awFundings = (List<Document>) aw.get("fundings");
+                        if (awFundings != null && !awFundings.isEmpty()) {
+                            Document fd = (Document) awFundings.get(0).get("funder");
+                            if (fd != null) funderName = funderNames.getOrDefault(fd.getString("uuid"), "");
+                        }
+
+                        double importTotal = 0.0;
+                        double importUAB = 0.0;
+                        if (awFundings != null) {
+                            for (Document funding : awFundings) {
+                                Document amountDoc = (Document) funding.get("amount");
+                                if (amountDoc != null) { Object val = amountDoc.get("value"); if (val instanceof Number n) importTotal += n.doubleValue(); }
+                                @SuppressWarnings("unchecked")
+                                List<Document> cols = (List<Document>) funding.get("fundingCollaborators");
+                                if (cols != null) for (Document col : cols) {
+                                    Document part = (Document) col.get("institutionalPart");
+                                    if (part != null) { Object val = part.get("value"); if (val instanceof Number n) importUAB += n.doubleValue(); }
+                                }
+                            }
+                        }
+                        if (importTotal == 0) importTotal = importUAB;
+
+                        Document period = (Document) aw.get("actualPeriod");
+                        String awStart = period != null ? formatDateDash(period.get("startDate")) : "";
+                        String awEnd   = period != null ? formatDateDash(period.get("endDate"))   : "";
+
+                        String codiOficial = "";
+                        @SuppressWarnings("unchecked")
+                        List<Document> identifiers = (List<Document>) aw.get("identifiers");
+                        if (identifiers != null) {
+                            codiOficial = identifiers.stream()
+                                .filter(id -> { Document idType = (Document) id.get("type"); return idType != null && "/dk/atira/pure/upm/classifiedsource/referencecode".equals(idType.getString("uri")); })
+                                .map(id -> id.getString("id") != null ? id.getString("id") : id.getString("value"))
+                                .filter(v -> v != null && !v.isBlank())
+                                .findFirst().orElse("");
+                        }
+
+                        String lbIp     = switch (lang) { case "es" -> "Investigador principal"; case "en" -> "Principal investigator"; default -> "Investigador principal"; };
+                        String lbRol    = switch (lang) { case "es" -> "Rol"; case "en" -> "Role"; default -> "Rol"; };
+                        String lbFunder = switch (lang) { case "es" -> "Entidad financiadora"; case "en" -> "Funder"; default -> "Entitat finan\u00e7adora"; };
+                        String lbTotal  = switch (lang) { case "es" -> "Importe total"; case "en" -> "Full awarding amount"; default -> "Import total"; };
+                        String lbUAB    = switch (lang) { case "es" -> "Importe UAB"; case "en" -> "UAB awarding amount"; default -> "Import UAB"; };
+                        String lbDates  = switch (lang) { case "es" -> "Fecha de inicio/fin"; case "en" -> "Start/end dates"; default -> "Data d'inici/fi"; };
+                        String lbCode   = switch (lang) { case "es" -> "C\u00f3digo Oficial"; case "en" -> "Reference code"; default -> "Codi Oficial"; };
+
+                        addProjectLine(awardPara, awardIdx + ".- " + awTitle, true);
+                        if (!ip.isBlank()) addProjectLabelValueLine(awardPara, lbIp, ip);
+                        if (!personRole.isBlank()) addProjectLabelValueLine(awardPara, lbRol, personRole);
+                        if (!funderName.isBlank()) addProjectLabelValueLine(awardPara, lbFunder, funderName);
+                        if (importTotal > 0) addProjectLabelValueLine(awardPara, lbTotal, formatImport(importTotal));
+                        if (importUAB > 0) addProjectLabelValueLine(awardPara, lbUAB, formatImport(importUAB));
+                        addProjectLabelValueLine(awardPara, lbDates, awStart + " \u2192 " + awEnd);
+                        if (!codiOficial.isBlank()) addProjectLabelValueLine(awardPara, lbCode, codiOficial);
+                        addProjectBlankLine(awardPara);
+                        awardIdx++;
+                    }
+                }
+                response.setContentType("application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+                String filename = "awards-" + personName.replaceAll("[^a-zA-Z0-9\\-_]", "_") + ".docx";
+                response.setHeader("Content-Disposition", "attachment; filename=\"" + filename + "\"");
+                doc.write(out);
+            }
+            return;
+        }
+
         InputStream tplIs = getClass().getClassLoader().getResourceAsStream(templateName);
         try (XWPFDocument doc = new XWPFDocument(tplIs); OutputStream out = response.getOutputStream()) {
 
@@ -2987,7 +4006,6 @@ public class PersonaController {
                     awardIdx++;
                 }
             }
-
             // Move all newly appended paragraphs to just after the "projectes" bookmark paragraph.
             if (projectesAnchorNode != null) {
                 Node bodyNode = projectesAnchorNode.getParentNode();

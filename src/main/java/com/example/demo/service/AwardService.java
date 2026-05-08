@@ -3,13 +3,21 @@ package com.example.demo.service;
 import com.example.demo.util.MongoPipelineBuilder;
 import com.mongodb.client.MongoCollection;
 
+import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.bson.Document;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StreamUtils;
 
+import jakarta.annotation.PostConstruct;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.*;
@@ -20,8 +28,74 @@ public class AwardService {
 
     private final MongoTemplate mongoTemplate;
 
+    // Cache: orgUuid -> year -> (contractId -> importReal)
+    // Populated once at startup from the Excel file.
+    private Map<String, Map<Integer, Map<String, Double>>> excelCache = Map.of();
+
+    // Cache: orgUuid -> year -> (contractId -> tipus)
+    private Map<String, Map<Integer, Map<String, String>>> excelTipusCache = Map.of();
+
+    // Cache: orgUuid -> year -> (contractId -> titol col17)
+    private Map<String, Map<Integer, Map<String, String>>> excelTitolCache = Map.of();
+
+    // Cache: orgUuid -> year -> (contractId -> personaUuid col10)
+    private Map<String, Map<Integer, Map<String, String>>> excelPersonaCache = Map.of();
+
+    @Autowired
     public AwardService(MongoTemplate mongoTemplate) {
         this.mongoTemplate = mongoTemplate;
+    }
+
+    @PostConstruct
+    private void loadExcelCache() {
+        try {
+            ClassPathResource resource = new ClassPathResource(EXCEL_PRESTACIO_PATH);
+            if (!resource.exists()) return;
+            try (InputStream is = resource.getInputStream();
+                 Workbook workbook = WorkbookFactory.create(is)) {
+                Sheet sheet = workbook.getSheetAt(0);
+                Map<String, Map<Integer, Map<String, Double>>> cache = new LinkedHashMap<>();
+                Map<String, Map<Integer, Map<String, String>>> tipusCache = new LinkedHashMap<>();
+                Map<String, Map<Integer, Map<String, String>>> titolCache = new LinkedHashMap<>();
+                Map<String, Map<Integer, Map<String, String>>> personaCache = new LinkedHashMap<>();
+                for (int rowIdx = EXCEL_DATA_START_ROW; rowIdx <= sheet.getLastRowNum(); rowIdx++) {
+                    Row row = sheet.getRow(rowIdx);
+                    if (row == null) continue;
+                    String tipus = getCellStringValue(row.getCell(5));
+                    if (!"Prestació de Serveis".equals(tipus)) continue;
+                    String unitUuid = getCellStringValue(row.getCell(3));
+                    if (unitUuid == null || unitUuid.isBlank()) continue;
+                    Integer year = getCellIntValue(row.getCell(1));
+                    if (year == null) continue;
+                    String id = getCellStringValue(row.getCell(18));
+                    if (id == null || id.isBlank()) id = "row_" + rowIdx;
+                    double importReal = getCellDoubleValue(row.getCell(21));
+                    String tipusLabel = tipus != null ? tipus : "Prestació de Serveis";
+                    String titol = getCellStringValue(row.getCell(17));
+                    if (titol == null) titol = "";
+                    String personaUuid = getCellStringValue(row.getCell(10));
+                    if (personaUuid == null) personaUuid = "";
+                    cache.computeIfAbsent(unitUuid, k -> new LinkedHashMap<>())
+                         .computeIfAbsent(year, k -> new LinkedHashMap<>())
+                         .merge(id, importReal, Double::max);
+                    tipusCache.computeIfAbsent(unitUuid, k -> new LinkedHashMap<>())
+                              .computeIfAbsent(year, k -> new LinkedHashMap<>())
+                              .putIfAbsent(id, tipusLabel);
+                    titolCache.computeIfAbsent(unitUuid, k -> new LinkedHashMap<>())
+                              .computeIfAbsent(year, k -> new LinkedHashMap<>())
+                              .putIfAbsent(id, titol);
+                                    personaCache.computeIfAbsent(unitUuid, k -> new LinkedHashMap<>())
+                                                .computeIfAbsent(year, k -> new LinkedHashMap<>())
+                                                .putIfAbsent(id, personaUuid);
+                }
+                excelCache = Collections.unmodifiableMap(cache);
+                excelTipusCache = Collections.unmodifiableMap(tipusCache);
+                excelTitolCache = Collections.unmodifiableMap(titolCache);
+                            excelPersonaCache = Collections.unmodifiableMap(personaCache);
+            }
+        } catch (Exception e) {
+            System.err.println("[AwardService] Could not load Excel cache: " + e.getMessage());
+        }
     }
 
     /*
@@ -123,21 +197,257 @@ public class AwardService {
     ===============================
     */
 
+    public List<Document> getAwardsLlistaInstitut(String collaboratorUuid,
+                                                   Integer desde,
+                                                   Integer hasta) {
+        if (collaboratorUuid == null || collaboratorUuid.isBlank()) {
+            return List.of();
+        }
+        List<Document> mongoResult = runPipeline(
+                "mongodb/awards/managing-llista-awards.json",
+                builder -> {
+                    builder.replaceManagingUuid(collaboratorUuid);
+                    builder.awardDateBetween(desde, hasta);
+                });
+        List<Document> excelResult = getExcelPrestacioLlistaRows(collaboratorUuid, desde, hasta);
+        List<Document> combined = new ArrayList<>(mongoResult);
+        combined.addAll(excelResult);
+        return combined;
+    }
+
+    private List<Document> getExcelPrestacioLlistaRows(String orgUuid, Integer desde, Integer hasta) {
+        Map<Integer, Map<String, Double>> byYear = excelCache.get(orgUuid);
+        if (byYear == null || byYear.isEmpty()) return List.of();
+        Map<Integer, Map<String, String>> tipusByYear = excelTipusCache.getOrDefault(orgUuid, Map.of());
+        Map<String, Map<Integer, Map<String, String>>> titolCacheAll = excelTitolCache;
+        Map<Integer, Map<String, String>> titolByYear = excelTitolCache.getOrDefault(orgUuid, Map.of());
+        Map<Integer, Map<String, String>> personaByYear = excelPersonaCache.getOrDefault(orgUuid, Map.of());
+        List<Document> result = new ArrayList<>();
+        byYear.forEach((year, ids) -> {
+            if (desde != null && year < desde) return;
+            if (hasta != null && year > hasta) return;
+            Map<String, String> tipusMap = tipusByYear.getOrDefault(year, Map.of());
+            Map<String, String> titolMap = titolByYear.getOrDefault(year, Map.of());
+                        Map<String, String> personaMap = personaByYear.getOrDefault(year, Map.of());
+            ids.forEach((id, importVal) -> {
+                String tipus = tipusMap.getOrDefault(id, "Prestació de Serveis");
+                String titol = titolMap.getOrDefault(id, "");
+                String personaUuid = personaMap.getOrDefault(id, "");
+                List<String> holdersUuids = personaUuid.isBlank() ? List.of() : List.of(personaUuid);
+                result.add(new Document()
+                        .append("anyo", year)
+                        .append("titulo", titol)
+                        .append("tipoAward", "Prestació de Serveis")
+                        .append("categoria", "Prestació de Serveis")
+                        .append("awardHoldersUuids", holdersUuids)
+                        .append("institutionalPart", Math.round(importVal * 100.0) / 100.0));
+            });
+        });
+        return result;
+    }
+
+    public List<Document> getIpsInstitut(String collaboratorUuid,
+                                          Integer desde,
+                                          Integer hasta) {
+        if (collaboratorUuid == null || collaboratorUuid.isBlank()) {
+            return List.of();
+        }
+
+        List<String> IP_TERMS_CA = Arrays.asList("Investigador/a Principal");
+        List<String> IP_TERMS_ES = Arrays.asList("Investigador/a principal", "Investigador/a Principal");
+        List<String> IP_TERMS_EN = Arrays.asList("Principal Investigator");
+        List<String> COIP_TERMS_CA = Arrays.asList("Co-Investigador/a Principal");
+        List<String> COIP_TERMS_ES = Arrays.asList("Co-Investigador/a Principal", "Co-Investigador/a principal");
+        List<String> COIP_TERMS_EN = Arrays.asList("Co-Principal Investigator");
+
+        List<Document> pipeline = new ArrayList<>();
+
+        // 1. Filtre workflow
+        pipeline.add(new Document("$match",
+            new Document("workflow.step", new Document("$in", Arrays.asList("validated", "closed")))));
+
+        // 2. Filtre per organització gestora
+        pipeline.add(new Document("$match",
+            new Document("$or", Arrays.asList(
+                new Document("managingOrganization.uuid", collaboratorUuid),
+                new Document("coManagingOrganizations.uuid", collaboratorUuid)
+            ))));
+
+        // 3. Filtre per rang d'anys (awardDate)
+        if (desde != null || hasta != null) {
+            Document range = new Document();
+            if (desde != null) range.put("$gte",
+                Date.from(java.time.LocalDate.of(desde, 1, 1).atStartOfDay().toInstant(java.time.ZoneOffset.UTC)));
+            if (hasta != null) range.put("$lte",
+                Date.from(java.time.LocalDate.of(hasta, 12, 31).atTime(23,59,59).toInstant(java.time.ZoneOffset.UTC)));
+            pipeline.add(new Document("$match", new Document("awardDate", range)));
+        }
+
+        // 4. Desplegar holders i filtrar per rol IP/Co-IP
+        pipeline.add(new Document("$unwind", "$awardHolders"));
+        pipeline.add(new Document("$match", new Document("$or", Arrays.asList(
+            new Document("awardHolders.role.term.ca_ES", new Document("$in", IP_TERMS_CA)),
+            new Document("awardHolders.role.term.es_ES", new Document("$in", IP_TERMS_ES)),
+            new Document("awardHolders.role.term.en_GB", new Document("$in", IP_TERMS_EN)),
+            new Document("awardHolders.role.term.ca_ES", new Document("$in", COIP_TERMS_CA)),
+            new Document("awardHolders.role.term.es_ES", new Document("$in", COIP_TERMS_ES)),
+            new Document("awardHolders.role.term.en_GB", new Document("$in", COIP_TERMS_EN))
+        ))));
+
+        // 5. Classificar IP vs Co-IP
+        Document esIPExpr = new Document("$or", Arrays.asList(
+            new Document("$in", Arrays.asList("$awardHolders.role.term.ca_ES", IP_TERMS_CA)),
+            new Document("$in", Arrays.asList("$awardHolders.role.term.es_ES", IP_TERMS_ES)),
+            new Document("$in", Arrays.asList("$awardHolders.role.term.en_GB", IP_TERMS_EN))
+        ));
+        Document esCoIPExpr = new Document("$or", Arrays.asList(
+            new Document("$in", Arrays.asList("$awardHolders.role.term.ca_ES", COIP_TERMS_CA)),
+            new Document("$in", Arrays.asList("$awardHolders.role.term.es_ES", COIP_TERMS_ES)),
+            new Document("$in", Arrays.asList("$awardHolders.role.term.en_GB", COIP_TERMS_EN))
+        ));
+        pipeline.add(new Document("$addFields", new Document()
+            .append("esIP",   esIPExpr)
+            .append("esCoIP", esCoIPExpr)
+            .append("holderUuid",    "$awardHolders.person.uuid")
+            .append("holderFirst",   new Document("$ifNull", Arrays.asList("$awardHolders.name.firstName", "")))
+            .append("holderLast",    new Document("$ifNull", Arrays.asList("$awardHolders.name.lastName",  "")))
+        ));
+
+        // 6. Agrupar per persona
+        pipeline.add(new Document("$group", new Document()
+            .append("_id", "$holderUuid")
+            .append("nombre", new Document("$first", new Document("$cond", Arrays.asList(
+                new Document("$and", Arrays.asList(
+                    new Document("$ne", Arrays.asList("$holderLast",  "")),
+                    new Document("$ne", Arrays.asList("$holderFirst", ""))
+                )),
+                new Document("$concat", Arrays.asList("$holderLast", ", ", "$holderFirst")),
+                new Document("$cond", Arrays.asList(
+                    new Document("$ne", Arrays.asList("$holderLast", "")),
+                    "$holderLast",
+                    "$holderFirst"
+                ))
+            ))))
+            .append("nAwardsIP", new Document("$sum", new Document("$cond", Arrays.asList(
+                new Document("$and", Arrays.asList(
+                    new Document("$eq", Arrays.asList("$esIP",   true)),
+                    new Document("$eq", Arrays.asList("$esCoIP", false))
+                )), 1, 0
+            ))))
+            .append("nAwardsCoIP", new Document("$sum", new Document("$cond", Arrays.asList(
+                "$esCoIP", 1, 0
+            ))))
+        ));
+
+        // 7. Ordenar
+        pipeline.add(new Document("$sort", new Document()
+            .append("nAwardsIP",   -1)
+            .append("nAwardsCoIP", -1)
+            .append("nombre",       1)
+        ));
+
+        // 8. Projectar
+        pipeline.add(new Document("$project", new Document()
+            .append("_id",        0)
+            .append("personUuid", "$_id")
+            .append("nombre",     1)
+            .append("nAwardsIP",  1)
+            .append("nAwardsCoIP", 1)
+        ));
+
+        List<Document> results = new ArrayList<>();
+        mongoTemplate.getCollection("Awards").aggregate(pipeline).forEach(results::add);
+        return results;
+    }
+
     public List<Document> getPowerTable(Integer desde,
                                         Integer hasta,
-                                        String modoAnio) {
+                                        String modoAnio,
+                                        String collaboratorUuid) {
+
+        if (collaboratorUuid != null && !collaboratorUuid.isBlank()) {
+            List<Document> mongoResult = runPipeline(
+                    "mongodb/awards/managing-powertable.json",
+                    builder -> {
+                        builder.replaceManagingUuid(collaboratorUuid);
+
+                        if ("vigencia".equalsIgnoreCase(modoAnio)) {
+                            builder.vigenciaYears(desde, hasta);
+                        } else {
+                            builder.awardDateBetween(desde, hasta);
+                        }
+                    });
+
+            List<Document> excelResult = getExcelPrestacioRows(collaboratorUuid, desde, hasta);
+            List<Document> combined = new ArrayList<>(mongoResult);
+            combined.addAll(excelResult);
+            return combined;
+        }
 
         return runPipeline(
                 "mongodb/awards/powertable.json",
                 builder -> {
-
                     if ("vigencia".equalsIgnoreCase(modoAnio)) {
                         builder.vigenciaYears(desde, hasta);
                     } else {
                         builder.awardDateBetween(desde, hasta);
                     }
-
                 });
+    }
+
+    private static final String EXCEL_PRESTACIO_PATH = "TABLON-Balanç de recursos - detallat (RC0025R).xlsx";
+    private static final int EXCEL_DATA_START_ROW = 6; // rows 0-5 are metadata/header
+
+    private List<Document> getExcelPrestacioRows(String orgUuid, Integer desde, Integer hasta) {
+        Map<Integer, Map<String, Double>> byYear = excelCache.get(orgUuid);
+        if (byYear == null || byYear.isEmpty()) return List.of();
+
+        List<Document> result = new ArrayList<>();
+        byYear.forEach((year, ids) -> {
+            if (desde != null && year < desde) return;
+            if (hasta != null && year > hasta) return;
+            double totalImport = ids.values().stream().mapToDouble(Double::doubleValue).sum();
+            result.add(new Document()
+                    .append("anio", year)
+                    .append("categoria", "Prestació de Serveis")
+                    .append("tipo", "Prestació de Serveis")
+                    .append("ajuts", ids.size())
+                    .append("import", Math.round(totalImport * 100.0) / 100.0));
+        });
+        return result;
+    }
+
+    private String getCellStringValue(Cell cell) {
+        if (cell == null) return null;
+        return switch (cell.getCellType()) {
+            case STRING -> cell.getStringCellValue().trim();
+            case NUMERIC -> String.valueOf((long) cell.getNumericCellValue());
+            default -> null;
+        };
+    }
+
+    private Integer getCellIntValue(Cell cell) {
+        if (cell == null) return null;
+        return switch (cell.getCellType()) {
+            case NUMERIC -> (int) cell.getNumericCellValue();
+            case STRING -> {
+                try { yield Integer.parseInt(cell.getStringCellValue().trim()); }
+                catch (NumberFormatException e) { yield null; }
+            }
+            default -> null;
+        };
+    }
+
+    private double getCellDoubleValue(Cell cell) {
+        if (cell == null) return 0.0;
+        return switch (cell.getCellType()) {
+            case NUMERIC -> cell.getNumericCellValue();
+            case STRING -> {
+                try { yield Double.parseDouble(cell.getStringCellValue().trim()); }
+                catch (NumberFormatException e) { yield 0.0; }
+            }
+            default -> 0.0;
+        };
     }
 
     /*

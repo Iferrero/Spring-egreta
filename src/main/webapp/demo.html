@@ -13,9 +13,23 @@
 
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.7.1/nouislider.min.css">
     <link href="https://unpkg.com/tabulator-tables@6.3.0/dist/css/tabulator.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.13.2/themes/base/jquery-ui.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/pivottable/2.23.0/pivot.min.css">
+    <link rel="stylesheet" href="table.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.7.1/nouislider.min.js"></script>
     <script src="https://unpkg.com/tabulator-tables@6.3.0/dist/js/tabulator.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.13.2/jquery-ui.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pivottable/2.23.0/pivot.min.js"></script>
+    <script src="egreta-modal.js" defer></script>
+<style>
+    .tabulator-row.tabulator-selected-row { background-color: #e0e7ff !important; cursor: pointer; }
+    .tabulator-row { cursor: pointer; }
+    td.pvtVal { cursor: pointer; }
+    td.pvtVal:hover { outline: 2px solid #6366f1; outline-offset: -2px; }
+    td.pvt-selected { outline: 2px solid #4f46e5 !important; outline-offset: -2px; box-shadow: inset 0 0 0 2px #4f46e5; }
+</style>
 </head>
 <body class="bg-slate-50 min-h-screen">
     <div id="loadingOverlayDemo" class="hidden fixed inset-0 z-50 bg-slate-900/20 backdrop-blur-[1px]">
@@ -26,7 +40,7 @@
             </div>
         </div>
     </div>
-    <div  class="max-w-6xl mx-auto px-6 py-8">
+    <div  class="w-full mx-auto px-6 py-8">
         <header hidden class="mb-6">
                 <h1 class="text-2xl font-bold text-slate-800">Dades d'instituts</h1>
                 <p class="text-sm text-slate-500">Cercador combinat d'instituts + slider d'anys (2015 - any actual)</p>
@@ -34,7 +48,7 @@
 
         <section class="bg-white border border-slate-200 rounded-2xl shadow-sm p-4 mb-6">
             <div class="grid grid-cols-1 lg:grid-cols-12 gap-3 items-end">
-                <div class="lg:col-span-4">
+                <div class="lg:col-span-3">
                     <label for="orgSelect" class="block text-xs font-bold text-slate-500 uppercase mb-1">Institut</label>
                     <select id="orgSelect" class="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm bg-white">
                         <option value="">Tots (tria institut)</option>
@@ -42,7 +56,15 @@
                     </select>
                 </div>
 
-                <div class="lg:col-span-6">
+                <div class="lg:col-span-3">
+                    <label for="filtrePersonalSelect" class="block text-xs font-bold text-slate-500 uppercase mb-1">Filtre personal</label>
+                    <select id="filtrePersonalSelect" class="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm bg-white">
+                        <option value="vigent">Personal vigent</option>
+                        <option value="periode" selected>Personal en el període seleccionat</option>
+                    </select>
+                </div>
+
+                <div class="lg:col-span-4">
                     <div class="flex items-center justify-between mb-1">
                         <label class="block text-xs font-bold text-slate-500 uppercase">Rang d'anys</label>
                         <span id="valorRango" class="text-xs font-bold text-indigo-600"></span>
@@ -59,8 +81,35 @@
             </div>
         </section>
 
-        <section class="mt-4">
-            <div class="bg-white border border-slate-100 rounded-2xl shadow-sm p-4">
+        <!-- Tabs -->
+        <div class="mt-4 border-b border-slate-200">
+            <nav class="flex gap-1" id="demoTabs">
+                <button id="tabBtnPersonal" onclick="switchTab('personal')"
+                    class="tab-btn px-5 py-2.5 text-sm font-semibold rounded-t-xl border border-b-0 border-slate-200 bg-white text-indigo-700">
+                    <i class="fa-solid fa-users mr-1.5"></i>Personal
+                </button>
+                <button id="tabBtnAjuts" onclick="switchTab('ajuts')"
+                    class="tab-btn px-5 py-2.5 text-sm font-semibold rounded-t-xl border border-b-0 border-slate-200 bg-slate-50 text-slate-500">
+                    <i class="fa-solid fa-file-invoice-dollar mr-1.5"></i>Ajuts
+                </button>
+                <button id="tabBtnTesis" onclick="switchTab('tesis')"
+                    class="tab-btn px-5 py-2.5 text-sm font-semibold rounded-t-xl border border-b-0 border-slate-200 bg-slate-50 text-slate-500">
+                    <i class="fa-solid fa-graduation-cap mr-1.5"></i>Tesis
+                </button>
+            </nav>
+        </div>
+
+        <!-- Tab: Personal -->
+        <section id="tabPersonal" class="tab-panel">
+            <div class="bg-white border border-slate-100 rounded-b-2xl rounded-tr-2xl shadow-sm p-4">
+                <div class="flex items-center gap-2 mb-3">
+                    <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Tipus personal:</span>
+                    <div class="inline-flex rounded-lg border border-slate-200 overflow-hidden text-xs font-semibold">
+                        <button id="filtreAcademicTots" onclick="aplicarFiltreAcademic('tots')" class="px-3 py-1.5 bg-indigo-600 text-white">Tots</button>
+                        <button id="filtreAcademicPDI" onclick="aplicarFiltreAcademic('pdi')" class="px-3 py-1.5 bg-white text-slate-600 hover:bg-slate-50">Acadèmic</button>
+                        <button id="filtreAcademicPAS" onclick="aplicarFiltreAcademic('pas')" class="px-3 py-1.5 bg-white text-slate-600 hover:bg-slate-50">No acadèmic</button>
+                    </div>
+                </div>
                 <div id="chartContainer" class="mb-4 flex flex-col lg:flex-row gap-4">
                         <div class="w-full lg:w-1/2">
                             <div id="dedicationCard" class="chart-card bg-white border border-slate-100 rounded-2xl shadow-sm p-4 relative">
@@ -82,7 +131,72 @@
                         </div>
                     <div id="chartPlaceholder" class="text-sm text-slate-400 mt-2 hidden">No hi ha dades per mostrar.</div>
                 </div>
+
                 <div id="demoTable"></div>
+            </div>
+        </section>
+
+        <!-- Tab: Ajuts -->
+        <section id="tabAjuts" class="tab-panel hidden">
+            <div class="bg-white rounded-b-2xl rounded-tr-2xl shadow-sm border border-slate-100 overflow-hidden">
+                <div id="ajutsLoading" class="p-20 text-center hidden">
+                    <div class="inline-block animate-spin mb-3 text-indigo-500"><i class="fa-solid fa-circle-notch text-2xl"></i></div>
+                    <p class="text-slate-400 font-black text-xs uppercase tracking-widest">Creuant dades validades...</p>
+                </div>
+                <div class="px-6 pt-6 pb-0">
+                    <div class="flex items-center gap-3 flex-wrap">
+                        <span id="ajutsFiltreIndicador" class="hidden items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 text-xs font-semibold">
+                            <i class="fa-solid fa-filter fa-xs"></i>
+                            <span id="ajutsFiltreText"></span>
+                            <button type="button" id="ajutsFiltreClear" class="ml-1 text-indigo-400 hover:text-indigo-700" title="Treure filtre"><i class="fa-solid fa-xmark"></i></button>
+                        </span>
+                        <span id="ajutsIpsFiltreIndicador" class="hidden items-center gap-2 px-3 py-1 rounded-full bg-violet-50 text-violet-700 text-xs font-semibold">
+                            <i class="fa-solid fa-user fa-xs"></i>
+                            <span id="ajutsIpsFiltreText"></span>
+                            <button type="button" id="ajutsIpsFiltreClear" class="ml-1 text-violet-400 hover:text-violet-700" title="Treure filtre persona"><i class="fa-solid fa-xmark"></i></button>
+                        </span>
+                    </div>
+                </div>
+                <div id="ajutsWrapper" class="p-6 flex flex-col xl:flex-row gap-6 items-start">
+                    <div class="flex-1 min-w-0">
+                        <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Ingressos</h3>
+                        <div id="ajuts-pivot-container"></div>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">IPs i Co-IPs</h3>
+                        <div id="ajuts-ips-table"></div>
+                    </div>
+                </div>
+                <div id="ajutsLlistaWrapper" class="px-6 pb-6 hidden">
+                    <div class="flex items-center gap-3 mb-3 flex-wrap">
+                        <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider">Llista d'ajuts</h3>
+                    </div>
+                    <div id="ajuts-llista-table"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Tab: Tesis -->
+        <section id="tabTesis" class="tab-panel hidden">
+            <div class="bg-white rounded-b-2xl rounded-tr-2xl shadow-sm border border-slate-100 overflow-hidden">
+                <div id="tesisLoading" class="p-20 text-center hidden">
+                    <div class="inline-block animate-spin mb-3 text-indigo-500"><i class="fa-solid fa-circle-notch text-2xl"></i></div>
+                    <p class="text-slate-400 font-black text-xs uppercase tracking-widest">Carregant tesis...</p>
+                </div>
+                <div id="tesisWrapper" class="p-6 flex flex-col lg:flex-row gap-6">
+                    <div class="flex-1 min-w-0">
+                        <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Per any</h3>
+                        <div id="tesis-table-container"></div>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Per director</h3>
+                        <div id="directors-table-container"></div>
+                    </div>
+                </div>
+                <div id="tesisLlistaWrapper" class="px-6 pb-6">
+                    <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Llista de tesis</h3>
+                    <div id="tesis-llista-container" style="max-height:480px;overflow-y:auto;"></div>
+                </div>
             </div>
         </section>
     </div>

@@ -222,8 +222,17 @@ function construirTablaPivot(data) {
         }
     ];
 
+    function extractCognoms(nom) {
+        const s = String(nom || '').trim();
+        // Format "Cognoms, Nom" → sort key is the part before the comma
+        if (s.includes(',')) return s.split(',')[0].trim();
+        // Format "Nom Cognom1 Cognom2" → sort key is last word
+        const parts = s.split(/\s+/);
+        return parts[parts.length - 1] || s;
+    }
+
     const rows = Array.from(porPersona.values())
-        .sort((a, b) => String(a.persona || '').localeCompare(String(b.persona || ''), 'ca', { sensitivity: 'base' }));
+        .sort((a, b) => extractCognoms(a.persona).localeCompare(extractCognoms(b.persona), 'ca', { sensitivity: 'base' }));
 
     return { columns, rows };
 }
