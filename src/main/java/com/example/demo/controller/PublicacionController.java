@@ -31,6 +31,7 @@ import java.util.Map;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.Date;
+import java.util.concurrent.ConcurrentHashMap;
 import org.bson.Document;
 
 @RestController
@@ -41,6 +42,11 @@ public class PublicacionController {
     private final PublicacionRepository repository;
     private final MongoTemplate mongoTemplate;
     private final ResearchOutputJournalLinkService researchOutputJournalLinkService;
+
+    // Cache for apa-list: key → (result, timestamp)
+    private record ApaListCacheEntry(List<Map<String, Object>> data, long timestamp) {}
+    private final Map<String, ApaListCacheEntry> apaListCache = new ConcurrentHashMap<>();
+    private static final long APA_LIST_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
     @Autowired
     public PublicacionController(
@@ -501,6 +507,13 @@ public List<Map> statsAnios() {
             @RequestParam(required = false) Integer hasta,
             @RequestParam(required = false) List<String> deptUuid) {
 
+        // Check cache first
+        String cacheKey = desde + "_" + hasta + "_" + (deptUuid == null ? "" : String.join(",", deptUuid));
+        ApaListCacheEntry cached = apaListCache.get(cacheKey);
+        if (cached != null && (System.currentTimeMillis() - cached.timestamp()) < APA_LIST_CACHE_TTL_MS) {
+            return cached.data();
+        }
+
         // Step 1: Get unique publication UUIDs with year, filtered by department/year
         List<Document> pipeline = new ArrayList<>();
 
@@ -624,7 +637,7 @@ public List<Map> statsAnios() {
             return ta.compareToIgnoreCase(tb);
         });
 
-        return fullDocs.stream().map(pub -> {
+        List<Map<String, Object>> apaResult = fullDocs.stream().map(pub -> {
             String uuid = pub.getString("uuid");
             int year = yearByUuid.getOrDefault(uuid, 0);
 
@@ -647,6 +660,9 @@ public List<Map> statsAnios() {
             result.put("apa", apa);
             return result;
         }).toList();
+
+        apaListCache.put(cacheKey, new ApaListCacheEntry(apaResult, System.currentTimeMillis()));
+        return apaResult;
     }
 
 }
