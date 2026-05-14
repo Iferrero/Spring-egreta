@@ -37,7 +37,7 @@ import org.openxmlformats.schemas.wordprocessingml.x2006.main.*;
 import org.springframework.beans.factory.annotation.Autowired;
 
 @RestController
-@RequestMapping({"/api/awards", "/awards", "/otr/api/awards"})
+@RequestMapping("/api/awards")
 @CrossOrigin(origins = "*")
 public class AwardController {
 
@@ -284,7 +284,7 @@ public class AwardController {
     */
 
     /** Diagnostic endpoint: returns counts at each step of the StudentTheses country filter. */
-    @GetMapping("/debug-tesis")
+    @GetMapping("/debug/tesis")
     public Map<String, Object> debugTesis(
             @RequestParam String countryCode,
             @RequestParam(required = false, defaultValue = "2020") int startYear,
@@ -590,7 +590,7 @@ public class AwardController {
      *   projectes    – true/false (include competitive awards)
      *   convenis     – true/false (include convenis)
      */
-    @GetMapping("/informe-word-pais")
+    @GetMapping("/reports/word/country")
     public void generarInformeWordPais(
             @RequestParam String countryCode,
             @RequestParam(required = false, defaultValue = "1968-01-01") String startDate,

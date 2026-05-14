@@ -737,7 +737,7 @@ async function cargarPublicacionsData() {
         if (loadingEl) loadingEl.classList.remove('hidden');
         if (wrapperEl) wrapperEl.classList.add('hidden');
 
-        const resPivot = await apiFetch(`/pure/stats/tipos-por-anio?${paramsKey}`);
+        const resPivot = await apiFetch(`/pure/stats/types-by-year?${paramsKey}`);
         if (!resPivot.ok) throw new Error('Error carregant publicacions');
         const dataPivot = await resPivot.json();
 
@@ -748,7 +748,7 @@ async function cargarPublicacionsData() {
         renderPublicacionsTable(dataPivot || []);
         setPublicacionsApaLoading(true);
 
-        const resApa = await apiFetch(`/pure/stats/apa-list?${paramsKey}`);
+        const resApa = await apiFetch(`/pure/stats/apa?${paramsKey}`);
         const dataApa = resApa.ok ? await resApa.json() : [];
 
         if (requestSeq !== publicacionsRequestSeq) return;
@@ -1265,9 +1265,9 @@ async function cargarTesisData() {
         if (llistaWrapper) llistaWrapper.classList.add('hidden');
 
         const params = `orgUuid=${encodeURIComponent(uuid)}&desde=${desde}&hasta=${hasta}&filtrePersonal=${encodeURIComponent(filtrePersonal)}`;
-        const basePerAny = (typeof apiUrl === 'function') ? apiUrl('/student-theses/stats/per-any-institut') : '/student-theses/stats/per-any-institut';
+        const basePerAny = (typeof apiUrl === 'function') ? apiUrl('/student-theses/stats/per-year-institute') : '/student-theses/stats/per-year-institute';
         const baseDirectors = (typeof apiUrl === 'function') ? apiUrl('/student-theses/stats/directors-institut') : '/student-theses/stats/directors-institut';
-        const baseLlista = (typeof apiUrl === 'function') ? apiUrl('/student-theses/stats/llista-institut') : '/student-theses/stats/llista-institut';
+        const baseLlista = (typeof apiUrl === 'function') ? apiUrl('/student-theses/stats/list-institute') : '/student-theses/stats/list-institute';
 
         const [resPerAny, resDirectors, resLlista] = await Promise.all([
             fetch(`${basePerAny}?${params}`),

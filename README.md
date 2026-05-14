@@ -68,7 +68,7 @@ cd Spring-egreta
 ./mvnw spring-boot:run -Dspring-boot.run.profiles=dev
 
 # Windows (PowerShell/CMD):
-mvnw.cmd spring-boot:run -Dspring-boot.run.profiles=dev
+mvnw.cmd spring-boot:run "-Dspring-boot.run.profiles=dev"
 ```
 
 L'aplicació estarà disponible a `http://localhost:8080`.
@@ -110,7 +110,18 @@ En altres perfils, l'accés es governa per CAS segons la configuració de segure
 | Organitzacions externes | `/api/external-organizations` |
 | Esquema MongoDB | `/api/mongo` |
 
-Cada recurs admet el prefix `/otr/api/` per compatibilitat amb el context de desplegament en producció.
+Tots els recursos s'exposen en format canònic sota `/api/...`.
+
+### Política de rutes (canònic + legacy)
+
+- **Canònic:** totes les rutes del frontend i backend usen `/api/...`.
+- **Legacy retirat per defecte:** `app.api.legacy-endpoints-enabled=false`.
+- **Resposta per rutes antigues:** `410 Gone` amb indicació de ruta successora.
+- **Base API per entorn:**
+	- Desenvolupament: `/api`
+	- Producció: `/otr/api`
+	- Resolució automàtica al frontend segons context d'URL (`/otr/*` -> `/otr/api`, altrament `/api`)
+	- Override opcional via `window.APP_CONFIG.apiBaseUrl` o meta `api-base-url`
 
 ### Exemples d'endpoints destacats
 
@@ -118,10 +129,16 @@ Cada recurs admet el prefix `/otr/api/` per compatibilitat amb el context de des
 GET /api/awards/stats/categories          # Recompte per categoria de premi
 GET /api/awards/stats/powertable          # Taula creuada d'ajuts
 GET /api/awards/stats/persona-resumen     # Resum d'ajuts per investigador
-GET /api/awards/informe-word-pais         # Informe Word per país
+GET /api/awards/reports/word/country      # Informe Word per país
 GET /api/pure/stats/quartiles             # Distribució de quartils per departament
-GET /api/student-theses/mismo-autor-director  # Tesis amb autor i director coincidents
+GET /api/student-theses/stats/same-author-director  # Tesis amb autor i director coincidents
+GET /api/pure/stats/types-by-year         # Tipus de publicació per any
+GET /api/pure/stats/apa                   # Llistat APA de publicacions
+GET /api/persons/search/active            # Cerca de personal actiu
+GET /api/persons/reports/word/person      # Informe Word per persona
 ```
+
+Consulta també [`ENDPOINTS_MIGRATION.md`](ENDPOINTS_MIGRATION.md) per al detall de rutes canòniques i aliases.
 
 ---
 

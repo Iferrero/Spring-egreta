@@ -220,7 +220,7 @@
 
     async function buscarPersones(q) {
         try {
-            const res = await apiFetch('/persons/search-vigentes?q=' + encodeURIComponent(q));
+            const res = await apiFetch('/persons/search/active?q=' + encodeURIComponent(q));
             if (!res.ok) return;
             const data = await res.json();
             mostrarDropdown(data);
@@ -294,7 +294,7 @@
             || [window.APP_CONFIG && window.APP_CONFIG.apiBaseUrl || '/api'];
         const base = Array.from(new Set(bases.filter(Boolean)))[0];
         const url = base.replace(/\/$/, '') +
-            '/persons/informe-word-persona' +
+            '/persons/reports/word/person' +
             '?personUuid=' + encodeURIComponent(personUuid) +
             '&startDate='  + encodeURIComponent(startDate) +
             '&endDate='    + encodeURIComponent(endDate) +

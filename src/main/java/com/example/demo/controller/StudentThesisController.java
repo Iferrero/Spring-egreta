@@ -24,7 +24,7 @@ import java.util.Map;
 import java.util.LinkedHashMap;
 
 @RestController
-@RequestMapping({"/api/student-theses", "/student-theses", "/otr/api/student-theses"})
+@RequestMapping("/api/student-theses")
 @CrossOrigin(origins = "*")
 public class StudentThesisController {
 
@@ -57,7 +57,7 @@ public class StudentThesisController {
                 return repository.findDoctoralByTitleContainingIgnoreCase(buscar, pageable);
     }
 
-    @GetMapping("/mismo-autor-director")
+    @GetMapping("/stats/same-author-director")
     public List<Document> mismoAutorDirector(
             @RequestParam(defaultValue = "2") int minCoincidencias,
             @RequestParam(defaultValue = "0") int limit) {
@@ -149,7 +149,7 @@ public class StudentThesisController {
      * Returns thesis counts per year for supervisors belonging to a given institute.
      * Filters persons by active membership (vigent) or membership overlapping the period (periode).
      */
-    @GetMapping("/stats/per-any-institut")
+    @GetMapping("/stats/per-year-institute")
     public List<Map<String, Object>> tesisPerAnyInstitut(
             @RequestParam String orgUuid,
             @RequestParam(required = false) Integer desde,
@@ -415,7 +415,7 @@ public class StudentThesisController {
      * Returns the full list of doctoral theses supervised by institute staff,
      * ordered by award year. Each item includes title, authors, directors and date.
      */
-    @GetMapping("/stats/llista-institut")
+    @GetMapping("/stats/list-institute")
     public List<Map<String, Object>> llistaTesisInstitut(
             @RequestParam String orgUuid,
             @RequestParam(required = false) Integer desde,

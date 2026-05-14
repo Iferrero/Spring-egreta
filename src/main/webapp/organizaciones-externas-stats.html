@@ -135,7 +135,7 @@ function normalizeCountryName(name) {
 // Fetch helpers
 // ─────────────────────────────────────────────
 async function fetchStats(path) {
-    const base = (typeof window.API_BASE !== 'undefined') ? window.API_BASE : '/otr/api';
+    const base = (typeof window.API_BASE !== 'undefined') ? window.API_BASE : '/api';
     const res = await fetch(`${base}/external-organizations${path}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return res.json();

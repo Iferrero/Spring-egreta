@@ -15,7 +15,7 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequestMapping({"/api/journals", "/journals", "/otr/api/journals"})
+@RequestMapping("/api/journals")
 @CrossOrigin(origins = "*")
 public class JournalController {
 

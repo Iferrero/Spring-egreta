@@ -95,7 +95,7 @@
 
     async function cargarGraficos() {
         // 1. Cargar Años (Line Chart)
-        const resAnios = await fetch(apiUrl('/stats/anios'));
+        const resAnios = await fetch(apiUrl('/pure/stats/years'));
         const dataAnios = await resAnios.json();
         
         new Chart(document.getElementById('chartLineAnios'), {
@@ -112,7 +112,7 @@
         });
 
         // 2. Cargar Tipos (Doughnut)
-        const resTipos = await fetch(apiUrl('/publicaciones/stats/tipos'));
+        const resTipos = await fetch(apiUrl('/pure/stats/types'));
         const dataTipos = await resTipos.json();
 
         new Chart(document.getElementById('chartPieTipos'), {

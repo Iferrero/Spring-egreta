@@ -177,7 +177,7 @@
             || [window.APP_CONFIG && window.APP_CONFIG.apiBaseUrl || '/api'];
         const base = Array.from(new Set(bases.filter(Boolean)))[0];
         const url = base.replace(/\/$/, '') +
-            '/persons/informe-word' +
+            '/persons/reports/word' +
             '?orgUuid=' + encodeURIComponent(orgUuid) +
             '&startDate=' + encodeURIComponent(startDate) +
             '&endDate=' + encodeURIComponent(endDate);

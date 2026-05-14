@@ -1008,9 +1008,9 @@ async function cargarTesisData() {
         if (llistaWrapper) llistaWrapper.classList.add('hidden');
 
         const params = `orgUuid=${encodeURIComponent(uuid)}&desde=${desde}&hasta=${hasta}&filtrePersonal=${encodeURIComponent(filtrePersonal)}`;
-        const basePerAny = (typeof apiUrl === 'function') ? apiUrl('/student-theses/stats/per-any-institut') : '/student-theses/stats/per-any-institut';
+        const basePerAny = (typeof apiUrl === 'function') ? apiUrl('/student-theses/stats/per-year-institute') : '/student-theses/stats/per-year-institute';
         const baseDirectors = (typeof apiUrl === 'function') ? apiUrl('/student-theses/stats/directors-institut') : '/student-theses/stats/directors-institut';
-        const baseLlista = (typeof apiUrl === 'function') ? apiUrl('/student-theses/stats/llista-institut') : '/student-theses/stats/llista-institut';
+        const baseLlista = (typeof apiUrl === 'function') ? apiUrl('/student-theses/stats/list-institute') : '/student-theses/stats/list-institute';
 
         const [resPerAny, resDirectors, resLlista] = await Promise.all([
             fetch(`${basePerAny}?${params}`),

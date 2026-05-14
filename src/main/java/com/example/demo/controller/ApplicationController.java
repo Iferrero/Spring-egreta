@@ -28,7 +28,7 @@ import java.util.Set;
 import java.util.regex.Pattern;
 
 @RestController
-@RequestMapping({"/api/applications", "/applications", "/otr/api/applications"})
+@RequestMapping("/api/applications")
 @CrossOrigin(origins = "*")
 public class ApplicationController {
 

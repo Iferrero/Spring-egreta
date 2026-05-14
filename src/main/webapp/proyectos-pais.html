@@ -197,7 +197,7 @@
         const bases = (window.APP_CONFIG && window.APP_CONFIG.apiBaseCandidates) || [window.APP_CONFIG && window.APP_CONFIG.apiBaseUrl || '/api'];
         const base = Array.from(new Set(bases.filter(Boolean)))[0];
         const url = base.replace(/\/$/, '') +
-            '/awards/informe-word-pais' +
+            '/awards/reports/word/country' +
             '?countryCode=' + encodeURIComponent(pais) +
             '&startDate=' + encodeURIComponent(startDate) +
             '&endDate=' + encodeURIComponent(endDate) +

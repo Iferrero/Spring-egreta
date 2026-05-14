@@ -36,7 +36,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.bson.Document;
 
 @RestController
-@RequestMapping({"/api/pure", "/pure", "/otr/api/pure"})
+@RequestMapping("/api/pure")
 @CrossOrigin(origins = "*")
 public class PublicacionController {
 
@@ -147,7 +147,7 @@ public class PublicacionController {
         }
     }
 
-    @GetMapping("/buscar")
+    @GetMapping("/search")
     public Page<Publicacion> buscarPorAnio(
             @RequestParam(required = false) Integer anio,
             @RequestParam(defaultValue = "0") int page) {
@@ -258,7 +258,7 @@ public class PublicacionController {
     }
     
     // Estadísticas para Gráfico de Líneas (Años)
-@GetMapping("/stats/anios")
+@GetMapping("/stats/years")
 public List<Map> statsAnios() {
     try {
         Aggregation agg = Aggregation.newAggregation(
@@ -281,7 +281,7 @@ public List<Map> statsAnios() {
 }
 
     // Estadísticas para Gráfico de Donut (Tipos)
-    @GetMapping("/stats/tipos")
+    @GetMapping("/stats/types")
     public List<Map> statsTipos() {
         Aggregation agg = Aggregation.newAggregation(
             Aggregation.group("type.term.es_ES").count().as("total"),
@@ -290,7 +290,7 @@ public List<Map> statsAnios() {
         return mongoTemplate.aggregate(agg, "Researchoutputs", Map.class).getMappedResults();
     }
 
-    @GetMapping("/stats/tipos-por-anio")
+    @GetMapping("/stats/types-by-year")
     public List<Map> statsTiposPorAnio(
             @RequestParam(required = false) Integer desde,
             @RequestParam(required = false) Integer hasta,
@@ -577,7 +577,7 @@ public List<Map> statsAnios() {
         return result;
     }
 
-    @GetMapping("/stats/apa-list")
+    @GetMapping("/stats/apa")
     public List<Map<String, Object>> statsApaList(
             @RequestParam(required = false) Integer desde,
             @RequestParam(required = false) Integer hasta,

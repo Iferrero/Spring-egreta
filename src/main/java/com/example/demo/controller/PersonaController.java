@@ -56,7 +56,7 @@ import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTBookmark;
 import org.w3c.dom.Node;
 
 @RestController
-@RequestMapping({"/api/persons", "/persons", "/otr/api/persons"})
+@RequestMapping("/api/persons")
 @CrossOrigin(origins = "*") // Permite llamadas desde tu index.html
 public class PersonaController {
 
@@ -2322,7 +2322,7 @@ public class PersonaController {
     // Informe Word: genera un .docx con el personal adscrit a un centre en
     // un rang de dates determinat.
     // -----------------------------------------------------------------------
-    @GetMapping("/informe-word")
+    @GetMapping("/reports/word")
     public void generarInformeWord(
             @RequestParam String orgUuid,
             @RequestParam(required = false, defaultValue = "2000-01-01") String startDate,
@@ -3666,7 +3666,7 @@ public class PersonaController {
     // -----------------------------------------------------------------------
     // Autocomplete: returns active persons matching a query (uuid + nombre)
     // -----------------------------------------------------------------------
-    @GetMapping("/search-vigentes")
+    @GetMapping("/search/active")
     public List<Map<String, String>> searchPersonasVigentes(
             @RequestParam(required = false, defaultValue = "") String q) {
         LocalDate hoy = LocalDate.now();
@@ -3725,7 +3725,7 @@ public class PersonaController {
     // Informe Word per persona: genera un .docx amb tots els ajuts (competitius
     // i convenis) on la persona és awardHolder durant un rang de dates.
     // -----------------------------------------------------------------------
-    @GetMapping("/informe-word-persona")
+    @GetMapping("/reports/word/person")
     public void generarInformeWordPersona(
             @RequestParam String personUuid,
             @RequestParam(required = false, defaultValue = "2000-01-01") String startDate,
