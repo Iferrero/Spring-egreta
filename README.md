@@ -11,7 +11,8 @@ Aplicació web de gestió i visualització de la recerca de la UAB (Universitat 
 | Backend | Java 21, Spring Boot 4.0.5 |
 | Seguretat | Spring Security (HTTP Basic) |
 | Persistència | Spring Data MongoDB (dues connexions: Kraken + JCR) |
-| Generació de documents | Apache POI 5.3.0 (Word/Excel) |
+| SSO | CAS client (Apereo, compatible amb Jakarta Servlet) |
+| Generació de documents | Apache POI 5.4.0 (Word/Excel) |
 | Frontend | HTML + Tailwind CSS + Font Awesome (estàtic sota `webapp/`) |
 | Empaquetament | WAR (desplegable en Tomcat extern) |
 
@@ -36,11 +37,20 @@ spring.mongodb.uri=mongodb://<user>:<password>@ymir.uab.cat:8000/kraken?authSour
 # Connexió secundària (JCR — bibliometria)
 app.jcr.mongodb.uri=mongodb://<user>:<password>@ymir.uab.cat:8000/JCR?authSource=admin
 
-# Credencials bàsiques de l'API
-spring.security.user.name=recerca
-spring.security.user.password=<password>
+# CAS (producció)
+cas.server.url-prefix=https://sso.uab.cat
+cas.service.server-name=http://localhost:8080
+cas.enabled=true
 
 server.port=8080
+```
+
+Per desenvolupament local amb autenticació bàsica, activa el perfil `dev` (fitxer [`src/main/resources/application-dev.properties`](src/main/resources/application-dev.properties)):
+
+```properties
+cas.enabled=false
+dev.user.name=recerca
+dev.user.password=<password>
 ```
 
 > **Nota de seguretat:** No pugis mai credencials reals al repositori. Usa variables d'entorn o un fitxer `.env` ignorat per Git.
@@ -54,8 +64,11 @@ server.port=8080
 git clone <url-del-repo>
 cd Spring-egreta
 
-# Compilar i arrencar
-./mvnw spring-boot:run
+# Linux/macOS: compilar i arrencar amb perfil dev
+./mvnw spring-boot:run -Dspring-boot.run.profiles=dev
+
+# Windows (PowerShell/CMD):
+mvnw.cmd spring-boot:run -Dspring-boot.run.profiles=dev
 ```
 
 L'aplicació estarà disponible a `http://localhost:8080`.
@@ -82,7 +95,8 @@ src/main/
 
 ## API REST
 
-Tots els endpoints requereixen autenticació HTTP Basic.
+En entorn local (`dev`) els endpoints requereixen autenticació HTTP Basic.
+En altres perfils, l'accés es governa per CAS segons la configuració de seguretat.
 
 | Recurs | Base path |
 |--------|-----------|
@@ -131,6 +145,9 @@ GET /api/student-theses/mismo-autor-director  # Tesis amb autor i director coinc
 ```bash
 # Generar el WAR
 ./mvnw clean package -DskipTests
+
+# Windows
+mvnw.cmd clean package -DskipTests
 
 # El fitxer resultant es troba a:
 target/otr.war
