@@ -79,6 +79,13 @@
 			<artifactId>poi-ooxml</artifactId>
 			<version>5.4.0</version>
 		</dependency>
+
+		<!-- CAS SSO client (apereo) — compatible with Jakarta Servlet -->
+		<dependency>
+			<groupId>org.apereo.cas.client</groupId>
+			<artifactId>cas-client-core</artifactId>
+			<version>4.0.4</version>
+		</dependency>
 	</dependencies>
 
 	<build>

@@ -28,6 +28,7 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Comparator;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.Date;
@@ -45,8 +46,12 @@ public class PublicacionController {
 
     // Cache for apa-list: key → (result, timestamp)
     private record ApaListCacheEntry(List<Map<String, Object>> data, long timestamp) {}
+    private record StatsCacheEntry(List<Map> data, long timestamp) {}
     private final Map<String, ApaListCacheEntry> apaListCache = new ConcurrentHashMap<>();
+    private final Map<String, StatsCacheEntry> tiposPorAnioCache = new ConcurrentHashMap<>();
+    private final Map<String, StatsCacheEntry> personaResumenCache = new ConcurrentHashMap<>();
     private static final long APA_LIST_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+    private static final long STATS_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
     @Autowired
     public PublicacionController(
@@ -56,6 +61,75 @@ public class PublicacionController {
         this.repository = repository;
         this.mongoTemplate = mongoTemplate;
         this.researchOutputJournalLinkService = researchOutputJournalLinkService;
+    }
+
+    private String buildStatsCacheKey(Integer desde, Integer hasta, List<String> deptUuid) {
+        return buildStatsCacheKey(desde, hasta, deptUuid, null);
+    }
+
+    private String buildStatsCacheKey(Integer desde, Integer hasta, List<String> deptUuid, String filtrePersonal) {
+        List<String> deptFilter = (deptUuid == null ? List.<String>of() : deptUuid).stream()
+                .filter(v -> v != null && !v.isBlank())
+                .sorted(Comparator.naturalOrder())
+                .toList();
+        String fp = (filtrePersonal == null || filtrePersonal.isBlank()) ? "vigent" : filtrePersonal;
+        return String.valueOf(desde) + "_" + String.valueOf(hasta) + "_" + String.join(",", deptFilter) + "_" + fp;
+    }
+
+    private Document buildPersonAssocCriteria(String filtrePersonal, Integer desde, Integer hasta) {
+        boolean usePeriode = "periode".equalsIgnoreCase(filtrePersonal);
+        if (usePeriode && (desde != null || hasta != null)) {
+            List<Document> conditions = new ArrayList<>();
+            if (desde != null) {
+                String desdeIso = desde + "-01-01";
+                Date desdeDate = Date.from(LocalDate.of(desde, 1, 1).atStartOfDay(ZoneId.systemDefault()).toInstant());
+                conditions.add(new Document("$or", List.of(
+                    new Document("period.endDate", null),
+                    new Document("period.endDate", new Document("$exists", false)),
+                    new Document("$and", List.of(
+                        new Document("period.endDate", new Document("$type", 9)),
+                        new Document("period.endDate", new Document("$gte", desdeDate))
+                    )),
+                    new Document("$and", List.of(
+                        new Document("period.endDate", new Document("$type", 2)),
+                        new Document("period.endDate", new Document("$gte", desdeIso))
+                    ))
+                )));
+            }
+            if (hasta != null) {
+                String hastaIso = hasta + "-12-31";
+                Date hastaDate = Date.from(LocalDate.of(hasta, 12, 31).atStartOfDay(ZoneId.systemDefault()).toInstant());
+                conditions.add(new Document("$or", List.of(
+                    new Document("period.startDate", null),
+                    new Document("period.startDate", new Document("$exists", false)),
+                    new Document("$and", List.of(
+                        new Document("period.startDate", new Document("$type", 9)),
+                        new Document("period.startDate", new Document("$lte", hastaDate))
+                    )),
+                    new Document("$and", List.of(
+                        new Document("period.startDate", new Document("$type", 2)),
+                        new Document("period.startDate", new Document("$lte", hastaIso))
+                    ))
+                )));
+            }
+            return conditions.size() == 1 ? conditions.get(0) : new Document("$and", conditions);
+        } else {
+            LocalDate today = LocalDate.now();
+            Date todayDate = Date.from(today.atStartOfDay(ZoneId.systemDefault()).toInstant());
+            String todayIso = today.toString();
+            return new Document("$or", Arrays.asList(
+                new Document("period.endDate", null),
+                new Document("period.endDate", new Document("$exists", false)),
+                new Document("$and", Arrays.asList(
+                    new Document("period.endDate", new Document("$type", 9)),
+                    new Document("period.endDate", new Document("$gt", todayDate))
+                )),
+                new Document("$and", Arrays.asList(
+                    new Document("period.endDate", new Document("$type", 2)),
+                    new Document("period.endDate", new Document("$gt", todayIso))
+                ))
+            ));
+        }
     }
 
     @GetMapping
@@ -220,7 +294,14 @@ public List<Map> statsAnios() {
     public List<Map> statsTiposPorAnio(
             @RequestParam(required = false) Integer desde,
             @RequestParam(required = false) Integer hasta,
-            @RequestParam(required = false) List<String> deptUuid) {
+            @RequestParam(required = false) List<String> deptUuid,
+            @RequestParam(required = false, defaultValue = "vigent") String filtrePersonal) {
+
+        String cacheKey = buildStatsCacheKey(desde, hasta, deptUuid, filtrePersonal);
+        StatsCacheEntry cached = tiposPorAnioCache.get(cacheKey);
+        if (cached != null && (System.currentTimeMillis() - cached.timestamp()) < STATS_CACHE_TTL_MS) {
+            return cached.data();
+        }
 
         List<Document> pipeline = new ArrayList<>();
 
@@ -272,37 +353,20 @@ public List<Map> statsAnios() {
                 .filter(v -> v != null && !v.isBlank())
                 .toList();
 
-        LocalDate hoy = LocalDate.now();
-        String hoyIso = hoy.toString();
-        Date hoyDate = Date.from(hoy.atStartOfDay(ZoneId.systemDefault()).toInstant());
-
-        Document activeAssociationCriteria = new Document("$or", Arrays.asList(
-            new Document("period.endDate", null),
-            new Document("period.endDate", new Document("$exists", false)),
-            new Document("$and", Arrays.asList(
-                new Document("period.endDate", new Document("$type", 9)),
-                new Document("period.endDate", new Document("$gt", hoyDate))
-            )),
-            new Document("$and", Arrays.asList(
-                new Document("period.endDate", new Document("$type", 2)),
-                new Document("period.endDate", new Document("$gt", hoyIso))
-            ))
-        ));
+        Document assocCriteria = buildPersonAssocCriteria(filtrePersonal, desde, hasta);
 
         if (!deptFilter.isEmpty()) {
-            Document assocCriteria = new Document("$and", Arrays.asList(
-                new Document("organization.uuid", new Document("$in", deptFilter)),
-                activeAssociationCriteria
-            ));
-
             pipeline.add(new Document("$match", new Document(
                 "persona_info.staffOrganizationAssociations",
-                new Document("$elemMatch", assocCriteria)
+                new Document("$elemMatch", new Document("$and", Arrays.asList(
+                    new Document("organization.uuid", new Document("$in", deptFilter)),
+                    assocCriteria
+                )))
             )));
         } else {
             pipeline.add(new Document("$match", new Document(
                 "persona_info.staffOrganizationAssociations",
-                new Document("$elemMatch", activeAssociationCriteria)
+                new Document("$elemMatch", assocCriteria)
             )));
         }
 
@@ -327,10 +391,13 @@ public List<Map> statsAnios() {
         pipeline.add(new Document("$sort", new Document("anio", 1)
                 .append("tipo_publicacion", 1)));
 
-        return mongoTemplate
+        List<Map> result = mongoTemplate
                 .getCollection("Researchoutputs")
                 .aggregate(pipeline)
                 .into(new ArrayList<>());
+
+        tiposPorAnioCache.put(cacheKey, new StatsCacheEntry(result, System.currentTimeMillis()));
+        return result;
     }
 
     @GetMapping("/stats/persona-resumen")
@@ -338,6 +405,12 @@ public List<Map> statsAnios() {
             @RequestParam(required = false) Integer desde,
             @RequestParam(required = false) Integer hasta,
             @RequestParam(required = false) List<String> deptUuid) {
+
+        String cacheKey = buildStatsCacheKey(desde, hasta, deptUuid);
+        StatsCacheEntry cached = personaResumenCache.get(cacheKey);
+        if (cached != null && (System.currentTimeMillis() - cached.timestamp()) < STATS_CACHE_TTL_MS) {
+            return cached.data();
+        }
 
         List<Document> pipeline = new ArrayList<>();
 
@@ -495,20 +568,25 @@ public List<Map> statsAnios() {
                 .append("tipo_publicacion", 1)));
         // "nombre" is now "Cognom, Nom" so sort is alphabetical by surname
 
-        return mongoTemplate
+        List<Map> result = mongoTemplate
                 .getCollection("Researchoutputs")
                 .aggregate(pipeline)
                 .into(new ArrayList<>());
+
+        personaResumenCache.put(cacheKey, new StatsCacheEntry(result, System.currentTimeMillis()));
+        return result;
     }
 
     @GetMapping("/stats/apa-list")
     public List<Map<String, Object>> statsApaList(
             @RequestParam(required = false) Integer desde,
             @RequestParam(required = false) Integer hasta,
-            @RequestParam(required = false) List<String> deptUuid) {
+            @RequestParam(required = false) List<String> deptUuid,
+            @RequestParam(required = false, defaultValue = "vigent") String filtrePersonal) {
 
         // Check cache first
-        String cacheKey = desde + "_" + hasta + "_" + (deptUuid == null ? "" : String.join(",", deptUuid));
+        String fp = (filtrePersonal == null || filtrePersonal.isBlank()) ? "vigent" : filtrePersonal;
+        String cacheKey = desde + "_" + hasta + "_" + (deptUuid == null ? "" : String.join(",", deptUuid)) + "_" + fp;
         ApaListCacheEntry cached = apaListCache.get(cacheKey);
         if (cached != null && (System.currentTimeMillis() - cached.timestamp()) < APA_LIST_CACHE_TTL_MS) {
             return cached.data();
@@ -563,35 +641,20 @@ public List<Map> statsAnios() {
                 .filter(v -> v != null && !v.isBlank())
                 .toList();
 
-        LocalDate hoy = LocalDate.now();
-        String hoyIso = hoy.toString();
-        Date hoyDate = Date.from(hoy.atStartOfDay(ZoneId.systemDefault()).toInstant());
-
-        Document activeAssociationCriteria = new Document("$or", Arrays.asList(
-            new Document("period.endDate", null),
-            new Document("period.endDate", new Document("$exists", false)),
-            new Document("$and", Arrays.asList(
-                new Document("period.endDate", new Document("$type", 9)),
-                new Document("period.endDate", new Document("$gt", hoyDate))
-            )),
-            new Document("$and", Arrays.asList(
-                new Document("period.endDate", new Document("$type", 2)),
-                new Document("period.endDate", new Document("$gt", hoyIso))
-            ))
-        ));
+        Document assocCriteriaApa = buildPersonAssocCriteria(filtrePersonal, desde, hasta);
 
         if (!deptFilter.isEmpty()) {
             pipeline.add(new Document("$match", new Document(
                 "persona_info.staffOrganizationAssociations",
                 new Document("$elemMatch", new Document("$and", Arrays.asList(
                     new Document("organization.uuid", new Document("$in", deptFilter)),
-                    activeAssociationCriteria
+                    assocCriteriaApa
                 )))
             )));
         } else {
             pipeline.add(new Document("$match", new Document(
                 "persona_info.staffOrganizationAssociations",
-                new Document("$elemMatch", activeAssociationCriteria)
+                new Document("$elemMatch", assocCriteriaApa)
             )));
         }
 

@@ -52,23 +52,36 @@ function formatearNumero(valor) {
     return Number(valor || 0).toLocaleString('ca-ES');
 }
 
+// Cache compartit per /stats/vigentes-por-categoria — s'invalida si canvien els filtres
+let _catsCache = { key: null, promise: null };
+
+function _fetchVigentesCats() {
+    const url = buildUrl('/persons/stats/vigentes-por-categoria', true);
+    if (_catsCache.key !== url) {
+        _catsCache.key = url;
+        _catsCache.promise = fetch(apiUrl(url))
+            .then(r => { if (!r.ok) throw new Error(); return r.json(); });
+    }
+    return _catsCache.promise;
+}
+
+function _sumCatsByRegex(cats, pattern) {
+    const re = new RegExp(pattern, 'i');
+    return (Array.isArray(cats) ? cats : [])
+        .filter(d => d.categoria_laboral && re.test(d.categoria_laboral))
+        .reduce((sum, d) => sum + (d.total_personas ?? 0), 0);
+}
+
 async function cargarPersonasVigentes() {
     const estado = document.getElementById('estadoVigentes');
     const valor = document.getElementById('valorVigentes');
-
     estado.textContent = 'Carregant dades...';
-
     try {
-        const url = buildUrl('/persons/vigentes', true);
-        const separator = url.includes('?') ? '&' : '?';
-        const res = await fetch(apiUrl(`${url}${separator}page=0`));
+        const url = buildUrl('/persons/stats/vigentes-total', true);
+        const res = await fetch(apiUrl(url));
+        if (!res.ok) throw new Error();
         const data = await res.json();
-
-        const total = data?.page?.totalElements
-            ?? data?.totalElements
-            ?? (Array.isArray(data?.content) ? data.content.length : 0);
-
-        valor.textContent = formatearNumero(total);
+        valor.textContent = formatearNumero(Number(data?.total ?? 0));
         estado.textContent = '';
     } catch (e) {
         valor.textContent = '--';
@@ -99,17 +112,10 @@ async function cargarPersonalAcademic() {
 async function cargarCatedraticos() {
     const estado = document.getElementById('estadoCatedraticos');
     const valor = document.getElementById('valorCatedraticos');
-
     estado.textContent = 'Carregant dades...';
-
     try {
-        const res = await fetch(apiUrl(buildUrl('/persons/stats/catedraticos', true)));
-        if (!res.ok) throw new Error('No s\'han pogut carregar els catedràtics.');
-
-        const data = await res.json();
-        const total = Number(data?.total ?? data?.value?.total ?? 0);
-
-        valor.textContent = formatearNumero(total);
+        const cats = await _fetchVigentesCats();
+        valor.textContent = formatearNumero(_sumCatsByRegex(cats, 'catedr|chair|full professor'));
         estado.textContent = '';
     } catch (e) {
         valor.textContent = '--';
@@ -120,17 +126,10 @@ async function cargarCatedraticos() {
 async function cargarTitulares() {
     const estado = document.getElementById('estadoTitulares');
     const valor = document.getElementById('valorTitulares');
-
     estado.textContent = 'Carregant dades...';
-
     try {
-        const res = await fetch(apiUrl(buildUrl('/persons/stats/titulares', true)));
-        if (!res.ok) throw new Error('No s\'han pogut carregar els titulars.');
-
-        const data = await res.json();
-        const total = Number(data?.total ?? data?.value?.total ?? 0);
-
-        valor.textContent = formatearNumero(total);
+        const cats = await _fetchVigentesCats();
+        valor.textContent = formatearNumero(_sumCatsByRegex(cats, 'titular|tenured|tenure'));
         estado.textContent = '';
     } catch (e) {
         valor.textContent = '--';
@@ -141,17 +140,10 @@ async function cargarTitulares() {
 async function cargarAgregados() {
     const estado = document.getElementById('estadoAgregados');
     const valor = document.getElementById('valorAgregados');
-
     estado.textContent = 'Carregant dades...';
-
     try {
-        const res = await fetch(apiUrl(buildUrl('/persons/stats/agregados', true)));
-        if (!res.ok) throw new Error('No s\'han pogut carregar els agregats.');
-
-        const data = await res.json();
-        const total = Number(data?.total ?? data?.value?.total ?? 0);
-
-        valor.textContent = formatearNumero(total);
+        const cats = await _fetchVigentesCats();
+        valor.textContent = formatearNumero(_sumCatsByRegex(cats, 'agregat|agregado|associate professor'));
         estado.textContent = '';
     } catch (e) {
         valor.textContent = '--';
@@ -162,17 +154,10 @@ async function cargarAgregados() {
 async function cargarLectores() {
     const estado = document.getElementById('estadoLectores');
     const valor = document.getElementById('valorLectores');
-
     estado.textContent = 'Carregant dades...';
-
     try {
-        const res = await fetch(apiUrl(buildUrl('/persons/stats/lectores', true)));
-        if (!res.ok) throw new Error('No s\'han pogut carregar els lectors.');
-
-        const data = await res.json();
-        const total = Number(data?.total ?? data?.value?.total ?? 0);
-
-        valor.textContent = formatearNumero(total);
+        const cats = await _fetchVigentesCats();
+        valor.textContent = formatearNumero(_sumCatsByRegex(cats, 'lector|lectura|reader'));
         estado.textContent = '';
     } catch (e) {
         valor.textContent = '--';
@@ -183,17 +168,10 @@ async function cargarLectores() {
 async function cargarAsociados() {
     const estado = document.getElementById('estadoAsociados');
     const valor = document.getElementById('valorAsociados');
-
     estado.textContent = 'Carregant dades...';
-
     try {
-        const res = await fetch(apiUrl(buildUrl('/persons/stats/asociados', true)));
-        if (!res.ok) throw new Error('No s\'han pogut carregar els associats.');
-
-        const data = await res.json();
-        const total = Number(data?.total ?? data?.value?.total ?? 0);
-
-        valor.textContent = formatearNumero(total);
+        const cats = await _fetchVigentesCats();
+        valor.textContent = formatearNumero(_sumCatsByRegex(cats, 'associat|asociad|adjunct'));
         estado.textContent = '';
     } catch (e) {
         valor.textContent = '--';
@@ -204,17 +182,10 @@ async function cargarAsociados() {
 async function cargarSubstituts() {
     const estado = document.getElementById('estadoSubstituts');
     const valor = document.getElementById('valorSubstituts');
-
     estado.textContent = 'Carregant dades...';
-
     try {
-        const res = await fetch(apiUrl(buildUrl('/persons/stats/substituts', true)));
-        if (!res.ok) throw new Error('No s\'han pogut carregar els substituts.');
-
-        const data = await res.json();
-        const total = Number(data?.total ?? data?.value?.total ?? 0);
-
-        valor.textContent = formatearNumero(total);
+        const cats = await _fetchVigentesCats();
+        valor.textContent = formatearNumero(_sumCatsByRegex(cats, 'substitu|sustitu'));
         estado.textContent = '';
     } catch (e) {
         valor.textContent = '--';
@@ -472,27 +443,29 @@ async function cargarCatedraticosBreakdown() {
 
 async function cargarTooltipSummary() {
     try {
-        const res = await fetch(apiUrl(buildUrl('/persons/stats/employment-types-summary', true)));
-        if (!res.ok) return;
-        const data = await res.json();
+        const cats = await _fetchVigentesCats();
 
-        const tooltipIds = {
-            catedraticos: 'tooltipCatedraticos',
-            titulares:    'tooltipTitulares',
-            agregados:    'tooltipAgregados',
-            lectores:     'tooltipLectores',
-            asociados:    'tooltipAsociados',
-            substituts:   'tooltipSubstituts',
-            icrea:        'tooltipIcrea',
-            predoctorals: 'tooltipPredoctorals',
-            postdoctorals:'tooltipPostdoctorals'
-        };
+        const tooltipGroups = [
+            { id: 'tooltipCatedraticos',  pattern: 'catedr|chair|full professor' },
+            { id: 'tooltipTitulares',     pattern: 'titular|tenured|tenure' },
+            { id: 'tooltipAgregados',     pattern: 'agregat|agregado|associate professor' },
+            { id: 'tooltipLectores',      pattern: 'lector|lectura|reader' },
+            { id: 'tooltipAsociados',     pattern: 'associat|asociad|adjunct' },
+            { id: 'tooltipSubstituts',    pattern: 'substitu|sustitu' },
+            { id: 'tooltipPredoctorals',  pattern: 'predoctoral|en formaci|FPI|FI-JOAN|FI-SDUR|novell|La Caixa|pre-doctoral|research training|novel research' },
+            { id: 'tooltipPostdoctorals', pattern: 'ordinari|postdoctoral|Cajal|Beatriu|Cierva|doctor distingit|director investigaci|regular researcher|post-doctoral|distinguished research|research director' },
+        ];
 
-        for (const [key, id] of Object.entries(tooltipIds)) {
+        for (const { id, pattern } of tooltipGroups) {
             const el = document.getElementById(id);
-            if (el && Array.isArray(data[key]) && data[key].length > 0) {
-                el.innerHTML = data[key]
-                    .map(t => `${t.term} <span class="opacity-60">(${t.count})</span>`)
+            if (!el) continue;
+            const re = new RegExp(pattern, 'i');
+            const matches = (Array.isArray(cats) ? cats : [])
+                .filter(d => d.categoria_laboral && re.test(d.categoria_laboral))
+                .sort((a, b) => b.total_personas - a.total_personas);
+            if (matches.length > 0) {
+                el.innerHTML = matches
+                    .map(d => `${d.categoria_laboral} <span class="opacity-60">(${d.total_personas})</span>`)
                     .join('<br>');
             }
         }
@@ -504,10 +477,8 @@ async function cargarPredoctorals() {
     const valor = document.getElementById('valorPredoctorals');
     estado.textContent = 'Carregant dades...';
     try {
-        const res = await fetch(apiUrl(buildUrl('/persons/stats/predoctorals', true)));
-        if (!res.ok) throw new Error();
-        const data = await res.json();
-        valor.textContent = formatearNumero(Number(data?.total ?? 0));
+        const cats = await _fetchVigentesCats();
+        valor.textContent = formatearNumero(_sumCatsByRegex(cats, 'predoctoral|en formaci|FPI|FI-JOAN|FI-SDUR|novell|La Caixa|pre-doctoral|research training|novel research'));
         estado.textContent = '';
     } catch (e) {
         valor.textContent = '--';
@@ -520,10 +491,8 @@ async function cargarPostdoctorals() {
     const valor = document.getElementById('valorPostdoctorals');
     estado.textContent = 'Carregant dades...';
     try {
-        const res = await fetch(apiUrl(buildUrl('/persons/stats/postdoctorals', true)));
-        if (!res.ok) throw new Error();
-        const data = await res.json();
-        valor.textContent = formatearNumero(Number(data?.total ?? 0));
+        const cats = await _fetchVigentesCats();
+        valor.textContent = formatearNumero(_sumCatsByRegex(cats, 'ordinari|postdoctoral|Cajal|Beatriu|Cierva|doctor distingit|director investigaci|regular researcher|post-doctoral|distinguished research|research director'));
         estado.textContent = '';
     } catch (e) {
         valor.textContent = '--';
