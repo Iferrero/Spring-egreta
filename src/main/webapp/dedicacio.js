@@ -432,6 +432,43 @@ function actualizarKPI(rows) {
     document.getElementById('kpiTotalValue').textContent = String(total);
 }
 
+async function actualizarKPIPersonasGlobal() {
+    const select = document.getElementById('orgSelect');
+    const filtrePersonalSelect = document.getElementById('filtrePersonalSelect');
+    const orgVal = select ? select.value : '';
+    const filtrePersonal = filtrePersonalSelect ? filtrePersonalSelect.value : 'periode';
+    const slider = document.getElementById('sliderAnios');
+
+    if (!orgVal || !slider || !slider.noUiSlider) {
+        actualizarKPI([]);
+        return;
+    }
+
+    const [, uuid] = orgVal.split(':');
+    if (!uuid) {
+        actualizarKPI([]);
+        return;
+    }
+
+    const [desdeRaw, hastaRaw] = slider.noUiSlider.get();
+    const desde = parseInt(desdeRaw, 10);
+    const hasta = parseInt(hastaRaw, 10);
+    const startDate = `${desde}-01-01`;
+    const endDate = `${hasta}-12-31`;
+
+    try {
+        const associationsUrl = (typeof apiUrl === 'function')
+            ? apiUrl('/persons/associations/latest')
+            : '/persons/associations/latest';
+        const res = await fetch(`${associationsUrl}?orgUuid=${encodeURIComponent(uuid)}&startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}&filtrePersonal=${encodeURIComponent(filtrePersonal)}`);
+        if (!res.ok) throw new Error('No s\'ha pogut calcular el total de persones');
+        const data = await res.json();
+        actualizarKPI(data || []);
+    } catch (e) {
+        actualizarKPI([]);
+    }
+}
+
 async function cargarDemoData() {
     const select = document.getElementById('orgSelect');
     const filtrePersonalSelect = document.getElementById('filtrePersonalSelect');
@@ -994,6 +1031,7 @@ async function cargarTesisData() {
         llistaData = [];
         selectedDirectorUuid = null;
         document.getElementById('tesis-llista-container').innerHTML = '';
+        actualizarKPI([]);
         return;
     }
 
@@ -1031,6 +1069,7 @@ async function cargarTesisData() {
         renderTesisTable(dataPerAny || []);
         renderDirectorsTable(dataDirectors || []);
         renderLlistaTesis(dataLlista || []);
+        await actualizarKPIPersonasGlobal();
     } catch (e) {
         if (loadingEl) loadingEl.classList.add('hidden');
         if (wrapperEl) wrapperEl.classList.remove('hidden');
@@ -1038,6 +1077,7 @@ async function cargarTesisData() {
         if (tesisTable) tesisTable.setData([]);
         if (directorsTable) directorsTable.setData([]);
         document.getElementById('tesis-llista-container').innerHTML = '<p class="text-sm text-slate-400 py-4">Error carregant dades.</p>';
+        await actualizarKPIPersonasGlobal();
         console.error('Error carregant tesis', e);
     }
 }
@@ -1105,6 +1145,7 @@ async function cargarAjutsData() {
     if (!orgVal) {
         if (loadingEl) loadingEl.classList.add('hidden');
         $('#ajuts-pivot-container').empty();
+        actualizarKPI([]);
         return;
     }
 
@@ -1141,10 +1182,12 @@ async function cargarAjutsData() {
         renderAjutsTable(data || []);
         renderAjutsLlistaTable(dataLlista || []);
         renderAjutsIPsTable(dataIps || []);
+        await actualizarKPIPersonasGlobal();
     } catch (e) {
         if (loadingEl) loadingEl.classList.add('hidden');
         if (wrapperEl) wrapperEl.classList.remove('hidden');
         $('#ajuts-pivot-container').html('<p class="p-8 text-center text-slate-400">Error carregant dades.</p>');
+        await actualizarKPIPersonasGlobal();
         console.error('Error carregant ajuts', e);
     }
 }

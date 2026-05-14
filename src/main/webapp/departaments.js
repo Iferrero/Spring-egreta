@@ -108,30 +108,52 @@ function hideLoadingDemo() {
 }
 
 async function cargarOrganizacionesCombinadas() {
-    const optInst = document.getElementById('opt_departaments');
+    const optDepts = document.getElementById('opt_departaments');
+    const optInstituts = document.getElementById('opt_institutos');
 
-    optInst.innerHTML = '<option value="">Carregant...</option>';
+    if (optDepts) optDepts.innerHTML = '<option value="">Carregant...</option>';
+    if (optInstituts) optInstituts.innerHTML = '<option value="">Carregant...</option>';
 
     try {
         showLoadingDemo();
-        const institutosUrl = (typeof apiUrl === 'function')
+        const departamentsUrl = (typeof apiUrl === 'function')
             ? apiUrl('/persons/departamentos')
             : '/api/persons/departamentos';
-        const resInst = await fetch(institutosUrl);
+        const institutosUrl = (typeof apiUrl === 'function')
+            ? apiUrl('/persons/institutos')
+            : '/api/persons/institutos';
+
+        const [resDept, resInst] = await Promise.all([
+            fetch(departamentsUrl),
+            fetch(institutosUrl)
+        ]);
+
+        const depts = resDept.ok ? await resDept.json() : [];
         const insts = resInst.ok ? await resInst.json() : [];
 
-        optInst.innerHTML = '';
+        if (optDepts) optDepts.innerHTML = '';
+        if (optInstituts) optInstituts.innerHTML = '';
+
+        depts.forEach(d => {
+            if (!optDepts) return;
+            const opt = document.createElement('option');
+            opt.value = `dept:${d.uuid}`;
+            opt.textContent = d.nombre;
+            optDepts.appendChild(opt);
+        });
 
         insts.forEach(i => {
+            if (!optInstituts) return;
             const opt = document.createElement('option');
             opt.value = `inst:${i.uuid}`;
             opt.textContent = i.nombre;
-            optInst.appendChild(opt);
+            optInstituts.appendChild(opt);
         });
 
     } catch (e) {
-        optInst.innerHTML = '<option value="">Error</option>';
-        console.error('Error carregant departaments', e);
+        if (optDepts) optDepts.innerHTML = '<option value="">Error</option>';
+        if (optInstituts) optInstituts.innerHTML = '<option value="">Error</option>';
+        console.error('Error carregant organitzacions', e);
     }
     finally {
         hideLoadingDemo();
@@ -907,16 +929,13 @@ function actualizarIndicadorFiltrePivot() {
 function aplicarFiltrePivotALlista() {
     if (!ajutsLlistaTable) return;
     let base = ajutsLlistaDataCompleta;
-    // Filtre per persona IP/Co-IP + injectar camp _rol
+    // Filtre per persona IP/Co-IP
     if (ajutsIpsFiltrePersonaUuid) {
         base = base
             .filter(d => {
                 const holders = d.awardHoldersUuids || [];
                 return holders.includes(ajutsIpsFiltrePersonaUuid);
-            })
-            .map(d => ({ ...d, _rol: rolPersonaEnAjut(d) }));
-    } else {
-        base = base.map(d => ({ ...d, _rol: null }));
+            });
     }
     if (!pivotFiltro) {
         ajutsLlistaTable.setData(base);
@@ -1069,20 +1088,6 @@ function formatearFechaDemo(cell) {
     return fecha.toLocaleDateString('ca-ES');
 }
 
-function rolPersonaEnAjut(d) {
-    if (!ajutsIpsFiltrePersonaUuid) return null;
-    const holders = d.awardHolders || [];
-    const holder = holders.find(h => h && h.person && h.person.uuid === ajutsIpsFiltrePersonaUuid);
-    if (!holder) return null;
-    const term = holder.role && holder.role.term;
-    if (!term) return null;
-    const t = term.ca_ES || term.es_ES || term.en_GB || '';
-    if (/Co-Investigador/i.test(t)) return 'Co-IP';
-    if (/Investigador.*principal/i.test(t) || /Principal Investigator/i.test(t)) return 'IP';
-    // shorten any other role
-    return t.length > 15 ? t.substring(0, 14) + '…' : t;
-}
-
 function renderAjutsLlistaTable(data) {
     ajutsLlistaDataCompleta = data || [];
     pivotFiltro = null;
@@ -1094,19 +1099,6 @@ function renderAjutsLlistaTable(data) {
     const cols = [
         { title: 'Any', field: 'anyo', sorter: 'number', hozAlign: 'center', width: 70 },
         { title: "Tipus", field: 'tipoAward', sorter: 'string', width: 130, tooltip: true },
-        {
-            title: 'Rol', field: '_rol', sorter: 'string', width: 75, hozAlign: 'center',
-            formatter: cell => {
-                const v = cell.getValue();
-                if (!v) return '';
-                const cls = v === 'IP'
-                    ? 'bg-indigo-100 text-indigo-700'
-                    : v === 'Co-IP'
-                        ? 'bg-violet-100 text-violet-700'
-                        : 'bg-slate-100 text-slate-600';
-                return `<span class="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-semibold ${cls}">${v}</span>`;
-            }
-        },
         { title: 'Títol', field: 'titulo', sorter: 'string', widthGrow: 2, formatter: formatearTituloAjutConEnlace },
         { title: 'Import (€)', field: 'institutionalPart', sorter: 'number', hozAlign: 'right', formatter: (cell) => formatearNumeroDemo(cell.getValue()), width: 120 },
         { title: 'Inici', field: 'vigenciaInicio', sorter: 'string', formatter: formatearFechaDemo, width: 100 },
