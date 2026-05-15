@@ -252,7 +252,14 @@ public class StudentThesisController {
             pipeline.add(new Document("$match", new Document("awardDate.year", yearRange)));
         }
 
-        pipeline.add(new Document("$group", new Document("_id", "$awardDate.year")
+        // Count unique theses that have at least one internal supervisor.
+        pipeline.add(new Document("$unwind", "$supervisors"));
+        pipeline.add(new Document("$match", new Document("supervisors.person.uuid",
+            new Document("$in", personUuids))));
+        pipeline.add(new Document("$group", new Document("_id", new Document()
+            .append("thesisUuid", "$uuid")
+            .append("any", "$awardDate.year"))));
+        pipeline.add(new Document("$group", new Document("_id", "$_id.any")
             .append("tesis", new Document("$sum", 1))));
 
         pipeline.add(new Document("$sort", new Document("_id", 1)));
@@ -383,9 +390,16 @@ public class StudentThesisController {
         pipeline.add(new Document("$match", new Document("supervisors.person.uuid",
             new Document("$in", personUuids))));
 
-        pipeline.add(new Document("$group", new Document("_id", "$supervisors.person.uuid")
+        // Dedupe thesis-supervisor pairs to avoid double counting.
+        pipeline.add(new Document("$group", new Document("_id", new Document()
+            .append("supervisorUuid", "$supervisors.person.uuid")
+            .append("thesisUuid", "$uuid"))
             .append("lastName", new Document("$first", "$supervisors.name.lastName"))
-            .append("firstName", new Document("$first", "$supervisors.name.firstName"))
+            .append("firstName", new Document("$first", "$supervisors.name.firstName"))));
+
+        pipeline.add(new Document("$group", new Document("_id", "$_id.supervisorUuid")
+            .append("lastName", new Document("$first", "$lastName"))
+            .append("firstName", new Document("$first", "$firstName"))
             .append("tesis", new Document("$sum", 1))));
 
         pipeline.add(new Document("$sort", new Document("lastName", 1).append("firstName", 1)));
@@ -516,14 +530,28 @@ public class StudentThesisController {
             pipeline.add(new Document("$match", new Document("awardDate.year", yearRange)));
         }
 
+        pipeline.add(new Document("$unwind", "$supervisors"));
+        pipeline.add(new Document("$match", new Document("supervisors.person.uuid",
+            new Document("$in", personUuids))));
+
+        // Keep one row per thesis and only retain internal supervisors in the payload.
+        pipeline.add(new Document("$group", new Document("_id", "$uuid")
+            .append("titol", new Document("$first", "$title.value"))
+            .append("contributors", new Document("$first", "$contributors"))
+            .append("supervisors", new Document("$addToSet", "$supervisors"))
+            .append("any", new Document("$first", "$awardDate.year"))
+            .append("mes", new Document("$first", "$awardDate.month"))
+            .append("dia", new Document("$first", "$awardDate.day"))
+        ));
+
         pipeline.add(new Document("$project", new Document()
             .append("_id", 0)
-            .append("titol", "$title.value")
+            .append("titol", 1)
             .append("contributors", 1)
             .append("supervisors", 1)
-            .append("any", "$awardDate.year")
-            .append("mes", "$awardDate.month")
-            .append("dia", "$awardDate.day")
+            .append("any", 1)
+            .append("mes", 1)
+            .append("dia", 1)
         ));
 
         pipeline.add(new Document("$sort", new Document("any", 1).append("mes", 1).append("dia", 1)));
@@ -555,7 +583,7 @@ public class StudentThesisController {
                 }
             }
 
-            // Directors from supervisors — only institute persons
+            // Directors from supervisors (already filtered to institute persons in pipeline)
             List<String> directors = new ArrayList<>();
             List<String> directorUuids = new ArrayList<>();
             Object supObj = d.get("supervisors");
@@ -564,7 +592,7 @@ public class StudentThesisController {
                     if (s instanceof Document sd) {
                         Document personRef = sd.get("person", Document.class);
                         String supUuid = personRef != null ? personRef.getString("uuid") : null;
-                        if (supUuid == null || !personUuids.contains(supUuid)) continue;
+                        if (supUuid == null || supUuid.isBlank()) continue;
                         Document name = sd.get("name", Document.class);
                         if (name != null) {
                             String ln = name.getString("lastName");
