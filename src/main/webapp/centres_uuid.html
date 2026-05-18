@@ -29,6 +29,7 @@
     td.pvtVal { cursor: pointer; }
     td.pvtVal:hover { outline: 2px solid #6366f1; outline-offset: -2px; }
     td.pvt-selected { outline: 2px solid #4f46e5 !important; outline-offset: -2px; box-shadow: inset 0 0 0 2px #4f46e5; }
+    .uab-brandbar__home { display: none !important; }
 </style>
 </head>
 <body class="bg-slate-50 min-h-screen">
@@ -41,13 +42,13 @@
         </div>
     </div>
     <div  class="w-full mx-auto px-6 py-8">
-        <header hidden class="mb-6">
-                <h1 class="text-2xl font-bold text-slate-800">Departaments/Instituts</h1>
+        <header class="mb-6 hidden">
+            <h1 id="dashboardOrgTitle" class="text-2xl font-bold text-slate-800">Departament / Institut</h1>
         </header>
 
         <section class="bg-white border border-slate-200 rounded-2xl shadow-sm p-4 mb-6">
             <div class="grid grid-cols-1 lg:grid-cols-12 gap-3 items-end">
-                <div class="lg:col-span-3">
+                <div id="orgSelectContainer" class="lg:col-span-3">
                     <label for="orgSelect" class="block text-xs font-bold text-slate-500 uppercase mb-1">Departament / Institut</label>
                     <select id="orgSelect" class="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm bg-white">
                         <option value="">Tots (tria organització)</option>
@@ -59,8 +60,8 @@
                 <div class="lg:col-span-3">
                     <label for="filtrePersonalSelect" class="block text-xs font-bold text-slate-500 uppercase mb-1">Filtre personal</label>
                     <select id="filtrePersonalSelect" class="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm bg-white">
-                        <option value="vigent">Personal vigent</option>
-                        <option value="periode" selected>Personal en el període seleccionat</option>
+                        <option value="vigent" selected>Personal vigent</option>
+                        <option value="periode">Personal en el període seleccionat</option>
                     </select>
                 </div>
 
@@ -212,12 +213,6 @@
                     <p class="text-slate-400 font-black text-xs uppercase tracking-widest">Carregant publicacions...</p>
                 </div>
                 <div id="publicacionsWrapper" class="p-6">
-                    <div class="mb-4">
-                        <label for="publicacionsManagingOnly" class="inline-flex items-center gap-2 text-sm text-slate-700">
-                            <input id="publicacionsManagingOnly" type="checkbox" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
-                            <span>Només publicacions gestionades per l'organització seleccionada</span>
-                        </label>
-                    </div>
                     <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Tipus de publicacions per any</h3>
                     <div id="publicacions-table"></div>
                     <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 mt-8">Llista de publicacions (APA)</h3>
@@ -231,6 +226,6 @@
         </section>
     </div>
 
-    <script src="departaments.js"></script>
+    <script src="centres_uuid.js"></script>
 </body>
 </html>

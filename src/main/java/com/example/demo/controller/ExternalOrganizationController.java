@@ -29,7 +29,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @RestController
-@RequestMapping({"/api/external-organizations", "/external-organizations", "/otr/api/external-organizations"})
+@RequestMapping("/api/external-organizations")
 @CrossOrigin(origins = "*")
 public class ExternalOrganizationController {
 

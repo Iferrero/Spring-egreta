@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Departaments - Cercador de departaments + Slider</title>
+        <title>Demo - Cercador d'instituts + Slider</title>
     <script src="config.js"></script>
     <script src="uab-brand.js" defer></script>
     <script src="https://cdn.tailwindcss.com"></script>
@@ -42,17 +42,17 @@
     </div>
     <div  class="w-full mx-auto px-6 py-8">
         <header hidden class="mb-6">
-                <h1 class="text-2xl font-bold text-slate-800">Departaments/Instituts</h1>
+                <h1 class="text-2xl font-bold text-slate-800">Dades d'instituts</h1>
+                <p class="text-sm text-slate-500">Cercador combinat d'instituts + slider d'anys (2015 - any actual)</p>
         </header>
 
         <section class="bg-white border border-slate-200 rounded-2xl shadow-sm p-4 mb-6">
             <div class="grid grid-cols-1 lg:grid-cols-12 gap-3 items-end">
                 <div class="lg:col-span-3">
-                    <label for="orgSelect" class="block text-xs font-bold text-slate-500 uppercase mb-1">Departament / Institut</label>
+                    <label for="orgSelect" class="block text-xs font-bold text-slate-500 uppercase mb-1">Institut</label>
                     <select id="orgSelect" class="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm bg-white">
-                        <option value="">Tots (tria organització)</option>
-                        <optgroup label="Departaments" id="opt_departaments"></optgroup>
-                        <optgroup label="Instituts propis" id="opt_institutos"></optgroup>
+                        <option value="">Tots (tria institut)</option>
+                        <optgroup label="Instituts" id="opt_institutos"></optgroup>
                     </select>
                 </div>
 
@@ -95,10 +95,6 @@
                 <button id="tabBtnTesis" onclick="switchTab('tesis')"
                     class="tab-btn px-5 py-2.5 text-sm font-semibold rounded-t-xl border border-b-0 border-slate-200 bg-slate-50 text-slate-500">
                     <i class="fa-solid fa-graduation-cap mr-1.5"></i>Tesis
-                </button>
-                <button id="tabBtnPublicacions" onclick="switchTab('publicacions')"
-                    class="tab-btn px-5 py-2.5 text-sm font-semibold rounded-t-xl border border-b-0 border-slate-200 bg-slate-50 text-slate-500">
-                    <i class="fa-solid fa-book-open mr-1.5"></i>Publicacions
                 </button>
             </nav>
         </div>
@@ -203,34 +199,8 @@
                 </div>
             </div>
         </section>
-
-        <!-- Tab: Publicacions -->
-        <section id="tabPublicacions" class="tab-panel hidden">
-            <div class="bg-white rounded-b-2xl rounded-tr-2xl shadow-sm border border-slate-100 overflow-hidden">
-                <div id="publicacionsLoading" class="p-20 text-center hidden">
-                    <div class="inline-block animate-spin mb-3 text-indigo-500"><i class="fa-solid fa-circle-notch text-2xl"></i></div>
-                    <p class="text-slate-400 font-black text-xs uppercase tracking-widest">Carregant publicacions...</p>
-                </div>
-                <div id="publicacionsWrapper" class="p-6">
-                    <div class="mb-4">
-                        <label for="publicacionsManagingOnly" class="inline-flex items-center gap-2 text-sm text-slate-700">
-                            <input id="publicacionsManagingOnly" type="checkbox" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
-                            <span>Només publicacions gestionades per l'organització seleccionada</span>
-                        </label>
-                    </div>
-                    <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Tipus de publicacions per any</h3>
-                    <div id="publicacions-table"></div>
-                    <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 mt-8">Llista de publicacions (APA)</h3>
-                    <div id="publicacionsApaLoading" class="p-8 text-center hidden">
-                        <div class="inline-block animate-spin mb-2 text-indigo-500"><i class="fa-solid fa-circle-notch"></i></div>
-                        <p class="text-slate-400 font-black text-xs uppercase tracking-widest">Carregant llista APA...</p>
-                    </div>
-                    <div id="publicacions-apa-table"></div>
-                </div>
-            </div>
-        </section>
     </div>
 
-    <script src="departaments.js"></script>
+    <script src="dedicacio.js"></script>
 </body>
 </html>

@@ -56,7 +56,7 @@ import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTBookmark;
 import org.w3c.dom.Node;
 
 @RestController
-@RequestMapping({"/api/persons", "/persons", "/otr/api/persons"})
+@RequestMapping("/api/persons")
 @CrossOrigin(origins = "*") // Permite llamadas desde tu index.html
 public class PersonaController {
 
@@ -1471,6 +1471,125 @@ public class PersonaController {
         return Map.of("total", total);
     }
 
+    /**
+     * Total de persones vigents (deduplicades per persona), usant la mateixa lògica
+     * d'elemMatch que els gràfics (age-pyramid, sex-distribution, nationality).
+     */
+    @GetMapping("/stats/vigentes-total")
+    public Map<String, Long> getVigentesTotal(
+            @RequestParam(required = false) String personalType,
+            @RequestParam(required = false) String deptUuid) {
+
+        LocalDate hoy = LocalDate.now();
+        String hoyIso = hoy.toString();
+
+        Criteria activeAssociationCriteria = new Criteria().orOperator(
+            Criteria.where("period.endDate").is(null),
+            Criteria.where("period.endDate").exists(false),
+            new Criteria().andOperator(
+                Criteria.where("period.endDate").type(9),
+                Criteria.where("period.endDate").gt(hoy)
+            ),
+            new Criteria().andOperator(
+                Criteria.where("period.endDate").type(2),
+                Criteria.where("period.endDate").gt(hoyIso)
+            )
+        );
+
+        Query query = new Query();
+        if (deptUuid != null && !deptUuid.isBlank()) {
+            query.addCriteria(Criteria.where("staffOrganizationAssociations").elemMatch(
+                new Criteria().andOperator(
+                    Criteria.where("organization.uuid").is(deptUuid),
+                    activeAssociationCriteria
+                )
+            ));
+        } else {
+            query.addCriteria(Criteria.where("staffOrganizationAssociations").elemMatch(activeAssociationCriteria));
+        }
+
+        addPersonalTypeCriteria(query, personalType);
+
+        return Map.of("total", mongoTemplate.count(query, Persona.class));
+    }
+
+    /**
+     * Persones vigents agrupades per categoria laboral (employmentType.term.ca_ES).
+     * Deduplicació per UUID dins de cada categoria. Suporta filtres opcionals deptUuid i personalType.
+     */
+    @GetMapping("/stats/vigentes-por-categoria")
+    public List<Map<String, Object>> getVigentesPorCategoria(
+            @RequestParam(required = false) String deptUuid,
+            @RequestParam(required = false) String personalType) {
+
+        List<AggregationOperation> ops = new ArrayList<>();
+
+        ops.add(Aggregation.unwind("staffOrganizationAssociations"));
+
+        // Filtre per departament sobre l'associació desplegada
+        if (deptUuid != null && !deptUuid.isBlank()) {
+            ops.add(Aggregation.match(
+                Criteria.where("staffOrganizationAssociations.organization.uuid").is(deptUuid)));
+        }
+
+        // Filtre per tipo de personal (acadèmic / no acadèmic)
+        if ("academic".equalsIgnoreCase(personalType)) {
+            ops.add(Aggregation.match(new Criteria().orOperator(
+                Criteria.where("staffOrganizationAssociations.staffType.term.ca_ES").regex("^acadèm", "i"),
+                Criteria.where("staffOrganizationAssociations.staffType.term.es_ES").regex("^académ", "i"),
+                Criteria.where("staffOrganizationAssociations.staffType.term.en_GB").regex("^academic", "i")
+            )));
+        } else if ("nonAcademic".equalsIgnoreCase(personalType)) {
+            ops.add(Aggregation.match(new Criteria().norOperator(
+                Criteria.where("staffOrganizationAssociations.staffType.term.ca_ES").regex("^acadèm", "i"),
+                Criteria.where("staffOrganizationAssociations.staffType.term.es_ES").regex("^académ", "i"),
+                Criteria.where("staffOrganizationAssociations.staffType.term.en_GB").regex("^academic", "i")
+            )));
+        }
+
+        // Filtre vigència: endDate null, no existeix, o > NOW (amb $toDate per a dates en string)
+        ops.add(ctx -> new Document("$match", new Document("$or", Arrays.asList(
+            new Document("staffOrganizationAssociations.period.endDate", (Object) null),
+            new Document("staffOrganizationAssociations.period.endDate",
+                new Document("$exists", false)),
+            new Document("$expr", new Document("$gt", Arrays.asList(
+                new Document("$toDate", "$staffOrganizationAssociations.period.endDate"),
+                "$$NOW"
+            )))
+        ))));
+
+        // Agrupació per categoria, deduplicant per uuid (fallback ca_ES → es_ES → en_GB)
+        ops.add(ctx -> new Document("$group", new Document("_id",
+            new Document("$ifNull", Arrays.asList(
+                "$staffOrganizationAssociations.employmentType.term.ca_ES",
+                new Document("$ifNull", Arrays.asList(
+                    "$staffOrganizationAssociations.employmentType.term.es_ES",
+                    "$staffOrganizationAssociations.employmentType.term.en_GB"
+                ))
+            )))
+            .append("total_personas", new Document("$addToSet", "$uuid"))));
+
+        // Projecció: nom camp + mida del set
+        ops.add(ctx -> new Document("$project", new Document("_id", 0)
+            .append("categoria_laboral", "$_id")
+            .append("total_personas", new Document("$size", "$total_personas"))));
+
+        // Ordre descendent
+        ops.add(ctx -> new Document("$sort", new Document("total_personas", -1)));
+
+        return mongoTemplate
+            .aggregate(Aggregation.newAggregation(ops), Persona.class, Document.class)
+            .getMappedResults()
+            .stream()
+            .map(d -> {
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("categoria_laboral", d.get("categoria_laboral"));
+                m.put("total_personas", ((Number) d.getOrDefault("total_personas", 0)).longValue());
+                return m;
+            })
+            .toList();
+    }
+
     @GetMapping("/stats/catedraticos")
     public Map<String, Long> getCatedraticosStats(
             @RequestParam(required = false) String personalType,
@@ -2203,7 +2322,7 @@ public class PersonaController {
     // Informe Word: genera un .docx con el personal adscrit a un centre en
     // un rang de dates determinat.
     // -----------------------------------------------------------------------
-    @GetMapping("/informe-word")
+    @GetMapping("/reports/word")
     public void generarInformeWord(
             @RequestParam String orgUuid,
             @RequestParam(required = false, defaultValue = "2000-01-01") String startDate,
@@ -3547,7 +3666,7 @@ public class PersonaController {
     // -----------------------------------------------------------------------
     // Autocomplete: returns active persons matching a query (uuid + nombre)
     // -----------------------------------------------------------------------
-    @GetMapping("/search-vigentes")
+    @GetMapping("/search/active")
     public List<Map<String, String>> searchPersonasVigentes(
             @RequestParam(required = false, defaultValue = "") String q) {
         LocalDate hoy = LocalDate.now();
@@ -3606,7 +3725,7 @@ public class PersonaController {
     // Informe Word per persona: genera un .docx amb tots els ajuts (competitius
     // i convenis) on la persona és awardHolder durant un rang de dates.
     // -----------------------------------------------------------------------
-    @GetMapping("/informe-word-persona")
+    @GetMapping("/reports/word/person")
     public void generarInformeWordPersona(
             @RequestParam String personUuid,
             @RequestParam(required = false, defaultValue = "2000-01-01") String startDate,

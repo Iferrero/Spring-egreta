@@ -16,8 +16,36 @@ const chartComparativaPies = new Map();
 let departamentosComparativa = [];
 let chartComparativaBarras = null;
 let chartComparativaGrowth = null;
+let chartComparativaGrowthLine = null;
+let growthViewMode = 'heatmap'; // 'heatmap' | 'line'
+let _legendCtrlDown = false;
+document.addEventListener('keydown', e => { if (e.key === 'Control') _legendCtrlDown = true; });
+document.addEventListener('keyup',   e => { if (e.key === 'Control') _legendCtrlDown = false; });
+
+function setGrowthView(mode) {
+    growthViewMode = mode;
+    const btnHeat = document.getElementById('growthViewHeatmap');
+    const btnLine = document.getElementById('growthViewLine');
+    const elHeat = document.getElementById('comparativaGrowthChart');
+    const elLine = document.getElementById('comparativaGrowthChartLine');
+    const active = 'px-2.5 py-1 rounded-lg bg-indigo-600 text-white font-semibold transition-colors';
+    const inactive = 'px-2.5 py-1 rounded-lg bg-white text-slate-500 border border-slate-200 font-semibold hover:bg-slate-50 transition-colors';
+    if (mode === 'heatmap') {
+        if (btnHeat) btnHeat.className = active;
+        if (btnLine) btnLine.className = inactive;
+        if (elHeat) elHeat.classList.remove('hidden');
+        if (elLine) elLine.classList.add('hidden');
+        if (chartComparativaGrowth) requestAnimationFrame(() => chartComparativaGrowth.resize());
+    } else {
+        if (btnHeat) btnHeat.className = inactive;
+        if (btnLine) btnLine.className = active;
+        if (elHeat) elHeat.classList.add('hidden');
+        if (elLine) elLine.classList.remove('hidden');
+        if (chartComparativaGrowthLine) requestAnimationFrame(() => chartComparativaGrowthLine.resize());
+    }
+}
 const comparativaQuartilesData = new Map(); // uuid -> { nombre, q1, total }
-const comparativaGrowthData = new Map(); // uuid -> { nombre, growth }
+const comparativaGrowthData = new Map(); // uuid -> { nombre, evolution: [{year, q1}] }
 
 function clearComparativaSelection() {
     departamentosComparativa = [];
@@ -58,7 +86,7 @@ function renderComparativaBarChart() {
         chartComparativaBarras.resize();
     }
 
-    const names = entries.map(d => d.nombre);
+    const names = entries.map(d => _deptLabel(d.nombre, 32));
     const values = entries.map(d => d.pct);
 
     // Calcular la media
@@ -101,7 +129,7 @@ function renderComparativaBarChart() {
                 label: {
                     show: true,
                     position: 'end',
-                    formatter: `Media: {c}%`,
+                    formatter: `Mitjana: {c}%`,
                     fontSize: 11,
                     color: '#004d5e',
                     fontWeight: 700
@@ -121,23 +149,42 @@ function renderComparativaBarChart() {
 
 function renderComparativaGrowthChart() {
     const section = document.getElementById('comparativaGrowthChartSection');
-    const el = document.getElementById('comparativaGrowthChart');
-    if (!section || !el) return;
+    if (!section) return;
 
     const entries = Array.from(comparativaGrowthData.values())
-        .filter(d => d.growth !== null && d.growth !== undefined)
-        .sort((a, b) => b.growth - a.growth);
+        .filter(d => d.evolution && d.evolution.length > 0);
 
     if (entries.length === 0) {
         section.classList.add('hidden');
         if (chartComparativaGrowth) { chartComparativaGrowth.dispose(); chartComparativaGrowth = null; }
+        if (chartComparativaGrowthLine) { chartComparativaGrowthLine.dispose(); chartComparativaGrowthLine = null; }
         return;
     }
 
     section.classList.remove('hidden');
-    const rowHeight = 32;
-    const minHeight = 120;
-    el.style.height = Math.max(minHeight, entries.length * rowHeight + 60) + 'px';
+
+    const allYears = [...new Set(entries.flatMap(d => d.evolution.map(e => e.year)))].sort((a, b) => a - b);
+    entries.sort((a, b) => {
+        const ta = a.evolution.reduce((s, e) => s + e.q1, 0);
+        const tb = b.evolution.reduce((s, e) => s + e.q1, 0);
+        return tb - ta;
+    });
+
+    _renderGrowthHeatmap(entries, allYears);
+    _renderGrowthLines(entries, allYears);
+}
+
+function _deptLabel(nombre, maxLen = 28) {
+    const stripped = nombre.replace(/^Departament(?:o)?\s+(?:d[e']\s*)?/i, '').trim();
+    return stripped.length > maxLen ? stripped.slice(0, maxLen - 1) + '…' : stripped;
+}
+
+function _renderGrowthHeatmap(entries, allYears) {
+    const el = document.getElementById('comparativaGrowthChart');
+    if (!el) return;
+
+    const n = entries.length;
+    el.style.height = Math.max(300, n * 44 + 90) + 'px';
 
     if (!chartComparativaGrowth) {
         chartComparativaGrowth = echarts.init(el);
@@ -145,42 +192,200 @@ function renderComparativaGrowthChart() {
         chartComparativaGrowth.resize();
     }
 
-    const names = entries.map(d => d.nombre);
-    const values = entries.map(d => d.growth);
+    const palette = ['#4f46e5','#059669','#dc2626','#d97706','#7c3aed','#0891b2','#be185d','#65a30d','#ea580c','#0369a1'];
+
+    // Q1 count matrix [deptIndex][yearIndex]
+    const q1Matrix = entries.map(d => {
+        const byYear = Object.fromEntries(d.evolution.map(e => [e.year, e.q1]));
+        return allYears.map(y => byYear[y] ?? 0);
+    });
+
+    // Rank matrix: rank 1 = most Q1 articles that year
+    const ranks = entries.map(() => new Array(allYears.length).fill(null));
+    allYears.forEach((y, yi) => {
+        const sorted = entries
+            .map((d, di) => ({ di, val: q1Matrix[di][yi] }))
+            .sort((a, b) => b.val - a.val);
+        let currentRank = 1;
+        sorted.forEach((v, si) => {
+            if (si > 0 && sorted[si - 1].val === v.val) {
+                ranks[v.di][yi] = ranks[sorted[si - 1].di][yi];
+            } else {
+                ranks[v.di][yi] = currentRank;
+            }
+            currentRank++;
+        });
+    });
+
+    const series = entries.map((d, di) => {
+        const shortName = _deptLabel(d.nombre);
+        return {
+            name: shortName,
+            type: 'line',
+            smooth: false,
+            symbol: 'circle',
+            symbolSize: 16,
+            lineStyle: { width: 1.5, color: palette[di % palette.length] },
+            itemStyle: { color: palette[di % palette.length] },
+            label: {
+                show: true,
+                formatter: p => q1Matrix[di][p.dataIndex] > 0 ? String(q1Matrix[di][p.dataIndex]) : '',
+                color: '#fff',
+                fontSize: 9,
+                fontWeight: 700
+            },
+            data: ranks[di].map((rank, yi) => ({ value: rank, q1: q1Matrix[di][yi] }))
+        };
+    });
 
     chartComparativaGrowth.setOption({
         tooltip: {
             trigger: 'axis',
-            axisPointer: { type: 'shadow' },
-            formatter: p => `${p[0].name}: <b>${p[0].value > 0 ? '+' : ''}${p[0].value.toFixed(1)}%</b>`
-        },
-        grid: { left: 200, right: 48, top: 12, bottom: 24, containLabel: false },
-        xAxis: {
-            type: 'value',
-            axisLabel: { formatter: '{value}%', color: '#596473', fontSize: 11 },
-            splitLine: { lineStyle: { color: '#f1f2f4' } }
-        },
-        yAxis: {
-            type: 'category',
-            data: names,
-            inverse: true,
-            axisLabel: {
-                color: '#2a3037',
-                fontSize: 11,
-                width: 190,
-                overflow: 'truncate'
+            formatter: params => {
+                const yi = params[0]?.dataIndex;
+                const year = allYears[yi];
+                const sorted = [...params].sort((a, b) => (a.data?.value ?? 99) - (b.data?.value ?? 99));
+                let html = `<b>${year}</b><br/>`;
+                sorted.forEach(p => {
+                    const q1 = p.data?.q1 ?? 0;
+                    const name = p.seriesName;
+                    html += `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p.color};margin-right:4px"></span>`
+                          + `<b>#${p.data?.value}</b> ${name}: <b>${q1}</b> art. Q1<br/>`;
+                });
+                return html;
             }
         },
-        series: [{
-            type: 'bar',
-            data: values.map((v) => ({
-                value: v,
-                itemStyle: { color: v >= 0 ? '#004d21' : '#dc2626', borderRadius: v >= 0 ? [0, 4, 4, 0] : [4, 0, 0, 4] }
-            })),
-            label: { show: true, position: 'right', formatter: p => `${p.value > 0 ? '+' : ''}${p.value.toFixed(1)}%`, fontSize: 11, color: '#596473' },
-            barMaxWidth: 24
-        }]
+        legend: { type: 'scroll', bottom: 0, textStyle: { fontSize: 10, color: '#596473' } },
+        grid: { left: 20, right: 20, top: 10, bottom: 50, containLabel: true },
+        xAxis: {
+            type: 'category',
+            data: allYears.map(String),
+            boundaryGap: true,
+            axisLabel: { color: '#596473', fontSize: 11 },
+            splitLine: { show: true, lineStyle: { color: '#eef0f3' } }
+        },
+        yAxis: {
+            type: 'value',
+            min: 1,
+            max: n,
+            inverse: true,
+            interval: 1,
+            axisLabel: { formatter: v => Number.isInteger(v) ? `#${v}` : '', color: '#596473', fontSize: 10 },
+            splitLine: { lineStyle: { color: '#eef0f3', type: 'dashed' } }
+        },
+        series
     }, true);
+
+    // Solo-click legend: click isolates; click again restores all. Ctrl+click: toggle individual.
+    chartComparativaGrowth.off('legendselectchanged');
+    let _growthRankSolo = null;
+    let _growthRankVisible = null; // Set of visible names in ctrl-mode
+    chartComparativaGrowth.on('legendselectchanged', ({ name }) => {
+        const allNames = series.map(s => s.name);
+        if (_legendCtrlDown) {
+            // Ctrl mode: init from current visible state, then add the clicked item
+            if (!_growthRankVisible) {
+                _growthRankVisible = _growthRankSolo ? new Set([_growthRankSolo]) : new Set(allNames);
+            }
+            _growthRankSolo = null;
+            if (_growthRankVisible.has(name)) { _growthRankVisible.delete(name); } else { _growthRankVisible.add(name); }
+            if (_growthRankVisible.size === 0) _growthRankVisible = new Set(allNames);
+            chartComparativaGrowth.setOption({ legend: { selected: Object.fromEntries(allNames.map(n => [n, _growthRankVisible.has(n)])) } });
+        } else {
+            _growthRankVisible = null;
+            if (_growthRankSolo === name) {
+                _growthRankSolo = null;
+                chartComparativaGrowth.setOption({ legend: { selected: Object.fromEntries(allNames.map(n => [n, true])) } });
+            } else {
+                _growthRankSolo = name;
+                chartComparativaGrowth.setOption({ legend: { selected: Object.fromEntries(allNames.map(n => [n, n === name])) } });
+            }
+        }
+    });
+}
+
+function _renderGrowthLines(entries, allYears) {
+    const el = document.getElementById('comparativaGrowthChartLine');
+    if (!el) return;
+
+    // ECharts can't initialize in a display:none container; temporarily show it
+    const wasHidden = el.classList.contains('hidden');
+    if (wasHidden) el.classList.remove('hidden');
+
+    el.style.height = '320px';
+
+    if (!chartComparativaGrowthLine) {
+        chartComparativaGrowthLine = echarts.init(el);
+    } else {
+        chartComparativaGrowthLine.resize();
+    }
+
+    const palette = ['#4f46e5','#059669','#dc2626','#d97706','#7c3aed','#0891b2','#be185d','#65a30d','#ea580c','#0369a1'];
+    const series = entries.map((d, i) => {
+        const byYear = Object.fromEntries(d.evolution.map(e => [e.year, e.q1]));
+        const shortName = _deptLabel(d.nombre);
+        return {
+            name: shortName,
+            type: 'line', smooth: true, symbol: 'circle', symbolSize: 7,
+            lineStyle: { width: 2.5, color: palette[i % palette.length] },
+            itemStyle: { color: palette[i % palette.length] },
+            data: allYears.map(y => byYear[y] ?? null),
+            connectNulls: false
+        };
+    });
+
+    chartComparativaGrowthLine.setOption({
+        tooltip: {
+            trigger: 'axis',
+            formatter: params => {
+                const year = params[0]?.axisValue;
+                let html = `<b>${year}</b><br/>`;
+                params.forEach(p => {
+                    if (p.value !== null && p.value !== undefined) {
+                        html += `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${p.color};margin-right:5px"></span>${p.seriesName}: <b>${p.value}</b><br/>`;
+                    }
+                });
+                return html;
+            }
+        },
+        legend: { type: 'scroll', bottom: 0, textStyle: { fontSize: 10, color: '#596473' } },
+        grid: { left: 40, right: 20, top: 16, bottom: 60, containLabel: true },
+        xAxis: { type: 'category', data: allYears.map(String), axisLabel: { color: '#596473', fontSize: 11 }, splitLine: { lineStyle: { color: '#f1f2f4' } } },
+        yAxis: { type: 'value', minInterval: 1, axisLabel: { color: '#596473', fontSize: 11 }, splitLine: { lineStyle: { color: '#f1f2f4' } } },
+        series
+    }, true);
+
+    // Solo-click legend: click isolates; click again restores all. Ctrl+click: toggle individual.
+    chartComparativaGrowthLine.off('legendselectchanged');
+    let _growthLineSolo = null;
+    let _growthLineVisible = null; // Set of visible names in ctrl-mode
+    chartComparativaGrowthLine.on('legendselectchanged', ({ name }) => {
+        const allNames = series.map(s => s.name);
+        if (_legendCtrlDown) {
+            // Ctrl mode: init from current visible state, then add the clicked item
+            if (!_growthLineVisible) {
+                _growthLineVisible = _growthLineSolo ? new Set([_growthLineSolo]) : new Set(allNames);
+            }
+            _growthLineSolo = null;
+            if (_growthLineVisible.has(name)) { _growthLineVisible.delete(name); } else { _growthLineVisible.add(name); }
+            if (_growthLineVisible.size === 0) _growthLineVisible = new Set(allNames);
+            chartComparativaGrowthLine.setOption({ legend: { selected: Object.fromEntries(allNames.map(n => [n, _growthLineVisible.has(n)])) } });
+        } else {
+            _growthLineVisible = null;
+            if (_growthLineSolo === name) {
+                _growthLineSolo = null;
+                chartComparativaGrowthLine.setOption({ legend: { selected: Object.fromEntries(allNames.map(n => [n, true])) } });
+            } else {
+                _growthLineSolo = name;
+                chartComparativaGrowthLine.setOption({ legend: { selected: Object.fromEntries(allNames.map(n => [n, n === name])) } });
+            }
+        }
+    });
+
+    // Restore hidden state if we're not currently in line view
+    if (wasHidden && growthViewMode !== 'line') {
+        el.classList.add('hidden');
+    }
 }
 
 function mostrarOverlayCargando() {
@@ -221,6 +426,7 @@ async function refrescarComparativa() {
         chartComparativaPies.forEach(ch => ch.resize());
         if (chartComparativaBarras) chartComparativaBarras.resize();
         if (chartComparativaGrowth) chartComparativaGrowth.resize();
+        if (chartComparativaGrowthLine) chartComparativaGrowthLine.resize();
     });
 }
 
@@ -313,6 +519,31 @@ function quitarDepartamentoSeleccionado(uuid) {
     renderizarChipsDepartamentos();
 }
 
+function renderPersonaChip() {
+    const container = document.getElementById('personaChipContainer');
+    if (!container) return;
+    container.innerHTML = '';
+    if (!personaSeleccionadaUuid) return;
+
+    const persona = personasCatalogo.find(p => p.uuid === personaSeleccionadaUuid);
+    const nom = persona ? persona.nombre : personaSeleccionadaUuid;
+
+    const chip = document.createElement('span');
+    chip.className = 'inline-flex items-center gap-2 px-3 py-1 rounded-full bg-violet-50 text-violet-700 text-xs font-semibold';
+    chip.innerHTML = `<i class="fa-solid fa-user text-violet-400"></i>${escapeHtml(nom)} <button type="button" class="ml-1 text-violet-400 hover:text-violet-700"><i class="fa-solid fa-xmark"></i></button>`;
+    chip.querySelector('button').addEventListener('click', () => {
+        personaSeleccionadaUuid = '';
+        document.getElementById('personaSeleccionadaUuid').value = '';
+        const lbl = document.getElementById('personaDropdownLabel');
+        lbl.textContent = 'Totes les persones';
+        lbl.classList.add('text-slate-400');
+        lbl.classList.remove('text-slate-800');
+        renderPersonaChip();
+        programarRefresco();
+    });
+    container.appendChild(chip);
+}
+
 function abrirDropdownDepartamentos() {
     document.getElementById('departamentoDropdownMenu').classList.remove('hidden');
 }
@@ -330,6 +561,7 @@ function resetPersonaDropdown() {
     label.classList.remove('text-slate-800');
     document.getElementById('personaDropdownBtn').disabled = true;
     document.getElementById('personaDropdownList').innerHTML = '';
+    renderPersonaChip();
 }
 
 function abrirDropdownPersones() {
@@ -377,6 +609,7 @@ async function cargarPersones() {
             lbl.textContent = 'Totes les persones';
             lbl.classList.add('text-slate-400');
             lbl.classList.remove('text-slate-800');
+            renderPersonaChip();
             cerrarDropdownPersones();
             programarRefresco();
         });
@@ -402,6 +635,7 @@ async function cargarPersones() {
                     : escapeHtml(p.nombre);
                 lbl.classList.remove('text-slate-400');
                 lbl.classList.add('text-slate-800');
+                renderPersonaChip();
                 cerrarDropdownPersones();
                 programarRefresco();
             });
@@ -990,6 +1224,7 @@ window.addEventListener('resize', () => {
     chartComparativaPies.forEach(ch => ch.resize());
     if (chartComparativaBarras) chartComparativaBarras.resize();
     if (chartComparativaGrowth) chartComparativaGrowth.resize();
+    if (chartComparativaGrowthLine) chartComparativaGrowthLine.resize();
 });
 
 // ─── Comparativa ─────────────────────────────────────────────────────────────
@@ -1016,6 +1251,7 @@ function activateTab(tab) {
                 chartComparativaPies.forEach(ch => ch.resize());
                 if (chartComparativaBarras) chartComparativaBarras.resize();
                 if (chartComparativaGrowth) chartComparativaGrowth.resize();
+                if (chartComparativaGrowthLine) chartComparativaGrowthLine.resize();
             });
         });
     } else {
@@ -1108,7 +1344,8 @@ async function carregarComparativaPiePerDept(dep) {
                 growth = 0;
             }
         }
-        comparativaGrowthData.set(dep.uuid, { nombre: dep.nombre, growth });
+        const evolutionQ1 = sortedEvo.map(e => ({ year: Number(e.year), q1: Number(e['Q1'] || 0) }));
+        comparativaGrowthData.set(dep.uuid, { nombre: dep.nombre, evolution: evolutionQ1 });
         renderComparativaGrowthChart();
 
         ch.setOption({

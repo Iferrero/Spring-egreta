@@ -1624,7 +1624,7 @@ async function cargarAwardsPersona(persona) {
 
 /**
  * Genera l'informe Word de la persona seleccionada amb el mateix format que el certificat.
- * Utilitza el rang d'anys actiu i crida l'endpoint /persons/informe-word-persona.
+ * Utilitza el rang d'anys actiu i crida l'endpoint /persons/reports/word/person.
  */
 function generarInformePersona() {
     if (!personaTopSeleccionada || !personaTopSeleccionada.personaUuid) {
@@ -1666,7 +1666,7 @@ function generarInformePersona() {
         modoAnio: modoAnio || 'awardDate'
     });
     appendFilterParams(params, { categoria, tipus });
-    const url = apiUrl('/persons/informe-word-persona') + '?' + params.toString();
+    const url = apiUrl('/persons/reports/word/person') + '?' + params.toString();
     const a = document.createElement('a');
     a.href = url;
     a.download = '';

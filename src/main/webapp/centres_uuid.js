@@ -11,6 +11,118 @@ let roleChart = null;
 let latestChartOptions = { dedication: null, role: null };
 let originalChartHeights = { dedication: null, role: null };
 let activeTab = 'personal';
+const forcedOrgFromUrl = getForcedOrgFromUrl();
+
+function getForcedOrgFromUrl() {
+    const params = new URLSearchParams(window.location.search || '');
+    const rawUuid =
+        params.get('uuid') ||
+        params.get('orgUuid') ||
+        params.get('deptUuid') ||
+        params.get('departamentUuid') ||
+        params.get('institutUuid') ||
+        params.get('instituteUuid');
+
+    if (!rawUuid) return null;
+
+    const rawType = (
+        params.get('type') ||
+        params.get('orgType') ||
+        params.get('tipus') ||
+        ''
+    ).toLowerCase();
+
+    let type = null;
+    if (rawType.startsWith('dept') || rawType.startsWith('dep')) type = 'dept';
+    if (rawType.startsWith('inst') || rawType.includes('institut')) type = 'inst';
+
+    const rawValue = String(rawUuid).trim();
+    if (!type && rawValue.includes(':')) {
+        const [typeFromUuid] = rawValue.split(':');
+        const t = String(typeFromUuid || '').toLowerCase();
+        if (t === 'dept' || t === 'dep') type = 'dept';
+        if (t === 'inst' || t === 'institut' || t === 'institute') type = 'inst';
+    }
+
+    const uuid = rawValue.includes(':') ? rawValue.split(':').slice(1).join(':') : rawValue;
+
+    return { uuid: String(uuid).trim(), type };
+}
+
+function normalizeOrgUuid(value) {
+    if (value === null || value === undefined) return '';
+    return String(value)
+        .trim()
+        .replace(/[{}]/g, '')
+        .toLowerCase();
+}
+
+function getOptionByUuid(selectEl, uuid, preferredType) {
+    if (!selectEl || !uuid) return null;
+
+    const normalizedTarget = normalizeOrgUuid(uuid);
+
+    const options = Array.from(selectEl.options || []);
+    const sameUuid = options.filter(o => {
+        const [optType, optUuid] = String(o.value || '').split(':');
+        return Boolean(optType && optUuid && normalizeOrgUuid(optUuid) === normalizedTarget);
+    });
+
+    if (!sameUuid.length) return null;
+    if (!preferredType) return sameUuid[0];
+
+    return sameUuid.find(o => String(o.value || '').startsWith(`${preferredType}:`)) || sameUuid[0];
+}
+
+function applyForcedOrgFilterFromUrl() {
+    if (!forcedOrgFromUrl || !forcedOrgFromUrl.uuid) return false;
+
+    const selectEl = document.getElementById('orgSelect');
+    if (!selectEl) return false;
+
+    const option = getOptionByUuid(selectEl, forcedOrgFromUrl.uuid, forcedOrgFromUrl.type);
+    if (!option) {
+        console.warn('No s\'ha trobat cap organització per la UUID de la URL:', forcedOrgFromUrl.uuid);
+        return false;
+    }
+
+    selectEl.value = option.value;
+    selectEl.disabled = true;
+
+    const container = document.getElementById('orgSelectContainer');
+    if (container) container.classList.add('hidden');
+    return true;
+}
+
+function ensureInitialOrgSelection() {
+    const selectEl = document.getElementById('orgSelect');
+    if (!selectEl) return;
+    if (selectEl.value) return;
+
+    const firstValid = Array.from(selectEl.options || []).find(opt => {
+        const value = String(opt.value || '');
+        return value.startsWith('dept:') || value.startsWith('inst:');
+    });
+
+    if (firstValid) {
+        selectEl.value = firstValid.value;
+    }
+}
+
+function updateDashboardTitle() {
+    const titleEl = document.getElementById('dashboardOrgTitle');
+    const selectEl = document.getElementById('orgSelect');
+    if (!selectEl) return;
+
+    const selectedOption = selectEl.options[selectEl.selectedIndex];
+    const orgName = selectedOption ? String(selectedOption.textContent || '').trim() : '';
+    const title = orgName || 'Departament / Institut';
+
+    if (titleEl) titleEl.textContent = title;
+
+    const brandTitleEl = document.querySelector('.uab-brandbar__title');
+    if (brandTitleEl) brandTitleEl.textContent = title;
+}
 
 // ---- Filtre acadèmic / no acadèmic ----
 let personalDataCompleta = [];
@@ -245,8 +357,13 @@ function renderDemoTable(rows) {
         }
     ];
 
+    personalDataCompleta = rows || [];
+    // Apply current academic filter
+    const toShow = filtrarRowsAcademic(personalDataCompleta, filtreAcademic);
+
     if (!demoTable) {
         demoTable = new Tabulator(el, {
+            data: toShow,
             layout: 'fitColumns',
             placeholder: 'No hi ha dades.',
             columns: cols,
@@ -256,12 +373,8 @@ function renderDemoTable(rows) {
         });
     } else {
         demoTable.setColumns(cols);
+        demoTable.setData(toShow);
     }
-
-    personalDataCompleta = rows || [];
-    // Apply current academic filter
-    const toShow = filtrarRowsAcademic(personalDataCompleta, filtreAcademic);
-    demoTable.setData(toShow);
 }
 
 function initDedicationChart() {
@@ -467,7 +580,7 @@ async function cargarKpiTotalPersonal() {
     const select = document.getElementById('orgSelect');
     const filtrePersonalSelect = document.getElementById('filtrePersonalSelect');
     const orgVal = select ? select.value : '';
-    const filtrePersonal = filtrePersonalSelect ? filtrePersonalSelect.value : 'periode';
+    const filtrePersonal = filtrePersonalSelect ? filtrePersonalSelect.value : 'vigent';
 
     if (!orgVal) {
         kpiRequestSeq++;
@@ -503,7 +616,7 @@ async function cargarDemoData() {
     const select = document.getElementById('orgSelect');
     const filtrePersonalSelect = document.getElementById('filtrePersonalSelect');
     const orgVal = select.value; // formato tipo:uuid o empty
-    const filtrePersonal = filtrePersonalSelect ? filtrePersonalSelect.value : 'periode';
+    const filtrePersonal = filtrePersonalSelect ? filtrePersonalSelect.value : 'vigent';
     const [desdeRaw, hastaRaw] = document.getElementById('sliderAnios').noUiSlider.get();
     const desde = parseInt(desdeRaw, 10);
     const hasta = parseInt(hastaRaw, 10);
@@ -638,7 +751,7 @@ function construirPublicacionsPivot(data) {
     });
 
     const columns = [
-        { title: 'Tipus', field: 'tipo', sorter: 'string', widthGrow: 2 },
+        { title: 'Tipus', field: 'tipo', sorter: 'string', headerFilter: 'input', headerFilterPlaceholder: 'Buscar tipus...', widthGrow: 2 },
         ...anios.map(anio => ({
             title: String(anio),
             field: fieldByAnio.get(anio),
@@ -718,17 +831,12 @@ function setPublicacionsApaLoading(isLoading) {
     if (tableEl) tableEl.classList.toggle('hidden', !!isLoading);
 }
 
-function isPublicacionsManagingOnlyEnabled() {
-    const checkbox = document.getElementById('publicacionsManagingOnly');
-    return !!(checkbox && checkbox.checked);
-}
-
 async function cargarPublicacionsData() {
 
     const select = document.getElementById('orgSelect');
     const orgVal = select.value;
     const filtrePersonalSelect = document.getElementById('filtrePersonalSelect');
-    const filtrePersonal = filtrePersonalSelect ? filtrePersonalSelect.value : 'periode';
+    const filtrePersonal = filtrePersonalSelect ? filtrePersonalSelect.value : 'vigent';
     const loadingEl = document.getElementById('publicacionsLoading');
     const wrapperEl = document.getElementById('publicacionsWrapper');
 
@@ -744,13 +852,7 @@ async function cargarPublicacionsData() {
     const [desdeRaw, hastaRaw] = document.getElementById('sliderAnios').noUiSlider.get();
     const desde = parseInt(desdeRaw, 10);
     const hasta = parseInt(hastaRaw, 10);
-    const managedByDepartment = isPublicacionsManagingOnlyEnabled();
-    const params = new URLSearchParams({
-        desde: String(desde),
-        hasta: String(hasta),
-        filtrePersonal,
-        managedByDepartment: managedByDepartment ? 'true' : 'false'
-    });
+    const params = new URLSearchParams({ desde: String(desde), hasta: String(hasta), filtrePersonal });
     if (deptUuid) params.append('deptUuid', deptUuid);
     const paramsKey = params.toString();
 
@@ -1195,17 +1297,14 @@ function buildLlistaHtml(data) {
     data.forEach(t => {
         const titol = t.titol || '(Sense títol)';
         const autors = (t.autors || []).map(a => `${a} (Autor)`).join(', ');
-        const supervisors = (t.directors || []).map((d, idx) => {
-            const rol = (t.supervisorRoles || [])[idx] || 'Director/a';
-            return `${d} (${rol})`;
-        }).join(', ');
+        const directors = (t.directors || []).map(d => `${d} (Director/a)`).join(', ');
         let data_str = '';
         if (t.any) {
             const mes = t.mes && t.mes >= 1 && t.mes <= 12 ? MESOS_CA[t.mes - 1] : null;
             const dia = t.dia ? `${t.dia} de ` : '';
             data_str = mes ? `${dia}${mes} ${t.any}` : String(t.any);
         }
-        const meta = [autors, supervisors, data_str].filter(Boolean).join(', ');
+        const meta = [autors, directors, data_str].filter(Boolean).join(', ');
         html += `<div class="py-3">
             <p class="text-sm font-medium text-slate-800">${titol}</p>
             <p class="text-xs text-slate-500 mt-0.5">${meta}</p>
@@ -1241,7 +1340,7 @@ async function cargarTesisData() {
     const select = document.getElementById('orgSelect');
     const orgVal = select.value;
     const filtrePersonalSelect = document.getElementById('filtrePersonalSelect');
-    const filtrePersonal = filtrePersonalSelect ? filtrePersonalSelect.value : 'periode';
+    const filtrePersonal = filtrePersonalSelect ? filtrePersonalSelect.value : 'vigent';
 
     const loadingEl = document.getElementById('tesisLoading');
     const wrapperEl = document.getElementById('tesisWrapper');
@@ -1423,6 +1522,9 @@ async function cargarAjutsData() {
 
 window.addEventListener('DOMContentLoaded', async () => {
     await cargarOrganizacionesCombinadas();
+    const forcedApplied = applyForcedOrgFilterFromUrl();
+    if (!forcedApplied) ensureInitialOrgSelection();
+    updateDashboardTitle();
     inicializarSliderDemo();
     initDedicationChart();
     initRoleChart();
@@ -1431,6 +1533,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     const orgSelect = document.getElementById('orgSelect');
     const filtrePersonalSelect = document.getElementById('filtrePersonalSelect');
     orgSelect.addEventListener('change', () => {
+        updateDashboardTitle();
         clearTimeout(debounceTimer);
         debounceTimer = setTimeout(() => {
             if (activeTab === 'ajuts') cargarAjutsData();
@@ -1454,18 +1557,6 @@ window.addEventListener('DOMContentLoaded', async () => {
 
                 if (activeTab !== 'personal') {
                     cargarKpiTotalPersonal();
-                }
-            }, 300);
-        });
-    }
-
-    const publicacionsManagingOnly = document.getElementById('publicacionsManagingOnly');
-    if (publicacionsManagingOnly) {
-        publicacionsManagingOnly.addEventListener('change', () => {
-            clearTimeout(debounceTimer);
-            debounceTimer = setTimeout(() => {
-                if (activeTab === 'publicacions') {
-                    cargarPublicacionsData();
                 }
             }, 300);
         });

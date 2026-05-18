@@ -3,7 +3,7 @@
   "pipeline": [
     {
       "$match": {
-        "workflow.step": { "$in": ["validated", "closed"] }
+        "workflow.step": "validated"
       }
     },
     {
@@ -15,22 +15,33 @@
       }
     },
     {
-      "$addFields": {
-        "anio": {
-          "$year": "$awardDate"
+      "$match": {
+        "type.term.ca_ES": {
+          "$ne": "Grups i Xarxes de Recerca externs a la UAB"
         }
       }
     },
     {
-      "$unwind": {
-        "path": "$fundings",
-        "preserveNullAndEmptyArrays": true
+      "$addFields": {
+        "anio": {
+          "$cond": [
+            { "$ifNull": ["$awardDate", false] },
+            { "$year": "$awardDate" },
+            null
+          ]
+        }
       }
     },
     {
-      "$unwind": {
-        "path": "$fundings.fundingCollaborators",
-        "preserveNullAndEmptyArrays": true
+      "$unwind": "$fundings"
+    },
+    {
+      "$unwind": "$fundings.fundingCollaborators"
+    },
+    {
+      "$match": {
+        "fundings.fundingCollaborators.collaborator.uuid":
+          "84443078-1a60-462d-9d0a-b04312afd9eb"
       }
     },
     {
@@ -53,25 +64,36 @@
           "tipo": "$type.term.ca_ES",
           "categoria": "$categoria"
         },
-        "totalImporte": { "$sum": "$importe" }
+        "totalImporte": {
+          "$sum": "$importe"
+        }
       }
     },
     {
-      "$addFields": {
-        "categoriaFinal": {
+      "$project": {
+        "_id": 0,
+        "awardUuid": "$_id.awardUuid",
+        "anio": "$_id.anio",
+        "tipo": "$_id.tipo",
+        "categoria": {
           "$ifNull": ["$_id.categoria", "Sense categoria"]
-        }
+        },
+        "importe": "$totalImporte"
       }
     },
     {
       "$group": {
         "_id": {
-          "anio": "$_id.anio",
-          "tipo": "$_id.tipo",
-          "categoria": "$categoriaFinal"
+          "anio": "$anio",
+          "tipo": "$tipo",
+          "categoria": "$categoria"
         },
-        "ajuts": { "$sum": 1 },
-        "import": { "$sum": "$totalImporte" }
+        "ajuts": {
+          "$sum": 1
+        },
+        "import": {
+          "$sum": "$importe"
+        }
       }
     },
     {
@@ -80,7 +102,7 @@
         "anio": "$_id.anio",
         "categoria": "$_id.categoria",
         "tipo": "$_id.tipo",
-        "ajuts": "$ajuts",
+        "ajuts": 1,
         "import": {
           "$round": ["$import", 2]
         }

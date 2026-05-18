@@ -171,7 +171,7 @@
             estado.className = 'p-4 text-sm text-indigo-600 font-semibold';
 
             try {
-                const response = await apiFetch(`/student-theses/mismo-autor-director?minCoincidencias=${minCoincidencias}&limit=${limit}`);
+                const response = await apiFetch(`/student-theses/stats/same-author-director?minCoincidencias=${minCoincidencias}&limit=${limit}`);
 
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}`);

@@ -1,9 +1,35 @@
-window.APP_CONFIG = window.APP_CONFIG || {
-    apiBaseUrl: '/otr/api',
+const appConfigFromWindow = window.APP_CONFIG || {};
+const metaApiBase = document.querySelector('meta[name="api-base-url"]')?.content?.trim();
+
+function detectDefaultApiBaseUrl() {
+    const path = window.location.pathname || '';
+    const isOtrContext = path === '/otr' || path.startsWith('/otr/');
+
+    if (isOtrContext) {
+        return '/otr/api';
+    }
+
+    return '/api';
+}
+
+const resolvedApiBase =
+    appConfigFromWindow.apiBaseUrl ||
+    metaApiBase ||
+    detectDefaultApiBaseUrl();
+
+const configuredCandidates = Array.isArray(appConfigFromWindow.apiBaseCandidates)
+    ? appConfigFromWindow.apiBaseCandidates
+    : [];
+
+window.APP_CONFIG = {
+    ...appConfigFromWindow,
+    apiBaseUrl: resolvedApiBase,
     apiBaseCandidates: [
+        resolvedApiBase,
+        '/api',
         '/otr/api',
-        '/api'
-    ]
+        ...configuredCandidates
+    ].filter(Boolean)
 };
 
 window.apiUrl = window.apiUrl || function(path, baseOverride) {

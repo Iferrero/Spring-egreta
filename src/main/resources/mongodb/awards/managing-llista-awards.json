@@ -34,12 +34,23 @@
     {
       "$addFields": {
         "importe_partida": {
-          "$convert": {
-            "input": "$fundings.fundingCollaborators.institutionalPart.value",
-            "to": "double",
-            "onError": 0,
-            "onNull": 0
-          }
+          "$cond": [
+            {
+              "$eq": [
+                "$fundings.fundingCollaborators.collaborator.uuid",
+                "84443078-1a60-462d-9d0a-b04312afd9eb"
+              ]
+            },
+            {
+              "$convert": {
+                "input": "$fundings.fundingCollaborators.institutionalPart.value",
+                "to": "double",
+                "onError": 0,
+                "onNull": 0
+              }
+            },
+            0
+          ]
         }
       }
     },

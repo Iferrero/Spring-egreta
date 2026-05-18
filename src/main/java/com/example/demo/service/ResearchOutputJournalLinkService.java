@@ -501,7 +501,10 @@ public class ResearchOutputJournalLinkService {
                 rowByYear.put(quartile, current + 1);
             }
 
-            articles.add(row);
+            // Only include publications with a journal association in the articles list
+            if (quartile != null) {
+                articles.add(row);
+            }
         }
 
         articles.sort((a, b) -> {
