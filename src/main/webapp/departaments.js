@@ -638,7 +638,7 @@ function construirPublicacionsPivot(data) {
     });
 
     const columns = [
-        { title: 'Tipus', field: 'tipo', sorter: 'string', headerFilter: 'input', headerFilterPlaceholder: 'Buscar tipus...', widthGrow: 2 },
+        { title: 'Tipus', field: 'tipo', sorter: 'string', widthGrow: 2 },
         ...anios.map(anio => ({
             title: String(anio),
             field: fieldByAnio.get(anio),
@@ -718,6 +718,11 @@ function setPublicacionsApaLoading(isLoading) {
     if (tableEl) tableEl.classList.toggle('hidden', !!isLoading);
 }
 
+function isPublicacionsManagingOnlyEnabled() {
+    const checkbox = document.getElementById('publicacionsManagingOnly');
+    return !!(checkbox && checkbox.checked);
+}
+
 async function cargarPublicacionsData() {
 
     const select = document.getElementById('orgSelect');
@@ -739,7 +744,13 @@ async function cargarPublicacionsData() {
     const [desdeRaw, hastaRaw] = document.getElementById('sliderAnios').noUiSlider.get();
     const desde = parseInt(desdeRaw, 10);
     const hasta = parseInt(hastaRaw, 10);
-    const params = new URLSearchParams({ desde: String(desde), hasta: String(hasta), filtrePersonal });
+    const managedByDepartment = isPublicacionsManagingOnlyEnabled();
+    const params = new URLSearchParams({
+        desde: String(desde),
+        hasta: String(hasta),
+        filtrePersonal,
+        managedByDepartment: managedByDepartment ? 'true' : 'false'
+    });
     if (deptUuid) params.append('deptUuid', deptUuid);
     const paramsKey = params.toString();
 
@@ -1184,14 +1195,17 @@ function buildLlistaHtml(data) {
     data.forEach(t => {
         const titol = t.titol || '(Sense títol)';
         const autors = (t.autors || []).map(a => `${a} (Autor)`).join(', ');
-        const directors = (t.directors || []).map(d => `${d} (Director/a)`).join(', ');
+        const supervisors = (t.directors || []).map((d, idx) => {
+            const rol = (t.supervisorRoles || [])[idx] || 'Director/a';
+            return `${d} (${rol})`;
+        }).join(', ');
         let data_str = '';
         if (t.any) {
             const mes = t.mes && t.mes >= 1 && t.mes <= 12 ? MESOS_CA[t.mes - 1] : null;
             const dia = t.dia ? `${t.dia} de ` : '';
             data_str = mes ? `${dia}${mes} ${t.any}` : String(t.any);
         }
-        const meta = [autors, directors, data_str].filter(Boolean).join(', ');
+        const meta = [autors, supervisors, data_str].filter(Boolean).join(', ');
         html += `<div class="py-3">
             <p class="text-sm font-medium text-slate-800">${titol}</p>
             <p class="text-xs text-slate-500 mt-0.5">${meta}</p>
@@ -1440,6 +1454,18 @@ window.addEventListener('DOMContentLoaded', async () => {
 
                 if (activeTab !== 'personal') {
                     cargarKpiTotalPersonal();
+                }
+            }, 300);
+        });
+    }
+
+    const publicacionsManagingOnly = document.getElementById('publicacionsManagingOnly');
+    if (publicacionsManagingOnly) {
+        publicacionsManagingOnly.addEventListener('change', () => {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => {
+                if (activeTab === 'publicacions') {
+                    cargarPublicacionsData();
                 }
             }, 300);
         });

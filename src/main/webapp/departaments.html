@@ -42,7 +42,7 @@
     </div>
     <div  class="w-full mx-auto px-6 py-8">
         <header hidden class="mb-6">
-                <h1 class="text-2xl font-bold text-slate-800">Departaments</h1>
+                <h1 class="text-2xl font-bold text-slate-800">Departaments/Instituts</h1>
         </header>
 
         <section class="bg-white border border-slate-200 rounded-2xl shadow-sm p-4 mb-6">
@@ -212,6 +212,12 @@
                     <p class="text-slate-400 font-black text-xs uppercase tracking-widest">Carregant publicacions...</p>
                 </div>
                 <div id="publicacionsWrapper" class="p-6">
+                    <div class="mb-4">
+                        <label for="publicacionsManagingOnly" class="inline-flex items-center gap-2 text-sm text-slate-700">
+                            <input id="publicacionsManagingOnly" type="checkbox" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
+                            <span>Només publicacions gestionades per l'organització seleccionada</span>
+                        </label>
+                    </div>
                     <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Tipus de publicacions per any</h3>
                     <div id="publicacions-table"></div>
                     <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 mt-8">Llista de publicacions (APA)</h3>

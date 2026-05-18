@@ -64,16 +64,20 @@ public class PublicacionController {
     }
 
     private String buildStatsCacheKey(Integer desde, Integer hasta, List<String> deptUuid) {
-        return buildStatsCacheKey(desde, hasta, deptUuid, null);
+        return buildStatsCacheKey(desde, hasta, deptUuid, null, false);
     }
 
     private String buildStatsCacheKey(Integer desde, Integer hasta, List<String> deptUuid, String filtrePersonal) {
+        return buildStatsCacheKey(desde, hasta, deptUuid, filtrePersonal, false);
+    }
+
+    private String buildStatsCacheKey(Integer desde, Integer hasta, List<String> deptUuid, String filtrePersonal, boolean managedByDepartment) {
         List<String> deptFilter = (deptUuid == null ? List.<String>of() : deptUuid).stream()
                 .filter(v -> v != null && !v.isBlank())
                 .sorted(Comparator.naturalOrder())
                 .toList();
         String fp = (filtrePersonal == null || filtrePersonal.isBlank()) ? "vigent" : filtrePersonal;
-        return String.valueOf(desde) + "_" + String.valueOf(hasta) + "_" + String.join(",", deptFilter) + "_" + fp;
+        return String.valueOf(desde) + "_" + String.valueOf(hasta) + "_" + String.join(",", deptFilter) + "_" + fp + "_" + managedByDepartment;
     }
 
     private Document buildPersonAssocCriteria(String filtrePersonal, Integer desde, Integer hasta) {
@@ -284,7 +288,7 @@ public List<Map> statsAnios() {
     @GetMapping("/stats/types")
     public List<Map> statsTipos() {
         Aggregation agg = Aggregation.newAggregation(
-            Aggregation.group("type.term.es_ES").count().as("total"),
+            Aggregation.group("type.term.ca_ES").count().as("total"),
             Aggregation.project("total").and("_id").as("tipo")
         );
         return mongoTemplate.aggregate(agg, "Researchoutputs", Map.class).getMappedResults();
@@ -295,22 +299,99 @@ public List<Map> statsAnios() {
             @RequestParam(required = false) Integer desde,
             @RequestParam(required = false) Integer hasta,
             @RequestParam(required = false) List<String> deptUuid,
-            @RequestParam(required = false, defaultValue = "vigent") String filtrePersonal) {
+            @RequestParam(required = false, defaultValue = "vigent") String filtrePersonal,
+            @RequestParam(required = false, defaultValue = "false") boolean managedByDepartment) {
 
-        String cacheKey = buildStatsCacheKey(desde, hasta, deptUuid, filtrePersonal);
+        String cacheKey = buildStatsCacheKey(desde, hasta, deptUuid, filtrePersonal, managedByDepartment);
         StatsCacheEntry cached = tiposPorAnioCache.get(cacheKey);
         if (cached != null && (System.currentTimeMillis() - cached.timestamp()) < STATS_CACHE_TTL_MS) {
             return cached.data();
         }
 
+        List<String> deptFilter = (deptUuid == null ? List.<String>of() : deptUuid).stream()
+                .filter(v -> v != null && !v.isBlank())
+                .toList();
+
         List<Document> pipeline = new ArrayList<>();
+
+        if (managedByDepartment && !deptFilter.isEmpty()) {
+            List<Document> andFilters = new ArrayList<>();
+            andFilters.add(new Document("workflow.step", "approved"));
+            andFilters.add(new Document("managingOrganization.uuid", new Document("$in", deptFilter)));
+
+            pipeline.add(new Document("$match", new Document("$and", andFilters)));
+
+            pipeline.add(new Document("$project", new Document()
+                .append("publicationUuid", "$uuid")
+                .append("publicationYear", new Document("$ifNull", Arrays.asList(
+                    new Document("$arrayElemAt", Arrays.asList("$publicationStatuses.publicationDate.year", 0)),
+                    new Document("$ifNull", Arrays.asList("$publicationDate.year", "$submissionYear"))
+                )))
+                .append("tipoPublicacion", new Document("$ifNull", Arrays.asList(
+                    "$type.term.ca_ES",
+                    new Document("$ifNull", Arrays.asList("$type.term.ca_ES", "Sense tipus"))
+                )))));
+
+            List<Document> yearFilters = new ArrayList<>();
+            yearFilters.add(new Document("$expr", new Document("$gt", Arrays.asList(
+                new Document("$ifNull", Arrays.asList("$publicationYear", 0)), 0
+            ))));
+            if (desde != null) {
+            yearFilters.add(new Document("publicationYear", new Document("$gte", desde)));
+            }
+            if (hasta != null) {
+            yearFilters.add(new Document("publicationYear", new Document("$lte", hasta)));
+            }
+            pipeline.add(new Document("$match", new Document("$and", yearFilters)));
+
+            // Equivalente a count(distinct r.uuid) por any/tipus
+            pipeline.add(new Document("$group", new Document("_id", new Document()
+                .append("publicationYear", "$publicationYear")
+                .append("tipoPublicacion", "$tipoPublicacion")
+                .append("publicationUuid", "$publicationUuid"))));
+
+            pipeline.add(new Document("$group", new Document("_id", new Document()
+                .append("publicationYear", "$_id.publicationYear")
+                .append("tipoPublicacion", "$_id.tipoPublicacion"))
+                .append("totalPublicaciones", new Document("$sum", 1))));
+
+            pipeline.add(new Document("$project", new Document("_id", 0)
+                .append("anio", "$_id.publicationYear")
+                .append("tipo_publicacion", "$_id.tipoPublicacion")
+                .append("num_publicaciones", "$totalPublicaciones")
+                .append("publicationYear", "$_id.publicationYear")
+                .append("tipoPublicacion", "$_id.tipoPublicacion")
+                .append("totalPublicaciones", "$totalPublicaciones")));
+
+            pipeline.add(new Document("$sort", new Document("anio", -1)
+                .append("tipo_publicacion", 1)));
+
+            List<Map> result = mongoTemplate
+                .getCollection("Researchoutputs")
+                .aggregate(pipeline)
+                .into(new ArrayList<>());
+
+            tiposPorAnioCache.put(cacheKey, new StatsCacheEntry(result, System.currentTimeMillis()));
+            return result;
+        }
 
         pipeline.add(new Document("$match", new Document("workflow.step", "approved")));
 
+        if (managedByDepartment && !deptFilter.isEmpty()) {
+            pipeline.add(new Document("$match", new Document("managingOrganization.uuid", new Document("$in", deptFilter))));
+        }
+
         pipeline.add(new Document("$project", new Document()
                 .append("publicationUuid", "$uuid")
-                .append("publicationYear", new Document("$ifNull", Arrays.asList("$publicationDate.year", "$submissionYear")))
-                .append("tipoPublicacion", new Document("$ifNull", Arrays.asList("$type.term.ca_ES", "Sense tipus")))
+                .append("publicationYear", new Document("$ifNull", Arrays.asList(
+                    new Document("$arrayElemAt", Arrays.asList("$publicationStatuses.publicationDate.year", 0)),
+                    new Document("$ifNull", Arrays.asList("$publicationDate.year", "$submissionYear"))
+                )))
+                .append("tipoPublicacion", new Document("$ifNull", Arrays.asList(
+                    "$type.term.ca_ES",
+                    new Document("$ifNull", Arrays.asList("$type.term.ca_ES", "Sense tipus"))
+                )))
+                .append("managingOrgUuid", "$managingOrganization.uuid")
                 .append("contributors", new Document("$ifNull", Arrays.asList("$contributors", List.of())))));
 
         List<Document> andFilters = new ArrayList<>();
@@ -330,6 +411,7 @@ public List<Map> statsAnios() {
                 .append("publicationUuid", 1)
                 .append("publicationYear", 1)
                 .append("tipoPublicacion", 1)
+            .append("managingOrgUuid", 1)
                 .append("personUuid", new Document("$trim", new Document("input",
                         new Document("$ifNull", Arrays.asList(
                                 "$contributors.person.uuid",
@@ -349,20 +431,18 @@ public List<Map> statsAnios() {
                 .append("path", "$persona_info")
                 .append("preserveNullAndEmptyArrays", false)));
 
-        List<String> deptFilter = (deptUuid == null ? List.<String>of() : deptUuid).stream()
-                .filter(v -> v != null && !v.isBlank())
-                .toList();
-
         Document assocCriteria = buildPersonAssocCriteria(filtrePersonal, desde, hasta);
 
         if (!deptFilter.isEmpty()) {
-            pipeline.add(new Document("$match", new Document(
+            Document assocMatch = new Document(
                 "persona_info.staffOrganizationAssociations",
                 new Document("$elemMatch", new Document("$and", Arrays.asList(
                     new Document("organization.uuid", new Document("$in", deptFilter)),
                     assocCriteria
                 )))
-            )));
+            );
+            Document managingMatch = new Document("managingOrgUuid", new Document("$in", deptFilter));
+            pipeline.add(new Document("$match", new Document("$or", Arrays.asList(assocMatch, managingMatch))));
         } else {
             pipeline.add(new Document("$match", new Document(
                 "persona_info.staffOrganizationAssociations",
@@ -582,90 +662,129 @@ public List<Map> statsAnios() {
             @RequestParam(required = false) Integer desde,
             @RequestParam(required = false) Integer hasta,
             @RequestParam(required = false) List<String> deptUuid,
-            @RequestParam(required = false, defaultValue = "vigent") String filtrePersonal) {
+            @RequestParam(required = false, defaultValue = "vigent") String filtrePersonal,
+            @RequestParam(required = false, defaultValue = "false") boolean managedByDepartment) {
 
         // Check cache first
         String fp = (filtrePersonal == null || filtrePersonal.isBlank()) ? "vigent" : filtrePersonal;
-        String cacheKey = desde + "_" + hasta + "_" + (deptUuid == null ? "" : String.join(",", deptUuid)) + "_" + fp;
+        List<String> deptFilter = (deptUuid == null ? List.<String>of() : deptUuid).stream()
+            .filter(v -> v != null && !v.isBlank())
+            .toList();
+        String cacheKey = desde + "_" + hasta + "_" + String.join(",", deptFilter) + "_" + fp + "_" + managedByDepartment;
         ApaListCacheEntry cached = apaListCache.get(cacheKey);
         if (cached != null && (System.currentTimeMillis() - cached.timestamp()) < APA_LIST_CACHE_TTL_MS) {
             return cached.data();
         }
 
-        // Step 1: Get unique publication UUIDs with year, filtered by department/year
-        List<Document> pipeline = new ArrayList<>();
+        // Step 1: Get unique publication UUIDs with year
+        List<Document> rows;
 
-        pipeline.add(new Document("$match", new Document("workflow.step", "approved")));
+        if (managedByDepartment && !deptFilter.isEmpty()) {
+            List<Document> pipeline = new ArrayList<>();
+            pipeline.add(new Document("$match", new Document("$and", Arrays.asList(
+                    new Document("workflow.step", "approved"),
+                    new Document("managingOrganization.uuid", new Document("$in", deptFilter))
+            ))));
 
-        pipeline.add(new Document("$project", new Document()
-                .append("publicationUuid", "$uuid")
-                .append("publicationYear", new Document("$ifNull", Arrays.asList("$publicationDate.year", "$submissionYear")))
-                .append("contributors", new Document("$ifNull", Arrays.asList("$contributors", List.of())))));
+            pipeline.add(new Document("$project", new Document()
+                    .append("publicationUuid", "$uuid")
+                    .append("publicationYear", new Document("$ifNull", Arrays.asList("$publicationDate.year", "$submissionYear")))));
 
-        List<Document> andFilters = new ArrayList<>();
-        if (desde != null) {
-            andFilters.add(new Document("publicationYear", new Document("$gte", desde)));
-        }
-        if (hasta != null) {
-            andFilters.add(new Document("publicationYear", new Document("$lte", hasta)));
-        }
-        if (!andFilters.isEmpty()) {
-            pipeline.add(new Document("$match", new Document("$and", andFilters)));
-        }
+            List<Document> yearFilters = new ArrayList<>();
+            yearFilters.add(new Document("$expr", new Document("$gt", Arrays.asList(
+                    new Document("$ifNull", Arrays.asList("$publicationYear", 0)), 0
+            ))));
+            if (desde != null) {
+                yearFilters.add(new Document("publicationYear", new Document("$gte", desde)));
+            }
+            if (hasta != null) {
+                yearFilters.add(new Document("publicationYear", new Document("$lte", hasta)));
+            }
+            pipeline.add(new Document("$match", new Document("$and", yearFilters)));
 
-        pipeline.add(new Document("$unwind", "$contributors"));
+            // Equivalente a distinct uuid con anyo
+            pipeline.add(new Document("$group", new Document("_id", "$publicationUuid")
+                    .append("publicationYear", new Document("$first", "$publicationYear"))));
 
-        pipeline.add(new Document("$project", new Document()
-                .append("publicationUuid", 1)
-                .append("publicationYear", 1)
-                .append("personUuid", new Document("$trim", new Document("input",
-                        new Document("$ifNull", Arrays.asList(
-                                "$contributors.person.uuid",
-                                new Document("$ifNull", Arrays.asList("$contributors.externalPerson.uuid", "")))))))));
-
-        pipeline.add(new Document("$match", new Document("$expr", new Document("$gt", Arrays.asList(
-                new Document("$strLenCP", "$personUuid"), 0
-        )))));
-
-        pipeline.add(new Document("$lookup", new Document()
-                .append("from", "Persons")
-                .append("localField", "personUuid")
-                .append("foreignField", "uuid")
-                .append("as", "persona_info")));
-
-        pipeline.add(new Document("$unwind", new Document()
-                .append("path", "$persona_info")
-                .append("preserveNullAndEmptyArrays", false)));
-
-        List<String> deptFilter = (deptUuid == null ? List.<String>of() : deptUuid).stream()
-                .filter(v -> v != null && !v.isBlank())
-                .toList();
-
-        Document assocCriteriaApa = buildPersonAssocCriteria(filtrePersonal, desde, hasta);
-
-        if (!deptFilter.isEmpty()) {
-            pipeline.add(new Document("$match", new Document(
-                "persona_info.staffOrganizationAssociations",
-                new Document("$elemMatch", new Document("$and", Arrays.asList(
-                    new Document("organization.uuid", new Document("$in", deptFilter)),
-                    assocCriteriaApa
-                )))
-            )));
+            rows = mongoTemplate
+                    .getCollection("Researchoutputs")
+                    .aggregate(pipeline)
+                    .into(new ArrayList<>());
         } else {
-            pipeline.add(new Document("$match", new Document(
-                "persona_info.staffOrganizationAssociations",
-                new Document("$elemMatch", assocCriteriaApa)
-            )));
+            List<Document> pipeline = new ArrayList<>();
+
+            pipeline.add(new Document("$match", new Document("workflow.step", "approved")));
+
+            pipeline.add(new Document("$project", new Document()
+                    .append("publicationUuid", "$uuid")
+                    .append("publicationYear", new Document("$ifNull", Arrays.asList("$publicationDate.year", "$submissionYear")))
+                    .append("managingOrgUuid", "$managingOrganization.uuid")
+                    .append("contributors", new Document("$ifNull", Arrays.asList("$contributors", List.of())))));
+
+            List<Document> andFilters = new ArrayList<>();
+            if (desde != null) {
+                andFilters.add(new Document("publicationYear", new Document("$gte", desde)));
+            }
+            if (hasta != null) {
+                andFilters.add(new Document("publicationYear", new Document("$lte", hasta)));
+            }
+            if (!andFilters.isEmpty()) {
+                pipeline.add(new Document("$match", new Document("$and", andFilters)));
+            }
+
+            pipeline.add(new Document("$unwind", "$contributors"));
+
+            pipeline.add(new Document("$project", new Document()
+                    .append("publicationUuid", 1)
+                    .append("publicationYear", 1)
+                    .append("managingOrgUuid", 1)
+                    .append("personUuid", new Document("$trim", new Document("input",
+                            new Document("$ifNull", Arrays.asList(
+                                    "$contributors.person.uuid",
+                                    new Document("$ifNull", Arrays.asList("$contributors.externalPerson.uuid", "")))))))));
+
+            pipeline.add(new Document("$match", new Document("$expr", new Document("$gt", Arrays.asList(
+                    new Document("$strLenCP", "$personUuid"), 0
+            )))));
+
+            pipeline.add(new Document("$lookup", new Document()
+                    .append("from", "Persons")
+                    .append("localField", "personUuid")
+                    .append("foreignField", "uuid")
+                    .append("as", "persona_info")));
+
+            pipeline.add(new Document("$unwind", new Document()
+                    .append("path", "$persona_info")
+                    .append("preserveNullAndEmptyArrays", false)));
+
+            Document assocCriteriaApa = buildPersonAssocCriteria(filtrePersonal, desde, hasta);
+
+            if (!deptFilter.isEmpty()) {
+                Document assocMatchApa = new Document(
+                    "persona_info.staffOrganizationAssociations",
+                    new Document("$elemMatch", new Document("$and", Arrays.asList(
+                        new Document("organization.uuid", new Document("$in", deptFilter)),
+                        assocCriteriaApa
+                    )))
+                );
+                Document managingMatchApa = new Document("managingOrgUuid", new Document("$in", deptFilter));
+                pipeline.add(new Document("$match", new Document("$or", Arrays.asList(assocMatchApa, managingMatchApa))));
+            } else {
+                pipeline.add(new Document("$match", new Document(
+                    "persona_info.staffOrganizationAssociations",
+                    new Document("$elemMatch", assocCriteriaApa)
+                )));
+            }
+
+            // Deduplicate by publication UUID, keep year
+            pipeline.add(new Document("$group", new Document("_id", "$publicationUuid")
+                    .append("publicationYear", new Document("$first", "$publicationYear"))));
+
+            rows = mongoTemplate
+                    .getCollection("Researchoutputs")
+                    .aggregate(pipeline)
+                    .into(new ArrayList<>());
         }
-
-        // Deduplicate by publication UUID, keep year
-        pipeline.add(new Document("$group", new Document("_id", "$publicationUuid")
-                .append("publicationYear", new Document("$first", "$publicationYear"))));
-
-        List<Document> rows = mongoTemplate
-                .getCollection("Researchoutputs")
-                .aggregate(pipeline)
-                .into(new ArrayList<>());
 
         if (rows.isEmpty()) return List.of();
 

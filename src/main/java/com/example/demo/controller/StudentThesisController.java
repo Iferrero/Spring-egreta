@@ -37,6 +37,23 @@ public class StudentThesisController {
         this.mongoTemplate = mongoTemplate;
     }
 
+    private String normalizeSupervisorRole(Document supervisorDoc) {
+        if (supervisorDoc == null) return "Director/a";
+        Document role = supervisorDoc.get("role", Document.class);
+        Document term = role != null ? role.get("term", Document.class) : null;
+        String roleText = null;
+        if (term != null) {
+            roleText = term.getString("ca_ES");
+            if (roleText == null || roleText.isBlank()) roleText = term.getString("es_ES");
+            if (roleText == null || roleText.isBlank()) roleText = term.getString("en_GB");
+        }
+        if (roleText == null || roleText.isBlank()) return "Director/a";
+
+        String normalized = roleText.trim().toLowerCase();
+        if (normalized.contains("tutor")) return "Tutor/a";
+        return "Director/a";
+    }
+
     @GetMapping
     public Page<StudentThesis> listar(
             @RequestParam(defaultValue = "") String buscar,
@@ -256,6 +273,17 @@ public class StudentThesisController {
         pipeline.add(new Document("$unwind", "$supervisors"));
         pipeline.add(new Document("$match", new Document("supervisors.person.uuid",
             new Document("$in", personUuids))));
+        pipeline.add(new Document("$addFields", new Document("supervisorRoleText",
+            new Document("$toLower", new Document("$ifNull", Arrays.asList(
+                "$supervisors.role.term.ca_ES",
+                new Document("$ifNull", Arrays.asList(
+                    "$supervisors.role.term.es_ES",
+                    new Document("$ifNull", Arrays.asList("$supervisors.role.term.en_GB", ""))
+                ))
+            )))
+        )));
+        pipeline.add(new Document("$match", new Document("supervisorRoleText",
+            new Document("$not", new Document("$regex", "tutor")))));
         pipeline.add(new Document("$group", new Document("_id", new Document()
             .append("thesisUuid", "$uuid")
             .append("any", "$awardDate.year"))));
@@ -389,6 +417,17 @@ public class StudentThesisController {
         // Only count supervisors that belong to the institute
         pipeline.add(new Document("$match", new Document("supervisors.person.uuid",
             new Document("$in", personUuids))));
+        pipeline.add(new Document("$addFields", new Document("supervisorRoleText",
+            new Document("$toLower", new Document("$ifNull", Arrays.asList(
+                "$supervisors.role.term.ca_ES",
+                new Document("$ifNull", Arrays.asList(
+                    "$supervisors.role.term.es_ES",
+                    new Document("$ifNull", Arrays.asList("$supervisors.role.term.en_GB", ""))
+                ))
+            )))
+        )));
+        pipeline.add(new Document("$match", new Document("supervisorRoleText",
+            new Document("$not", new Document("$regex", "tutor")))));
 
         // Dedupe thesis-supervisor pairs to avoid double counting.
         pipeline.add(new Document("$group", new Document("_id", new Document()
@@ -533,6 +572,17 @@ public class StudentThesisController {
         pipeline.add(new Document("$unwind", "$supervisors"));
         pipeline.add(new Document("$match", new Document("supervisors.person.uuid",
             new Document("$in", personUuids))));
+        pipeline.add(new Document("$addFields", new Document("supervisorRoleText",
+            new Document("$toLower", new Document("$ifNull", Arrays.asList(
+                "$supervisors.role.term.ca_ES",
+                new Document("$ifNull", Arrays.asList(
+                    "$supervisors.role.term.es_ES",
+                    new Document("$ifNull", Arrays.asList("$supervisors.role.term.en_GB", ""))
+                ))
+            )))
+        )));
+        pipeline.add(new Document("$match", new Document("supervisorRoleText",
+            new Document("$not", new Document("$regex", "tutor")))));
 
         // Keep one row per thesis and only retain internal supervisors in the payload.
         pipeline.add(new Document("$group", new Document("_id", "$uuid")
@@ -586,6 +636,7 @@ public class StudentThesisController {
             // Directors from supervisors (already filtered to institute persons in pipeline)
             List<String> directors = new ArrayList<>();
             List<String> directorUuids = new ArrayList<>();
+            List<String> supervisorRoles = new ArrayList<>();
             Object supObj = d.get("supervisors");
             if (supObj instanceof List<?> sups) {
                 for (Object s : sups) {
@@ -603,6 +654,7 @@ public class StudentThesisController {
                                     : "";
                                 directors.add(ln.trim() + "," + initials);
                                 directorUuids.add(supUuid);
+                                supervisorRoles.add(normalizeSupervisorRole(sd));
                             }
                         }
                     }
@@ -614,6 +666,7 @@ public class StudentThesisController {
             row.put("autors", autors);
             row.put("directors", directors);
             row.put("directorUuids", directorUuids);
+            row.put("supervisorRoles", supervisorRoles);
             row.put("any", d.get("any"));
             row.put("mes", d.get("mes"));
             row.put("dia", d.get("dia"));
