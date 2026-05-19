@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Organitzacions Externes</title>
+    <script src="config.js"></script>
+    <script src="uab-brand.js" defer></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="uab-theme.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .card-link {
+            transition: all 0.3s ease;
+        }
+        .card-link:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+        }
+        .card-link:hover .card-icon {
+            transform: scale(1.15);
+        }
+        .card-icon {
+            transition: transform 0.3s ease;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen font-sans">
+
+<div class="mx-auto py-16 px-4 max-w-7xl">
+
+    <!-- Header -->
+    <header class="text-center mb-16">
+        <div class="mb-4 inline-block">
+            <div class="w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center">
+                <i class="fa-solid fa-building text-indigo-600 text-2xl"></i>
+            </div>
+        </div>
+        <h1 class="text-4xl font-extrabold text-slate-800 tracking-tight mb-3">
+            Organitzacions Externes
+        </h1>
+        <p class="text-xl text-slate-500 max-w-2xl mx-auto">
+            Gestió integral de dades d'organitzacions externes amb diverses perspectives: visualització completa, anàlisi de similitud i control de qualitat
+        </p>
+    </header>
+
+    <!-- Cards Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-8 mb-12">
+
+        <!-- Card 1: Llistat Complet -->
+        <a href="organizaciones-externas.html" class="card-link group">
+            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden h-full flex flex-col hover:border-indigo-300">
+                <!-- Icon/Color Bar -->
+                <div class="h-2 bg-gradient-to-r from-indigo-500 to-indigo-600"></div>
+                
+                <!-- Content -->
+                <div class="p-8 flex-1 flex flex-col justify-between">
+                    <div>
+                        <div class="w-14 h-14 bg-indigo-100 rounded-lg flex items-center justify-center mb-4 card-icon">
+                            <i class="fa-solid fa-list text-indigo-600 text-2xl"></i>
+                        </div>
+                        <h2 class="text-2xl font-bold text-slate-800 mb-2">Llistat Complet</h2>
+                        <p class="text-slate-600 leading-relaxed">
+                            Visualitza totes les organitzacions externes en una taula interactiva amb paginació, busca avançada i filtres multidimensionals.
+                        </p>
+                    </div>
+                    
+                    <!-- Features -->
+                    <div class="mt-6 space-y-2 text-sm">
+                        <div class="flex items-center gap-2 text-slate-600">
+                            <i class="fa-solid fa-check text-green-500 w-4"></i>
+                            <span>Visualització completa de totes les organitzacions</span>
+                        </div>
+                        <div class="flex items-center gap-2 text-slate-600">
+                            <i class="fa-solid fa-check text-green-500 w-4"></i>
+                            <span>Busca i filtre avançats per nom, tipus, país</span>
+                        </div>
+                        <div class="flex items-center gap-2 text-slate-600">
+                            <i class="fa-solid fa-check text-green-500 w-4"></i>
+                            <span>Ordenació flexible per paràmetres múltiples</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CTA -->
+                <div class="px-8 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between group-hover:bg-indigo-50 transition-colors">
+                    <span class="font-semibold text-slate-700">Accedir</span>
+                    <i class="fa-solid fa-arrow-right text-slate-400 group-hover:text-indigo-600 group-hover:translate-x-1 transition-all"></i>
+                </div>
+            </div>
+        </a>
+
+        <!-- Card 2: Grafo Similitud -->
+        <a href="organizaciones-externas-grafo.html" class="card-link group">
+            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden h-full flex flex-col hover:border-emerald-300">
+                <!-- Icon/Color Bar -->
+                <div class="h-2 bg-gradient-to-r from-emerald-500 to-emerald-600"></div>
+                
+                <!-- Content -->
+                <div class="p-8 flex-1 flex flex-col justify-between">
+                    <div>
+                        <div class="w-14 h-14 bg-emerald-100 rounded-lg flex items-center justify-center mb-4 card-icon">
+                            <i class="fa-solid fa-diagram-project text-emerald-600 text-2xl"></i>
+                        </div>
+                        <h2 class="text-2xl font-bold text-slate-800 mb-2">Similitud</h2>
+                        <p class="text-slate-600 leading-relaxed">
+                            Detecta organitzacions amb noms similars mitjançant algoritmes avançats de comparació de tokens i distància de Levenshtein.
+                        </p>
+                    </div>
+                    
+                    <!-- Features -->
+                    <div class="mt-6 space-y-2 text-sm">
+                        <div class="flex items-center gap-2 text-slate-600">
+                            <i class="fa-solid fa-check text-green-500 w-4"></i>
+                            <span>Detecció de parells de noms similars</span>
+                        </div>
+                        <div class="flex items-center gap-2 text-slate-600">
+                            <i class="fa-solid fa-check text-green-500 w-4"></i>
+                            <span>Agrupació en clusters de organitzacions equivalents</span>
+                        </div>
+                        <div class="flex items-center gap-2 text-slate-600">
+                            <i class="fa-solid fa-check text-green-500 w-4"></i>
+                            <span>Exportació a Excel amb resultats detallats</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CTA -->
+                <div class="px-8 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between group-hover:bg-emerald-50 transition-colors">
+                    <span class="font-semibold text-slate-700">Accedir</span>
+                    <i class="fa-solid fa-arrow-right text-slate-400 group-hover:text-emerald-600 group-hover:translate-x-1 transition-all"></i>
+                </div>
+            </div>
+        </a>
+
+        <!-- Card 3: KPIs Gestió -->
+        <a href="organizaciones-externas-kpis.html" class="card-link group">
+            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden h-full flex flex-col hover:border-purple-300">
+                <!-- Icon/Color Bar -->
+                <div class="h-2 bg-gradient-to-r from-purple-500 to-purple-600"></div>
+                
+                <!-- Content -->
+                <div class="p-8 flex-1 flex flex-col justify-between">
+                    <div>
+                        <div class="w-14 h-14 bg-purple-100 rounded-lg flex items-center justify-center mb-4 card-icon">
+                            <i class="fa-solid fa-gauge-high text-purple-600 text-2xl"></i>
+                        </div>
+                        <h2 class="text-2xl font-bold text-slate-800 mb-2">Gestió KPI</h2>
+                        <p class="text-slate-600 leading-relaxed">
+                            Monitoritza la qualitat de dades amb indicadors clau: organitzacions sense país, sense tipus i altres mètriques de completitud.
+                        </p>
+                    </div>
+                    
+                    <!-- Features -->
+                    <div class="mt-6 space-y-2 text-sm">
+                        <div class="flex items-center gap-2 text-slate-600">
+                            <i class="fa-solid fa-check text-green-500 w-4"></i>
+                            <span>KPIs de qualitat de metadades</span>
+                        </div>
+                        <div class="flex items-center gap-2 text-slate-600">
+                            <i class="fa-solid fa-check text-green-500 w-4"></i>
+                            <span>Sugeriments automàtics de tipus i país</span>
+                        </div>
+                        <div class="flex items-center gap-2 text-slate-600">
+                            <i class="fa-solid fa-check text-green-500 w-4"></i>
+                            <span>Detall de registres per cada KPI</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CTA -->
+                <div class="px-8 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between group-hover:bg-purple-50 transition-colors">
+                    <span class="font-semibold text-slate-700">Accedir</span>
+                    <i class="fa-solid fa-arrow-right text-slate-400 group-hover:text-purple-600 group-hover:translate-x-1 transition-all"></i>
+                </div>
+            </div>
+        </a>
+
+        <!-- Card 4: Estadistiques -->
+        <a href="organizaciones-externas-stats.html" class="card-link group">
+            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden h-full flex flex-col hover:border-amber-300">
+                <!-- Icon/Color Bar -->
+                <div class="h-2 bg-gradient-to-r from-amber-500 to-amber-600"></div>
+
+                <!-- Content -->
+                <div class="p-8 flex-1 flex flex-col justify-between">
+                    <div>
+                        <div class="w-14 h-14 bg-amber-100 rounded-lg flex items-center justify-center mb-4 card-icon">
+                            <i class="fa-solid fa-chart-column text-amber-600 text-2xl"></i>
+                        </div>
+                        <h2 class="text-2xl font-bold text-slate-800 mb-2">Estadistiques</h2>
+                        <p class="text-slate-600 leading-relaxed">
+                            Explora distribucions per país i tipus, i revisa mètriques agregades per entendre l'estat global de les dades.
+                        </p>
+                    </div>
+
+                    <!-- Features -->
+                    <div class="mt-6 space-y-2 text-sm">
+                        <div class="flex items-center gap-2 text-slate-600">
+                            <i class="fa-solid fa-check text-green-500 w-4"></i>
+                            <span>Distribució d'organitzacions per país</span>
+                        </div>
+                        <div class="flex items-center gap-2 text-slate-600">
+                            <i class="fa-solid fa-check text-green-500 w-4"></i>
+                            <span>Distribució d'organitzacions per tipus</span>
+                        </div>
+                        <div class="flex items-center gap-2 text-slate-600">
+                            <i class="fa-solid fa-check text-green-500 w-4"></i>
+                            <span>Resum agregat de qualitat i cobertura</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CTA -->
+                <div class="px-8 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between group-hover:bg-amber-50 transition-colors">
+                    <span class="font-semibold text-slate-700">Accedir</span>
+                    <i class="fa-solid fa-arrow-right text-slate-400 group-hover:text-amber-600 group-hover:translate-x-1 transition-all"></i>
+                </div>
+            </div>
+        </a>
+
+    </div>
+
+    <!-- Info Section -->
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-8">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+            
+            <div>
+                <div class="flex items-center gap-3 mb-4">
+                    <div class="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                        <i class="fa-solid fa-database text-blue-600"></i>
+                    </div>
+                    <h3 class="font-bold text-slate-800">Origen de dades</h3>
+                </div>
+                <p class="text-sm text-slate-600 leading-relaxed">
+                    Integració directa amb MongoDB per a accés real-time a totes les organitzacions externes del repositori PURE.
+                </p>
+            </div>
+
+            <div>
+                <div class="flex items-center gap-3 mb-4">
+                    <div class="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                        <i class="fa-solid fa-bolt text-green-600"></i>
+                    </div>
+                    <h3 class="font-bold text-slate-800">Rendiment</h3>
+                </div>
+                <p class="text-sm text-slate-600 leading-relaxed">
+                    Caché multinivell (backend + frontend) per a respostes ràpides. Compressió de dades i paginació per a eficiència.
+                </p>
+            </div>
+
+            <div>
+                <div class="flex items-center gap-3 mb-4">
+                    <div class="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                        <i class="fa-solid fa-gears text-purple-600"></i>
+                    </div>
+                    <h3 class="font-bold text-slate-800">Funcionalitat</h3>
+                </div>
+                <p class="text-sm text-slate-600 leading-relaxed">
+                    Algoritmes de similitud order-insensitive, clustering automàtic, sugerencies de metadades i exportació a Excel.
+                </p>
+            </div>
+
+        </div>
+    </div>
+
+</div>
+
+</body>
+</html>
