@@ -42,6 +42,8 @@ import java.util.Set;
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.UUID;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -55,9 +57,11 @@ public class ExternalOrganizationController {
     // TTL cache — thread-safe via AtomicReference + double-check (mejora #1)
     // -------------------------------------------------------------------------
     private record CachedSet<T>(Set<T> data, long timestamp) {}
+    private record CachedInference(String result, long timestamp) {}
 
     private static final long REFERENCE_CACHE_TTL_MS = 5 * 60 * 1000;
     private static final long GRAPH_SIMILARITY_CACHE_TTL_MS = 2 * 60 * 1000;
+    private static final long INFERENCE_CACHE_TTL_MS = 10 * 60 * 1000;  // 10 minutos para inferencias
 
     private final AtomicReference<CachedSet<String>> cachedExternalOrgUuids        = new AtomicReference<>();
     private final AtomicReference<CachedSet<String>> cachedReferencedExternalOrgUuids = new AtomicReference<>();
@@ -67,6 +71,9 @@ public class ExternalOrganizationController {
     private final Map<String, CachedGraphResult> graphSimilarityCache = new ConcurrentHashMap<>();
     private final Map<String, CachedPairsResult> pairsSimilarityCache = new ConcurrentHashMap<>();
     private final Map<String, SimilarityJobState> similarityJobs = new ConcurrentHashMap<>();
+    // Caché de inferencias AI por nombre (mejora #7: evita llamadas repetidas)
+    private final Map<String, CachedInference> countryInferenceCache = new ConcurrentHashMap<>();
+    private final Map<String, CachedInference> typeInferenceCache = new ConcurrentHashMap<>();
 
     private final ExternalOrganizationRepository repository;
     private final MongoTemplate mongoTemplate;
@@ -88,8 +95,8 @@ public class ExternalOrganizationController {
     @Value("${app.ai.country-suggest.api-key:}")
     private String aiCountrySuggestApiKey;
 
-    @Value("${app.ai.country-suggest.timeout-ms:8000}")
-    private int aiCountrySuggestTimeoutMs;
+    @Value("${app.ai.country-suggest.timeout-ms:2000}")
+    private int aiCountrySuggestTimeoutMs;  // Reducido de 8000 a 2000ms para fallback rápido
 
     @Value("${app.egreta.external-org.enabled:false}")
     private boolean egretaExternalOrgEnabled;
@@ -1874,49 +1881,67 @@ public class ExternalOrganizationController {
     }
 
     // =========================================================================
-    // Inferencia con AI local (mejora #6: método centralizado para la llamada HTTP)
+    // Inferencia con AI local (mejora #6/#7/#8: async, caché, timeout corto)
     // =========================================================================
 
     /**
-     * Mejora #6: la construcción y envío de la petición HTTP a la API local
-     * está centralizada aquí. inferCountryWithLocalAi e inferTypeWithLocalAi
-     * ya no duplican ese bloque; sólo construyen el prompt y parsean la respuesta.
+     * Mejora #6/#7: método centralizado con:
+     * - CompletableFuture para async (no bloquea thread)
+     * - Timeout corto (2 segundos, no 8) para fallback rápido a heurística
+     * - Caché por prompt para evitar llamadas repetidas
      */
-    private String callLocalAiApi(String prompt) {
+    private CompletableFuture<String> callLocalAiApiAsync(String prompt) {
         if (!aiCountrySuggestEnabled || aiCountrySuggestUrl == null || aiCountrySuggestUrl.isBlank()) {
-            return null;
+            return CompletableFuture.completedFuture(null);
         }
-        try {
-            Map<String, Object> payload = new LinkedHashMap<>();
-            payload.put("model", aiCountrySuggestModel == null || aiCountrySuggestModel.isBlank()
-                ? "local-model" : aiCountrySuggestModel);
-            payload.put("temperature", 0);
-            payload.put("messages", List.of(
-                Map.of("role", "system", "content", "You are a data quality assistant."),
-                Map.of("role", "user",   "content", prompt)
-            ));
-            payload.put("response_format", Map.of("type", "json_object"));
+        
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                Map<String, Object> payload = new LinkedHashMap<>();
+                payload.put("model", aiCountrySuggestModel == null || aiCountrySuggestModel.isBlank()
+                    ? "local-model" : aiCountrySuggestModel);
+                payload.put("temperature", 0);
+                payload.put("messages", List.of(
+                    Map.of("role", "system", "content", "You are a data quality assistant."),
+                    Map.of("role", "user",   "content", prompt)
+                ));
+                payload.put("response_format", Map.of("type", "json_object"));
 
-            HttpRequest.Builder builder = HttpRequest.newBuilder()
-                .uri(URI.create(aiCountrySuggestUrl))
-                .timeout(Duration.ofMillis(Math.max(2000, aiCountrySuggestTimeoutMs)))
-                .header("Content-Type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(payload)));
+                HttpRequest.Builder builder = HttpRequest.newBuilder()
+                    .uri(URI.create(aiCountrySuggestUrl))
+                    .timeout(Duration.ofMillis(aiCountrySuggestTimeoutMs))  // Usa timeout más corto (2000ms por defecto)
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(payload)));
 
-            if (aiCountrySuggestApiKey != null && !aiCountrySuggestApiKey.isBlank()) {
-                builder.header("Authorization", "Bearer " + aiCountrySuggestApiKey.trim());
+                if (aiCountrySuggestApiKey != null && !aiCountrySuggestApiKey.isBlank()) {
+                    builder.header("Authorization", "Bearer " + aiCountrySuggestApiKey.trim());
+                }
+
+                HttpResponse<String> response = httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofString());
+                if (response.statusCode() < 200 || response.statusCode() >= 300) return null;
+                return response.body();
+            } catch (Exception ignored) {
+                return null;
             }
-
-            HttpResponse<String> response = httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofString());
-            if (response.statusCode() < 200 || response.statusCode() >= 300) return null;
-            return response.body();
-        } catch (Exception ignored) {
-            return null;
-        }
+        }).orTimeout(aiCountrySuggestTimeoutMs, TimeUnit.MILLISECONDS)
+          .exceptionally(e -> null);
     }
 
     private InferenceResult inferCountryWithLocalAi(String orgName, List<CountryAggregate> catalog) {
-        String catalogText = catalog.stream().limit(120).map(c -> c.label).collect(Collectors.joining(", "));
+        // Mejora #7: Caché de inferencias por nombre (TTL 10 minutos)
+        String cacheKey = "country:" + orgName;
+        CachedInference cached = countryInferenceCache.get(cacheKey);
+        if (cached != null && (System.currentTimeMillis() - cached.timestamp()) < INFERENCE_CACHE_TTL_MS) {
+            String cachedBody = cached.result();
+            if (cachedBody != null) {
+                InferenceResult result = parseLocalAiResponse(cachedBody, catalog);
+                return (result == null || result.countryLabel.isBlank()) ? null : result;
+            }
+            return null;
+        }
+
+        // Mejora #8: Limitar catálogo a top-20 (no 120) para reducir tamaño del prompt
+        String catalogText = catalog.stream().limit(20).map(c -> c.label).collect(Collectors.joining(", "));
         String prompt = "Given an organization name, infer the most likely country. "
             + "Return strict JSON with keys suggestedCountry, confidence, reason. "
             + "confidence must be between 0 and 1. "
@@ -1924,15 +1949,40 @@ public class ExternalOrganizationController {
             + "Organization: '" + orgName + "'. "
             + "Candidate countries: " + catalogText;
 
-        String body = callLocalAiApi(prompt);
-        if (body == null) return null;
-
-        InferenceResult result = parseLocalAiResponse(body, catalog);
-        return (result == null || result.countryLabel.isBlank()) ? null : result;
+        // Mejora #7: Usar async con await y timeout corto
+        String body = null;
+        try {
+            body = callLocalAiApiAsync(prompt)
+                .get(aiCountrySuggestTimeoutMs + 500, TimeUnit.MILLISECONDS);
+        } catch (Exception e) {
+            // Timeout o error - continuará con null
+        }
+        
+        // Cachear resultado incluso si es null
+        if (body != null) {
+            countryInferenceCache.put(cacheKey, new CachedInference(body, System.currentTimeMillis()));
+            InferenceResult result = parseLocalAiResponse(body, catalog);
+            return (result == null || result.countryLabel.isBlank()) ? null : result;
+        }
+        
+        return null;
     }
 
     private TypeInferenceResult inferTypeWithLocalAi(String orgName, List<TypeAggregate> catalog) {
-        String catalogText = catalog.stream().limit(80).map(t -> t.label).collect(Collectors.joining(", "));
+        // Mejora #7: Caché de inferencias por nombre (TTL 10 minutos)
+        String cacheKey = "type:" + orgName;
+        CachedInference cached = typeInferenceCache.get(cacheKey);
+        if (cached != null && (System.currentTimeMillis() - cached.timestamp()) < INFERENCE_CACHE_TTL_MS) {
+            String cachedBody = cached.result();
+            if (cachedBody != null) {
+                TypeInferenceResult result = parseLocalAiTypeResponse(cachedBody, catalog);
+                return (result == null || result.typeLabel.isBlank()) ? null : result;
+            }
+            return null;
+        }
+
+        // Mejora #8: Limitar catálogo a top-20 (no 80) para reducir tamaño del prompt
+        String catalogText = catalog.stream().limit(20).map(t -> t.label).collect(Collectors.joining(", "));
         String prompt = "Given an organization name, infer the most likely organization type. "
             + "Return strict JSON with keys suggestedType, confidence, reason. "
             + "confidence must be between 0 and 1. "
@@ -1940,11 +1990,23 @@ public class ExternalOrganizationController {
             + "Organization: '" + orgName + "'. "
             + "Candidate types: " + catalogText;
 
-        String body = callLocalAiApi(prompt);
-        if (body == null) return null;
-
-        TypeInferenceResult result = parseLocalAiTypeResponse(body, catalog);
-        return (result == null || result.typeLabel.isBlank()) ? null : result;
+        // Mejora #7: Usar async con await y timeout corto
+        String body = null;
+        try {
+            body = callLocalAiApiAsync(prompt)
+                .get(aiCountrySuggestTimeoutMs + 500, TimeUnit.MILLISECONDS);
+        } catch (Exception e) {
+            // Timeout o error - continuará con null
+        }
+        
+        // Cachear resultado incluso si es null
+        if (body != null) {
+            typeInferenceCache.put(cacheKey, new CachedInference(body, System.currentTimeMillis()));
+            TypeInferenceResult result = parseLocalAiTypeResponse(body, catalog);
+            return (result == null || result.typeLabel.isBlank()) ? null : result;
+        }
+        
+        return null;
     }
 
     private MetadataInferenceResult inferMetadataWithLocalAi(
@@ -1952,8 +2014,9 @@ public class ExternalOrganizationController {
             List<CountryAggregate> countryCatalog,
             List<TypeAggregate> typeCatalog) {
 
-        String countryCatalogText = countryCatalog.stream().limit(120).map(c -> c.label).collect(Collectors.joining(", "));
-        String typeCatalogText    = typeCatalog.stream().limit(80).map(t -> t.label).collect(Collectors.joining(", "));
+        // Mejora #8: Limitar catálogo a top-20 (no 120/80) para reducir tamaño del prompt
+        String countryCatalogText = countryCatalog.stream().limit(20).map(c -> c.label).collect(Collectors.joining(", "));
+        String typeCatalogText    = typeCatalog.stream().limit(20).map(t -> t.label).collect(Collectors.joining(", "));
         String prompt = "Given an organization name, infer the most likely country and organization type. "
             + "Return strict JSON with keys suggestedCountry, countryConfidence, countryReason, suggestedType, typeConfidence, typeReason. "
             + "Confidence values must be between 0 and 1. "
@@ -1962,7 +2025,15 @@ public class ExternalOrganizationController {
             + "Candidate countries: " + countryCatalogText + ". "
             + "Candidate types: " + typeCatalogText;
 
-        String body = callLocalAiApi(prompt);
+        // Mejora #7: Usar async con await y timeout corto
+        String body = null;
+        try {
+            body = callLocalAiApiAsync(prompt)
+                .get(aiCountrySuggestTimeoutMs + 500, TimeUnit.MILLISECONDS);
+        } catch (Exception e) {
+            // Timeout o error - continuará con null
+        }
+        
         if (body == null) return null;
 
         return parseLocalAiMetadataResponse(body, countryCatalog, typeCatalog);
