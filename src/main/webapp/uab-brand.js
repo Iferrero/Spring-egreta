@@ -26,7 +26,7 @@
         if (fileName === 'index-orgaext.html') return 'index-orgaext.html';
 
         // For external organizations module pages, go back to module index.
-        if (fileName.startsWith('organizaciones-externas-')) {
+        if (fileName.startsWith('organizaciones-externas')) {
             return 'index-orgaext.html';
         }
 

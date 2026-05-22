@@ -243,19 +243,65 @@ async function fetchSuggestionBundle(org) {
     return bundle;
 }
 
+async function preloadSuggestionsForPage(rows) {
+    const targets = (rows || []).filter(org => {
+        const typeLabel = getOrgTypeLabel(org);
+        return !hasCountry(org) || !typeLabel || isUnknownTypeLabel(typeLabel);
+    });
+    if (!targets.length) return;
+
+    // Separar los que ya están en caché
+    const needsFetch = targets.filter(org => {
+        const key = getOrgSuggestionKey(org);
+        return key && !suggestionBundleCache.has(key);
+    });
+    if (!needsFetch.length) return;
+
+    const uuids = needsFetch.map(org => org.uuid).filter(Boolean);
+    if (!uuids.length) return;
+
+    try {
+        const res = await apiFetch('/external-organizations/stats/suggest-metadata/batch', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ uuids })
+        });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const results = await res.json();
+
+        // Poblar caché con los resultados del batch
+        for (const item of (results || [])) {
+            const key = 'uuid:' + String(item.uuid || '').trim();
+            if (!key || key === 'uuid:') continue;
+            const bundle = {
+                country: {
+                    country: String(item.suggestedCountry || '').trim(),
+                    uri: String(item.suggestedCountryUri || '').trim(),
+                    confidence: Number(item.countryConfidence || 0),
+                    reason: String(item.countryReason || '').trim()
+                },
+                type: {
+                    type: String(item.suggestedType || '').trim(),
+                    confidence: Number(item.typeConfidence || 0),
+                    reason: String(item.typeReason || '').trim()
+                }
+            };
+            suggestionBundleCache.set(key, bundle);
+            countrySuggestionCache.set(key, bundle.country);
+            typeSuggestionCache.set(key, bundle.type);
+        }
+    } catch (_) {
+        // Fallback silencioso — las celdas quedarán vacías
+    }
+}
+
 async function preloadCountrySuggestions(rows) {
-    const targets = (rows || []).filter(org => !hasCountry(org));
-    await Promise.all(targets.map(fetchSuggestionBundle));
+    await preloadSuggestionsForPage(rows);
 }
 
 async function preloadTypeSuggestions(rows) {
-    const targets = (rows || []).filter(org => {
-        const typeLabel = getOrgTypeLabel(org);
-        return !typeLabel || isUnknownTypeLabel(typeLabel);
-    });
-    await Promise.all(targets.map(fetchSuggestionBundle));
+    // Ya cubierto por preloadSuggestionsForPage, no hace nada extra
 }
-
 function buildConfidenceChip(label, confidence, reason) {
     const safeLabel = String(label || '').trim();
     if (!safeLabel) return '<span class="text-slate-400">—</span>';
@@ -561,11 +607,14 @@ async function applySuggestedValue(kind, uuid, suggested, buttonEl) {
 }
 
 function updatePager(pageData) {
-    const totalPages = (pageData.totalPages != null && pageData.totalPages > 0) ? pageData.totalPages : 1;
-    const pageNum = (pageData.number || 0) + 1;
+    // Usar los datos anidados en pageData.page
+    const page = pageData.page || {};
+    const totalPages = (page.totalPages != null && page.totalPages > 0) ? page.totalPages : 1;
+    const pageNum = (page.number || 0) + 1;
     document.getElementById('pageInfo').textContent = 'Pagina ' + pageNum + ' de ' + totalPages;
-    document.getElementById('btnPrev').disabled = !!pageData.first;
-    document.getElementById('btnNext').disabled = !!pageData.last;
+    // Si tienes flags first/last, ajústalos aquí, si no, deshabilita según número de página
+    document.getElementById('btnPrev').disabled = pageNum <= 1;
+    document.getElementById('btnNext').disabled = pageNum >= totalPages;
 }
 
 async function loadTable() {
@@ -610,11 +659,14 @@ document.getElementById('btnNext').addEventListener('click', () => {
 });
 
 document.getElementById('searchInput').addEventListener('input', () => {
-    clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(() => {
+    // Ahora la búsqueda solo se activa con Enter, no en cada input
+});
+
+document.getElementById('searchInput').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
         currentPage = 0;
         loadTable();
-    }, 300);
+    }
 });
 
 document.getElementById('tableBody').addEventListener('click', (ev) => {

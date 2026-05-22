@@ -12,6 +12,8 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.aggregation.Aggregation;
+import org.springframework.data.mongodb.core.aggregation.AggregationResults;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.web.bind.annotation.CrossOrigin;
@@ -28,10 +30,13 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.text.Normalizer;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -42,6 +47,7 @@ import java.util.Set;
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.UUID;
@@ -53,6 +59,8 @@ import java.util.stream.Collectors;
 @CrossOrigin(origins = "*")
 public class ExternalOrganizationController {
 
+     private static final org.slf4j.Logger log =
+            org.slf4j.LoggerFactory.getLogger(ExternalOrganizationController.class);
     // -------------------------------------------------------------------------
     // TTL cache — thread-safe via AtomicReference + double-check (mejora #1)
     // -------------------------------------------------------------------------
@@ -62,6 +70,7 @@ public class ExternalOrganizationController {
     private static final long REFERENCE_CACHE_TTL_MS = 5 * 60 * 1000;
     private static final long GRAPH_SIMILARITY_CACHE_TTL_MS = 2 * 60 * 1000;
     private static final long INFERENCE_CACHE_TTL_MS = 10 * 60 * 1000;  // 10 minutos para inferencias
+    private static final long AI_TIMEOUT_BUFFER_MS = 500;               // margen extra sobre el timeout HTTP
 
     private final AtomicReference<CachedSet<String>> cachedExternalOrgUuids        = new AtomicReference<>();
     private final AtomicReference<CachedSet<String>> cachedReferencedExternalOrgUuids = new AtomicReference<>();
@@ -97,6 +106,18 @@ public class ExternalOrganizationController {
 
     @Value("${app.ai.country-suggest.timeout-ms:2000}")
     private int aiCountrySuggestTimeoutMs;  // Reducido de 8000 a 2000ms para fallback rápido
+
+    @Value("${app.searxng.country-suggest.enabled:false}")
+    private boolean searxngCountrySuggestEnabled;
+
+    @Value("${app.searxng.country-suggest.url:}")
+    private String searxngCountrySuggestUrl;
+
+    @Value("${app.searxng.country-suggest.timeout-ms:2500}")
+    private int searxngCountrySuggestTimeoutMs;
+
+    @Value("${app.searxng.country-suggest.max-results:5}")
+    private int searxngCountrySuggestMaxResults;
 
     @Value("${app.egreta.external-org.enabled:false}")
     private boolean egretaExternalOrgEnabled;
@@ -380,6 +401,20 @@ public class ExternalOrganizationController {
         InferenceResult     countryResult = inferCountryFromName(orgName, countryCatalog);
         TypeInferenceResult typeResult    = inferTypeFromName(orgName, typeCatalog);
 
+        /*if (countryResult.countryLabel.isBlank()) {
+            InferenceResult searxngCountry = inferCountryWithSearxng(orgName, countryCatalog);
+            if (searxngCountry != null && !searxngCountry.countryLabel.isBlank()) {
+                countryResult = searxngCountry;
+            }
+        }
+
+        if (typeResult.typeLabel.isBlank()) {
+            TypeInferenceResult aiType = inferTypeWithLocalAi(orgName, typeCatalog);
+            if (aiType != null && !aiType.typeLabel.isBlank()) {
+                typeResult = aiType;
+            }
+        }*/
+
         if (countryResult.countryLabel.isBlank() || typeResult.typeLabel.isBlank()) {
             MetadataInferenceResult aiResult = inferMetadataWithLocalAi(orgName, countryCatalog, typeCatalog);
             if (aiResult != null) {
@@ -407,23 +442,114 @@ public class ExternalOrganizationController {
         );
     }
 
+    // -------------------------------------------------------------------------
+    // POST /external-organizations/stats/suggest-metadata/batch
+    // Body: { "uuids": ["uuid1", "uuid2", ...] }
+    // -------------------------------------------------------------------------
+    @PostMapping("/stats/suggest-metadata/batch")
+    public List<Map<String, Object>> suggestMetadataBatch(@RequestBody Map<String, List<String>> body) {
+        List<String> uuids = body == null ? List.of() : body.getOrDefault("uuids", List.of());
+        if (uuids.isEmpty()) return List.of();
+
+        // Cargar las organizaciones correspondientes a los UUIDs recibidos
+        List<ExternalOrganization> organizations = mongoTemplate.find(
+            new Query(Criteria.where("uuid").in(uuids)),
+            ExternalOrganization.class
+        );
+        if (organizations.isEmpty()) return List.of();
+
+        List<CountryAggregate> countryCatalog = getCachedCountryCatalog();
+        List<TypeAggregate>    typeCatalog    = getCachedTypeCatalog();
+
+        // Inferencia local (sin AI) para todas
+        Map<String, InferenceResult>     countryResults = new ConcurrentHashMap<>();
+        Map<String, TypeInferenceResult> typeResults    = new ConcurrentHashMap<>();
+        for (ExternalOrganization org : organizations) {
+            String uuid    = org.getUuid();
+            String orgName = extractOrgName(org);
+            countryResults.put(uuid, inferCountryFromName(orgName, countryCatalog));
+            typeResults.put(uuid,    inferTypeFromName(orgName, typeCatalog));
+        }
+
+        // Batch AI para los que no tienen resultado local
+        List<ExternalOrganization> needsAi = organizations.stream()
+            .filter(org -> {
+                String uuid = org.getUuid();
+                return countryResults.getOrDefault(uuid, new InferenceResult("", 0.0, "")).countryLabel.isBlank()
+                    || typeResults.getOrDefault(uuid,    new TypeInferenceResult("", 0.0, "")).typeLabel.isBlank();
+            })
+            .collect(Collectors.toList());
+
+        if (!needsAi.isEmpty() && aiCountrySuggestEnabled) {
+            Map<String, MetadataInferenceResult> aiResults =
+                inferMetadataBatch(needsAi, countryCatalog, typeCatalog);
+            aiResults.forEach((uuid, aiResult) -> {
+                if (aiResult.country() != null && !aiResult.country().countryLabel.isBlank()
+                        && countryResults.getOrDefault(uuid, new InferenceResult("", 0.0, "")).countryLabel.isBlank()) {
+                    countryResults.put(uuid, aiResult.country());
+                }
+                if (aiResult.type() != null && !aiResult.type().typeLabel.isBlank()
+                        && typeResults.getOrDefault(uuid, new TypeInferenceResult("", 0.0, "")).typeLabel.isBlank()) {
+                    typeResults.put(uuid, aiResult.type());
+                }
+            });
+        }
+
+        // Construir respuesta
+        return organizations.stream().map(org -> {
+            String uuid          = org.getUuid();
+            InferenceResult     cr = countryResults.getOrDefault(uuid, new InferenceResult("", 0.0, "no-signal"));
+            TypeInferenceResult tr = typeResults.getOrDefault(uuid,    new TypeInferenceResult("", 0.0, "no-signal"));
+            String countryUri      = resolveCountryUriByLabel(cr.countryLabel);
+
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("uuid",                uuid);
+            row.put("name",                extractOrgName(org));
+            row.put("suggestedCountry",    cr.countryLabel);
+            row.put("suggestedCountryUri", countryUri);
+            row.put("countryConfidence",   cr.confidence);
+            row.put("countryReason",       cr.reason);
+            row.put("suggestedType",       tr.typeLabel);
+            row.put("typeConfidence",       tr.confidence);
+            row.put("typeReason",          tr.reason);
+            // Add workflow step if present
+            String workflowStep = null;
+            if (org.getWorkflow() != null) {
+                workflowStep = org.getWorkflow().getStep();
+            }
+            row.put("workflow", workflowStep);
+            return row;
+        }).collect(Collectors.toList());
+    }
+
     @GetMapping("/stats/type-catalog")
     public List<Map<String, String>> typeCatalog() {
-        return repository.findAll().stream()
-            .map(ExternalOrganization::getType)
-            .filter(Objects::nonNull)
-            .map(t -> Map.of(
-                "uri", Objects.toString(t.getUri(), "").trim(),
-                "label", Objects.toString(
-                    t.getTerm() == null ? "" :
-                        t.getTerm().getOrDefault("ca_ES",
-                            t.getTerm().getOrDefault("es_ES",
-                                t.getTerm().getOrDefault("en_GB", ""))),
-                    "").trim()))
-            .filter(row -> !Objects.toString(row.get("uri"), "").isBlank()
-                && !Objects.toString(row.get("label"), "").isBlank())
-            .distinct()
-            .sorted(Comparator.comparing(r -> Objects.toString(r.get("label"), ""), String.CASE_INSENSITIVE_ORDER))
+        Aggregation agg = Aggregation.newAggregation(
+            Aggregation.match(Criteria.where("type").exists(true).ne(null)),
+            Aggregation.group("type.uri").first("type.term").as("label"),
+            Aggregation.match(Criteria.where("_id").ne(null).ne("")),
+            Aggregation.sort(Sort.by("_id"))
+        );
+
+        AggregationResults<Document> results = mongoTemplate.aggregate(
+            agg, "ExternalOrganizations", Document.class
+        );
+
+        return results.getMappedResults().stream()
+            .map(doc -> {
+                String uri = Objects.toString(doc.getString("_id"), "").trim();
+                @SuppressWarnings("unchecked")
+                Map<String, String> term = (Map<String, String>) doc.get("label");
+                String label = term == null ? "" :
+                    term.getOrDefault("ca_ES",
+                        term.getOrDefault("es_ES",
+                            term.getOrDefault("en_GB", ""))).trim();
+                return Map.of("uri", uri, "label", label);
+            })
+            .filter(row -> !row.get("uri").isBlank() && !row.get("label").isBlank())
+            .sorted(Comparator.comparing(
+                r -> r.get("label"),
+                String.CASE_INSENSITIVE_ORDER))
             .collect(Collectors.toList());
     }
 
@@ -1269,6 +1395,16 @@ public class ExternalOrganizationController {
         long processedComparisons = 0;
         long progressTick = Math.max(1, totalComparisons / 120);
 
+
+        // Crear un Map de uuid a organización para lookup rápido
+        Map<String, ExternalOrganization> orgMap = new HashMap<>();
+        // Usar solo las organizaciones realmente procesadas (las de 'orgs')
+        // Se asume que los ids de los perfiles corresponden a los de orgs
+        for (ExternalOrganization org : repository.findAll()) {
+            if (org.getUuid() != null) orgMap.put(org.getUuid(), org);
+            else if (org.getId() != null) orgMap.put(org.getId(), org);
+        }
+
         for (int i = 0; i < profiles.size(); i++) {
             for (int j = i + 1; j < profiles.size(); j++) {
                 processedComparisons++;
@@ -1299,6 +1435,14 @@ public class ExternalOrganizationController {
                     continue;
                 }
 
+                // Obtener workflow.step para ambos lados usando el Map
+                String leftWorkflow = null;
+                String rightWorkflow = null;
+                ExternalOrganization org1 = orgMap.get(id1);
+                ExternalOrganization org2 = orgMap.get(id2);
+                if (org1 != null && org1.getWorkflow() != null) leftWorkflow = org1.getWorkflow().getStep();
+                if (org2 != null && org2.getWorkflow() != null) rightWorkflow = org2.getWorkflow().getStep();
+
                 pairs.add(Map.of(
                     "from", id1,
                     "to", id2,
@@ -1307,7 +1451,9 @@ public class ExternalOrganizationController {
                     "leftPureId", p1.pureId() == null ? "" : String.valueOf(p1.pureId()),
                     "rightPureId", p2.pureId() == null ? "" : String.valueOf(p2.pureId()),
                     "value", Math.round(similarity * 100.0) / 100.0,
-                    "title", "Similitud: " + Math.round(similarity * 100.0) + "%"
+                    "title", "Similitud: " + Math.round(similarity * 100.0) + "%",
+                    "leftWorkflow", leftWorkflow,
+                    "rightWorkflow", rightWorkflow
                 ));
                 connectedNodeIds.add(id1);
                 connectedNodeIds.add(id2);
@@ -1539,7 +1685,7 @@ public class ExternalOrganizationController {
 
         InferenceResult result = suggestWithFallback(
             orgName,
-            () -> inferCountryWithLocalAi(orgName, catalog),
+            () -> inferCountryWithSearxng(orgName, catalog),
             r  -> r == null || r.countryLabel.isBlank(),
             () -> inferCountryFromName(orgName, catalog)
         );
@@ -1881,8 +2027,151 @@ public class ExternalOrganizationController {
     }
 
     // =========================================================================
-    // Inferencia con AI local (mejora #6/#7/#8: async, caché, timeout corto)
+    // Inferencia asistida por SearxNG para país + AI local para tipo
     // =========================================================================
+
+    private CompletableFuture<String> callSearxngApiAsync(String orgName) {
+        if (!searxngCountrySuggestEnabled || searxngCountrySuggestUrl == null || searxngCountrySuggestUrl.isBlank()) {
+            return CompletableFuture.completedFuture(null);
+        }
+
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                String query = "\"" + orgName + "\" organization country";
+                String baseSearchUrl = resolveSearxngSearchUrl(searxngCountrySuggestUrl);
+                String separator = baseSearchUrl.contains("?") ? "&" : "?";
+                String requestUrl = baseSearchUrl
+                    + separator
+                    + "format=json&q="
+                    + URLEncoder.encode(query, StandardCharsets.UTF_8);
+
+                HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(requestUrl))
+                    .timeout(Duration.ofMillis(Math.max(800, searxngCountrySuggestTimeoutMs)))
+                    .header("Accept", "application/json")
+                    .GET()
+                    .build();
+
+                HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+                if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                    return null;
+                }
+                return response.body();
+            } catch (Exception ignored) {
+                return null;
+            }
+        }).orTimeout(searxngCountrySuggestTimeoutMs, TimeUnit.MILLISECONDS)
+          .exceptionally(e -> null);
+    }
+
+    private String resolveSearxngSearchUrl(String configuredUrl) {
+        String safe = configuredUrl == null ? "" : configuredUrl.trim();
+        if (safe.endsWith("/sse")) {
+            return safe.substring(0, safe.length() - 4) + "/search";
+        }
+        return safe;
+    }
+
+    private InferenceResult inferCountryWithSearxng(String orgName, List<CountryAggregate> catalog) {
+        String cacheKey = "country:searxng:" + orgName;
+        CachedInference cached = countryInferenceCache.get(cacheKey);
+        if (cached != null && (System.currentTimeMillis() - cached.timestamp()) < INFERENCE_CACHE_TTL_MS) {
+            String cachedBody = cached.result();
+            if (cachedBody != null) {
+                InferenceResult result = parseSearxngCountryResponse(cachedBody, catalog);
+                return (result == null || result.countryLabel.isBlank()) ? null : result;
+            }
+            return null;
+        }
+
+        String body = null;
+        try {
+            body = callSearxngApiAsync(orgName)
+                .get(searxngCountrySuggestTimeoutMs + 500, TimeUnit.MILLISECONDS);
+        } catch (Exception ignored) {
+            body = null;
+        }
+
+        if (body != null) {
+            countryInferenceCache.put(cacheKey, new CachedInference(body, System.currentTimeMillis()));
+            InferenceResult result = parseSearxngCountryResponse(body, catalog);
+            return (result == null || result.countryLabel.isBlank()) ? null : result;
+        }
+
+        return null;
+    }
+
+    private InferenceResult parseSearxngCountryResponse(String rawBody, List<CountryAggregate> catalog) {
+        if (rawBody == null || rawBody.isBlank() || catalog == null || catalog.isEmpty()) {
+            return null;
+        }
+
+        try {
+            JsonNode root = objectMapper.readTree(rawBody);
+            JsonNode resultsNode = root.path("results");
+            if (!resultsNode.isArray() || resultsNode.isEmpty()) {
+                return null;
+            }
+
+            int maxResults = Math.max(1, searxngCountrySuggestMaxResults);
+            Map<String, Integer> scores = new HashMap<>();
+            int rank = 0;
+
+            for (JsonNode resultNode : resultsNode) {
+                if (rank >= maxResults) break;
+
+                String title = resultNode.path("title").asText("");
+                String content = resultNode.path("content").asText("");
+                String url = resultNode.path("url").asText("");
+                String normalizedText = normalizeText(title + " " + content + " " + url);
+                if (normalizedText.isBlank()) {
+                    rank++;
+                    continue;
+                }
+
+                int weight = Math.max(1, maxResults - rank);
+
+                for (CountryAggregate candidate : catalog) {
+                    if (!candidate.normalizedLabel.isBlank() && containsWord(normalizedText, candidate.normalizedLabel)) {
+                        scores.merge(candidate.label, 3 * weight, Integer::sum);
+                    }
+                }
+
+                for (Map.Entry<String, List<String>> aliasEntry : COUNTRY_ALIASES.entrySet()) {
+                    boolean aliasMatched = aliasEntry.getValue().stream().anyMatch(alias -> containsWord(normalizedText, alias));
+                    if (!aliasMatched) continue;
+
+                    String resolved = resolveAliasCountry(aliasEntry.getKey(), catalog);
+                    if (!resolved.isBlank()) {
+                        scores.merge(resolved, 2 * weight, Integer::sum);
+                    }
+                }
+
+                rank++;
+            }
+
+            if (scores.isEmpty()) {
+                return null;
+            }
+
+            String bestCountry = scores.entrySet().stream()
+                .max(Comparator.<Map.Entry<String, Integer>>comparingInt(Map.Entry::getValue)
+                    .thenComparingInt(entry -> countryCountByLabel(entry.getKey(), catalog)))
+                .map(Map.Entry::getKey)
+                .orElse("");
+
+            if (bestCountry.isBlank()) {
+                return null;
+            }
+
+            int score = scores.getOrDefault(bestCountry, 0);
+            double confidence = clamp(0.55 + Math.min(0.40, score / 20.0));
+            confidence = Math.round(confidence * 100.0) / 100.0;
+            return new InferenceResult(bestCountry, confidence, "searxng-match");
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
 
     /**
      * Mejora #6/#7: método centralizado con:
@@ -1890,11 +2179,11 @@ public class ExternalOrganizationController {
      * - Timeout corto (2 segundos, no 8) para fallback rápido a heurística
      * - Caché por prompt para evitar llamadas repetidas
      */
-    private CompletableFuture<String> callLocalAiApiAsync(String prompt) {
+    private CompletableFuture<String> callLocalAiApiAsync(String systemPrompt, String userPrompt) {
         if (!aiCountrySuggestEnabled || aiCountrySuggestUrl == null || aiCountrySuggestUrl.isBlank()) {
             return CompletableFuture.completedFuture(null);
         }
-        
+
         return CompletableFuture.supplyAsync(() -> {
             try {
                 Map<String, Object> payload = new LinkedHashMap<>();
@@ -1902,14 +2191,14 @@ public class ExternalOrganizationController {
                     ? "local-model" : aiCountrySuggestModel);
                 payload.put("temperature", 0);
                 payload.put("messages", List.of(
-                    Map.of("role", "system", "content", "You are a data quality assistant."),
-                    Map.of("role", "user",   "content", prompt)
+                    Map.of("role", "system", "content", systemPrompt),
+                    Map.of("role", "user",   "content", userPrompt)
                 ));
                 payload.put("response_format", Map.of("type", "json_object"));
 
                 HttpRequest.Builder builder = HttpRequest.newBuilder()
                     .uri(URI.create(aiCountrySuggestUrl))
-                    .timeout(Duration.ofMillis(aiCountrySuggestTimeoutMs))  // Usa timeout más corto (2000ms por defecto)
+                    .timeout(Duration.ofMillis(aiCountrySuggestTimeoutMs))
                     .header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(payload)));
 
@@ -1940,32 +2229,131 @@ public class ExternalOrganizationController {
             return null;
         }
 
-        // Mejora #8: Limitar catálogo a top-20 (no 120) para reducir tamaño del prompt
-        String catalogText = catalog.stream().limit(20).map(c -> c.label).collect(Collectors.joining(", "));
-        String prompt = "Given an organization name, infer the most likely country. "
-            + "Return strict JSON with keys suggestedCountry, confidence, reason. "
-            + "confidence must be between 0 and 1. "
-            + "If uncertain return suggestedCountry as empty string and confidence 0. "
-            + "Organization: '" + orgName + "'. "
-            + "Candidate countries: " + catalogText;
+        String systemPrompt =
+                "You are a data quality assistant specialized in research organizations. "
+                + "Given an organization name, infer the most likely country. "
+                + "Return strict JSON with exactly these keys: suggestedCountry, confidence, reason. "
+                + "confidence must be between 0 and 1. "
+                + "If uncertain, return suggestedCountry as empty string and confidence as 0. "
+                + "Never include explanation or markdown outside the JSON object.";
 
-        // Mejora #7: Usar async con await y timeout corto
+        String userPrompt = "Organization: '" + orgName + "'";
+
         String body = null;
         try {
-            body = callLocalAiApiAsync(prompt)
-                .get(aiCountrySuggestTimeoutMs + 500, TimeUnit.MILLISECONDS);
-        } catch (Exception e) {
-            // Timeout o error - continuará con null
+            body = callLocalAiApiAsync(systemPrompt, userPrompt)
+                    .get(aiCountrySuggestTimeoutMs + AI_TIMEOUT_BUFFER_MS, TimeUnit.MILLISECONDS);
+        } catch (java.util.concurrent.TimeoutException e) {
+            log.debug("Local AI timeout inferring country for org '{}'", orgName);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.warn("Interrupted while inferring country for org '{}'", orgName);
+        } catch (java.util.concurrent.ExecutionException e) {
+            log.warn("Local AI error inferring country for org '{}': {}", orgName, e.getCause().getMessage());
         }
-        
-        // Cachear resultado incluso si es null
+
         if (body != null) {
             countryInferenceCache.put(cacheKey, new CachedInference(body, System.currentTimeMillis()));
             InferenceResult result = parseLocalAiResponse(body, catalog);
             return (result == null || result.countryLabel.isBlank()) ? null : result;
         }
-        
+
         return null;
+    }
+
+    // -------------------------------------------------------------------------
+    // inferMetadataWithLocalAiAsync — versión no bloqueante para el batch
+    // -------------------------------------------------------------------------
+    private CompletableFuture<MetadataInferenceResult> inferMetadataWithLocalAiAsync(
+            String orgName,
+            List<CountryAggregate> countryCatalog,
+            List<TypeAggregate> typeCatalog) {
+
+        String typeCatalogText = typeCatalog.stream()
+                .limit(20)
+                .map(t -> t.label)
+                .collect(Collectors.joining(", "));
+
+        String systemPrompt =
+                "You are a data quality assistant specialized in research organizations. "
+                + "Given an organization name, infer the most likely country and organization type. "
+                + "Return strict JSON with exactly these keys: "
+                + "suggestedCountry, countryConfidence, countryReason, suggestedType, typeConfidence, typeReason. "
+                + "Confidence values must be between 0 and 1. "
+                + "If uncertain, return the corresponding suggested field as empty string and its confidence as 0. "
+                + "Never include explanation or markdown outside the JSON object.";
+
+        String userPrompt = "Organization: '" + orgName + "'. Candidate types: " + typeCatalogText;
+
+        return callLocalAiApiAsync(systemPrompt, userPrompt)
+                .orTimeout(aiCountrySuggestTimeoutMs + AI_TIMEOUT_BUFFER_MS, TimeUnit.MILLISECONDS)
+                .exceptionally(e -> {
+                    log.debug("Local AI timeout/error for org '{}': {}", orgName, e.getMessage());
+                    return null;
+                })
+                .thenApply(body -> {
+                    if (body == null) return null;
+                    return parseLocalAiMetadataResponse(body, countryCatalog, typeCatalog);
+                });
+    }
+
+    // -------------------------------------------------------------------------
+    // inferMetadataBatch — lotes de AI_BATCH_SIZE, AI_BATCH_CONCURRENCY paralelos
+    // -------------------------------------------------------------------------
+    private static final int AI_BATCH_SIZE        = 20;
+    private static final int AI_BATCH_CONCURRENCY = 5;
+
+    private Map<String, MetadataInferenceResult> inferMetadataBatch(
+            List<ExternalOrganization> organizations,
+            List<CountryAggregate> countryCatalog,
+            List<TypeAggregate> typeCatalog) {
+
+        Map<String, MetadataInferenceResult> results = new ConcurrentHashMap<>();
+        Semaphore semaphore = new Semaphore(AI_BATCH_CONCURRENCY);
+
+        for (int i = 0; i < organizations.size(); i += AI_BATCH_SIZE) {
+            List<ExternalOrganization> batch = organizations.subList(
+                    i, Math.min(i + AI_BATCH_SIZE, organizations.size()));
+
+            List<CompletableFuture<Void>> futures = batch.stream()
+                .map(org -> {
+                    String orgName = extractOrgName(org);
+                    try {
+                        semaphore.acquire();
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        return CompletableFuture.<Void>completedFuture(null);
+                    }
+                    return inferMetadataWithLocalAiAsync(orgName, countryCatalog, typeCatalog)
+                        .whenComplete((result, ex) -> {
+                            semaphore.release();
+                            if (result != null && org.getUuid() != null) {
+                                results.put(org.getUuid(), result);
+                            }
+                        })
+                        .thenApply(r -> (Void) null);
+                })
+                .collect(Collectors.toList());
+
+            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+
+            log.debug("Lote AI procesado: {}/{} organizaciones",
+                    Math.min(i + batch.size(), organizations.size()),
+                    organizations.size());
+        }
+
+        return results;
+    }
+
+    // -------------------------------------------------------------------------
+    // extractOrgName — nombre preferido en en_GB, fallback es_ES, ca_ES
+    // -------------------------------------------------------------------------
+    private String extractOrgName(ExternalOrganization org) {
+        if (org.getName() == null) return "";
+        String name = org.getName().get("en_GB");
+        if (name == null || name.isBlank()) name = org.getName().get("es_ES");
+        if (name == null || name.isBlank()) name = org.getName().get("ca_ES");
+        return name != null ? name : "";
     }
 
     private TypeInferenceResult inferTypeWithLocalAi(String orgName, List<TypeAggregate> catalog) {
@@ -1983,29 +2371,37 @@ public class ExternalOrganizationController {
 
         // Mejora #8: Limitar catálogo a top-20 (no 80) para reducir tamaño del prompt
         String catalogText = catalog.stream().limit(20).map(t -> t.label).collect(Collectors.joining(", "));
-        String prompt = "Given an organization name, infer the most likely organization type. "
-            + "Return strict JSON with keys suggestedType, confidence, reason. "
-            + "confidence must be between 0 and 1. "
-            + "If uncertain return suggestedType as empty string and confidence 0. "
-            + "Organization: '" + orgName + "'. "
-            + "Candidate types: " + catalogText;
 
-        // Mejora #7: Usar async con await y timeout corto
+        String systemPrompt =
+                "You are a data quality assistant specialized in research organizations. "
+                + "Given an organization name, infer the most likely organization type. "
+                + "Return strict JSON with exactly these keys: suggestedType, confidence, reason. "
+                + "confidence must be between 0 and 1. "
+                + "If uncertain, return suggestedType as empty string and confidence as 0. "
+                + "Never include explanation or markdown outside the JSON object.";
+
+        String userPrompt = "Organization: '" + orgName + "'. Candidate types: " + catalogText;
+
         String body = null;
         try {
-            body = callLocalAiApiAsync(prompt)
-                .get(aiCountrySuggestTimeoutMs + 500, TimeUnit.MILLISECONDS);
-        } catch (Exception e) {
-            // Timeout o error - continuará con null
+            body = callLocalAiApiAsync(systemPrompt, userPrompt)
+                    .get(aiCountrySuggestTimeoutMs + AI_TIMEOUT_BUFFER_MS, TimeUnit.MILLISECONDS);
+        } catch (java.util.concurrent.TimeoutException e) {
+            log.debug("Local AI timeout inferring type for org '{}'", orgName);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.warn("Interrupted while inferring type for org '{}'", orgName);
+        } catch (java.util.concurrent.ExecutionException e) {
+            log.warn("Local AI error inferring type for org '{}': {}", orgName, e.getCause().getMessage());
         }
-        
+
         // Cachear resultado incluso si es null
         if (body != null) {
             typeInferenceCache.put(cacheKey, new CachedInference(body, System.currentTimeMillis()));
             TypeInferenceResult result = parseLocalAiTypeResponse(body, catalog);
             return (result == null || result.typeLabel.isBlank()) ? null : result;
         }
-        
+
         return null;
     }
 
@@ -2014,26 +2410,36 @@ public class ExternalOrganizationController {
             List<CountryAggregate> countryCatalog,
             List<TypeAggregate> typeCatalog) {
 
-        // Mejora #8: Limitar catálogo a top-20 (no 120/80) para reducir tamaño del prompt
-        String countryCatalogText = countryCatalog.stream().limit(20).map(c -> c.label).collect(Collectors.joining(", "));
-        String typeCatalogText    = typeCatalog.stream().limit(20).map(t -> t.label).collect(Collectors.joining(", "));
-        String prompt = "Given an organization name, infer the most likely country and organization type. "
-            + "Return strict JSON with keys suggestedCountry, countryConfidence, countryReason, suggestedType, typeConfidence, typeReason. "
-            + "Confidence values must be between 0 and 1. "
-            + "If uncertain, return the corresponding suggested field as empty string and its confidence as 0. "
-            + "Organization: '" + orgName + "'. "
-            + "Candidate countries: " + countryCatalogText + ". "
-            + "Candidate types: " + typeCatalogText;
+        // Mejora #8: Limitar catálogo a top-20 para reducir tamaño del prompt
+        String typeCatalogText = typeCatalog.stream()
+                .limit(20)
+                .map(t -> t.label)
+                .collect(Collectors.joining(", "));
 
-        // Mejora #7: Usar async con await y timeout corto
+        String systemPrompt =
+                "You are a data quality assistant specialized in research organizations. "
+                + "Given an organization name, infer the most likely country and organization type. "
+                + "Return strict JSON with exactly these keys: "
+                + "suggestedCountry, countryConfidence, countryReason, suggestedType, typeConfidence, typeReason. "
+                + "Confidence values must be between 0 and 1. "
+                + "If uncertain, return the corresponding suggested field as empty string and its confidence as 0. "
+                + "Never include explanation or markdown outside the JSON object.";
+
+        String userPrompt = "Organization: '" + orgName + "'. Candidate types: " + typeCatalogText;
+
         String body = null;
         try {
-            body = callLocalAiApiAsync(prompt)
-                .get(aiCountrySuggestTimeoutMs + 500, TimeUnit.MILLISECONDS);
-        } catch (Exception e) {
-            // Timeout o error - continuará con null
+            body = callLocalAiApiAsync(systemPrompt, userPrompt)
+                    .get(aiCountrySuggestTimeoutMs + AI_TIMEOUT_BUFFER_MS, TimeUnit.MILLISECONDS);
+        } catch (java.util.concurrent.TimeoutException e) {
+            log.debug("Local AI timeout inferring metadata for org '{}'", orgName);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.warn("Interrupted while inferring metadata for org '{}'", orgName);
+        } catch (java.util.concurrent.ExecutionException e) {
+            log.warn("Local AI error inferring metadata for org '{}': {}", orgName, e.getCause().getMessage());
         }
-        
+
         if (body == null) return null;
 
         return parseLocalAiMetadataResponse(body, countryCatalog, typeCatalog);
@@ -2349,8 +2755,7 @@ public class ExternalOrganizationController {
         return Sort.by(
             Sort.Order.asc("name.ca_ES"),
             Sort.Order.asc("name.es_ES"),
-            Sort.Order.asc("name.en_GB"),
-            Sort.Order.asc("displayName")
+            Sort.Order.asc("name.en_GB")
         );
     }
 

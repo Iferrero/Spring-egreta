@@ -317,9 +317,6 @@
             <button id="btnReload" class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium transition-colors">
                 <i class="fa-solid fa-rotate"></i> Recarregar
             </button>
-            <button id="btnCenter" class="px-4 py-2 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-sm font-medium transition-colors">
-                <i class="fa-solid fa-expand"></i> Centrar
-            </button>
             <button id="btnExport" class="px-4 py-2 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-sm font-medium transition-colors">
                 <i class="fa-solid fa-download"></i> Descarregar
             </button>
@@ -337,11 +334,7 @@
         <div class="legend">
             <div class="legend-item">
                 <div class="legend-box with-type"></div>
-                <span>Amb tipus</span>
-            </div>
-            <div class="legend-item">
-                <div class="legend-box without-type"></div>
-                <span>Sense tipus</span>
+                <span>Validat</span>
             </div>
         </div>
     </div>
@@ -375,12 +368,12 @@ const clustersPageSize = 40;
 const queryCacheTtlMs = 2 * 60 * 1000;
 const queryCacheMaxEntries = 20;
 
+// ── Utilitats ────────────────────────────────────────────────────────────────
+
 function debounce(fn, delayMs) {
     let timeoutId = null;
     return (...args) => {
-        if (timeoutId) {
-            clearTimeout(timeoutId);
-        }
+        if (timeoutId) clearTimeout(timeoutId);
         timeoutId = setTimeout(() => fn(...args), delayMs);
     };
 }
@@ -403,34 +396,27 @@ function safeHtml(value) {
 
 function formatNameWithPureId(name, pureId) {
     const base = String(name || '').trim();
-    const pid = String(pureId || '').trim();
-    if (!pid) {
-        return base;
-    }
-    return base + ' (' + pid + ')';
+    const pid  = String(pureId || '').trim();
+    return pid ? base + ' (' + pid + ')' : base;
 }
+
+// ── Loading overlay ──────────────────────────────────────────────────────────
 
 function setLoading(isLoading, message) {
     const overlay = document.getElementById('loadingOverlay');
-    const text = document.getElementById('loadingText');
+    const text    = document.getElementById('loadingText');
     if (!overlay || !text) return;
-
-    if (message) {
-        text.textContent = message;
-    }
-
+    if (message) text.textContent = message;
     overlay.classList.toggle('hidden', !isLoading);
     overlay.setAttribute('aria-busy', isLoading ? 'true' : 'false');
 }
 
 function hideLoadingOverlayWithDone() {
     setLoading(true, 'Calculant similitud... 100%');
-    setTimeout(() => {
-        if (pendingRequests === 0) {
-            setLoading(false);
-        }
-    }, 120);
+    setTimeout(() => { if (pendingRequests === 0) setLoading(false); }, 120);
 }
+
+// ── Cache ────────────────────────────────────────────────────────────────────
 
 function makeQueryCacheKey(similarity) {
     return similarity.toFixed(3) + '|' + graphLimit + '|' + maxPairs;
@@ -438,137 +424,116 @@ function makeQueryCacheKey(similarity) {
 
 function getCachedQueryResult(key) {
     const entry = queryCache.get(key);
-    if (!entry) {
-        return null;
-    }
-
-    const now = Date.now();
-    if ((now - entry.timestamp) > queryCacheTtlMs) {
+    if (!entry) return null;
+    if ((Date.now() - entry.timestamp) > queryCacheTtlMs) {
         queryCache.delete(key);
         return null;
     }
-
     return entry.payload;
 }
 
 function setCachedQueryResult(key, payload) {
-    queryCache.set(key, {
-        timestamp: Date.now(),
-        payload
-    });
-
+    queryCache.set(key, { timestamp: Date.now(), payload });
+    // LRU: eliminar l'entrada més antiga si superem el límit
     if (queryCache.size > queryCacheMaxEntries) {
-        const oldestKey = queryCache.keys().next().value;
-        if (oldestKey) {
-            queryCache.delete(oldestKey);
-        }
+        queryCache.delete(queryCache.keys().next().value);
     }
 }
 
+// ── Fetch amb progrés real i polling adaptatiu ───────────────────────────────
+
 async function fetchSimilarityWithRealProgress(similarity, requestId) {
-    const startRes = await fetch('/api/external-organizations/similarity/pairs/job/start?threshold=' + similarity + '&limit=' + graphLimit + '&maxPairs=' + maxPairs);
+    const startRes = await fetch(
+        '/api/external-organizations/similarity/pairs/job/start?threshold=' + similarity +
+        '&limit=' + graphLimit + '&maxPairs=' + maxPairs
+    );
     if (!startRes.ok) throw new Error('HTTP ' + startRes.status + ' iniciant job');
     const startData = await startRes.json();
     const jobId = startData.jobId;
-    if (!jobId) {
-        throw new Error('No s\'ha rebut jobId');
-    }
+    if (!jobId) throw new Error('No s\'ha rebut jobId');
 
     let guard = 0;
+    let lastProgress = 0;
+
     while (guard < 1200) {
-        guard += 1;
+        guard++;
+        if (requestId !== activeRequestId) return null;
 
-        if (requestId !== activeRequestId) {
-            return null;
-        }
-
-        const statusRes = await fetch('/api/external-organizations/similarity/pairs/job/status?jobId=' + encodeURIComponent(jobId));
+        const statusRes = await fetch(
+            '/api/external-organizations/similarity/pairs/job/status?jobId=' + encodeURIComponent(jobId)
+        );
         if (!statusRes.ok) throw new Error('HTTP ' + statusRes.status + ' consultant progrés');
         const status = await statusRes.json();
 
-        const progress = typeof status.progress === 'number' ? Math.max(0, Math.min(100, Math.round(status.progress))) : 0;
+        const progress = typeof status.progress === 'number'
+            ? Math.max(0, Math.min(100, Math.round(status.progress))) : 0;
         setLoading(true, 'Calculant similitud... ' + progress + '%');
+        lastProgress = progress;
 
-        if (status.status === 'done') {
-            return status.result || null;
-        }
-
-        if (status.status === 'error' || status.status === 'not-found') {
+        if (status.status === 'done')  return status.result || null;
+        if (status.status === 'error' || status.status === 'not-found')
             throw new Error(status.error || status.message || 'Error al calcular similitud');
-        }
 
-        await new Promise(resolve => setTimeout(resolve, 250));
+        // Millora #8: polling adaptatiu — menys peticions quan el procés és lent
+        const delay = progress < 30 ? 500 : progress < 80 ? 300 : 150;
+        await new Promise(resolve => setTimeout(resolve, delay));
     }
 
     throw new Error('Temps d\'espera esgotat al calcular la similitud');
 }
 
-function buildPairs() {
-    if (!currentData || !Array.isArray(currentData.pairs)) {
-        currentPairs = [];
-        return;
-    }
+// ── Construcció de dades ─────────────────────────────────────────────────────
 
+function buildPairs() {
+    if (!currentData || !Array.isArray(currentData.pairs)) { currentPairs = []; return; }
     currentPairs = currentData.pairs
         .map(p => ({
-            from: p.from,
-            to: p.to,
+            from:       p.from,
+            to:         p.to,
             similarity: p.value,
-            leftLabel: formatNameWithPureId(p.leftLabel || String(p.from), p.leftPureId),
-            rightLabel: formatNameWithPureId(p.rightLabel || String(p.to), p.rightPureId),
-            leftTitle: p.leftLabel || '',
+            leftLabel:  formatNameWithPureId(p.leftLabel  || String(p.from), p.leftPureId),
+            rightLabel: formatNameWithPureId(p.rightLabel || String(p.to),   p.rightPureId),
+            leftTitle:  p.leftLabel  || '',
             rightTitle: p.rightLabel || '',
-            rawTitle: p.title || ''
+            rawTitle:   p.title      || '',
+            leftWorkflow:  (p.leftWorkflow || '').toLowerCase(),
+            rightWorkflow: (p.rightWorkflow || '').toLowerCase(),
+            leftPureId: p.leftPureId,
+            rightPureId: p.rightPureId
         }))
         .sort((a, b) => b.similarity - a.similarity);
 }
 
 function buildClusters() {
-    if (!currentData || !Array.isArray(currentData.pairs)) {
-        currentClusters = [];
-        return;
-    }
+    if (!currentData || !Array.isArray(currentData.pairs)) { currentClusters = []; return; }
 
     const idToLabel = new Map();
     for (const p of currentData.pairs) {
-        idToLabel.set(p.from, formatNameWithPureId(p.leftLabel || String(p.from), p.leftPureId));
-        idToLabel.set(p.to, formatNameWithPureId(p.rightLabel || String(p.to), p.rightPureId));
+        idToLabel.set(p.from, formatNameWithPureId(p.leftLabel  || String(p.from), p.leftPureId));
+        idToLabel.set(p.to,   formatNameWithPureId(p.rightLabel || String(p.to),   p.rightPureId));
     }
 
     const parent = new Map(Array.from(idToLabel.keys()).map(id => [id, id]));
-
     const find = (x) => {
         let p = parent.get(x);
-        while (p !== parent.get(p)) {
-            parent.set(p, parent.get(parent.get(p)));
-            p = parent.get(p);
-        }
+        while (p !== parent.get(p)) { parent.set(p, parent.get(parent.get(p))); p = parent.get(p); }
         return p;
     };
-
-    const union = (a, b) => {
-        const pa = find(a);
-        const pb = find(b);
-        if (pa !== pb) {
-            parent.set(pa, pb);
-        }
-    };
+    const union = (a, b) => { const pa = find(a), pb = find(b); if (pa !== pb) parent.set(pa, pb); };
 
     currentData.pairs.forEach(p => union(p.from, p.to));
 
     const groups = new Map();
     for (const id of idToLabel.keys()) {
         const root = find(id);
-        if (!groups.has(root)) {
-            groups.set(root, []);
-        }
+        if (!groups.has(root)) groups.set(root, []);
         groups.get(root).push(id);
     }
 
     currentClusters = Array.from(groups.values())
         .filter(g => g.length > 1)
         .map(g => ({
-            size: g.length,
+            size:  g.length,
             names: g.map(id => idToLabel.get(id) || String(id)).sort((a, b) => a.localeCompare(b))
         }))
         .sort((a, b) => b.size - a.size || a.names[0].localeCompare(b.names[0]));
@@ -576,62 +541,86 @@ function buildClusters() {
 
 function updateStats() {
     if (!currentData) return;
-    const totalAvailable = typeof currentData.totalAvailableOrgs === 'number' ? currentData.totalAvailableOrgs : 0;
-    const totalProcessed = typeof currentData.totalProcessedOrgs === 'number' ? currentData.totalProcessedOrgs : 0;
-    const connected = typeof currentData.totalConnectedOrgs === 'number' ? currentData.totalConnectedOrgs : 0;
-    const totalPairs = typeof currentData.totalPairs === 'number' ? currentData.totalPairs : 0;
-
-    document.getElementById('totalOrgsValue').textContent = totalProcessed + '/' + totalAvailable;
+    const totalAvailable  = typeof currentData.totalAvailableOrgs  === 'number' ? currentData.totalAvailableOrgs  : 0;
+    const totalProcessed  = typeof currentData.totalProcessedOrgs  === 'number' ? currentData.totalProcessedOrgs  : 0;
+    const connected       = typeof currentData.totalConnectedOrgs  === 'number' ? currentData.totalConnectedOrgs  : 0;
+    const totalPairsCount = typeof currentData.totalPairs          === 'number' ? currentData.totalPairs          : 0;
+    document.getElementById('totalOrgsValue').textContent  = totalProcessed + '/' + totalAvailable;
     document.getElementById('totalNodesValue').textContent = connected;
-    document.getElementById('totalEdgesValue').textContent = totalPairs;
+    document.getElementById('totalEdgesValue').textContent = totalPairsCount;
 }
+
+// ── Delegació d'esdeveniments al contenidor pare (Millora #3) ────────────────
+// Delegació d'events: un sol listener per contenidor pare estàtic
+document.getElementById('tableContainer').addEventListener('click', e => {
+    const btn = e.target.closest('.js-prev-page, .js-next-page');
+    if (!btn) return;
+    const totalPages = parseInt(document.getElementById('tableContainer').dataset.totalPages || '1', 10);
+    if (btn.classList.contains('js-prev-page') && tablePage > 1)              { tablePage--;                    renderTable(); }
+    if (btn.classList.contains('js-next-page') && tablePage < totalPages)     { tablePage++;                    renderTable(); }
+});
+
+document.getElementById('clustersContainer').addEventListener('click', e => {
+    const btn = e.target.closest('.js-prev-page, .js-next-page');
+    if (!btn) return;
+    const totalPages = parseInt(document.getElementById('clustersContainer').dataset.totalPages || '1', 10);
+    if (btn.classList.contains('js-prev-page') && clustersPage > 1)           { clustersPage--;                 renderClusters(); }
+    if (btn.classList.contains('js-next-page') && clustersPage < totalPages)  { clustersPage++;                 renderClusters(); }
+});
 
 function renderTable() {
     const container = document.getElementById('tableContainer');
     const q = normalizeText(document.getElementById('searchInput').value);
 
+    // Preparar text de cerca per cada parell
     const filtered = currentPairs.filter(p => {
         if (!q) return true;
-        return normalizeText(p.leftLabel).includes(q)
-            || normalizeText(p.rightLabel).includes(q)
-            || normalizeText(p.leftTitle).includes(q)
-            || normalizeText(p.rightTitle).includes(q)
-            || normalizeText(p.rawTitle).includes(q);
+        const text = normalizeText(p.leftLabel + ' ' + p.rightLabel + ' ' + p.leftTitle + ' ' + p.rightTitle + ' ' + p.rawTitle);
+        return text.includes(q);
     });
 
     const totalPages = Math.max(1, Math.ceil(filtered.length / tablePageSize));
-    if (tablePage > totalPages) {
-        tablePage = totalPages;
-    }
-    const start = (tablePage - 1) * tablePageSize;
-    const end = start + tablePageSize;
+    if (tablePage > totalPages) tablePage = totalPages;
+
+    const start   = (tablePage - 1) * tablePageSize;
+    const end     = start + tablePageSize;
     const visible = filtered.slice(start, end);
 
     if (!visible.length) {
         container.innerHTML = '<div class="p-6 text-slate-500">No hi ha parelles similars per al filtre actual.</div>';
+        container.dataset.totalPages = '1';
         return;
     }
 
     const rows = visible.map(p => {
         const sim = Math.round(p.similarity * 100);
+        const leftGreen  = p.leftWorkflow === 'approved' || p.leftWorkflow === 'validated';
+        const rightGreen = p.rightWorkflow === 'approved' || p.rightWorkflow === 'validated';
+        const leftBase = (p.leftLabel || '').split(' (')[0];
+        const rightBase = (p.rightLabel || '').split(' (')[0];
+        const leftPureId = p.leftPureId ? ` (${safeHtml(p.leftPureId)})` : '';
+        const rightPureId = p.rightPureId ? ` (${safeHtml(p.rightPureId)})` : '';
+        const EGRETA_EXTERNAL_ORG_BASE = 'https://egreta.uab.cat/admin/editor/dk/atira/pure/api/shared/model/ueo/externalorganisation/editor/ueoexternalorganisationeditor.xhtml?scheme=&type=&id=';
+        const leftUrl = p.leftPureId ? EGRETA_EXTERNAL_ORG_BASE + encodeURIComponent(p.leftPureId) : '#';
+        const rightUrl = p.rightPureId ? EGRETA_EXTERNAL_ORG_BASE + encodeURIComponent(p.rightPureId) : '#';
+        const leftChip  = `<a href=\"${leftUrl}\" class=\"sim-chip\" style=\"background:${leftGreen ? '#4ade80' : '#e0f2fe'};color:${leftGreen ? '#14532d' : '#0c4a6e'};text-decoration:none;\" target=\"_blank\" onclick=\"window.open('${leftUrl}','egreta','width=900,height=700,scrollbars=yes');return false;\">${safeHtml(leftBase)}${leftPureId}</a>`;
+        const rightChip = `<a href=\"${rightUrl}\" class=\"sim-chip\" style=\"background:${rightGreen ? '#4ade80' : '#e0f2fe'};color:${rightGreen ? '#14532d' : '#0c4a6e'};text-decoration:none;\" target=\"_blank\" onclick=\"window.open('${rightUrl}','egreta','width=900,height=700,scrollbars=yes');return false;\">${safeHtml(rightBase)}${rightPureId}</a>`;
         return '<tr>'
-            + '<td>' + safeHtml(p.leftLabel) + '</td>'
-            + '<td>' + safeHtml(p.rightLabel) + '</td>'
+            + '<td>' + leftChip  + '</td>'
+            + '<td>' + rightChip + '</td>'
             + '<td><span class="sim-chip">' + sim + '%</span></td>'
             + '</tr>';
     }).join('');
 
-    const fromLabel = filtered.length === 0 ? 0 : (start + 1);
-    const toLabel = Math.min(end, filtered.length);
-    const note = '<div class="p-3 text-xs text-slate-500 border-b border-slate-100">Mostrant ' + fromLabel + '-' + toLabel + ' de ' + filtered.length + ' parelles.</div>';
-
+    const fromLabel = start + 1;
+    const toLabel   = Math.min(end, filtered.length);
+    const note  = '<div class="p-3 text-xs text-slate-500 border-b border-slate-100">Mostrant ' + fromLabel + '–' + toLabel + ' de ' + filtered.length + ' parelles.</div>';
     const pager = '<div class="pager">'
         + '<div>Pàgina ' + tablePage + ' de ' + totalPages + '</div>'
         + '<div class="pager-controls">'
-        + '<button id="tablePrevPage" class="pager-btn"' + (tablePage <= 1 ? ' disabled' : '') + '>Anterior</button>'
-        + '<button id="tableNextPage" class="pager-btn"' + (tablePage >= totalPages ? ' disabled' : '') + '>Següent</button>'
-        + '</div>'
-        + '</div>';
+        + '<button class="pager-btn js-prev-page"' + (tablePage <= 1 ? ' disabled' : '') + '>Anterior</button>'
+        + '<button class="pager-btn js-next-page"' + (tablePage >= totalPages ? ' disabled' : '') + '>Següent</button>'
+        + '</div></div>';
 
     container.innerHTML = note
         + '<table class="fast-table">'
@@ -640,24 +629,7 @@ function renderTable() {
         + '</table>'
         + pager;
 
-    const prevBtn = document.getElementById('tablePrevPage');
-    const nextBtn = document.getElementById('tableNextPage');
-    if (prevBtn) {
-        prevBtn.addEventListener('click', () => {
-            if (tablePage > 1) {
-                tablePage -= 1;
-                renderTable();
-            }
-        });
-    }
-    if (nextBtn) {
-        nextBtn.addEventListener('click', () => {
-            if (tablePage < totalPages) {
-                tablePage += 1;
-                renderTable();
-            }
-        });
-    }
+    container.dataset.totalPages = String(totalPages);
 }
 
 function renderClusters() {
@@ -666,205 +638,163 @@ function renderClusters() {
 
     const filtered = currentClusters.filter(c => {
         if (!q) return true;
-        return c.names.some(name => normalizeText(name).includes(q));
+        return normalizeText(c.names.join(' ')).includes(q);
     });
 
     const totalPages = Math.max(1, Math.ceil(filtered.length / clustersPageSize));
-    if (clustersPage > totalPages) {
-        clustersPage = totalPages;
-    }
-    const start = (clustersPage - 1) * clustersPageSize;
-    const end = start + clustersPageSize;
+    if (clustersPage > totalPages) clustersPage = totalPages;
+
+    const start   = (clustersPage - 1) * clustersPageSize;
+    const end     = start + clustersPageSize;
     const visible = filtered.slice(start, end);
 
     if (!visible.length) {
         container.innerHTML = '<div class="p-4 text-slate-500">No hi ha clusters per al filtre actual.</div>';
+        container.dataset.totalPages = '1';
         return;
     }
 
+    // Para colorear los chips y mostrar el PureId, necesitamos saber el workflow y el PureId de cada nombre
+    // Creamos un mapa de nombre base a { workflow, pureId }
+    const nameToInfo = {};
+    currentPairs.forEach(p => {
+        const leftBase  = (p.leftLabel || '').split(' (')[0];
+        const rightBase = (p.rightLabel || '').split(' (')[0];
+        nameToInfo[leftBase]  = { workflow: p.leftWorkflow,  pureId: p.leftPureId };
+        nameToInfo[rightBase] = { workflow: p.rightWorkflow, pureId: p.rightPureId };
+    });
+
     const html = visible.map(c => {
-        const preview = c.names.slice(0, 12).map(name => '<div>' + safeHtml(name) + '</div>').join('');
-        const extra = c.names.length > 12 ? '<div class="text-slate-400">... +' + (c.names.length - 12) + ' més</div>' : '';
+        const preview = c.names.slice(0, 12).map(name => {
+            const baseName = (name || '').split(' (')[0];
+            const info = nameToInfo[baseName] || {};
+            const workflow = (info.workflow || '').toLowerCase();
+            const pureId = info.pureId ? ` (${safeHtml(info.pureId)})` : '';
+            const isGreen = workflow === 'approved' || workflow === 'validated';
+            const EGRETA_EXTERNAL_ORG_BASE = 'https://egreta.uab.cat/admin/editor/dk/atira/pure/api/shared/model/ueo/externalorganisation/editor/ueoexternalorganisationeditor.xhtml?scheme=&type=&id=';
+            const url = info.pureId ? EGRETA_EXTERNAL_ORG_BASE + encodeURIComponent(info.pureId) : '#';
+            return `<a href=\"${url}\" class=\"sim-chip\" style=\"background:${isGreen ? '#4ade80' : '#e0f2fe'};color:${isGreen ? '#14532d' : '#0c4a6e'};margin-bottom:2px;display:inline-block;text-decoration:none;\" target=\"_blank\" onclick=\"window.open('${url}','egreta','width=900,height=700,scrollbars=yes');return false;\">${safeHtml(baseName)}${pureId}</a>`;
+        }).join(' ');
+        const extra   = c.names.length > 12 ? '<div class="text-slate-400">... +' + (c.names.length - 12) + ' més</div>' : '';
         return '<div class="cluster-card">'
             + '<div class="cluster-title">'
-            + '<div class="font-semibold text-slate-700">' + safeHtml(c.names[0]) + '</div>'
+            + '<div class="font-semibold text-slate-700">' + safeHtml((c.names[0] || '').split(' (')[0]) + '</div>'
             + '<span class="cluster-badge">' + c.size + ' noms</span>'
             + '</div>'
             + '<div class="cluster-items">' + preview + extra + '</div>'
             + '</div>';
     }).join('');
 
-    const fromLabel = filtered.length === 0 ? 0 : (start + 1);
-    const toLabel = Math.min(end, filtered.length);
-    const note = '<div class="p-2 text-xs text-slate-500">Mostrant ' + fromLabel + '-' + toLabel + ' de ' + filtered.length + ' clusters.</div>';
-
+    const fromLabel = start + 1;
+    const toLabel   = Math.min(end, filtered.length);
+    const note  = '<div class="p-2 text-xs text-slate-500">Mostrant ' + fromLabel + '–' + toLabel + ' de ' + filtered.length + ' clusters.</div>';
     const pager = '<div class="pager">'
         + '<div>Pàgina ' + clustersPage + ' de ' + totalPages + '</div>'
         + '<div class="pager-controls">'
-        + '<button id="clustersPrevPage" class="pager-btn"' + (clustersPage <= 1 ? ' disabled' : '') + '>Anterior</button>'
-        + '<button id="clustersNextPage" class="pager-btn"' + (clustersPage >= totalPages ? ' disabled' : '') + '>Següent</button>'
-        + '</div>'
-        + '</div>';
+        + '<button class="pager-btn js-prev-page"' + (clustersPage <= 1 ? ' disabled' : '') + '>Anterior</button>'
+        + '<button class="pager-btn js-next-page"' + (clustersPage >= totalPages ? ' disabled' : '') + '>Següent</button>'
+        + '</div></div>';
 
     container.innerHTML = note + html + pager;
-
-    const prevBtn = document.getElementById('clustersPrevPage');
-    const nextBtn = document.getElementById('clustersNextPage');
-    if (prevBtn) {
-        prevBtn.addEventListener('click', () => {
-            if (clustersPage > 1) {
-                clustersPage -= 1;
-                renderClusters();
-            }
-        });
-    }
-    if (nextBtn) {
-        nextBtn.addEventListener('click', () => {
-            if (clustersPage < totalPages) {
-                clustersPage += 1;
-                renderClusters();
-            }
-        });
-    }
+    container.dataset.totalPages = String(totalPages);
 }
+
+// ── Mode de vista ────────────────────────────────────────────────────────────
 
 function setMode(mode) {
     currentMode = mode;
-
-    document.getElementById('modeTable').classList.toggle('active', mode === 'table');
+    document.getElementById('modeTable').classList.toggle('active',    mode === 'table');
     document.getElementById('modeClusters').classList.toggle('active', mode === 'clusters');
-
-    document.getElementById('tableContainer').classList.toggle('view-hidden', mode !== 'table');
+    document.getElementById('tableContainer').classList.toggle('view-hidden',    mode !== 'table');
     document.getElementById('clustersContainer').classList.toggle('view-hidden', mode !== 'clusters');
-
-    if (mode === 'table') {
-        renderTable();
-    } else if (mode === 'clusters') {
-        renderClusters();
-    }
+    if (mode === 'table')    renderTable();
+    else if (mode === 'clusters') renderClusters();
 }
 
+// ── Càrrega principal ────────────────────────────────────────────────────────
+
 async function loadGraph() {
-    const requestId = ++activeRequestId;
+    const requestId  = ++activeRequestId;
     const similarity = parseFloat(document.getElementById('similaritySlider').value);
-    const cacheKey = makeQueryCacheKey(similarity);
-    const cached = getCachedQueryResult(cacheKey);
+    const cacheKey   = makeQueryCacheKey(similarity);
+    const cached     = getCachedQueryResult(cacheKey);
 
     if (cached) {
         currentData = cached;
-        updateStats();
-        buildPairs();
-        buildClusters();
-
-        if (currentMode === 'table') {
-            renderTable();
-        } else {
-            renderClusters();
-        }
-
+        updateStats(); buildPairs(); buildClusters();
+        if (currentMode === 'table') renderTable(); else renderClusters();
         setLoading(true, 'Resultat en caché... 100%');
         setTimeout(() => setLoading(false), 100);
         return;
     }
 
-    pendingRequests += 1;
+    pendingRequests++;
     setLoading(true, 'Calculant similitud... 1%');
 
     try {
         const data = await fetchSimilarityWithRealProgress(similarity, requestId);
-        if (requestId !== activeRequestId || !data) {
-            return;
-        }
+        if (requestId !== activeRequestId || !data) return;
+
         currentData = data;
         setCachedQueryResult(cacheKey, data);
-
-        updateStats();
-        buildPairs();
-        buildClusters();
-
-        if (currentMode === 'table') {
-            renderTable();
-        } else {
-            renderClusters();
-        }
+        updateStats(); buildPairs(); buildClusters();
+        if (currentMode === 'table') renderTable(); else renderClusters();
     } catch (e) {
-        if (requestId !== activeRequestId) {
-            return;
-        }
+        if (requestId !== activeRequestId) return;
         console.error('Error carregant dades:', e);
-        const msg = '<div class="p-6 text-red-600"><i class="fa-solid fa-exclamation-circle mr-2"></i> Error carregant dades</div>';
-        document.getElementById('tableContainer').innerHTML = msg;
+        const msg = '<div class="p-6 text-red-600"><i class="fa-solid fa-exclamation-circle mr-2"></i> Error carregant dades: ' + safeHtml(e.message) + '</div>';
+        document.getElementById('tableContainer').innerHTML    = msg;
         document.getElementById('clustersContainer').innerHTML = msg;
     } finally {
         pendingRequests = Math.max(0, pendingRequests - 1);
-        if (pendingRequests === 0) {
-            hideLoadingOverlayWithDone();
-        }
+        if (pendingRequests === 0) hideLoadingOverlayWithDone();
     }
 }
 
 const debouncedLoadGraph = debounce(loadGraph, 280);
 
-document.getElementById('similaritySlider').addEventListener('input', (e) => {
+// ── Listeners ────────────────────────────────────────────────────────────────
+
+document.getElementById('similaritySlider').addEventListener('input', e => {
     document.getElementById('similarityValue').textContent = Math.round(e.target.value * 100) + '%';
     debouncedLoadGraph();
 });
 
 document.getElementById('btnReload').addEventListener('click', loadGraph);
-
-document.getElementById('modeTable').addEventListener('click', () => setMode('table'));
+document.getElementById('modeTable').addEventListener('click',    () => setMode('table'));
 document.getElementById('modeClusters').addEventListener('click', () => setMode('clusters'));
+
 document.getElementById('searchInput').addEventListener('input', () => {
     tablePage = 1;
     clustersPage = 1;
-    if (currentMode === 'table') {
-        renderTable();
-    } else if (currentMode === 'clusters') {
-        renderClusters();
-    }
-});
-
-document.getElementById('btnCenter').addEventListener('click', () => {
-    setMode('table');
+    if (currentMode === 'table') renderTable(); else renderClusters();
 });
 
 document.getElementById('btnExport').addEventListener('click', () => {
     if (!currentData) return;
-
-    if (!window.XLSX) {
-        alert('No s\'ha pogut carregar la llibreria d\'Excel.');
-        return;
-    }
+    if (!window.XLSX) { alert('No s\'ha pogut carregar la llibreria d\'Excel.'); return; }
 
     const pairRows = (currentData.pairs || []).map(p => ({
-        Nom_A: p.leftLabel || '',
-        PureId_A: p.leftPureId || '',
-        Nom_B: p.rightLabel || '',
-        PureId_B: p.rightPureId || '',
+        Nom_A:     p.leftLabel   || '',
+        PureId_A:  p.leftPureId  || '',
+        Nom_B:     p.rightLabel  || '',
+        PureId_B:  p.rightPureId || '',
         Similitud: Math.round((Number(p.value) || 0) * 100) + '%'
     }));
 
     const clusterRows = [];
     (currentClusters || []).forEach((cluster, index) => {
         (cluster.names || []).forEach((name, memberIndex) => {
-            clusterRows.push({
-                Cluster: index + 1,
-                Mida_Cluster: cluster.size,
-                Posicio: memberIndex + 1,
-                Nom: name
-            });
+            clusterRows.push({ Cluster: index + 1, Mida_Cluster: cluster.size, Posicio: memberIndex + 1, Nom: name });
         });
     });
 
-    const workbook = XLSX.utils.book_new();
-
-    const pairsSheet = XLSX.utils.json_to_sheet(pairRows);
-    XLSX.utils.book_append_sheet(workbook, pairsSheet, 'Parelles');
-
+    const workbook     = XLSX.utils.book_new();
+    const pairsSheet   = XLSX.utils.json_to_sheet(pairRows);
     const clustersSheet = XLSX.utils.json_to_sheet(clusterRows.length ? clusterRows : [{ Info: 'Sense clusters disponibles' }]);
+    XLSX.utils.book_append_sheet(workbook, pairsSheet,    'Parelles');
     XLSX.utils.book_append_sheet(workbook, clustersSheet, 'Clusters');
-
-    XLSX.writeFile(workbook, 'similitud-organitzacions-' + new Date().getTime() + '.xlsx');
+    XLSX.writeFile(workbook, 'similitud-organitzacions-' + Date.now() + '.xlsx');
 });
 
 loadGraph();
