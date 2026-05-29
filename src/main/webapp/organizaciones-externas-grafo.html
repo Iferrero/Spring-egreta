@@ -1,0 +1,819 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Similitud d'Organitzacions Externes</title>
+    <script src="config.js"></script>
+    <script src="uab-brand.js" defer></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <link rel="stylesheet" href="uab-theme.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .control-panel {
+            background-color: white;
+            padding: 16px;
+            border-radius: 8px;
+            border: 1px solid #e0e0e0;
+            margin-bottom: 16px;
+        }
+        .slider-group {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+        .slider-group label {
+            min-width: 120px;
+            font-weight: 500;
+            font-size: 14px;
+        }
+        .slider-group input[type="range"] {
+            flex: 1;
+        }
+        .slider-value {
+            min-width: 50px;
+            text-align: right;
+            font-weight: 600;
+            color: #4CAF50;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 12px;
+            border-radius: 6px;
+            text-align: center;
+        }
+        .stat-card.primary {
+            background: linear-gradient(135deg, #4CAF50 0%, #2E7D32 100%);
+        }
+        .stat-card.secondary {
+            background: linear-gradient(135deg, #2196F3 0%, #1565C0 100%);
+        }
+        .stat-card.tertiary {
+            background: linear-gradient(135deg, #FF9800 0%, #E65100 100%);
+        }
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+        }
+        .stat-label {
+            font-size: 12px;
+            opacity: 0.9;
+            margin-top: 4px;
+        }
+        .legend {
+            display: flex;
+            gap: 20px;
+            font-size: 12px;
+            flex-wrap: wrap;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .legend-box {
+            width: 16px;
+            height: 16px;
+            border-radius: 3px;
+        }
+        .legend-box.with-type {
+            background-color: #4CAF50;
+        }
+        .legend-box.without-type {
+            background-color: #ccc;
+        }
+        .view-tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+        }
+        .view-tab-btn {
+            border: 1px solid #cbd5e1;
+            background: white;
+            color: #334155;
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+        }
+        .view-tab-btn.active {
+            background: #0f172a;
+            color: white;
+            border-color: #0f172a;
+        }
+        .view-hidden {
+            display: none;
+        }
+        .table-toolbar {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+        }
+        .table-toolbar input {
+            width: 320px;
+            max-width: 100%;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            padding: 8px 10px;
+            font-size: 14px;
+        }
+        .table-wrap {
+            max-height: 600px;
+            overflow: auto;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            background: white;
+        }
+        table.fast-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        .fast-table th,
+        .fast-table td {
+            border-bottom: 1px solid #f1f5f9;
+            padding: 8px 10px;
+            text-align: left;
+            vertical-align: top;
+        }
+        .fast-table th {
+            position: sticky;
+            top: 0;
+            z-index: 2;
+            background: #f8fafc;
+            color: #334155;
+            font-weight: 700;
+        }
+        .sim-chip {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 999px;
+            background: #e0f2fe;
+            color: #0c4a6e;
+            font-weight: 700;
+            font-size: 12px;
+        }
+        .cluster-list {
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            max-height: 600px;
+            overflow: auto;
+            padding: 8px;
+        }
+        .cluster-card {
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 10px;
+            margin-bottom: 8px;
+            background: #ffffff;
+        }
+        .cluster-title {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+        .cluster-badge {
+            font-size: 12px;
+            font-weight: 700;
+            background: #dcfce7;
+            color: #14532d;
+            border-radius: 999px;
+            padding: 2px 8px;
+        }
+        .cluster-items {
+            color: #475569;
+            font-size: 13px;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+            gap: 6px 10px;
+        }
+        .pager {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            margin-top: 10px;
+            color: #475569;
+            font-size: 12px;
+        }
+        .pager-controls {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .pager-btn {
+            border: 1px solid #cbd5e1;
+            background: white;
+            color: #334155;
+            border-radius: 6px;
+            padding: 4px 8px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .pager-btn:disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+        }
+        .results-wrap {
+            position: relative;
+        }
+        .loading-overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(248, 250, 252, 0.78);
+            -webkit-backdrop-filter: blur(1px);
+            backdrop-filter: blur(1px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 15;
+            border-radius: 8px;
+        }
+        .loading-card {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 14px;
+            border: 1px solid #cbd5e1;
+            border-radius: 10px;
+            background: white;
+            color: #0f172a;
+            font-weight: 600;
+            font-size: 13px;
+            box-shadow: 0 6px 20px rgba(15, 23, 42, 0.08);
+        }
+        .loading-spinner {
+            width: 18px;
+            height: 18px;
+            border: 2px solid #cbd5e1;
+            border-top-color: #2563eb;
+            border-radius: 999px;
+            animation: spin 0.8s linear infinite;
+        }
+        .hidden {
+            display: none;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen">
+<div class="mx-auto max-w-7xl px-4 py-10">
+    <header class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5 mb-8">
+        <a href="index-orgaext.html" class="hover:opacity-80 transition-opacity">
+            <div>
+                <h1 class="text-2xl font-extrabold text-slate-800 tracking-tight">Similitud d'Organitzacions</h1>
+                <p class="text-sm text-slate-500 mt-1">Detecció ràpida de noms similars amb taula i clusters</p>
+            </div>
+        </a>
+        <div class="flex gap-3">
+            <a href="organizaciones-externas.html" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-sm text-slate-600 shadow-sm">
+                <i class="fa-solid fa-list"></i> Llistat complet
+            </a>
+            <a href="organizaciones-externas-kpis.html" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-sm text-slate-600 shadow-sm">
+                <i class="fa-solid fa-chart-column"></i> KPIs
+            </a>
+        </div>
+    </header>
+
+    <div class="control-panel">
+        <div class="stats-grid" id="statsGrid">
+            <div class="stat-card primary">
+                <div class="stat-value" id="totalOrgsValue">0</div>
+                <div class="stat-label">Organitzacions</div>
+            </div>
+            <div class="stat-card secondary">
+                <div class="stat-value" id="totalNodesValue">0</div>
+                <div class="stat-label">Noms en mostra</div>
+            </div>
+            <div class="stat-card tertiary">
+                <div class="stat-value" id="totalEdgesValue">0</div>
+                <div class="stat-label">Arestes (Similars)</div>
+            </div>
+        </div>
+
+        <div class="slider-group">
+            <label for="similaritySlider">Llindar similitud:</label>
+            <input type="range" id="similaritySlider" min="0.8" max="1.0" step="0.05" value="0.9">
+            <span class="slider-value" id="similarityValue">90%</span>
+        </div>
+
+        <div class="flex gap-3 mb-3">
+            <button id="btnReload" class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium transition-colors">
+                <i class="fa-solid fa-rotate"></i> Recarregar
+            </button>
+            <button id="btnExport" class="px-4 py-2 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-sm font-medium transition-colors">
+                <i class="fa-solid fa-download"></i> Descarregar
+            </button>
+        </div>
+
+        <div class="view-tabs">
+            <button id="modeTable" class="view-tab-btn active"><i class="fa-solid fa-table"></i> Taula ràpida</button>
+            <button id="modeClusters" class="view-tab-btn"><i class="fa-solid fa-layer-group"></i> Clusters</button>
+        </div>
+
+        <div class="table-toolbar">
+            <input id="searchInput" type="text" placeholder="Filtra per nom (ex. institute, universidad, hospital...)" />
+        </div>
+
+        <div class="legend">
+            <div class="legend-item">
+                <div class="legend-box with-type"></div>
+                <span>Validat</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="results-wrap">
+        <div id="loadingOverlay" class="loading-overlay hidden" aria-live="polite" aria-busy="false">
+            <div class="loading-card">
+                <span class="loading-spinner" aria-hidden="true"></span>
+                <span id="loadingText">Calculant similitud...</span>
+            </div>
+        </div>
+        <div id="tableContainer" class="table-wrap"></div>
+        <div id="clustersContainer" class="cluster-list view-hidden"></div>
+    </div>
+</div>
+
+<script>
+let currentData = null;
+let currentPairs = [];
+let currentClusters = [];
+let currentMode = 'table';
+let pendingRequests = 0;
+let tablePage = 1;
+let clustersPage = 1;
+let activeRequestId = 0;
+const queryCache = new Map();
+const graphLimit = 70000;
+const maxPairs = 5000;
+const tablePageSize = 100;
+const clustersPageSize = 40;
+const queryCacheTtlMs = 2 * 60 * 1000;
+const queryCacheMaxEntries = 20;
+
+// ── Utilitats ────────────────────────────────────────────────────────────────
+
+function debounce(fn, delayMs) {
+    let timeoutId = null;
+    return (...args) => {
+        if (timeoutId) clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => fn(...args), delayMs);
+    };
+}
+
+function normalizeText(value) {
+    return String(value || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '');
+}
+
+function safeHtml(value) {
+    return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function formatNameWithPureId(name, pureId) {
+    const base = String(name || '').trim();
+    const pid  = String(pureId || '').trim();
+    return pid ? base + ' (' + pid + ')' : base;
+}
+
+// ── Loading overlay ──────────────────────────────────────────────────────────
+
+function setLoading(isLoading, message) {
+    const overlay = document.getElementById('loadingOverlay');
+    const text    = document.getElementById('loadingText');
+    if (!overlay || !text) return;
+    if (message) text.textContent = message;
+    overlay.classList.toggle('hidden', !isLoading);
+    overlay.setAttribute('aria-busy', isLoading ? 'true' : 'false');
+}
+
+function hideLoadingOverlayWithDone() {
+    setLoading(true, 'Calculant similitud... 100%');
+    setTimeout(() => { if (pendingRequests === 0) setLoading(false); }, 120);
+}
+
+// ── Cache ────────────────────────────────────────────────────────────────────
+
+function makeQueryCacheKey(similarity) {
+    return similarity.toFixed(3) + '|' + graphLimit + '|' + maxPairs;
+}
+
+function getCachedQueryResult(key) {
+    const entry = queryCache.get(key);
+    if (!entry) return null;
+    if ((Date.now() - entry.timestamp) > queryCacheTtlMs) {
+        queryCache.delete(key);
+        return null;
+    }
+    return entry.payload;
+}
+
+function setCachedQueryResult(key, payload) {
+    queryCache.set(key, { timestamp: Date.now(), payload });
+    // LRU: eliminar l'entrada més antiga si superem el límit
+    if (queryCache.size > queryCacheMaxEntries) {
+        queryCache.delete(queryCache.keys().next().value);
+    }
+}
+
+// ── Fetch amb progrés real i polling adaptatiu ───────────────────────────────
+
+async function fetchSimilarityWithRealProgress(similarity, requestId) {
+    const startRes = await fetch(
+        '/api/external-organizations/similarity/pairs/job/start?threshold=' + similarity +
+        '&limit=' + graphLimit + '&maxPairs=' + maxPairs
+    );
+    if (!startRes.ok) throw new Error('HTTP ' + startRes.status + ' iniciant job');
+    const startData = await startRes.json();
+    const jobId = startData.jobId;
+    if (!jobId) throw new Error('No s\'ha rebut jobId');
+
+    let guard = 0;
+    let lastProgress = 0;
+
+    while (guard < 1200) {
+        guard++;
+        if (requestId !== activeRequestId) return null;
+
+        const statusRes = await fetch(
+            '/api/external-organizations/similarity/pairs/job/status?jobId=' + encodeURIComponent(jobId)
+        );
+        if (!statusRes.ok) throw new Error('HTTP ' + statusRes.status + ' consultant progrés');
+        const status = await statusRes.json();
+
+        const progress = typeof status.progress === 'number'
+            ? Math.max(0, Math.min(100, Math.round(status.progress))) : 0;
+        setLoading(true, 'Calculant similitud... ' + progress + '%');
+        lastProgress = progress;
+
+        if (status.status === 'done')  return status.result || null;
+        if (status.status === 'error' || status.status === 'not-found')
+            throw new Error(status.error || status.message || 'Error al calcular similitud');
+
+        // Millora #8: polling adaptatiu — menys peticions quan el procés és lent
+        const delay = progress < 30 ? 500 : progress < 80 ? 300 : 150;
+        await new Promise(resolve => setTimeout(resolve, delay));
+    }
+
+    throw new Error('Temps d\'espera esgotat al calcular la similitud');
+}
+
+// ── Construcció de dades ─────────────────────────────────────────────────────
+
+function buildPairs() {
+    if (!currentData || !Array.isArray(currentData.pairs)) { currentPairs = []; return; }
+    currentPairs = currentData.pairs
+        .map(p => ({
+            from:       p.from,
+            to:         p.to,
+            similarity: p.value,
+            leftLabel:  formatNameWithPureId(p.leftLabel  || String(p.from), p.leftPureId),
+            rightLabel: formatNameWithPureId(p.rightLabel || String(p.to),   p.rightPureId),
+            leftTitle:  p.leftLabel  || '',
+            rightTitle: p.rightLabel || '',
+            rawTitle:   p.title      || '',
+            leftWorkflow:  (p.leftWorkflow || '').toLowerCase(),
+            rightWorkflow: (p.rightWorkflow || '').toLowerCase(),
+            leftPureId: p.leftPureId,
+            rightPureId: p.rightPureId
+        }))
+        .sort((a, b) => b.similarity - a.similarity);
+}
+
+function buildClusters() {
+    if (!currentData || !Array.isArray(currentData.pairs)) { currentClusters = []; return; }
+
+    // Map UUID to all info needed for chips
+    const idToInfo = new Map();
+    for (const p of currentData.pairs) {
+        idToInfo.set(p.from, {
+            label: p.leftLabel  || String(p.from),
+            pureId: p.leftPureId,
+            workflow: (p.leftWorkflow || '').toLowerCase(),
+            uuid: p.from
+        });
+        idToInfo.set(p.to, {
+            label: p.rightLabel || String(p.to),
+            pureId: p.rightPureId,
+            workflow: (p.rightWorkflow || '').toLowerCase(),
+            uuid: p.to
+        });
+    }
+
+    const parent = new Map(Array.from(idToInfo.keys()).map(id => [id, id]));
+    const find = (x) => {
+        let p = parent.get(x);
+        while (p !== parent.get(p)) { parent.set(p, parent.get(parent.get(p))); p = parent.get(p); }
+        return p;
+    };
+    const union = (a, b) => { const pa = find(a), pb = find(b); if (pa !== pb) parent.set(pa, pb); };
+
+    currentData.pairs.forEach(p => union(p.from, p.to));
+
+    const groups = new Map();
+    for (const id of idToInfo.keys()) {
+        const root = find(id);
+        if (!groups.has(root)) groups.set(root, []);
+        groups.get(root).push(id);
+    }
+
+    currentClusters = Array.from(groups.values())
+        .filter(g => g.length > 1)
+        .map(g => ({
+            size:  g.length,
+            uuids: g,
+            // Para mostrar, ordenar por label
+            sorted: g.map(id => idToInfo.get(id)).sort((a, b) => (a.label || '').localeCompare(b.label || ''))
+        }))
+        .sort((a, b) => b.size - a.size || (a.sorted[0]?.label || '').localeCompare(b.sorted[0]?.label || ''));
+}
+
+function updateStats() {
+    if (!currentData) return;
+    const totalAvailable  = typeof currentData.totalAvailableOrgs  === 'number' ? currentData.totalAvailableOrgs  : 0;
+    const totalProcessed  = typeof currentData.totalProcessedOrgs  === 'number' ? currentData.totalProcessedOrgs  : 0;
+    const connected       = typeof currentData.totalConnectedOrgs  === 'number' ? currentData.totalConnectedOrgs  : 0;
+    const totalPairsCount = typeof currentData.totalPairs          === 'number' ? currentData.totalPairs          : 0;
+    document.getElementById('totalOrgsValue').textContent  = totalProcessed + '/' + totalAvailable;
+    document.getElementById('totalNodesValue').textContent = connected;
+    document.getElementById('totalEdgesValue').textContent = totalPairsCount;
+}
+
+// ── Delegació d'esdeveniments al contenidor pare (Millora #3) ────────────────
+// Delegació d'events: un sol listener per contenidor pare estàtic
+document.getElementById('tableContainer').addEventListener('click', e => {
+    const btn = e.target.closest('.js-prev-page, .js-next-page');
+    if (!btn) return;
+    const totalPages = parseInt(document.getElementById('tableContainer').dataset.totalPages || '1', 10);
+    if (btn.classList.contains('js-prev-page') && tablePage > 1)              { tablePage--;                    renderTable(); }
+    if (btn.classList.contains('js-next-page') && tablePage < totalPages)     { tablePage++;                    renderTable(); }
+});
+
+document.getElementById('clustersContainer').addEventListener('click', e => {
+    const btn = e.target.closest('.js-prev-page, .js-next-page');
+    if (!btn) return;
+    const totalPages = parseInt(document.getElementById('clustersContainer').dataset.totalPages || '1', 10);
+    if (btn.classList.contains('js-prev-page') && clustersPage > 1)           { clustersPage--;                 renderClusters(); }
+    if (btn.classList.contains('js-next-page') && clustersPage < totalPages)  { clustersPage++;                 renderClusters(); }
+});
+
+function renderTable() {
+    const container = document.getElementById('tableContainer');
+    const q = normalizeText(document.getElementById('searchInput').value);
+
+    // Preparar text de cerca per cada parell
+    const filtered = currentPairs.filter(p => {
+        if (!q) return true;
+        const text = normalizeText(p.leftLabel + ' ' + p.rightLabel + ' ' + p.leftTitle + ' ' + p.rightTitle + ' ' + p.rawTitle);
+        return text.includes(q);
+    });
+
+    const totalPages = Math.max(1, Math.ceil(filtered.length / tablePageSize));
+    if (tablePage > totalPages) tablePage = totalPages;
+
+    const start   = (tablePage - 1) * tablePageSize;
+    const end     = start + tablePageSize;
+    const visible = filtered.slice(start, end);
+
+    if (!visible.length) {
+        container.innerHTML = '<div class="p-6 text-slate-500">No hi ha parelles similars per al filtre actual.</div>';
+        container.dataset.totalPages = '1';
+        return;
+    }
+
+    const rows = visible.map(p => {
+        const sim = Math.round(p.similarity * 100);
+        const leftGreen  = p.leftWorkflow === 'approved' || p.leftWorkflow === 'validated';
+        const rightGreen = p.rightWorkflow === 'approved' || p.rightWorkflow === 'validated';
+        const leftBase = (p.leftLabel || '').split(' (')[0];
+        const rightBase = (p.rightLabel || '').split(' (')[0];
+        const leftPureId = p.leftPureId ? ` (${safeHtml(p.leftPureId)})` : '';
+        const rightPureId = p.rightPureId ? ` (${safeHtml(p.rightPureId)})` : '';
+        const EGRETA_EXTERNAL_ORG_BASE = 'https://egreta.uab.cat/admin/editor/dk/atira/pure/api/shared/model/ueo/externalorganisation/editor/ueoexternalorganisationeditor.xhtml?scheme=&type=&id=';
+        const leftUrl = p.leftPureId ? EGRETA_EXTERNAL_ORG_BASE + encodeURIComponent(p.leftPureId) : '#';
+        const rightUrl = p.rightPureId ? EGRETA_EXTERNAL_ORG_BASE + encodeURIComponent(p.rightPureId) : '#';
+        const leftChip  = `<a href=\"${leftUrl}\" class=\"sim-chip\" style=\"background:${leftGreen ? '#4ade80' : '#e0f2fe'};color:${leftGreen ? '#14532d' : '#0c4a6e'};text-decoration:none;\" target=\"_blank\" onclick=\"window.open('${leftUrl}','egreta','width=900,height=700,scrollbars=yes');return false;\">${safeHtml(leftBase)}${leftPureId}</a>`;
+        const rightChip = `<a href=\"${rightUrl}\" class=\"sim-chip\" style=\"background:${rightGreen ? '#4ade80' : '#e0f2fe'};color:${rightGreen ? '#14532d' : '#0c4a6e'};text-decoration:none;\" target=\"_blank\" onclick=\"window.open('${rightUrl}','egreta','width=900,height=700,scrollbars=yes');return false;\">${safeHtml(rightBase)}${rightPureId}</a>`;
+        return '<tr>'
+            + '<td>' + leftChip  + '</td>'
+            + '<td>' + rightChip + '</td>'
+            + '<td><span class="sim-chip">' + sim + '%</span></td>'
+            + '</tr>';
+    }).join('');
+
+    const fromLabel = start + 1;
+    const toLabel   = Math.min(end, filtered.length);
+    const note  = '<div class="p-3 text-xs text-slate-500 border-b border-slate-100">Mostrant ' + fromLabel + '–' + toLabel + ' de ' + filtered.length + ' parelles.</div>';
+    const pager = '<div class="pager">'
+        + '<div>Pàgina ' + tablePage + ' de ' + totalPages + '</div>'
+        + '<div class="pager-controls">'
+        + '<button class="pager-btn js-prev-page"' + (tablePage <= 1 ? ' disabled' : '') + '>Anterior</button>'
+        + '<button class="pager-btn js-next-page"' + (tablePage >= totalPages ? ' disabled' : '') + '>Següent</button>'
+        + '</div></div>';
+
+    container.innerHTML = note
+        + '<table class="fast-table">'
+        + '<thead><tr><th>Nom A</th><th>Nom B</th><th>Similitud</th></tr></thead>'
+        + '<tbody>' + rows + '</tbody>'
+        + '</table>'
+        + pager;
+
+    container.dataset.totalPages = String(totalPages);
+}
+
+function renderClusters() {
+    const container = document.getElementById('clustersContainer');
+    const q = normalizeText(document.getElementById('searchInput').value);
+
+    const filtered = currentClusters.filter(c => {
+        if (!q) return true;
+        // Buscar en los labels de los miembros del cluster
+        return c.sorted.some(info => normalizeText(info.label).includes(q));
+    });
+
+    const totalPages = Math.max(1, Math.ceil(filtered.length / clustersPageSize));
+    if (clustersPage > totalPages) clustersPage = totalPages;
+
+    const start   = (clustersPage - 1) * clustersPageSize;
+    const end     = start + clustersPageSize;
+    const visible = filtered.slice(start, end);
+
+    if (!visible.length) {
+        container.innerHTML = '<div class="p-4 text-slate-500">No hi ha clusters per al filtre actual.</div>';
+        container.dataset.totalPages = '1';
+        return;
+    }
+
+    const html = visible.map(c => {
+        // Botón para ir a merge con todos los UUIDs del cluster
+        const clusterUuids = c.uuids;
+        const preview = c.sorted.slice(0, 12).map(info => {
+            const workflow = (info.workflow || '').toLowerCase();
+            const pureId = info.pureId ? ` (${safeHtml(info.pureId)})` : '';
+            const isGreen = workflow === 'approved' || workflow === 'validated';
+            const EGRETA_EXTERNAL_ORG_BASE = 'https://egreta.uab.cat/admin/editor/dk/atira/pure/api/shared/model/ueo/externalorganisation/editor/ueoexternalorganisationeditor.xhtml?scheme=&type=&id=';
+            const url = info.pureId ? EGRETA_EXTERNAL_ORG_BASE + encodeURIComponent(info.pureId) : '#';
+            return `<a href=\"${url}\" class=\"sim-chip\" style=\"background:${isGreen ? '#4ade80' : '#e0f2fe'};color:${isGreen ? '#14532d' : '#0c4a6e'};margin-bottom:2px;display:inline-block;text-decoration:none;\" target=\"_blank\" onclick=\"window.open('${url}','egreta','width=900,height=700,scrollbars=yes');return false;\">${safeHtml((info.label || '').split(' (')[0])}${pureId}</a>`;
+        }).join(' ');
+        const extra   = c.sorted.length > 12 ? '<div class="text-slate-400">... +' + (c.sorted.length - 12) + ' més</div>' : '';
+        // Botón para ir a merge
+        const mergeBtn = `<button class=\"px-2 py-1 rounded bg-amber-500 hover:bg-amber-600 text-white text-xs ml-2\" onclick=\"goToMergeWithCluster([${clusterUuids.map(u => `'${u}'`).join(',')}])\">Merge cluster</button>`;
+        return '<div class="cluster-card">'
+            + '<div class="cluster-title">'
+            + '<div class="font-semibold text-slate-700">' + safeHtml((c.sorted[0]?.label || '').split(' (')[0]) + mergeBtn + '</div>'
+            + '<span class="cluster-badge">' + c.size + ' noms</span>'
+            + '</div>'
+            + '<div class="cluster-items">' + preview + extra + '</div>'
+            + '</div>';
+    }).join('');
+
+    const fromLabel = start + 1;
+    const toLabel   = Math.min(end, filtered.length);
+    const note  = '<div class="p-2 text-xs text-slate-500">Mostrant ' + fromLabel + '–' + toLabel + ' de ' + filtered.length + ' clusters.</div>';
+    const pager = '<div class="pager">'
+        + '<div>Pàgina ' + clustersPage + ' de ' + totalPages + '</div>'
+        + '<div class="pager-controls">'
+        + '<button class="pager-btn js-prev-page"' + (clustersPage <= 1 ? ' disabled' : '') + '>Anterior</button>'
+        + '<button class="pager-btn js-next-page"' + (clustersPage >= totalPages ? ' disabled' : '') + '>Següent</button>'
+        + '</div></div>';
+
+    container.innerHTML = note + html + pager;
+    container.dataset.totalPages = String(totalPages);
+}
+
+// ── Ir a merge con cluster ────────────────────────────────────────────────
+function goToMergeWithCluster(uuids) {
+    if (!Array.isArray(uuids) || !uuids.length) return;
+    const url = '../ext-org-merge/index.html?uuids=' + uuids.join(',');
+    const w = 900, h = 700;
+    const left = Math.round((window.screen.width - w) / 2);
+    const top = Math.round((window.screen.height - h) / 2);
+    window.open(url, 'mergeWindow', `width=${w},height=${h},left=${left},top=${top},resizable=yes,scrollbars=yes`);
+}
+
+// ── Mode de vista ────────────────────────────────────────────────────────────
+
+function setMode(mode) {
+    currentMode = mode;
+    document.getElementById('modeTable').classList.toggle('active',    mode === 'table');
+    document.getElementById('modeClusters').classList.toggle('active', mode === 'clusters');
+    document.getElementById('tableContainer').classList.toggle('view-hidden',    mode !== 'table');
+    document.getElementById('clustersContainer').classList.toggle('view-hidden', mode !== 'clusters');
+    if (mode === 'table')    renderTable();
+    else if (mode === 'clusters') renderClusters();
+}
+
+// ── Càrrega principal ────────────────────────────────────────────────────────
+
+async function loadGraph() {
+    const requestId  = ++activeRequestId;
+    const similarity = parseFloat(document.getElementById('similaritySlider').value);
+    const cacheKey   = makeQueryCacheKey(similarity);
+    const cached     = getCachedQueryResult(cacheKey);
+
+    if (cached) {
+        currentData = cached;
+        updateStats(); buildPairs(); buildClusters();
+        if (currentMode === 'table') renderTable(); else renderClusters();
+        setLoading(true, 'Resultat en caché... 100%');
+        setTimeout(() => setLoading(false), 100);
+        return;
+    }
+
+    pendingRequests++;
+    setLoading(true, 'Calculant similitud... 1%');
+
+    try {
+        const data = await fetchSimilarityWithRealProgress(similarity, requestId);
+        if (requestId !== activeRequestId || !data) return;
+
+        currentData = data;
+        setCachedQueryResult(cacheKey, data);
+        updateStats(); buildPairs(); buildClusters();
+        if (currentMode === 'table') renderTable(); else renderClusters();
+    } catch (e) {
+        if (requestId !== activeRequestId) return;
+        console.error('Error carregant dades:', e);
+        const msg = '<div class="p-6 text-red-600"><i class="fa-solid fa-exclamation-circle mr-2"></i> Error carregant dades: ' + safeHtml(e.message) + '</div>';
+        document.getElementById('tableContainer').innerHTML    = msg;
+        document.getElementById('clustersContainer').innerHTML = msg;
+    } finally {
+        pendingRequests = Math.max(0, pendingRequests - 1);
+        if (pendingRequests === 0) hideLoadingOverlayWithDone();
+    }
+}
+
+const debouncedLoadGraph = debounce(loadGraph, 280);
+
+// ── Listeners ────────────────────────────────────────────────────────────────
+
+document.getElementById('similaritySlider').addEventListener('input', e => {
+    document.getElementById('similarityValue').textContent = Math.round(e.target.value * 100) + '%';
+    debouncedLoadGraph();
+});
+
+document.getElementById('btnReload').addEventListener('click', loadGraph);
+document.getElementById('modeTable').addEventListener('click',    () => setMode('table'));
+document.getElementById('modeClusters').addEventListener('click', () => setMode('clusters'));
+
+document.getElementById('searchInput').addEventListener('input', () => {
+    tablePage = 1;
+    clustersPage = 1;
+    if (currentMode === 'table') renderTable(); else renderClusters();
+});
+
+document.getElementById('btnExport').addEventListener('click', () => {
+    if (!currentData) return;
+    if (!window.XLSX) { alert('No s\'ha pogut carregar la llibreria d\'Excel.'); return; }
+
+    const pairRows = (currentData.pairs || []).map(p => ({
+        Nom_A:     p.leftLabel   || '',
+        PureId_A:  p.leftPureId  || '',
+        Nom_B:     p.rightLabel  || '',
+        PureId_B:  p.rightPureId || '',
+        Similitud: Math.round((Number(p.value) || 0) * 100) + '%'
+    }));
+
+    const clusterRows = [];
+    (currentClusters || []).forEach((cluster, index) => {
+        (cluster.names || []).forEach((name, memberIndex) => {
+            clusterRows.push({ Cluster: index + 1, Mida_Cluster: cluster.size, Posicio: memberIndex + 1, Nom: name });
+        });
+    });
+
+    const workbook     = XLSX.utils.book_new();
+    const pairsSheet   = XLSX.utils.json_to_sheet(pairRows);
+    const clustersSheet = XLSX.utils.json_to_sheet(clusterRows.length ? clusterRows : [{ Info: 'Sense clusters disponibles' }]);
+    XLSX.utils.book_append_sheet(workbook, pairsSheet,    'Parelles');
+    XLSX.utils.book_append_sheet(workbook, clustersSheet, 'Clusters');
+    XLSX.writeFile(workbook, 'similitud-organitzacions-' + Date.now() + '.xlsx');
+});
+
+loadGraph();
+</script>
+</body>
+</html>

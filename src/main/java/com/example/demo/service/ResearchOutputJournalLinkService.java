@@ -23,6 +23,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -405,8 +406,11 @@ public class ResearchOutputJournalLinkService {
         counts.put("Q4", 0);
         counts.put("Sense Quartil", 0);
 
-        int openAccessCount = 0;
-        int notOpenAccessCount = 0;
+    int openAccessCount = 0;
+    int notOpenAccessCount = 0;
+    // Nuevo: evolución de acceso abierto por año
+    Map<Integer, Integer> openAccessByYear = new TreeMap<>();
+    Map<Integer, Integer> closedAccessByYear = new TreeMap<>();
 
         Map<Integer, Map<String, Object>> byYear = new TreeMap<>();
         List<Map<String, Object>> articles = new ArrayList<>();
@@ -477,12 +481,19 @@ public class ResearchOutputJournalLinkService {
             row.put("openAccess", openAccess);
             row.put("cita", buildCitationApa(authors, day, month, year, journalTitle, volume, issue, pages, articleNumber, title));
 
+
             if (quartile != null) {
                 counts.put(quartile, counts.get(quartile) + 1);
                 if (openAccess) {
                     openAccessCount++;
+                    if (year != null) {
+                        openAccessByYear.put(year, openAccessByYear.getOrDefault(year, 0) + 1);
+                    }
                 } else {
                     notOpenAccessCount++;
+                    if (year != null) {
+                        closedAccessByYear.put(year, closedAccessByYear.getOrDefault(year, 0) + 1);
+                    }
                 }
             }
 
@@ -534,15 +545,31 @@ public class ResearchOutputJournalLinkService {
             }
         }
 
+
         List<Map<String, Object>> openAccessData = new ArrayList<>();
         if (openAccessCount > 0) openAccessData.add(Map.of("label", "Accés obert", "value", openAccessCount));
         if (notOpenAccessCount > 0) openAccessData.add(Map.of("label", "Accés tancat", "value", notOpenAccessCount));
 
+        // Nueva lista: evolución de acceso abierto por año
+        List<Map<String, Object>> openAccessEvolution = new ArrayList<>();
+        // Unir todos los años presentes en ambos mapas
+        Set<Integer> allYears = new TreeSet<>();
+        allYears.addAll(openAccessByYear.keySet());
+        allYears.addAll(closedAccessByYear.keySet());
+        for (Integer year : allYears) {
+            int oa = openAccessByYear.getOrDefault(year, 0);
+            int closed = closedAccessByYear.getOrDefault(year, 0);
+            if (oa > 0) openAccessEvolution.add(Map.of("year", year, "label", "Accés obert", "value", oa));
+            if (closed > 0) openAccessEvolution.add(Map.of("year", year, "label", "Accés tancat", "value", closed));
+        }
+
         Map<String, Object> result = new LinkedHashMap<>();
+
         result.put("quartiles", quartiles);
         result.put("articles", articles);
         result.put("evolution", new ArrayList<>(byYear.values()));
         result.put("openAccess", openAccessData);
+        result.put("openAccessEvolution", openAccessEvolution);
 
         quartilesDashboardCache.put(cacheKey, new CacheEntry(result, now + QUARTILES_CACHE_TTL_MS));
         cleanupExpiredQuartilesCache(now);

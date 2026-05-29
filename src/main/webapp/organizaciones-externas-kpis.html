@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestio Organitzacions Externes</title>
+    <script src="config.js"></script>
+    <script src="uab-brand.js" defer></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="uab-theme.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body class="bg-slate-50 min-h-screen">
+<div class="mx-auto max-w-7xl px-4 py-10">
+    <header class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5 mb-8">
+        <a href="index-orgaext.html" class="hover:opacity-80 transition-opacity">
+            <div>
+                <h1 class="text-2xl font-extrabold text-slate-800 tracking-tight">Gestio d'organitzacions externes</h1>
+                <p class="text-sm text-slate-500 mt-1">KPIs de qualitat de dades i llistat detallat per cada KPI</p>
+            </div>
+        </a>
+        <div class="flex gap-3">
+            <a href="organizaciones-externas.html" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-sm text-slate-600 shadow-sm">
+                <i class="fa-solid fa-list"></i> Llistat complet
+            </a>
+            <a href="organizaciones-externas-grafo.html" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-sm text-slate-600 shadow-sm">
+                <i class="fa-solid fa-diagram-project"></i> Grafo
+            </a>
+            <a href="organizaciones-externas-stats.html" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-sm text-slate-600 shadow-sm">
+                <i class="fa-solid fa-chart-column"></i> Estadistiques
+            </a>
+        </div>
+    </header>
+
+    <section class="mb-6">
+        <h2 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">KPIs</h2>
+        <div id="kpiGrid" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4"></div>
+    </section>
+
+    <section class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+        <div class="px-6 py-4 border-b border-slate-100 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+            <div>
+                <h3 id="detailTitle" class="text-sm font-bold text-slate-700">Detall KPI</h3>
+                <p id="detailSubtitle" class="text-xs text-slate-400">Selecciona un KPI</p>
+            </div>
+            <div class="relative w-full md:w-[360px]">
+                <i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-slate-400"></i>
+                <input id="searchInput" type="text" placeholder="Cercar organitzacio..."
+                       class="w-full pl-10 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-400 text-sm">
+            </div>
+        </div>
+
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                <tr class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider">
+                    <th class="px-6 py-3 font-bold">Nom</th>
+                    <th class="px-6 py-3 font-bold">Tipus</th>
+                    <th class="px-10 py-3 font-bold">Tipus suggerit</th>
+                    <th class="px-4 py-3 font-bold">Pais</th>
+                    <th class="px-6 py-3 font-bold">Pais suggerit</th>
+                    <th class="px-6 py-3 font-bold">Workflow</th>
+                    <th class="px-6 py-3 font-bold text-right">UUID</th>
+                </tr>
+                </thead>
+                <tbody id="tableBody" class="divide-y divide-slate-100 text-sm"></tbody>
+            </table>
+        </div>
+
+        <div class="px-6 py-4 bg-slate-50/70 flex items-center justify-between border-t border-slate-100">
+            <button id="btnPrev" class="px-4 py-2 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed text-sm">Anterior</button>
+            <span id="pageInfo" class="text-sm font-semibold text-slate-600">Pagina 1 de 1</span>
+            <button id="btnNext" class="px-4 py-2 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed text-sm">Seguent</button>
+        </div>
+    </section>
+</div>
+
+<script>
+const KPI_DEFS = {
+    withoutType: {
+        id: 'withoutType',
+        label: 'Organitzacions sense tipus',
+        icon: 'fa-tags',
+        color: 'indigo',
+        countKey: 'withoutType',
+        countEndpoint: '/external-organizations/stats/no-type/count',
+        listEndpoint: '/external-organizations/stats/no-type',
+        subtitle: 'Registres sense tipus informat'
+    },
+    withoutCountry: {
+        id: 'withoutCountry',
+        label: 'Organitzacions sense pais',
+        icon: 'fa-earth-europe',
+        color: 'rose',
+        countKey: 'withoutCountry',
+        countEndpoint: '/external-organizations/stats/no-country/count',
+        listEndpoint: '/external-organizations/stats/no-country',
+        subtitle: 'Registres sense pais informat'
+    }
+};
+
+let activeKpi = 'withoutType';
+let currentPage = 0;
+const pageSize = 20;
+let debounceTimer = null;
+const countrySuggestionCache = new Map();
+const typeSuggestionCache = new Map();
+const suggestionBundleCache = new Map();
+let typeCatalogOptions = null;
+const EGRETA_EXTERNAL_ORG_BASE =
+    'https://egreta.uab.cat/admin/editor/dk/atira/pure/api/shared/model/ueo/externalorganisation/editor/ueoexternalorganisationeditor.xhtml?scheme=&type=&id=';
+function esc(v) {
+    if (v == null) return '';
+    return String(v)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function colorClasses(color) {
+    const map = {
+        rose: { bg: 'bg-rose-100', fg: 'text-rose-600', ring: 'ring-rose-300' },
+        indigo: { bg: 'bg-indigo-100', fg: 'text-indigo-600', ring: 'ring-indigo-300' }
+    };
+    return map[color] || map.indigo;
+}
+
+function workflowBadge(step) {
+    const v = (step || '').toLowerCase();
+    if (v === 'approved' || v === 'validated') return '<span class="px-2 py-1 rounded-full text-[10px] font-bold uppercase bg-emerald-100 text-emerald-700">' + esc(step) + '</span>';
+    if (v === 'draft') return '<span class="px-2 py-1 rounded-full text-[10px] font-bold uppercase bg-amber-100 text-amber-700">Draft</span>';
+    return '<span class="px-2 py-1 rounded-full text-[10px] font-bold uppercase bg-slate-100 text-slate-600">' + esc(step || 'N/A') + '</span>';
+}
+
+function normalizeText(v) {
+    return String(v || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9\s]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function getOrgNameLabel(org) {
+    return org.displayName || (org.name && (org.name.ca_ES || org.name.es_ES || org.name.en_GB)) || '';
+}
+
+function getOrgTypeLabel(org) {
+    return org.typeName || (org.type && org.type.term && (org.type.term.ca_ES || org.type.term.es_ES || org.type.term.en_GB)) || '';
+}
+
+function getOrgCountryLabel(org) {
+    return org.countryName || (org.address && org.address.country && org.address.country.term && (org.address.country.term.ca_ES || org.address.country.term.es_ES || org.address.country.term.en_GB)) || '';
+}
+
+function getOrgEgretaUrl(org) {
+    const pureId = org && org.pureId != null ? String(org.pureId).trim() : '';
+    if (!pureId) return '';
+    return EGRETA_EXTERNAL_ORG_BASE + encodeURIComponent(pureId);
+}
+
+function hasCountry(org) {
+    return !!(getOrgCountryLabel(org) || '').trim();
+}
+
+function hasType(org) {
+    return !!(getOrgTypeLabel(org) || '').trim();
+}
+
+function isUnknownTypeLabel(typeLabel) {
+    const normalized = normalizeText(typeLabel);
+    return normalized === 'desconegut' || normalized === 'unknown';
+}
+
+function getOrgSuggestionKey(org) {
+    const uuid = String(org && org.uuid || '').trim();
+    if (uuid) return 'uuid:' + uuid;
+    return 'name:' + normalizeText(getOrgNameLabel(org));
+}
+
+async function fetchCountrySuggestion(org) {
+    const bundle = await fetchSuggestionBundle(org);
+    return bundle.country;
+}
+
+async function fetchTypeSuggestion(org) {
+    const bundle = await fetchSuggestionBundle(org);
+    return bundle.type;
+}
+
+async function fetchSuggestionBundle(org) {
+    const key = getOrgSuggestionKey(org);
+    if (!key) {
+        return {
+            country: { country: '', uri: '', confidence: 0, reason: '' },
+            type: { type: '', confidence: 0, reason: '' }
+        };
+    }
+    if (suggestionBundleCache.has(key)) return suggestionBundleCache.get(key);
+
+    const orgName = String(getOrgNameLabel(org) || '').trim();
+    if (!orgName) {
+        const emptyBundle = {
+            country: { country: '', uri: '', confidence: 0, reason: 'empty-name' },
+            type: { type: '', confidence: 0, reason: 'empty-name' }
+        };
+        suggestionBundleCache.set(key, emptyBundle);
+        countrySuggestionCache.set(key, emptyBundle.country);
+        typeSuggestionCache.set(key, emptyBundle.type);
+        return emptyBundle;
+    }
+
+    let bundle = {
+        country: { country: '', uri: '', confidence: 0, reason: '' },
+        type: { type: '', confidence: 0, reason: '' }
+    };
+    try {
+        const res = await apiFetch('/external-organizations/stats/suggest-metadata?name=' + encodeURIComponent(orgName));
+        if (res.ok) {
+            const data = await res.json();
+            bundle = {
+                country: {
+                    country: String((data && data.suggestedCountry) || '').trim(),
+                    uri: String((data && data.suggestedCountryUri) || '').trim(),
+                    confidence: Number((data && data.countryConfidence) || 0),
+                    reason: String((data && data.countryReason) || '').trim()
+                },
+                type: {
+                    type: String((data && data.suggestedType) || '').trim(),
+                    confidence: Number((data && data.typeConfidence) || 0),
+                    reason: String((data && data.typeReason) || '').trim()
+                }
+            };
+        }
+    } catch (_) {}
+
+    suggestionBundleCache.set(key, bundle);
+    countrySuggestionCache.set(key, bundle.country);
+    typeSuggestionCache.set(key, bundle.type);
+    return bundle;
+}
+
+async function preloadSuggestionsForPage(rows) {
+    const targets = (rows || []).filter(org => {
+        const typeLabel = getOrgTypeLabel(org);
+        return !hasCountry(org) || !typeLabel || isUnknownTypeLabel(typeLabel);
+    });
+    if (!targets.length) return;
+
+    // Separar los que ya están en caché
+    const needsFetch = targets.filter(org => {
+        const key = getOrgSuggestionKey(org);
+        return key && !suggestionBundleCache.has(key);
+    });
+    if (!needsFetch.length) return;
+
+    const uuids = needsFetch.map(org => org.uuid).filter(Boolean);
+    if (!uuids.length) return;
+
+    try {
+        const res = await apiFetch('/external-organizations/stats/suggest-metadata/batch', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ uuids })
+        });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const results = await res.json();
+
+        // Poblar caché con los resultados del batch
+        for (const item of (results || [])) {
+            const key = 'uuid:' + String(item.uuid || '').trim();
+            if (!key || key === 'uuid:') continue;
+            const bundle = {
+                country: {
+                    country: String(item.suggestedCountry || '').trim(),
+                    uri: String(item.suggestedCountryUri || '').trim(),
+                    confidence: Number(item.countryConfidence || 0),
+                    reason: String(item.countryReason || '').trim()
+                },
+                type: {
+                    type: String(item.suggestedType || '').trim(),
+                    confidence: Number(item.typeConfidence || 0),
+                    reason: String(item.typeReason || '').trim()
+                }
+            };
+            suggestionBundleCache.set(key, bundle);
+            countrySuggestionCache.set(key, bundle.country);
+            typeSuggestionCache.set(key, bundle.type);
+        }
+    } catch (_) {
+        // Fallback silencioso — las celdas quedarán vacías
+    }
+}
+
+async function preloadCountrySuggestions(rows) {
+    await preloadSuggestionsForPage(rows);
+}
+
+async function preloadTypeSuggestions(rows) {
+    // Ya cubierto por preloadSuggestionsForPage, no hace nada extra
+}
+function buildConfidenceChip(label, confidence, reason) {
+    const safeLabel = String(label || '').trim();
+    if (!safeLabel) return '<span class="text-slate-400">—</span>';
+
+    const confidencePct = Math.round((Number(confidence) || 0) * 100);
+    let chipClasses = 'bg-rose-50 text-rose-700';
+    let pctClasses = 'text-rose-500';
+    if (confidencePct >= 80) {
+        chipClasses = 'bg-emerald-50 text-emerald-700';
+        pctClasses = 'text-emerald-500';
+    } else if (confidencePct >= 55) {
+        chipClasses = 'bg-amber-50 text-amber-700';
+        pctClasses = 'text-amber-500';
+    }
+
+    return '<span class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-semibold ' + chipClasses + '" title="Confianca: ' + esc(String(confidencePct)) + '% | senyal: ' + esc(reason || 'n/a') + '">' + esc(safeLabel) + '<span class="text-[10px] ' + pctClasses + '">' + esc(String(confidencePct)) + '%</span></span>';
+}
+
+async function ensureTypeCatalogOptions() {
+    if (Array.isArray(typeCatalogOptions)) return typeCatalogOptions;
+
+    try {
+        const res = await apiFetch('/external-organizations/stats/type-catalog');
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+
+        typeCatalogOptions = (Array.isArray(data) ? data : [])
+            .map(row => {
+                const uri = String((row && row.uri) || '').trim();
+                const label = String((row && row.label) || '').trim();
+                return { uri, label };
+            })
+            .filter(row => !!row.uri && !!row.label && normalizeText(row.label) !== normalizeText('(desconegut)'));
+    } catch (_) {
+        typeCatalogOptions = [];
+    }
+
+    return typeCatalogOptions;
+}
+
+function findTypeOptionByLabel(label) {
+    const normalized = normalizeText(label || '');
+    if (!normalized || !Array.isArray(typeCatalogOptions)) return null;
+    return typeCatalogOptions.find(opt => normalizeText(opt.label) === normalized) || null;
+}
+
+function buildTypeSuggestionSelect(uuid, selectedTypeUri, selectedTypeLabel) {
+    const safeUuid = String(uuid || '').trim();
+    if (!safeUuid) return '<span class="text-slate-400">—</span>';
+
+    const selectedUri = String(selectedTypeUri || '').trim();
+    const selectedLabel = String(selectedTypeLabel || '').trim();
+    const options = Array.isArray(typeCatalogOptions) ? [...typeCatalogOptions] : [];
+
+    if (selectedUri && !options.some(opt => String(opt.uri || '').trim() === selectedUri)) {
+        options.unshift({ uri: selectedUri, label: selectedLabel || selectedUri });
+    }
+
+    const placeholder = '<option value="">Selecciona tipus...</option>';
+    const rendered = options.map(opt => {
+        const uri = String((opt && opt.uri) || '').trim();
+        const label = String((opt && opt.label) || '').trim();
+        const isSelected = selectedUri && uri === selectedUri;
+        return '<option value="' + esc(uri) + '"' + (isSelected ? ' selected' : '') + '>' + esc(label || uri) + '</option>';
+    }).join('');
+
+    return '<select class="type-suggest-select w-full max-w-[280px] px-2 py-1.5 rounded-lg border border-slate-300 bg-white text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-300" data-uuid="' + esc(safeUuid) + '">' + placeholder + rendered + '</select>';
+}
+
+function buildApplySuggestionButton(kind, uuid, suggestedLabel, suggestedUri) {
+    const safeUuid = String(uuid || '').trim();
+    const safeLabel = String(suggestedLabel || '').trim();
+    const safeUri = String(suggestedUri || '').trim();
+    if (!safeUuid) return '';
+
+    const suggestedAttr = safeLabel ? ' data-suggested="' + esc(safeLabel) + '"' : '';
+    const suggestedUriAttr = safeUri ? ' data-suggested-uri="' + esc(safeUri) + '"' : '';
+
+    return '<button type="button" class="apply-suggestion-btn inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-[11px] font-semibold text-slate-700" data-kind="' + esc(kind) + '" data-uuid="' + esc(safeUuid) + '"' + suggestedAttr + suggestedUriAttr + '><i class="fa-solid fa-floppy-disk"></i> Aplicar</button>';
+}
+
+function showToast(message, type) {
+    let root = document.getElementById('toastRoot');
+    if (!root) {
+        root = document.createElement('div');
+        root.id = 'toastRoot';
+        root.className = 'fixed top-4 right-4 z-50 space-y-2 w-[min(92vw,360px)]';
+        document.body.appendChild(root);
+    }
+
+    const variant = type === 'error'
+        ? 'bg-rose-50 border-rose-200 text-rose-700'
+        : 'bg-emerald-50 border-emerald-200 text-emerald-700';
+    const icon = type === 'error' ? 'fa-circle-exclamation' : 'fa-circle-check';
+
+    const toast = document.createElement('div');
+    toast.className = 'rounded-xl border px-3 py-2 text-sm shadow-sm bg-white ' + variant;
+    toast.innerHTML = '<div class="flex items-start gap-2"><i class="fa-solid ' + icon + ' mt-0.5"></i><span>' + esc(message || '') + '</span></div>';
+    root.appendChild(toast);
+
+    setTimeout(() => {
+        toast.classList.add('opacity-0', 'translate-y-[-4px]', 'transition', 'duration-300');
+        setTimeout(() => toast.remove(), 320);
+    }, 2600);
+}
+
+function markRowUpdated(rowEl, kind, payload, result, buttonEl) {
+    if (!rowEl) return;
+
+    const cells = rowEl.querySelectorAll('td');
+    const updatedChip = '<span class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-semibold bg-black text-white"><i class="fa-solid fa-circle-check"></i> Actualitzat</span>';
+
+    if (kind === 'type') {
+        const select = rowEl.querySelector('.type-suggest-select');
+        const selectedLabel = select && select.options && select.selectedIndex >= 0
+            ? (select.options[select.selectedIndex].text || '').trim()
+            : '';
+        const appliedLabel = selectedLabel || String((result && result.appliedType) || '').trim() || '—';
+
+        if (cells[1]) cells[1].textContent = appliedLabel;
+        if (cells[2]) cells[2].innerHTML = updatedChip;
+    }
+
+    if (kind === 'country') {
+        const appliedCountry = String((result && result.appliedCountry) || payload.suggestedCountry || '').trim() || '—';
+        if (cells[3]) cells[3].textContent = appliedCountry;
+        if (cells[4]) cells[4].innerHTML = updatedChip;
+    }
+
+    if (buttonEl) {
+        buttonEl.disabled = true;
+        buttonEl.innerHTML = '<i class="fa-solid fa-circle-check"></i> Actualitzat';
+        buttonEl.classList.remove('hover:bg-slate-50', 'text-slate-700');
+        buttonEl.classList.add('bg-emerald-50', 'border-emerald-200', 'text-emerald-700', 'cursor-default');
+    }
+
+    rowEl.classList.add('bg-emerald-50/60');
+    setTimeout(() => rowEl.classList.remove('bg-emerald-50/60'), 1500);
+}
+
+async function loadKpis() {
+    const grid = document.getElementById('kpiGrid');
+    grid.innerHTML = '<div class="col-span-full text-sm text-slate-400">Carregant KPIs...</div>';
+
+    const cards = [];
+    for (const kpi of Object.values(KPI_DEFS)) {
+        let count = 0;
+        try {
+            const res = await apiFetch(kpi.countEndpoint);
+            if (res.ok) {
+                const data = await res.json();
+                count = Number(data[kpi.countKey] || 0);
+            }
+        } catch (_) {}
+        cards.push({ ...kpi, count });
+    }
+
+    grid.innerHTML = cards.map(kpi => {
+        const c = colorClasses(kpi.color);
+        const active = kpi.id === activeKpi;
+        return `
+        <button data-kpi="${esc(kpi.id)}" class="kpi-card text-left bg-white rounded-xl border border-slate-200 shadow-sm p-4 flex items-center gap-3 ${active ? 'ring-2 ' + c.ring : ''}">
+            <div class="w-10 h-10 ${c.bg} rounded-full flex items-center justify-center shrink-0">
+                <i class="fa-solid ${esc(kpi.icon)} ${c.fg}"></i>
+            </div>
+            <div class="min-w-0">
+                <p class="text-xs text-slate-400 uppercase font-bold truncate">${esc(kpi.label)}</p>
+                <p class="text-xl font-black text-slate-700 leading-tight">${Number(kpi.count).toLocaleString('ca-ES')}</p>
+            </div>
+        </button>`;
+    }).join('');
+
+    document.querySelectorAll('.kpi-card').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const id = btn.getAttribute('data-kpi');
+            if (!id || id === activeKpi) return;
+            activeKpi = id;
+            currentPage = 0;
+            loadKpis();
+            loadTable();
+        });
+    });
+}
+
+function renderTable(rows) {
+    const body = document.getElementById('tableBody');
+    if (!rows || rows.length === 0) {
+        body.innerHTML = '<tr><td colspan="7" class="px-6 py-10 text-center text-slate-400 italic">No hi ha registres per aquest KPI.</td></tr>';
+        return;
+    }
+
+    body.innerHTML = rows.map(org => {
+        const nameRaw = getOrgNameLabel(org);
+        const nameText = esc(nameRaw || '—');
+        const egretaUrl = getOrgEgretaUrl(org);
+        const name = egretaUrl
+            ? '<button type="button" class="open-egreta-org text-left text-indigo-700 hover:text-indigo-900 hover:underline" data-egreta-url="' + esc(egretaUrl) + '">' + nameText + '</button>'
+            : nameText;
+        const typeRaw = getOrgTypeLabel(org);
+        const type = esc(typeRaw || '—');
+        const countryRaw = getOrgCountryLabel(org);
+        const country = esc(countryRaw || '—');
+
+        const cachedTypeSuggestion = typeSuggestionCache.get(getOrgSuggestionKey(org)) || { type: '', confidence: 0, reason: '' };
+        const shouldSuggestType = !typeRaw || isUnknownTypeLabel(typeRaw);
+        const suggestedTypeRaw = shouldSuggestType ? cachedTypeSuggestion.type : '';
+        const currentTypeUri = String((org && org.type && org.type.uri) || '').trim();
+        const suggestedTypeOption = findTypeOptionByLabel(suggestedTypeRaw);
+        const selectedTypeUri = (suggestedTypeOption && suggestedTypeOption.uri) || currentTypeUri;
+        const selectedTypeLabel = (suggestedTypeOption && suggestedTypeOption.label) || suggestedTypeRaw || typeRaw || '';
+        const typeSelect = buildTypeSuggestionSelect(org.uuid, selectedTypeUri, selectedTypeLabel);
+        const applyTypeBtn = buildApplySuggestionButton('type', org.uuid, '', '');
+        const suggestedTypeCell = (typeSelect + (applyTypeBtn ? '<div class="mt-2">' + applyTypeBtn + '</div>' : ''));
+
+        const cachedCountrySuggestion = countrySuggestionCache.get(getOrgSuggestionKey(org)) || { country: '', uri: '', confidence: 0, reason: '' };
+        const suggestedCountryRaw = !countryRaw ? cachedCountrySuggestion.country : '';
+        const suggestedCountryUri = !countryRaw ? String(cachedCountrySuggestion.uri || '').trim() : '';
+        const suggestedCountryChip = buildConfidenceChip(suggestedCountryRaw, cachedCountrySuggestion.confidence, cachedCountrySuggestion.reason);
+        const applyCountryBtn = !countryRaw ? buildApplySuggestionButton('country', org.uuid, suggestedCountryRaw, suggestedCountryUri) : '';
+        const suggestedCountryCell = (suggestedCountryChip + (applyCountryBtn ? '<div class="mt-2">' + applyCountryBtn + '</div>' : ''));
+
+        const uuid = org.uuid ? '<span class="font-mono text-xs text-slate-400">' + esc(org.uuid) + '</span>' : '—';
+        const wf = workflowBadge(org.workflow && org.workflow.step);
+        return `
+        <tr class="hover:bg-slate-50 transition-colors">
+            <td class="px-6 py-3 font-semibold text-slate-800">${name}</td>
+            <td class="px-6 py-3 text-slate-600">${type}</td>
+            <td class="px-6 py-3 text-slate-600">${suggestedTypeCell}</td>
+            <td class="px-6 py-3 text-slate-600">${country}</td>
+            <td class="px-6 py-3 text-slate-600">${suggestedCountryCell}</td>
+            <td class="px-6 py-3">${wf}</td>
+            <td class="px-6 py-3 text-right">${uuid}</td>
+        </tr>`;
+    }).join('');
+}
+
+async function applySuggestedValue(kind, uuid, suggested, buttonEl) {
+    const payload = { uuid: String(uuid || '').trim() };
+    let endpoint = '';
+
+    if (kind === 'type') {
+        endpoint = '/external-organizations/stats/apply-suggested-type';
+        payload.suggestedTypeUri = String(suggested || '').trim();
+        if (!payload.suggestedTypeUri && buttonEl) {
+            const row = buttonEl.closest('tr');
+            const select = row ? row.querySelector('.type-suggest-select') : null;
+            payload.suggestedTypeUri = String(select && select.value || '').trim();
+        }
+        if (!payload.suggestedTypeUri) {
+            showToast('Selecciona un tipus abans d\'aplicar.', 'error');
+            return;
+        }
+    } else if (kind === 'country') {
+        endpoint = '/external-organizations/stats/apply-suggested-country';
+        payload.suggestedCountryUri = String(buttonEl && buttonEl.getAttribute('data-suggested-uri') || '').trim();
+        payload.suggestedCountry = String(suggested || '').trim();
+        if (!payload.suggestedCountryUri && !payload.suggestedCountry) {
+            showToast('No hi ha pais suggerit per aplicar.', 'error');
+            return;
+        }
+    } else {
+        return;
+    }
+
+    if (!payload.uuid || (!payload.suggestedTypeUri && !payload.suggestedCountryUri && !payload.suggestedCountry)) return;
+
+    const originalHtml = buttonEl ? buttonEl.innerHTML : '';
+    if (buttonEl) {
+        buttonEl.disabled = true;
+        buttonEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Guardant...';
+    }
+
+    try {
+        const res = await apiFetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const result = await res.json();
+        if (!result || result.updated !== true) {
+            throw new Error((result && (result.reason || result.message)) || 'update-failed');
+        }
+
+        const key = 'uuid:' + payload.uuid;
+        countrySuggestionCache.delete(key);
+        typeSuggestionCache.delete(key);
+        suggestionBundleCache.delete(key);
+
+        const rowEl = buttonEl ? buttonEl.closest('tr') : null;
+        markRowUpdated(rowEl, kind, payload, result, buttonEl);
+        showToast('Registre actualitzat correctament.', 'success');
+        
+        // Recarregar KPIs per actualitzar els comptadors
+        loadKpis();
+    } catch (e) {
+        if (buttonEl) {
+            buttonEl.disabled = false;
+            buttonEl.innerHTML = originalHtml;
+        }
+        showToast('No s\'ha pogut actualitzar el registre: ' + (e && e.message ? e.message : 'error'), 'error');
+    }
+}
+
+function updatePager(pageData) {
+    // Usar los datos anidados en pageData.page
+    const page = pageData.page || {};
+    const totalPages = (page.totalPages != null && page.totalPages > 0) ? page.totalPages : 1;
+    const pageNum = (page.number || 0) + 1;
+    document.getElementById('pageInfo').textContent = 'Pagina ' + pageNum + ' de ' + totalPages;
+    // Si tienes flags first/last, ajústalos aquí, si no, deshabilita según número de página
+    document.getElementById('btnPrev').disabled = pageNum <= 1;
+    document.getElementById('btnNext').disabled = pageNum >= totalPages;
+}
+
+async function loadTable() {
+    const kpi = KPI_DEFS[activeKpi];
+    if (!kpi) return;
+
+    document.getElementById('detailTitle').textContent = kpi.label;
+    document.getElementById('detailSubtitle').textContent = kpi.subtitle;
+
+    const search = document.getElementById('searchInput').value.trim();
+    const params = new URLSearchParams({ page: String(currentPage), size: String(pageSize) });
+    if (search) params.set('buscar', search);
+
+    const body = document.getElementById('tableBody');
+    body.innerHTML = '<tr><td colspan="7" class="px-6 py-10 text-center text-slate-400 italic">Carregant...</td></tr>';
+
+    try {
+        await ensureTypeCatalogOptions();
+        const res = await apiFetch(kpi.listEndpoint + '?' + params.toString());
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        await Promise.all([
+            preloadTypeSuggestions(data.content || []),
+            preloadCountrySuggestions(data.content || [])
+        ]);
+        renderTable(data.content || []);
+        updatePager(data);
+    } catch (e) {
+        body.innerHTML = '<tr><td colspan="7" class="px-6 py-10 text-center text-rose-500">Error carregant dades: ' + esc(e.message) + '</td></tr>';
+    }
+}
+
+document.getElementById('btnPrev').addEventListener('click', () => {
+    if (currentPage <= 0) return;
+    currentPage -= 1;
+    loadTable();
+});
+
+document.getElementById('btnNext').addEventListener('click', () => {
+    currentPage += 1;
+    loadTable();
+});
+
+document.getElementById('searchInput').addEventListener('input', () => {
+    // Ahora la búsqueda solo se activa con Enter, no en cada input
+});
+
+document.getElementById('searchInput').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+        currentPage = 0;
+        loadTable();
+    }
+});
+
+document.getElementById('tableBody').addEventListener('click', (ev) => {
+    const egretaBtn = ev.target.closest('.open-egreta-org');
+    if (egretaBtn) {
+        const url = egretaBtn.getAttribute('data-egreta-url') || '';
+        if (url) {
+            if (typeof window.abrirEgretaModal === 'function') {
+                window.abrirEgretaModal(url);
+            } else {
+                window.open(url, '_blank', 'noopener,noreferrer');
+            }
+        }
+        return;
+    }
+
+    const btn = ev.target.closest('.apply-suggestion-btn');
+    if (!btn) return;
+
+    const kind = btn.getAttribute('data-kind') || '';
+    const uuid = btn.getAttribute('data-uuid') || '';
+    const suggested = btn.getAttribute('data-suggested') || '';
+    applySuggestedValue(kind, uuid, suggested, btn);
+});
+
+loadKpis().then(loadTable);
+</script>
+<script src="egreta-modal.js"></script>
+</body>
+</html>

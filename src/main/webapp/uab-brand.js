@@ -20,6 +20,19 @@
         return '';
     }
 
+    function resolveHomeHref(pathname) {
+        const fileName = (pathname || '').split('/').pop() || '';
+        if (!fileName || fileName === 'index.html') return 'index.html';
+        if (fileName === 'index-orgaext.html') return 'index-orgaext.html';
+
+        // For external organizations module pages, go back to module index.
+        if (fileName.startsWith('organizaciones-externas')) {
+            return 'index-orgaext.html';
+        }
+
+        return 'index.html';
+    }
+
     function injectUabBrand() {
         const body = document.body;
         if (!body || document.querySelector('.uab-brandbar')) return;
@@ -28,6 +41,8 @@
 
         const path = window.location.pathname;
         const isIndexPage = path === '/' || path.endsWith('/index.html') || path.endsWith('/');
+        const homeHref = resolveHomeHref(path);
+        const isCurrentHome = path.endsWith('/' + homeHref) || path.endsWith(homeHref);
 
         const brandBar = document.createElement('div');
         brandBar.className = 'uab-brandbar';
@@ -45,8 +60,8 @@
                 <span class="uab-brandbar__title text-2xl font-extrabold text-[#2a3037] tracking-tight" aria-label="Títol de la pàgina">${pageTitle}</span>
                 ${pageSubtitle ? `<span class="uab-brandbar__subtitle" aria-label="Subtítol de la pàgina">${pageSubtitle}</span>` : ''}
             </div>
-            ${!isIndexPage ? `
-            <a class="uab-brandbar__home" href="index.html" aria-label="Tornar a l'inici">
+            ${!isIndexPage && !isCurrentHome ? `
+            <a class="uab-brandbar__home" href="${homeHref}" aria-label="Tornar a l'inici">
                 <i class="fa-solid fa-house"></i>
                 <span>Inici</span>
             </a>` : ''}

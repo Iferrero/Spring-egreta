@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fusión de Organizaciones Externas</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+  <style>
+    #resultsTable td, #resultsTable th {
+      font-size: 13px;
+      padding-top: 4px;
+      padding-bottom: 4px;
+    }
+    .control-panel {
+      background-color: white;
+      padding: 16px;
+      border-radius: 8px;
+      border: 1px solid #e0e0e0;
+      margin-bottom: 16px;
+    }
+    .success { color: #16a34a; margin: 1rem 0; }
+    .error { color: #dc2626; margin: 1rem 0; }
+    .spinner { display: inline-block; width: 18px; height: 18px; border: 2px solid #cbd5e1; border-top-color: #2563eb; border-radius: 50%; animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body class="bg-slate-50 min-h-screen">
+
+  <div class="mx-auto max-w-3xl px-4 py-2">
+    <div class="control-panel">
+      <form id="searchForm" class="flex gap-3 mb-4">
+        <input type="text" id="searchInput" class="flex-1 border border-slate-300 rounded-lg px-3 py-2" placeholder="Buscar por nombre..." required />
+        <button class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-medium transition-colors" id="searchBtn" type="submit"><i class="fa fa-search"></i> Buscar</button>
+      </form>
+      <div id="successMsg" class="success" style="display:none;"></div>
+      <div id="errorMsg" class="error" style="display:none;"></div>
+      <form id="mergeForm">
+        <div class="overflow-x-auto">
+          <table id="resultsTable" class="fast-table w-full text-sm" style="display:none;">
+            <tbody id="resultsBody"></tbody>
+          </table>
+        </div>
+        <div class="mt-6 flex items-center gap-4">
+          <button class="px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-white font-medium transition-colors" id="mergeBtn" type="submit" disabled>Fusionar seleccionats</button>
+          <span id="loadingSpinner" class="spinner" style="display:none;"></span>
+        </div>
+      </form>
+    </div>
+  </div>
+  <script src="ext-org-merge.js"></script>
+</body>
+</html>

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Organitzacions externes sense vinculació</title>
+    <title>Llista completa d'organitzacions externes</title>
     <script src="config.js"></script>
     <script src="uab-brand.js" defer></script>
     <script src="https://cdn.tailwindcss.com"></script>
@@ -16,26 +16,17 @@
 
     <!-- Header -->
     <header class="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 mb-8">
-        <div>
-            <h1 class="text-2xl font-extrabold text-slate-800 tracking-tight">
-                Organitzacions externes <span class="text-rose-600">sense vinculació</span>
-            </h1>
-            <p class="text-slate-500 text-sm mt-1">
-                Registres d'organitzacions externes no referenciats en cap altra col·lecció (publicacions, projectes, persones, etc.)
-            </p>
-        </div>
-
-        <!-- KPI badge -->
-        <div class="bg-white shadow-sm p-3 rounded-xl flex items-center gap-3 border border-slate-200 min-w-[200px]">
-            <div class="w-10 h-10 bg-rose-100 rounded-full flex items-center justify-center shrink-0">
-                <i class="fa-solid fa-link-slash text-rose-600"></i>
-            </div>
+        <a href="index-orgaext.html" class="hover:opacity-80 transition-opacity">
             <div>
-                <p class="text-xs text-slate-400 uppercase font-bold">Sense vinculació</p>
-                <p id="kpiUnlinked" class="text-xl font-black text-slate-700 leading-tight">--</p>
-                <p id="kpiTotal" class="text-xs text-slate-500">de -- totals</p>
+                <h1 class="text-2xl font-extrabold text-slate-800 tracking-tight">
+                    Organitzacions externes <span class="text-rose-600">llista completa</span>
+                </h1>
+                <p class="text-slate-500 text-sm mt-1">
+                    Llistat complet d'organitzacions externes registrades al sistema
+                </p>
             </div>
-        </div>
+        </a>
+
     </header>
 
     <!-- Search toolbar -->
@@ -46,7 +37,7 @@
                    class="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-rose-400 text-sm">
         </div>
         <div id="loadingBadge" class="hidden items-center gap-2 text-xs text-slate-400 italic">
-            <i class="fa-solid fa-rotate fa-spin"></i> Comprovant vinculacions...
+            <i class="fa-solid fa-rotate fa-spin"></i> Carregant organitzacions...
         </div>
     </div>
 
@@ -123,7 +114,7 @@
         if (!lista || lista.length === 0) {
             body.innerHTML = `<tr><td colspan="6" class="px-6 py-12 text-center text-slate-400 italic">
                 <i class="fa-solid fa-circle-check text-emerald-400 mr-2"></i>
-                No s'han trobat organitzacions sense vinculació amb els filtres actuals
+                No s'han trobat organitzacions amb els filtres actuals
             </td></tr>`;
             return;
         }
@@ -164,23 +155,13 @@
     // ----------------------------------------------------------------
     // API calls
     // ----------------------------------------------------------------
-    async function cargarKpi() {
-        try {
-            const res = await apiFetch('/external-organizations/unlinked/count');
-            if (!res.ok) return;
-            const data = await res.json();
-            document.getElementById('kpiUnlinked').textContent = (data.unlinked ?? '--').toLocaleString('ca-ES');
-            document.getElementById('kpiTotal').textContent    = `de ${(data.total ?? '--').toLocaleString('ca-ES')} totals`;
-        } catch (_) { /* ignore */ }
-    }
-
     async function cargarDatos() {
         const loading = document.getElementById('loadingBadge');
         const body    = document.getElementById('tabla-body');
         loading.classList.remove('hidden');
         loading.classList.add('flex');
         body.innerHTML = `<tr><td colspan="6" class="px-6 py-12 text-center text-slate-400 italic">
-            <i class="fa-solid fa-rotate fa-spin mr-2"></i>Comprovant vinculacions...
+            <i class="fa-solid fa-rotate fa-spin mr-2"></i>Carregant organitzacions...
         </td></tr>`;
 
         const buscar = document.getElementById('inputBuscar').value.trim();
@@ -191,7 +172,7 @@
         if (buscar) params.set('buscar', buscar);
 
         try {
-            const res = await apiFetch(`/external-organizations/unlinked?${params}`);
+            const res = await apiFetch(`/external-organizations?${params}`);
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const data = await res.json();
             renderTabla(data.content || []);
@@ -223,7 +204,6 @@
     });
 
     // Initial load
-    cargarKpi();
     cargarDatos();
 </script>
 </body>
