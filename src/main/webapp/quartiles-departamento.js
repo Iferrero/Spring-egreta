@@ -940,64 +940,81 @@ function renderEvolution(data, deptName) {
     });
 }
 
-function renderOpenAccessPie(data) {
+function renderOpenAccessEvolution(data) {
     const container = document.getElementById('openAccessPie');
     if (!chartOpenAccess) {
         chartOpenAccess = echarts.init(container);
     }
 
     const rows = Array.isArray(data) ? data : [];
-    const total = rows.reduce((acc, r) => acc + Number(r.value || 0), 0);
-
-    if (rows.length === 0 || total === 0) {
+    if (rows.length === 0) {
         chartOpenAccess.setOption({
-            title: { text: 'Accés obert', left: 'center', top: 6, textStyle: { fontSize: 14, fontWeight: 700, color: getUabColor('--uab-pissarra', '#2a3037') } },
-            series: [{ type: 'pie', radius: ['35%', '70%'], data: [], label: { show: true, formatter: 'Sense dades' } }]
+            title: { text: 'Evolució accés obert', left: 'center', top: 6, textStyle: { fontSize: 14, fontWeight: 700, color: getUabColor('--uab-pissarra', '#2a3037') } },
+            series: [],
+            xAxis: { data: [] },
+            yAxis: {},
+            tooltip: {},
         });
         return;
     }
 
-    const colorMap = {
-        'Accés obert': getUabColor('--uab-campus', '#008037'),
-        'Accés tancat': getUabColor('--uab-cendra', '#a9b1bc')
-    };
-
-    const chartData = rows.map(r => ({
-        name: r.label,
-        value: r.value,
-        itemStyle: { color: colorMap[r.label] || getUabColor('--uab-tauro', '#596473') }
-    }));
+    // Agrupar por año
+    const years = [...new Set(rows.map(r => r.year))].sort();
+    const oaByYear = years.map(year => {
+        const entry = rows.find(r => r.year === year && r.label === 'Accés obert');
+        return Number(entry?.value || 0);
+    });
+    const closedByYear = years.map(year => {
+        const entry = rows.find(r => r.year === year && r.label === 'Accés tancat');
+        return Number(entry?.value || 0);
+    });
+    // Calcular %
+    const totalByYear = years.map((_, i) => oaByYear[i] + closedByYear[i]);
+    const oaPct = oaByYear.map((v, i) => totalByYear[i] > 0 ? Math.round(v / totalByYear[i] * 100) : 0);
 
     chartOpenAccess.setOption({
-        tooltip: {
-            trigger: 'item',
-            formatter: params => `${params.name}: <b>${params.value}</b> (${params.percent}%)`
-        },
-        series: [{
-            name: 'Accés obert',
-            type: 'pie',
-            radius: ['35%', '70%'],
-            center: ['50%', '55%'],
-            cursor: 'pointer',
-            itemStyle: {
-                borderRadius: 8,
-                borderColor: getUabColor('--uab-coco', '#ffffff'),
-                borderWidth: 2
-            },
-            label: { formatter: '{b}: {c}' },
-            data: chartData
-        }],
         title: {
-            text: '',
+            text: 'Evolució accés obert',
             left: 'center',
             top: 6,
             textStyle: { fontSize: 14, fontWeight: 700, color: getUabColor('--uab-pissarra', '#2a3037') }
-        }
-    });
-
-    chartOpenAccess.off('click');
-    chartOpenAccess.on('click', params => {
-        applyOpenAccessFilter(params.name);
+        },
+        tooltip: {
+            trigger: 'axis',
+            formatter: params => {
+                let str = `<b>${params[0].axisValue}</b><br/>`;
+                params.forEach(p => {
+                    str += `<span style='display:inline-block;margin-right:4px;border-radius:3px;width:10px;height:10px;background:${p.color}'></span> ${p.seriesName}: <b>${p.value}%</b><br/>`;
+                });
+                return str;
+            }
+        },
+        legend: { show: false },
+        grid: { left: 42, right: 20, top: 60, bottom: 28 },
+        xAxis: {
+            type: 'category',
+            data: years,
+            axisLabel: { color: getUabColor('--uab-tauro', '#596473') }
+        },
+        yAxis: {
+            type: 'value',
+            min: 0,
+            max: 100,
+            axisLabel: { formatter: '{value}%', color: getUabColor('--uab-tauro', '#596473') }
+        },
+        series: [
+            {
+                name: 'Accés obert',
+                type: 'line',
+                data: oaPct,
+                smooth: true,
+                symbol: 'circle',
+                symbolSize: 8,
+                itemStyle: { color: getUabColor('--uab-campus', '#008037') },
+                lineStyle: { width: 3 },
+                label: { show: true, position: 'top', formatter: '{c}%' }
+            }
+        ]
     });
 }
 
@@ -1136,7 +1153,7 @@ async function cargarDatos() {
         renderPie(Array.isArray(data) ? data : [], deptName);
         renderArticlesTable(articles);
         renderEvolution(evolution, deptName);
-        renderOpenAccessPie(openAccess);
+        renderOpenAccessEvolution(dashboard.openAccessEvolution || openAccess);
 
         const total = (Array.isArray(data) ? data : [])
             .reduce((acc, item) => acc + Number(item.total || 0), 0);
@@ -1280,7 +1297,9 @@ function renderComparativaDeptChips() {
             const card = document.getElementById(`comp-pie-${uuid}`);
             if (card) card.remove();
             comparativaQuartilesData.delete(uuid);
+            comparativaGrowthData.delete(uuid);
             renderComparativaBarChart();
+            renderComparativaGrowthChart();
             renderComparativaDeptChips();
         });
     });

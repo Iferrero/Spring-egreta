@@ -1,3 +1,4 @@
+
 package com.example.demo.controller;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -122,7 +123,7 @@ public class ExternalOrganizationController {
     @Value("${app.egreta.external-org.enabled:false}")
     private boolean egretaExternalOrgEnabled;
 
-    @Value("${app.egreta.external-org.base-url:https://egreta.uab.cat/ws/api/external-organizations}")
+    @Value("${app.egreta.external-org.base-url:https://egretat.uab.cat/ws/api/external-organizations}")
     private String egretaExternalOrgBaseUrl;
 
     @Value("${app.egreta.external-org.get-url-template:}")
@@ -186,6 +187,160 @@ public class ExternalOrganizationController {
         long total = mongoTemplate.count(Query.of(query).limit(-1).skip(-1), ExternalOrganization.class);
         List<ExternalOrganization> items = mongoTemplate.find(query, ExternalOrganization.class);
         return new PageImpl<>(items, pageable, total);
+    }
+
+    // ------------------------------------------------------------------------- 
+    // POST /external-organizations/merge
+    // Body: { "targetId": "uuid", "sourceIds": ["uuid1", "uuid2", ...], "egreta": true/false }
+    // Si "egreta" es true, realiza la fusión vía API Egreta
+    // -------------------------------------------------------------------------
+    @PostMapping("/merge")
+    public Map<String, Object> mergeOrganizations(@RequestBody Map<String, Object> payload) {
+        String targetId = payload == null ? null : Objects.toString(payload.get("targetId"), null);
+        List<String> sourceIds = payload == null ? null : (List<String>) payload.get("sourceIds");
+        boolean useEgreta = payload != null && Boolean.TRUE.equals(payload.get("egreta"));
+        if (targetId == null || sourceIds == null || sourceIds.isEmpty()) {
+            return Map.of("merged", false, "reason", "missing-target-or-sources");
+        }
+
+        
+            // Llamada a la API de Egreta para fusionar
+            if (!egretaExternalOrgEnabled) {
+                return Map.of("merged", false, "reason", "egreta-sync-disabled");
+            }
+            String mergeUrl = egretaExternalOrgBaseUrl + "/merge";
+            try {
+                // Construir el body según la especificación de Egreta (uuid + systemName)
+                List<Map<String, Object>> items = new java.util.ArrayList<>();
+                items.add(Map.of("uuid", targetId, "systemName", "ExternalOrganization"));
+                for (String src : sourceIds) {
+                    items.add(Map.of("uuid", src, "systemName", "ExternalOrganization"));
+                }
+                Map<String, Object> body = Map.of("items", items);
+
+                HttpRequest.Builder reqBuilder = HttpRequest.newBuilder()
+                        .uri(URI.create(mergeUrl))
+                        .timeout(Duration.ofMillis(Math.max(1000, egretaExternalOrgTimeoutMs)))
+                        .header("Content-Type", "application/json")
+                        .header("Accept", "application/json")
+                        .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(body)));
+                appendEgretaAuth(reqBuilder);
+
+                HttpResponse<String> response = httpClient.send(reqBuilder.build(), HttpResponse.BodyHandlers.ofString());
+                if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                    return Map.of(
+                        "merged", false,
+                        "reason", "egreta-merge-failed",
+                        "status", response.statusCode(),
+                        "body", trimResponseBody(response.body())
+                    );
+                }
+                // Devuelve el resultado de Egreta
+                return Map.of(
+                    "merged", true,
+                    "targetId", targetId,
+                    "removed", sourceIds,
+                    "egreta", true,
+                    "response", objectMapper.readTree(response.body())
+                );
+            } catch (Exception e) {
+                return Map.of(
+                    "merged", false,
+                    "reason", "egreta-merge-exception",
+                    "message", e.getMessage() == null ? "unknown" : e.getMessage()
+                );
+            }
+        
+        /* 
+        // Fusión local MongoDB (comportamiento anterior)
+        Query targetQuery = new Query(Criteria.where("uuid").is(targetId));
+        ExternalOrganization target = mongoTemplate.findOne(targetQuery, ExternalOrganization.class);
+        if (target == null) {
+            return Map.of("merged", false, "reason", "target-not-found", "targetId", targetId);
+        }
+
+        List<ExternalOrganization> sources = mongoTemplate.find(
+            new Query(Criteria.where("uuid").in(sourceIds)),
+            ExternalOrganization.class
+        );
+        if (sources.isEmpty()) {
+            return Map.of("merged", false, "reason", "sources-not-found", "sourceIds", sourceIds);
+        }
+
+        // Ejemplo de fusión: combinar nombres, identificadores, links, etc.
+        for (ExternalOrganization source : sources) {
+            // Fusionar nombres (añadir los que falten)
+            if (source.getName() != null) {
+                if (target.getName() == null) target.setName(new java.util.HashMap<>());
+                target.getName().putAll(source.getName());
+            }
+            // Fusionar identificadores
+            if (source.getIdentifiers() != null) {
+                if (target.getIdentifiers() == null) target.setIdentifiers(new java.util.ArrayList<>());
+                for (var id : source.getIdentifiers()) {
+                    if (!target.getIdentifiers().contains(id)) target.getIdentifiers().add(id);
+                }
+            }
+            // Fusionar links
+            if (source.getLinks() != null) {
+                if (target.getLinks() == null) target.setLinks(new java.util.ArrayList<>());
+                for (var link : source.getLinks()) {
+                    if (!target.getLinks().contains(link)) target.getLinks().add(link);
+                }
+            }
+            // Fusionar prettyUrlIdentifiers
+            if (source.getPrettyUrlIdentifiers() != null) {
+                if (target.getPrettyUrlIdentifiers() == null) target.setPrettyUrlIdentifiers(new java.util.ArrayList<>());
+                for (var pui : source.getPrettyUrlIdentifiers()) {
+                    if (!target.getPrettyUrlIdentifiers().contains(pui)) target.getPrettyUrlIdentifiers().add(pui);
+                }
+            }
+            // Fusionar keywordGroups
+            if (source.getKeywordGroups() != null) {
+                if (target.getKeywordGroups() == null) target.setKeywordGroups(new java.util.ArrayList<>());
+                for (var kg : source.getKeywordGroups()) {
+                    if (!target.getKeywordGroups().contains(kg)) target.getKeywordGroups().add(kg);
+                }
+            }
+            // Si el target no tiene algún campo importante, tomarlo del source
+            if (target.getType() == null && source.getType() != null) target.setType(source.getType());
+            if (target.getNatureTypes() == null && source.getNatureTypes() != null) target.setNatureTypes(source.getNatureTypes());
+            if (target.getAddress() == null && source.getAddress() != null) target.setAddress(source.getAddress());
+            if (target.getVisibility() == null && source.getVisibility() != null) target.setVisibility(source.getVisibility());
+            if (target.getWorkflow() == null && source.getWorkflow() != null) target.setWorkflow(source.getWorkflow());
+        }
+
+        // Guardar la organización fusionada
+        repository.save(target);
+
+        // Eliminar las fuentes
+        for (ExternalOrganization source : sources) {
+            mongoTemplate.remove(new Query(Criteria.where("uuid").is(source.getUuid())), ExternalOrganization.class);
+        }
+        
+        // TODO: Actualizar referencias externas en otras colecciones si es necesario
+
+        return Map.of(
+            "merged", true,
+            "targetId", targetId,
+            "removed", sourceIds,
+            "target", target
+        );
+        */
+    }
+
+    // -------------------------------------------------------------------------
+    // POST /external-organizations/by-uuids
+    // Body: { "uuids": ["uuid1", "uuid2", ...] }
+    // -------------------------------------------------------------------------
+    @PostMapping("/by-uuids")
+    public List<ExternalOrganization> findByUuids(@RequestBody Map<String, List<String>> body) {
+        List<String> uuids = body == null ? List.of() : body.getOrDefault("uuids", List.of());
+        if (uuids.isEmpty()) return List.of();
+        return mongoTemplate.find(
+            new Query(org.springframework.data.mongodb.core.query.Criteria.where("uuid").in(uuids)),
+            ExternalOrganization.class
+        );
     }
 
     // -------------------------------------------------------------------------

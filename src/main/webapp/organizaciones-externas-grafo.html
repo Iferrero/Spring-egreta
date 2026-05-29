@@ -507,13 +507,24 @@ function buildPairs() {
 function buildClusters() {
     if (!currentData || !Array.isArray(currentData.pairs)) { currentClusters = []; return; }
 
-    const idToLabel = new Map();
+    // Map UUID to all info needed for chips
+    const idToInfo = new Map();
     for (const p of currentData.pairs) {
-        idToLabel.set(p.from, formatNameWithPureId(p.leftLabel  || String(p.from), p.leftPureId));
-        idToLabel.set(p.to,   formatNameWithPureId(p.rightLabel || String(p.to),   p.rightPureId));
+        idToInfo.set(p.from, {
+            label: p.leftLabel  || String(p.from),
+            pureId: p.leftPureId,
+            workflow: (p.leftWorkflow || '').toLowerCase(),
+            uuid: p.from
+        });
+        idToInfo.set(p.to, {
+            label: p.rightLabel || String(p.to),
+            pureId: p.rightPureId,
+            workflow: (p.rightWorkflow || '').toLowerCase(),
+            uuid: p.to
+        });
     }
 
-    const parent = new Map(Array.from(idToLabel.keys()).map(id => [id, id]));
+    const parent = new Map(Array.from(idToInfo.keys()).map(id => [id, id]));
     const find = (x) => {
         let p = parent.get(x);
         while (p !== parent.get(p)) { parent.set(p, parent.get(parent.get(p))); p = parent.get(p); }
@@ -524,7 +535,7 @@ function buildClusters() {
     currentData.pairs.forEach(p => union(p.from, p.to));
 
     const groups = new Map();
-    for (const id of idToLabel.keys()) {
+    for (const id of idToInfo.keys()) {
         const root = find(id);
         if (!groups.has(root)) groups.set(root, []);
         groups.get(root).push(id);
@@ -534,9 +545,11 @@ function buildClusters() {
         .filter(g => g.length > 1)
         .map(g => ({
             size:  g.length,
-            names: g.map(id => idToLabel.get(id) || String(id)).sort((a, b) => a.localeCompare(b))
+            uuids: g,
+            // Para mostrar, ordenar por label
+            sorted: g.map(id => idToInfo.get(id)).sort((a, b) => (a.label || '').localeCompare(b.label || ''))
         }))
-        .sort((a, b) => b.size - a.size || a.names[0].localeCompare(b.names[0]));
+        .sort((a, b) => b.size - a.size || (a.sorted[0]?.label || '').localeCompare(b.sorted[0]?.label || ''));
 }
 
 function updateStats() {
@@ -638,7 +651,8 @@ function renderClusters() {
 
     const filtered = currentClusters.filter(c => {
         if (!q) return true;
-        return normalizeText(c.names.join(' ')).includes(q);
+        // Buscar en los labels de los miembros del cluster
+        return c.sorted.some(info => normalizeText(info.label).includes(q));
     });
 
     const totalPages = Math.max(1, Math.ceil(filtered.length / clustersPageSize));
@@ -654,31 +668,23 @@ function renderClusters() {
         return;
     }
 
-    // Para colorear los chips y mostrar el PureId, necesitamos saber el workflow y el PureId de cada nombre
-    // Creamos un mapa de nombre base a { workflow, pureId }
-    const nameToInfo = {};
-    currentPairs.forEach(p => {
-        const leftBase  = (p.leftLabel || '').split(' (')[0];
-        const rightBase = (p.rightLabel || '').split(' (')[0];
-        nameToInfo[leftBase]  = { workflow: p.leftWorkflow,  pureId: p.leftPureId };
-        nameToInfo[rightBase] = { workflow: p.rightWorkflow, pureId: p.rightPureId };
-    });
-
     const html = visible.map(c => {
-        const preview = c.names.slice(0, 12).map(name => {
-            const baseName = (name || '').split(' (')[0];
-            const info = nameToInfo[baseName] || {};
+        // Botón para ir a merge con todos los UUIDs del cluster
+        const clusterUuids = c.uuids;
+        const preview = c.sorted.slice(0, 12).map(info => {
             const workflow = (info.workflow || '').toLowerCase();
             const pureId = info.pureId ? ` (${safeHtml(info.pureId)})` : '';
             const isGreen = workflow === 'approved' || workflow === 'validated';
             const EGRETA_EXTERNAL_ORG_BASE = 'https://egreta.uab.cat/admin/editor/dk/atira/pure/api/shared/model/ueo/externalorganisation/editor/ueoexternalorganisationeditor.xhtml?scheme=&type=&id=';
             const url = info.pureId ? EGRETA_EXTERNAL_ORG_BASE + encodeURIComponent(info.pureId) : '#';
-            return `<a href=\"${url}\" class=\"sim-chip\" style=\"background:${isGreen ? '#4ade80' : '#e0f2fe'};color:${isGreen ? '#14532d' : '#0c4a6e'};margin-bottom:2px;display:inline-block;text-decoration:none;\" target=\"_blank\" onclick=\"window.open('${url}','egreta','width=900,height=700,scrollbars=yes');return false;\">${safeHtml(baseName)}${pureId}</a>`;
+            return `<a href=\"${url}\" class=\"sim-chip\" style=\"background:${isGreen ? '#4ade80' : '#e0f2fe'};color:${isGreen ? '#14532d' : '#0c4a6e'};margin-bottom:2px;display:inline-block;text-decoration:none;\" target=\"_blank\" onclick=\"window.open('${url}','egreta','width=900,height=700,scrollbars=yes');return false;\">${safeHtml((info.label || '').split(' (')[0])}${pureId}</a>`;
         }).join(' ');
-        const extra   = c.names.length > 12 ? '<div class="text-slate-400">... +' + (c.names.length - 12) + ' més</div>' : '';
+        const extra   = c.sorted.length > 12 ? '<div class="text-slate-400">... +' + (c.sorted.length - 12) + ' més</div>' : '';
+        // Botón para ir a merge
+        const mergeBtn = `<button class=\"px-2 py-1 rounded bg-amber-500 hover:bg-amber-600 text-white text-xs ml-2\" onclick=\"goToMergeWithCluster([${clusterUuids.map(u => `'${u}'`).join(',')}])\">Merge cluster</button>`;
         return '<div class="cluster-card">'
             + '<div class="cluster-title">'
-            + '<div class="font-semibold text-slate-700">' + safeHtml((c.names[0] || '').split(' (')[0]) + '</div>'
+            + '<div class="font-semibold text-slate-700">' + safeHtml((c.sorted[0]?.label || '').split(' (')[0]) + mergeBtn + '</div>'
             + '<span class="cluster-badge">' + c.size + ' noms</span>'
             + '</div>'
             + '<div class="cluster-items">' + preview + extra + '</div>'
@@ -697,6 +703,16 @@ function renderClusters() {
 
     container.innerHTML = note + html + pager;
     container.dataset.totalPages = String(totalPages);
+}
+
+// ── Ir a merge con cluster ────────────────────────────────────────────────
+function goToMergeWithCluster(uuids) {
+    if (!Array.isArray(uuids) || !uuids.length) return;
+    const url = '../ext-org-merge/index.html?uuids=' + uuids.join(',');
+    const w = 900, h = 700;
+    const left = Math.round((window.screen.width - w) / 2);
+    const top = Math.round((window.screen.height - h) / 2);
+    window.open(url, 'mergeWindow', `width=${w},height=${h},left=${left},top=${top},resizable=yes,scrollbars=yes`);
 }
 
 // ── Mode de vista ────────────────────────────────────────────────────────────
