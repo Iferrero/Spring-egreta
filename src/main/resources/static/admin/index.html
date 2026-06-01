@@ -1,0 +1,760 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Administración Egreta</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="https://fonts.googleapis.com/css?family=Roboto:400,700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Roboto', Arial, sans-serif;
+            margin: 0;
+            background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%);
+            min-height: 100vh;
+        }
+        body.loading .container {
+            display: none;
+        }
+        .startup-loading {
+            min-height: 100vh;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            color: #1976d2;
+            font-size: 1.1em;
+            font-weight: 600;
+            letter-spacing: 0.3px;
+        }
+        body.loading .startup-loading {
+            display: flex;
+        }
+        .container {
+            background: #fff;
+            padding: 2.5em 2em 2em 2em;
+            border-radius: 18px;
+            box-shadow: 0 6px 32px #bdbdbd44;
+            max-width: 520px;
+            margin: 48px auto;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        h1 {
+            font-size: 2em;
+            margin-bottom: 0.5em;
+            font-weight: 700;
+            color: #1976d2;
+            letter-spacing: 1px;
+        }
+        .subtitle {
+            color: #555;
+            font-size: 1.1em;
+            margin-bottom: 1.5em;
+        }
+        .sync-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.7em 1em;
+            width: 100%;
+            margin-bottom: 1.5em;
+        }
+        .sync-btn {
+            padding: 0.7em 0.5em;
+            font-size: 1em;
+            border: none;
+            border-radius: 6px;
+            font-weight: 500;
+            background: #1976d2;
+            color: #fff;
+            cursor: pointer;
+            box-shadow: 0 2px 8px #1976d233;
+            transition: background 0.2s, transform 0.1s;
+            outline: none;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            line-height: 1.2;
+        }
+        .sync-btn-meta {
+            margin-top: 0.2em;
+            font-size: 0.78em;
+            font-weight: 400;
+            opacity: 0.95;
+        }
+        .sync-btn:disabled {
+            background: #bdbdbd;
+            color: #eee;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .sync-btn:hover:not(:disabled) {
+            background: #1565c0;
+            transform: translateY(-2px) scale(1.03);
+        }
+        .status {
+            margin-top: 0.5em;
+            font-size: 1.1em;
+            min-height: 1.5em;
+            text-align: center;
+        }
+        .status.error {
+            color: #d32f2f;
+            font-weight: bold;
+        }
+        .status.ok {
+            color: #388e3c;
+            font-weight: bold;
+        }
+        .progress-outer {
+            margin-top: 1.5em;
+            width: 100%;
+            background: #e3e3e3;
+            border-radius: 8px;
+            overflow: hidden;
+            height: 28px;
+            box-shadow: 0 2px 8px #1976d211;
+            display: none;
+        }
+        .progress-inner {
+            height: 100%;
+            width: 0;
+            background: linear-gradient(90deg, #1976d2 60%, #64b5f6 100%);
+            color: #fff;
+            text-align: center;
+            line-height: 28px;
+            font-size: 1.05em;
+            font-weight: 500;
+            transition: width 0.3s, background 0.3s;
+        }
+        @media (max-width: 600px) {
+            .container {
+                max-width: 98vw;
+                padding: 1em 0.2em 1.5em 0.2em;
+            }
+            .sync-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body class="loading">
+<div id="startupLoading" class="startup-loading">Carregant dades...</div>
+<div class="container">
+    <h1>Administració Mongo Egreta</h1>
+    <div class="subtitle">Sincronitza i monitoritza l'estat de cada col·lecció</div>
+    <div class="sync-grid">
+        <button id="syncBtn" class="sync-btn">Activities</button>
+        <button id="syncOrgBtn" class="sync-btn" style="background:#388e3c;">Organizations</button>
+        <button id="syncAppBtn" class="sync-btn" style="background:#f57c00;">Applications</button>
+        <button id="syncAwardsBtn" class="sync-btn" style="background:#7b1fa2;">Awards</button>
+        <button id="syncAuthorcollaborationsBtn" class="sync-btn" style="background:#0097a7;">AuthorCollaborations</button>
+        <button id="syncClassificationschemesBtn" class="sync-btn" style="background:#c2185b;">Classificationschemes</button>
+        <button id="syncConceptsBtn" class="sync-btn" style="background:#7e57c2;">Concepts</button>
+        <button id="syncCoursesBtn" class="sync-btn" style="background:#0288d1;">Courses</button>
+        <button id="syncDatasetsBtn" class="sync-btn" style="background:#43a047;">Datasets</button>
+        <button id="syncEquipmentsBtn" class="sync-btn" style="background:#fbc02d; color:#333;">Equipments</button>
+        <button id="syncEventsBtn" class="sync-btn" style="background:#8d6e63;">Events</button>
+        <button id="syncExternalorganizationsBtn" class="sync-btn" style="background:#6d4c41;">ExternalOrganizations</button>
+        <button id="syncExternalpersonsBtn" class="sync-btn" style="background:#00bcd4; color:#222;">ExternalPersons</button>
+        <button id="syncFingerprintsBtn" class="sync-btn" style="background:#ff7043;">Fingerprints</button>
+        <button id="syncFundingOpportunitiesBtn" class="sync-btn" style="background:#1976d2;">FundingOpportunities</button>
+        <button id="syncJournalsBtn" class="sync-btn" style="background:#512da8;">Journals</button>
+        <button id="syncPersonsBtn" class="sync-btn" style="background:#689f38;">Persons</button>
+        <button id="syncPressmediaBtn" class="sync-btn" style="background:#d84315;">Pressmedia</button>
+        <button id="syncPrizesBtn" class="sync-btn" style="background:#ad1457;">Prizes</button>
+        <button id="syncProjectsBtn" class="sync-btn" style="background:#388e3c;">Projects</button>
+        <button id="syncPublishersBtn" class="sync-btn" style="background:#0288d1;">Publishers</button>
+        <button id="syncResearchoutputsBtn" class="sync-btn" style="background:#fbc02d; color:#333;">Researchoutputs</button>
+        <button id="syncStudentthesesBtn" class="sync-btn" style="background:#7b1fa2;">StudentTheses</button>
+    </div>
+    <div class="status" id="status"></div>
+    <div class="progress-outer" id="progressBar">
+        <div class="progress-inner" id="progressFill"></div>
+    </div>
+</div>
+<script>
+    const btn          = document.getElementById('syncBtn');
+    const btnOrg       = document.getElementById('syncOrgBtn');
+    const btnApp       = document.getElementById('syncAppBtn');
+    const btnAwards    = document.getElementById('syncAwardsBtn');
+    const btnAuthorcollaborations = document.getElementById('syncAuthorcollaborationsBtn');
+    const btnClassificationschemes = document.getElementById('syncClassificationschemesBtn');
+    const btnConcepts = document.getElementById('syncConceptsBtn');
+    const btnCourses = document.getElementById('syncCoursesBtn');
+    const btnDatasets = document.getElementById('syncDatasetsBtn');
+    const btnEquipments = document.getElementById('syncEquipmentsBtn');
+    const btnEvents = document.getElementById('syncEventsBtn');
+    const btnExternalorganizations = document.getElementById('syncExternalorganizationsBtn');
+    const btnExternalpersons = document.getElementById('syncExternalpersonsBtn');
+    const btnFingerprints = document.getElementById('syncFingerprintsBtn');
+    const btnFundingOpportunities = document.getElementById('syncFundingOpportunitiesBtn');
+    const btnJournals = document.getElementById('syncJournalsBtn');
+    const btnPersons = document.getElementById('syncPersonsBtn');
+    const btnPressmedia = document.getElementById('syncPressmediaBtn');
+    const btnPrizes = document.getElementById('syncPrizesBtn');
+    const btnProjects = document.getElementById('syncProjectsBtn');
+    const btnPublishers = document.getElementById('syncPublishersBtn');
+    const btnResearchoutputs = document.getElementById('syncResearchoutputsBtn');
+    const btnStudenttheses = document.getElementById('syncStudentthesesBtn');
+    const status       = document.getElementById('status');
+    const progressBar  = document.getElementById('progressBar');
+    const progressFill = document.getElementById('progressFill');
+
+    const buttonStatsMap = [
+        { button: btn, collection: 'Activities' },
+        { button: btnOrg, collection: 'Organizations' },
+        { button: btnApp, collection: 'Applications' },
+        { button: btnAwards, collection: 'Awards' },
+        { button: btnAuthorcollaborations, collection: 'AuthorCollaborations' },
+        { button: btnClassificationschemes, collection: 'Classificationschemes' },
+        { button: btnConcepts, collection: 'Concepts' },
+        { button: btnCourses, collection: 'Courses' },
+        { button: btnDatasets, collection: 'Datasets' },
+        { button: btnEquipments, collection: 'Equipments' },
+        { button: btnEvents, collection: 'Events' },
+        { button: btnExternalorganizations, collection: 'ExternalOrganizations' },
+        { button: btnExternalpersons, collection: 'ExternalPersons' },
+        { button: btnFingerprints, collection: 'Fingerprints' },
+        { button: btnFundingOpportunities, collection: 'FundingOpportunities' },
+        { button: btnJournals, collection: 'Journals' },
+        { button: btnPersons, collection: 'Persons' },
+        { button: btnPressmedia, collection: 'Pressmedia' },
+        { button: btnPrizes, collection: 'Prizes' },
+        { button: btnProjects, collection: 'Projects' },
+        { button: btnPublishers, collection: 'Publishers' },
+        { button: btnResearchoutputs, collection: 'Researchoutputs' },
+        { button: btnStudenttheses, collection: 'StudentTheses' }
+    ];
+
+    function renderButtonStats(button, mongoCount, collectionCount) {
+        if (!button.dataset.baseLabel) {
+            button.dataset.baseLabel = button.textContent.trim();
+        }
+        const mongo = Number.isFinite(mongoCount) ? mongoCount : 0;
+        const collection = Number.isFinite(collectionCount) ? collectionCount : 0;
+        button.innerHTML = `${button.dataset.baseLabel}<span class="sync-btn-meta">Mongo: ${mongo} / Egreta: ${collection}</span>`;
+    }
+
+    async function loadCollectionStats() {
+        try {
+            const res = await fetch('/egreta/sync/stats');
+            if (!res.ok) {
+                return false;
+            }
+            const stats = await res.json();
+            buttonStatsMap.forEach(({ button, collection }) => {
+                const values = stats?.[collection] || {};
+                renderButtonStats(button, values.mongo, values.collection);
+            });
+            return true;
+        } catch (e) {
+            // Silent fail: los botones siguen operativos aunque no carguen estadísticas.
+            return false;
+        }
+    }
+
+    async function bootstrapPage() {
+        let statsLoaded = false;
+        while (!statsLoaded) {
+            statsLoaded = await loadCollectionStats();
+            if (!statsLoaded) {
+                await new Promise(resolve => setTimeout(resolve, 1000));
+            }
+        }
+        document.body.classList.remove('loading');
+    }
+
+    bootstrapPage();
+        btnAuthorcollaborations.onclick = async () => {
+            btnAuthorcollaborations.disabled = true;
+            setStatus('Sincronitzant Authorcollaborations...');
+            try {
+                const res = await fetch('/egreta/sync/author-collaborations', { method: 'POST' });
+                if (res.ok) {
+                    setStatus('Sincronització de Authorcollaborations iniciada correctament.');
+                    pollProgress('Authorcollaborations', () => { btnAuthorcollaborations.disabled = false; });
+                } else {
+                    setStatus('Error a l\'iniciar la Sincronització de Authorcollaborations.', 'error');
+                    btnAuthorcollaborations.disabled = false;
+                }
+            } catch (e) {
+                setStatus('Error de red.', 'error');
+                btnAuthorcollaborations.disabled = false;
+            }
+        };
+
+        btnClassificationschemes.onclick = async () => {
+            btnClassificationschemes.disabled = true;
+            setStatus('Sincronitzant Classificationschemes...');
+            try {
+                const res = await fetch('/egreta/sync/classificationschemes', { method: 'POST' });
+                if (res.ok) {
+                    setStatus('Sincronització de Classificationschemes iniciada correctament.');
+                    pollProgress('Classificationschemes', () => { btnClassificationschemes.disabled = false; });
+                } else {
+                    setStatus('Error a l\'iniciar la Sincronització de Classificationschemes.', 'error');
+                    btnClassificationschemes.disabled = false;
+                }
+            } catch (e) {
+                setStatus('Error de red.', 'error');
+                btnClassificationschemes.disabled = false;
+            }
+        };
+
+        btnConcepts.onclick = async () => {
+            btnConcepts.disabled = true;
+            setStatus('Sincronitzant Concepts...');
+            try {
+                const res = await fetch('/egreta/sync/concepts', { method: 'POST' });
+                if (res.ok) {
+                    setStatus('Sincronització de Concepts iniciada correctament.');
+                    pollProgress('Concepts', () => { btnConcepts.disabled = false; });
+                } else {
+                    setStatus('Error a l\'iniciar la Sincronització de Concepts.', 'error');
+                    btnConcepts.disabled = false;
+                }
+            } catch (e) {
+                setStatus('Error de red.', 'error');
+                btnConcepts.disabled = false;
+            }
+        };
+
+        btnCourses.onclick = async () => {
+            btnCourses.disabled = true;
+            setStatus('Sincronitzant Courses...');
+            try {
+                const res = await fetch('/egreta/sync/courses', { method: 'POST' });
+                if (res.ok) {
+                    setStatus('Sincronització de Courses iniciada correctament.');
+                    pollProgress('Courses', () => { btnCourses.disabled = false; });
+                } else {
+                    setStatus('Error a l\'iniciar la Sincronització de Courses.', 'error');
+                    btnCourses.disabled = false;
+                }
+            } catch (e) {
+                setStatus('Error de red.', 'error');
+                btnCourses.disabled = false;
+            }
+        };
+
+        btnDatasets.onclick = async () => {
+            btnDatasets.disabled = true;
+            setStatus('Sincronitzant Datasets...');
+            try {
+                const res = await fetch('/egreta/sync/datasets', { method: 'POST' });
+                if (res.ok) {
+                    setStatus('Sincronització de Datasets iniciada correctament.');
+                    pollProgress('Datasets', () => { btnDatasets.disabled = false; });
+                } else {
+                    setStatus('Error a l\'iniciar la Sincronització de Datasets.', 'error');
+                    btnDatasets.disabled = false;
+                }
+            } catch (e) {
+                setStatus('Error de red.', 'error');
+                btnDatasets.disabled = false;
+            }
+        };
+
+        btnEquipments.onclick = async () => {
+            btnEquipments.disabled = true;
+            setStatus('Sincronitzant Equipments...');
+            try {
+                const res = await fetch('/egreta/sync/equipments', { method: 'POST' });
+                if (res.ok) {
+                    setStatus('Sincronització de Equipments iniciada correctament.');
+                    pollProgress('Equipments', () => { btnEquipments.disabled = false; });
+                } else {
+                    setStatus('Error a l\'iniciar la Sincronització de Equipments.', 'error');
+                    btnEquipments.disabled = false;
+                }
+            } catch (e) {
+                setStatus('Error de red.', 'error');
+                btnEquipments.disabled = false;
+            }
+        };
+
+        btnEvents.onclick = async () => {
+            btnEvents.disabled = true;
+            setStatus('Sincronitzant Events...');
+            try {
+                const res = await fetch('/egreta/sync/events', { method: 'POST' });
+                if (res.ok) {
+                    setStatus('Sincronització de Events iniciada correctament.');
+                    pollProgress('Events', () => { btnEvents.disabled = false; });
+                } else {
+                    setStatus('Error a l\'iniciar la Sincronització de Events.', 'error');
+                    btnEvents.disabled = false;
+                }
+            } catch (e) {
+                setStatus('Error de red.', 'error');
+                btnEvents.disabled = false;
+            }
+        };
+
+        btnExternalorganizations.onclick = async () => {
+            btnExternalorganizations.disabled = true;
+            setStatus('Sincronitzant Externalorganizations...');
+            try {
+                const res = await fetch('/egreta/sync/externalorganizations', { method: 'POST' });
+                if (res.ok) {
+                    setStatus('Sincronització de Externalorganizations iniciada correctament.');
+                    pollProgress('ExternalOrganizations', () => { btnExternalorganizations.disabled = false; });
+                } else {
+                    setStatus('Error a l\'iniciar la Sincronització de Externalorganizations.', 'error');
+                    btnExternalorganizations.disabled = false;
+                }
+            } catch (e) {
+                setStatus('Error de red.', 'error');
+                btnExternalorganizations.disabled = false;
+            }
+        };
+
+        btnExternalpersons.onclick = async () => {
+            btnExternalpersons.disabled = true;
+            setStatus('Sincronitzant Externalpersons...');
+            try {
+                const res = await fetch('/egreta/sync/externalpersons', { method: 'POST' });
+                if (res.ok) {
+                    setStatus('Sincronització de Externalpersons iniciada correctament.');
+                    pollProgress('ExternalPersons', () => { btnExternalpersons.disabled = false; });
+                } else {
+                    setStatus('Error a l\'iniciar la Sincronització de Externalpersons.', 'error');
+                    btnExternalpersons.disabled = false;
+                }
+            } catch (e) {
+                setStatus('Error de red.', 'error');
+                btnExternalpersons.disabled = false;
+            }
+        };
+
+        btnFingerprints.onclick = async () => {
+            btnFingerprints.disabled = true;
+            setStatus('Sincronitzant Fingerprints...');
+            try {
+                const res = await fetch('/egreta/sync/fingerprints', { method: 'POST' });
+                if (res.ok) {
+                    setStatus('Sincronització de Fingerprints iniciada correctament.');
+                    pollProgress('Fingerprints', () => { btnFingerprints.disabled = false; });
+                } else {
+                    setStatus('Error a l\'iniciar la Sincronització de Fingerprints.', 'error');
+                    btnFingerprints.disabled = false;
+                }
+            } catch (e) {
+                setStatus('Error de red.', 'error');
+                btnFingerprints.disabled = false;
+            }
+        };
+
+        btnFundingOpportunities.onclick = async () => {
+            btnFundingOpportunities.disabled = true;
+            setStatus('Sincronitzant FundingOpportunities...');
+            try {
+                const res = await fetch('/egreta/sync/FundingOpportunities', { method: 'POST' });
+                if (res.ok) {
+                    setStatus('Sincronització de FundingOpportunities iniciada correctament.');
+                    pollProgress('FundingOpportunities', () => { btnFundingOpportunities.disabled = false; });
+                } else {
+                    setStatus('Error a l\'iniciar la Sincronització de FundingOpportunities.', 'error');
+                    btnFundingOpportunities.disabled = false;
+                }
+            } catch (e) {
+                setStatus('Error de red.', 'error');
+                btnFundingOpportunities.disabled = false;
+            }
+        };
+
+        btnJournals.onclick = async () => {
+            btnJournals.disabled = true;
+            setStatus('Sincronitzant Journals...');
+            try {
+                const res = await fetch('/egreta/sync/journals', { method: 'POST' });
+                if (res.ok) {
+                    setStatus('Sincronització de Journals iniciada correctament.');
+                    pollProgress('Journals', () => { btnJournals.disabled = false; });
+                } else {
+                    setStatus('Error a l\'iniciar la Sincronització de Journals.', 'error');
+                    btnJournals.disabled = false;
+                }
+            } catch (e) {
+                setStatus('Error de red.', 'error');
+                btnJournals.disabled = false;
+            }
+        };
+
+        btnPersons.onclick = async () => {
+            btnPersons.disabled = true;
+            setStatus('Sincronitzant Persons...');
+            try {
+                const res = await fetch('/egreta/sync/persons', { method: 'POST' });
+                if (res.ok) {
+                    setStatus('Sincronització de Persons iniciada correctament.');
+                    pollProgress('Persons', () => { btnPersons.disabled = false; });
+                } else {
+                    setStatus('Error a l\'iniciar la Sincronització de Persons.', 'error');
+                    btnPersons.disabled = false;
+                }
+            } catch (e) {
+                setStatus('Error de red.', 'error');
+                btnPersons.disabled = false;
+            }
+        };
+
+        btnPressmedia.onclick = async () => {
+            btnPressmedia.disabled = true;
+            setStatus('Sincronitzant Pressmedia...');
+            try {
+                const res = await fetch('/egreta/sync/pressmedia', { method: 'POST' });
+                if (res.ok) {
+                    setStatus('Sincronització de Pressmedia iniciada correctament.');
+                    pollProgress('Pressmedia', () => { btnPressmedia.disabled = false; });
+                } else {
+                    setStatus('Error a l\'iniciar la Sincronització de Pressmedia.', 'error');
+                    btnPressmedia.disabled = false;
+                }
+            } catch (e) {
+                setStatus('Error de red.', 'error');
+                btnPressmedia.disabled = false;
+            }
+        };
+
+        btnPrizes.onclick = async () => {
+            btnPrizes.disabled = true;
+            setStatus('Sincronitzant Prizes...');
+            try {
+                const res = await fetch('/egreta/sync/prizes', { method: 'POST' });
+                if (res.ok) {
+                    setStatus('Sincronització de Prizes iniciada correctament.');
+                    pollProgress('Prizes', () => { btnPrizes.disabled = false; });
+                } else {
+                    setStatus('Error a l\'iniciar la Sincronització de Prizes.', 'error');
+                    btnPrizes.disabled = false;
+                }
+            } catch (e) {
+                setStatus('Error de red.', 'error');
+                btnPrizes.disabled = false;
+            }
+        };
+
+        btnProjects.onclick = async () => {
+            btnProjects.disabled = true;
+            setStatus('Sincronitzant Projects...');
+            try {
+                const res = await fetch('/egreta/sync/projects', { method: 'POST' });
+                if (res.ok) {
+                    setStatus('Sincronització de Projects iniciada correctament.');
+                    pollProgress('Projects', () => { btnProjects.disabled = false; });
+                } else {
+                    setStatus('Error a l\'iniciar la Sincronització de Projects.', 'error');
+                    btnProjects.disabled = false;
+                }
+            } catch (e) {
+                setStatus('Error de red.', 'error');
+                btnProjects.disabled = false;
+            }
+        };
+
+        btnPublishers.onclick = async () => {
+            btnPublishers.disabled = true;
+            setStatus('Sincronitzant Publishers...');
+            try {
+                const res = await fetch('/egreta/sync/publishers', { method: 'POST' });
+                if (res.ok) {
+                    setStatus('Sincronització de Publishers iniciada correctament.');
+                    pollProgress('Publishers', () => { btnPublishers.disabled = false; });
+                } else {
+                    setStatus('Error a l\'iniciar la Sincronització de Publishers.', 'error');
+                    btnPublishers.disabled = false;
+                }
+            } catch (e) {
+                setStatus('Error de red.', 'error');
+                btnPublishers.disabled = false;
+            }
+        };
+
+        btnResearchoutputs.onclick = async () => {
+            btnResearchoutputs.disabled = true;
+            setStatus('Sincronitzant Researchoutputs...');
+            try {
+                const res = await fetch('/egreta/sync/researchoutputs', { method: 'POST' });
+                if (res.ok) {
+                    setStatus('Sincronització de Researchoutputs iniciada correctament.');
+                    pollProgress('Researchoutputs', () => { btnResearchoutputs.disabled = false; });
+                } else {
+                    setStatus('Error a l\'iniciar la Sincronització de Researchoutputs.', 'error');
+                    btnResearchoutputs.disabled = false;
+                }
+            } catch (e) {
+                setStatus('Error de red.', 'error');
+                btnResearchoutputs.disabled = false;
+            }
+        };
+
+        btnStudenttheses.onclick = async () => {
+            btnStudenttheses.disabled = true;
+            setStatus('Sincronitzant Studenttheses...');
+            try {
+                const res = await fetch('/egreta/sync/studenttheses', { method: 'POST' });
+                if (res.ok) {
+                    setStatus('Sincronització de Studenttheses iniciada correctament.');
+                    pollProgress('StudentTheses', () => { btnStudenttheses.disabled = false; });
+                } else {
+                    setStatus('Error a l\'iniciar la Sincronització de Studenttheses.', 'error');
+                    btnStudenttheses.disabled = false;
+                }
+            } catch (e) {
+                setStatus('Error de red.', 'error');
+                btnStudenttheses.disabled = false;
+            }
+        };
+    btnAwards.onclick = async () => {
+        btnAwards.disabled = true;
+        setStatus('Sincronitzant Awards...');
+        try {
+            const res = await fetch('/egreta/sync/awards', { method: 'POST' });
+            if (res.ok) {
+                setStatus('Sincronització de Awards iniciada correctament.');
+                pollProgress('Awards', () => { btnAwards.disabled = false; });
+            } else {
+                setStatus('Error a l\'iniciar la Sincronització de Awards.', 'error');
+                btnAwards.disabled = false;
+            }
+        } catch (e) {
+            setStatus('Error de red.', 'error');
+            btnAwards.disabled = false;
+        }
+    };
+
+    function setStatus(text, type) {
+        status.textContent = text;
+        status.className = 'status' + (type ? ' ' + type : '');
+    }
+
+    function pollProgress(collection, onFinish) {
+        progressBar.style.display = 'block';
+        progressFill.style.width = '0%';
+        progressFill.style.background = '#1976d2';
+        progressFill.textContent = 'Iniciando...';
+
+        setTimeout(() => {
+            const interval = setInterval(async () => {
+                try {
+                    const res = await fetch(`/egreta/sync/progress/${collection}`);
+                    if (!res.ok) {
+                        setStatus('Error al consultar el progreso.', 'error');
+                        progressFill.style.background = '#d32f2f';
+                        progressFill.style.width = '100%';
+                        progressFill.textContent = 'Error';
+                        clearInterval(interval);
+                        setTimeout(() => {
+                            progressBar.style.display = 'none';
+                            if (onFinish) onFinish();
+                        }, 5000);
+                        return;
+                    }
+                    const data = await res.json();
+
+                    if (data && data.error) {
+                        progressFill.style.background = '#d32f2f';
+                        progressFill.style.width = '100%';
+                        progressFill.textContent = 'Error';
+                        setStatus(data.error, 'error');
+                        clearInterval(interval);
+                        setTimeout(() => {
+                            progressBar.style.display = 'none';
+                            if (onFinish) onFinish();
+                        }, 5000);
+                        return;
+                    }
+
+                    if (data && data.total > 0) {
+                        if (data.completed) {
+                            // Completado: barra en verde al 100%
+                            progressFill.style.background = '#388e3c';
+                            progressFill.style.width = '100%';
+                            progressFill.textContent = `100% (${data.total}/${data.total})`;
+                            setStatus(`Sincronització completada (${data.total} registros).`, 'ok');
+                            clearInterval(interval);
+                            setTimeout(() => {
+                                progressBar.style.display = 'none';
+                                loadCollectionStats();
+                                if (onFinish) onFinish();
+                            }, 2000);
+                        } else {
+                            // En progreso: máximo 99% hasta confirmar completed
+                            const percent = Math.min(99, Math.round(100 * data.current / data.total));
+                            progressFill.style.width = percent + '%';
+                            progressFill.textContent = `${percent}% (${data.current}/${data.total})`;
+                        }
+                    }
+                } catch (e) {
+                    setStatus('Error de red o de formato en la respuesta.', 'error');
+                    progressFill.style.background = '#d32f2f';
+                    progressFill.style.width = '100%';
+                    progressFill.textContent = 'Error';
+                    clearInterval(interval);
+                    setTimeout(() => {
+                        progressBar.style.display = 'none';
+                        if (onFinish) onFinish();
+                    }, 5000);
+                }
+            }, 1000);
+        }, 500);
+    }
+
+    btn.onclick = async () => {
+        btn.disabled = true;
+        setStatus('Sincronitzant Activities...');
+        try {
+            const res = await fetch('/egreta/sync/activities', { method: 'POST' });
+            if (res.ok) {
+                setStatus('Sincronització de Activities iniciada correctament.');
+                pollProgress('Activities', () => { btn.disabled = false; });
+            } else {
+                setStatus('Error a l\'iniciar la Sincronització de Activities.', 'error');
+                btn.disabled = false;
+            }
+        } catch (e) {
+            setStatus('Error de red.', 'error');
+            btn.disabled = false;
+        }
+    };
+
+    btnOrg.onclick = async () => {
+        btnOrg.disabled = true;
+        setStatus('Sincronitzant Organizations...');
+        try {
+            const res = await fetch('/egreta/sync/organizations', { method: 'POST' });
+            if (res.ok) {
+                setStatus('Sincronització de Organizations iniciada correctament.');
+                pollProgress('Organizations', () => { btnOrg.disabled = false; });
+            } else {
+                setStatus('Error a l\'iniciar la Sincronització de Organizations.', 'error');
+                btnOrg.disabled = false;
+            }
+        } catch (e) {
+            setStatus('Error de red.', 'error');
+            btnOrg.disabled = false;
+        }
+    };
+
+    btnApp.onclick = async () => {
+        btnApp.disabled = true;
+        setStatus('Sincronitzant Applications...');
+        try {
+            const res = await fetch('/egreta/sync/applications', { method: 'POST' });
+            if (res.ok) {
+                setStatus('Sincronització de Applications iniciada correctament.');
+                pollProgress('Applications', () => { btnApp.disabled = false; });
+            } else {
+                setStatus('Error a l\'iniciar la Sincronització de Applications.', 'error');
+                btnApp.disabled = false;
+            }
+        } catch (e) {
+            setStatus('Error de red.', 'error');
+            btnApp.disabled = false;
+        }
+    };
+</script>
+</body>
+</html>
