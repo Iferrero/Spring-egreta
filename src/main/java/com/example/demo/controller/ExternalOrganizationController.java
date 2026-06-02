@@ -26,6 +26,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.RestController;
 import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -51,6 +52,11 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.RejectedExecutionHandler;
 import java.util.UUID;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -89,6 +95,7 @@ public class ExternalOrganizationController {
     private final MongoTemplate mongoTemplate;
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
+    private final ExecutorService asyncExecutor;
 
     // Nombre de colección resuelto una sola vez al arrancar (mejora #9)
     private String externalOrganizationCollection;
@@ -146,6 +153,22 @@ public class ExternalOrganizationController {
         this.mongoTemplate = mongoTemplate;
         this.objectMapper = new ObjectMapper();
         this.httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
+        ThreadFactory tf = r -> {
+            Thread t = new Thread(r);
+            t.setName("ext-org-async-" + t.threadId());
+            t.setDaemon(true);
+            return t;
+        };
+        RejectedExecutionHandler rejectionPolicy = new ThreadPoolExecutor.CallerRunsPolicy();
+        this.asyncExecutor = new ThreadPoolExecutor(
+            2,
+            4,
+            60L,
+            TimeUnit.SECONDS,
+            new LinkedBlockingQueue<>(200),
+            tf,
+            rejectionPolicy
+        );
     }
 
     // Mejora #9: resolver la colección una sola vez al arrancar el contexto Spring
@@ -160,6 +183,11 @@ public class ExternalOrganizationController {
             }
         }
         externalOrganizationCollection = "ExternalOrganizations";
+    }
+
+    @PreDestroy
+    private void shutdownAsyncExecutor() {
+        asyncExecutor.shutdown();
     }
 
     // -------------------------------------------------------------------------
@@ -1249,9 +1277,8 @@ public class ExternalOrganizationController {
             return cached.payload();
         }
 
-        List<ExternalOrganization> allOrgs = repository.findAll();
-        int totalAvailableOrgs = allOrgs.size();
-        List<ExternalOrganization> orgs = allOrgs.stream().limit(limit).toList();
+        int totalAvailableOrgs = (int) repository.count();
+        List<ExternalOrganization> orgs = findOrganizationsLimited(limit);
 
         List<OrgSimilarityProfile> profiles = buildSimilarityProfiles(orgs);
         List<Map<String, Object>> nodes = profiles.stream()
@@ -1321,9 +1348,8 @@ public class ExternalOrganizationController {
             return cached.payload();
         }
 
-        List<ExternalOrganization> allOrgs = repository.findAll();
-        int totalAvailableOrgs = allOrgs.size();
-        List<ExternalOrganization> orgs = allOrgs.stream().limit(limit).toList();
+        int totalAvailableOrgs = (int) repository.count();
+        List<ExternalOrganization> orgs = findOrganizationsLimited(limit);
         List<OrgSimilarityProfile> profiles = buildSimilarityProfiles(orgs);
 
         SimilarityPairResult pairResult = buildSimilarityPairs(profiles, threshold, maxPairs);
@@ -1378,7 +1404,7 @@ public class ExternalOrganizationController {
                 state.message = "Error en el càlcul";
                 state.status = "error";
             }
-        });
+        }, asyncExecutor);
 
         return Map.of(
             "jobId", jobId,
@@ -1442,9 +1468,8 @@ public class ExternalOrganizationController {
         state.progress = 4;
         state.message = "Llegint organitzacions";
 
-        List<ExternalOrganization> allOrgs = repository.findAll();
-        int totalAvailableOrgs = allOrgs.size();
-        List<ExternalOrganization> orgs = allOrgs.stream().limit(limit).toList();
+        int totalAvailableOrgs = (int) repository.count();
+        List<ExternalOrganization> orgs = findOrganizationsLimited(limit);
 
         state.progress = 10;
         state.message = "Preparant noms";
@@ -1505,7 +1530,7 @@ public class ExternalOrganizationController {
             this.createdAt = createdAt;
         }
     }
-    private record OrgSimilarityProfile(String id, String displayName, Long pureId, String normalizedName, String[] tokens, String typeLabel, String countryLabel) {}
+    private record OrgSimilarityProfile(String id, String displayName, Long pureId, String normalizedName, String[] tokens, String typeLabel, String countryLabel, String workflowStep) {}
 
     private List<OrgSimilarityProfile> buildSimilarityProfiles(List<ExternalOrganization> orgs) {
         List<OrgSimilarityProfile> profiles = new ArrayList<>(orgs.size());
@@ -1529,10 +1554,16 @@ public class ExternalOrganizationController {
                 normalized,
                 tokens,
                 getOrgTypeLabel(org),
-                getOrgCountryLabel(org)
+                getOrgCountryLabel(org),
+                (org.getWorkflow() == null ? null : org.getWorkflow().getStep())
             ));
         }
         return profiles;
+    }
+
+    private List<ExternalOrganization> findOrganizationsLimited(int limit) {
+        Query query = new Query().limit(Math.max(1, limit));
+        return mongoTemplate.find(query, ExternalOrganization.class);
     }
 
     private SimilarityPairResult buildSimilarityPairs(List<OrgSimilarityProfile> profiles, double threshold, int maxPairs) {
@@ -1549,17 +1580,6 @@ public class ExternalOrganizationController {
         long totalComparisons = ((long) n * (n - 1)) / 2;
         long processedComparisons = 0;
         long progressTick = Math.max(1, totalComparisons / 120);
-
-
-        // Crear un Map de uuid a organización para lookup rápido
-        Map<String, ExternalOrganization> orgMap = new HashMap<>();
-        // Usar solo las organizaciones realmente procesadas (las de 'orgs')
-        // Se asume que los ids de los perfiles corresponden a los de orgs
-        for (ExternalOrganization org : repository.findAll()) {
-            if (org.getUuid() != null) orgMap.put(org.getUuid(), org);
-            else if (org.getId() != null) orgMap.put(org.getId(), org);
-        }
-
         for (int i = 0; i < profiles.size(); i++) {
             for (int j = i + 1; j < profiles.size(); j++) {
                 processedComparisons++;
@@ -1590,13 +1610,8 @@ public class ExternalOrganizationController {
                     continue;
                 }
 
-                // Obtener workflow.step para ambos lados usando el Map
-                String leftWorkflow = null;
-                String rightWorkflow = null;
-                ExternalOrganization org1 = orgMap.get(id1);
-                ExternalOrganization org2 = orgMap.get(id2);
-                if (org1 != null && org1.getWorkflow() != null) leftWorkflow = org1.getWorkflow().getStep();
-                if (org2 != null && org2.getWorkflow() != null) rightWorkflow = org2.getWorkflow().getStep();
+                String leftWorkflow = p1.workflowStep();
+                String rightWorkflow = p2.workflowStep();
 
                 pairs.add(Map.of(
                     "from", id1,
@@ -2215,7 +2230,7 @@ public class ExternalOrganizationController {
             } catch (Exception ignored) {
                 return null;
             }
-        }).orTimeout(searxngCountrySuggestTimeoutMs, TimeUnit.MILLISECONDS)
+        }, asyncExecutor).orTimeout(searxngCountrySuggestTimeoutMs, TimeUnit.MILLISECONDS)
           .exceptionally(e -> null);
     }
 
@@ -2367,7 +2382,7 @@ public class ExternalOrganizationController {
             } catch (Exception ignored) {
                 return null;
             }
-        }).orTimeout(aiCountrySuggestTimeoutMs, TimeUnit.MILLISECONDS)
+        }, asyncExecutor).orTimeout(aiCountrySuggestTimeoutMs, TimeUnit.MILLISECONDS)
           .exceptionally(e -> null);
     }
 

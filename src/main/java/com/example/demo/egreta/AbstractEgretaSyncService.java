@@ -22,12 +22,15 @@ import java.util.Map;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorCompletionService;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 public abstract class AbstractEgretaSyncService {
+
+    private record PageResult(int offset, List<Map<String, Object>> items) {}
 
     protected final Logger logger = LoggerFactory.getLogger(this.getClass());
 
@@ -49,13 +52,16 @@ public abstract class AbstractEgretaSyncService {
     protected abstract String getEndpoint();
     protected abstract String getCollectionName();
 
+    protected String getApiBaseUrl() { return baseUrl; }
+    protected String getApiKey() { return apiKey; }
+
     public String collectionName() {
         return getCollectionName();
     }
 
     // Configurables por subclase
     protected int getPageSize() { return 1000; }
-    protected int getMaxBufferSizeMB() { return 10; }
+    protected int getMaxBufferSizeMB() { return 20; }
     protected int getMaxWorkers() { return 4; }
     protected String getItemsField() { return "items"; }
     protected String getCountField() { return "count"; }
@@ -73,7 +79,7 @@ public abstract class AbstractEgretaSyncService {
     }
 
     public long getSourceCollectionCount() {
-        if (apiKey == null || apiKey.isEmpty()) {
+        if (getApiKey() == null || getApiKey().isEmpty()) {
             return 0L;
         }
         return fetchTotalCount(buildClient());
@@ -90,9 +96,18 @@ public abstract class AbstractEgretaSyncService {
     // Nombre de la colección temporal
     protected String getTmpCollectionName() { return getCollectionName() + "_tmp"; }
 
+    protected void rebuildIndexes() {
+        try {
+            mongoTemplate.getCollection(getCollectionName()).createIndex(new org.bson.Document("uuid", 1));
+            logger.info("[{}] Rebuilt base indexes", getCollectionName());
+        } catch (Exception e) {
+            throw new RuntimeException("Error rebuilding base indexes for '" + getCollectionName() + "': " + e.getMessage(), e);
+        }
+    }
+
     @Async
     public void sync() {
-        if (apiKey == null || apiKey.isEmpty()) {
+        if (getApiKey() == null || getApiKey().isEmpty()) {
             logger.error("egreta.api.key not set in properties");
             return;
         }
@@ -121,37 +136,66 @@ public abstract class AbstractEgretaSyncService {
             return;
         }
 
-        // 3. Descarga concurrente de páginas
+        // 3. Descarga concurrente con límite de páginas en vuelo para evitar picos de heap
         int pageSize = getPageSize();
-        List<Integer> offsets = new ArrayList<>();
-        for (int offset = 0; offset < total; offset += pageSize) {
-            offsets.add(offset);
-        }
-        ExecutorService executor = Executors.newFixedThreadPool(getMaxWorkers());
-        List<Future<List<Map<String, Object>>>> futures = new ArrayList<>();
-        for (int offset : offsets) {
-            futures.add(executor.submit(() -> fetchPage(client, offset, pageSize)));
+        int maxWorkers = Math.max(1, getMaxWorkers());
+        int maxInFlight = Math.max(maxWorkers, maxWorkers * 2);
+        ExecutorService executor = Executors.newFixedThreadPool(maxWorkers);
+        ExecutorCompletionService<PageResult> completionService = new ExecutorCompletionService<>(executor);
+
+        int nextOffset = 0;
+        int submitted = 0;
+        int completed = 0;
+
+        while (nextOffset < total && submitted < maxInFlight) {
+            final int offsetToSubmit = nextOffset;
+            completionService.submit(() -> new PageResult(offsetToSubmit, fetchPage(client, offsetToSubmit, pageSize)));
+            submitted++;
+            nextOffset += pageSize;
         }
 
         int totalSaved = 0;
         List<Integer> failedOffsets = new ArrayList<>();
+        String finalErrorMessage = null;
 
         try {
-            for (int i = 0; i < offsets.size(); i++) {
-                int offset = offsets.get(i);
+            while (completed < submitted) {
+                Future<PageResult> future;
                 try {
-                    List<Map<String, Object>> items = futures.get(i).get();
+                    future = completionService.take();
+                } catch (InterruptedException e) {
+                    logger.error("Interrupted while waiting for page result", e);
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+
+                completed++;
+
+                try {
+                    PageResult result = future.get();
+                    int offset = result.offset();
+                    List<Map<String, Object>> items = result.items();
+
                     if (items == null) {
                         failedOffsets.add(offset);
-                        continue;
+                    } else {
+                        saveBulkToCollection(items, tmpCollection);
+                        totalSaved += items.size();
+                        syncProgressRegistry.setProgress(getCollectionName(), total, totalSaved);
+                        logger.info("[{}] Saved {} items (offset={}, total={})", tmpCollection, items.size(), offset, totalSaved);
                     }
-                    saveBulkToCollection(items, tmpCollection);
-                    totalSaved += items.size();
-                    syncProgressRegistry.setProgress(getCollectionName(), total, totalSaved);
-                    logger.info("[{}] Saved {} items (offset={}, total={})", tmpCollection, items.size(), offset, totalSaved);
                 } catch (InterruptedException | ExecutionException e) {
-                    logger.error("Error fetching page at offset {}: {}", offset, e.getMessage(), e);
-                    failedOffsets.add(offset);
+                    logger.error("Error processing page result: {}", e.getMessage(), e);
+                    if (e instanceof InterruptedException) {
+                        Thread.currentThread().interrupt();
+                    }
+                }
+
+                if (nextOffset < total) {
+                    final int offsetToSubmit = nextOffset;
+                    completionService.submit(() -> new PageResult(offsetToSubmit, fetchPage(client, offsetToSubmit, pageSize)));
+                    submitted++;
+                    nextOffset += pageSize;
                 }
             }
             executor.shutdown();
@@ -178,7 +222,13 @@ public abstract class AbstractEgretaSyncService {
                     return;
                 }
                 // 5. Post-procesado
-                postProcess();
+                try {
+                    postProcess();
+                    rebuildIndexes();
+                } catch (Exception e) {
+                    finalErrorMessage = "Error al reconstruir índices o ejecutar el post-procesado: " + e.getMessage();
+                    logger.error("[{}] {}", getCollectionName(), finalErrorMessage, e);
+                }
             } else {
                 logger.warn("Swap cancelled due to {} failed pages. Temp collection '{}' preserved for review.",
                         failedOffsets.size(), tmpCollection);
@@ -189,7 +239,9 @@ public abstract class AbstractEgretaSyncService {
 
         } finally {
             // Comparar registros guardados con el total esperado
-            if (!failedOffsets.isEmpty() || totalSaved < total) {
+            if (finalErrorMessage != null) {
+                syncProgressRegistry.markError(getCollectionName(), finalErrorMessage);
+            } else if (!failedOffsets.isEmpty() || totalSaved < total) {
                 String errorMsg = String.format(
                         "Error: se esperaban %d registros pero solo se guardaron %d (%d páginas fallidas).",
                         total, totalSaved, failedOffsets.size());
@@ -206,13 +258,13 @@ public abstract class AbstractEgretaSyncService {
 
     // Obtiene el total de registros del endpoint
     protected int fetchTotalCount(WebClient client) {
-        String url = UriComponentsBuilder.fromUriString(baseUrl + "/" + getEndpoint())
+        String url = UriComponentsBuilder.fromUriString(getApiBaseUrl() + "/" + getEndpoint())
                 .queryParam("size", 1)
                 .toUriString();
         try {
             ResponseEntity<Map> response = client.get()
                     .uri(url)
-                    .header("api-key", apiKey)
+                .header("api-key", getApiKey())
                     .retrieve()
                     .toEntity(Map.class)
                     .block();
@@ -241,13 +293,13 @@ public abstract class AbstractEgretaSyncService {
         int maxAttempts = 5;
         for (int attempt = 1; attempt <= maxAttempts; attempt++) {
             try {
-                String url = UriComponentsBuilder.fromUriString(baseUrl + "/" + getEndpoint())
+            String url = UriComponentsBuilder.fromUriString(getApiBaseUrl() + "/" + getEndpoint())
                         .queryParam("size", pageSize)
                         .queryParam("offset", offset)
                         .toUriString();
                 ResponseEntity<Map> response = client.get()
                         .uri(url)
-                        .header("api-key", apiKey)
+                .header("api-key", getApiKey())
                         .retrieve()
                         .toEntity(Map.class)
                         .block();

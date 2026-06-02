@@ -10,6 +10,16 @@ public class AwardsSyncService extends AbstractEgretaSyncService {
     }
 
     @Override
+    protected int getPageSize() {
+        return 500;
+    }
+
+    @Override
+    protected int getMaxBufferSizeMB() {
+        return 20;
+    }
+
+    @Override
     protected String getCollectionName() {
         return "Awards";
     }
