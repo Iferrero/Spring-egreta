@@ -44,6 +44,7 @@ public class ExternalOrganization {
 
     private WorkflowStatus workflow;
 
+
     // -------------------------------------------------------------------------
     // Convenience helpers
     // -------------------------------------------------------------------------

@@ -8,4 +8,15 @@ public class FingerprintsSyncService extends AbstractEgretaSyncService {
     protected String getEndpoint() { return "fingerprints"; }
     @Override
     protected String getCollectionName() { return "Fingerprints"; }
+
+    @Override
+    protected void rebuildIndexes() {
+        super.rebuildIndexes();
+        try {
+            mongoTemplate.getCollection(getCollectionName()).createIndex(new org.bson.Document("contentFamily", 1));
+            logger.info("[Fingerprints] Rebuilt index for contentFamily");
+        } catch (Exception e) {
+            throw new RuntimeException("Error rebuilding Fingerprints index: " + e.getMessage(), e);
+        }
+    }
 }

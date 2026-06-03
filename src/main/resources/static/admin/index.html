@@ -31,10 +31,13 @@
         .container {
             background: #fff;
             padding: 2.5em 2em 2em 2em;
-            border-radius: 18px;
+            border-radius: 0;
             box-shadow: 0 6px 32px #bdbdbd44;
-            max-width: 520px;
-            margin: 48px auto;
+            width: 100%;
+            max-width: none;
+            margin: 0;
+            min-height: 100vh;
+            box-sizing: border-box;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -53,7 +56,7 @@
         }
         .sync-grid {
             display: grid;
-            grid-template-columns: 1fr 1fr;
+            grid-template-columns: repeat(4, minmax(180px, 1fr));
             gap: 0.7em 1em;
             width: 100%;
             margin-bottom: 1.5em;
@@ -127,9 +130,18 @@
             font-weight: 500;
             transition: width 0.3s, background 0.3s;
         }
+        @media (max-width: 1024px) {
+            .sync-grid {
+                grid-template-columns: repeat(3, minmax(170px, 1fr));
+            }
+        }
+        @media (max-width: 800px) {
+            .sync-grid {
+                grid-template-columns: repeat(2, minmax(150px, 1fr));
+            }
+        }
         @media (max-width: 600px) {
             .container {
-                max-width: 98vw;
                 padding: 1em 0.2em 1.5em 0.2em;
             }
             .sync-grid {
@@ -231,9 +243,25 @@
         if (!button.dataset.baseLabel) {
             button.dataset.baseLabel = button.textContent.trim();
         }
-        const mongo = Number.isFinite(mongoCount) ? mongoCount : 0;
-        const collection = Number.isFinite(collectionCount) ? collectionCount : 0;
-        button.innerHTML = `${button.dataset.baseLabel}<span class="sync-btn-meta">Mongo: ${mongo} / Egreta: ${collection}</span>`;
+        const mongo = Number.isFinite(mongoCount) ? mongoCount : null;
+        const collection = Number.isFinite(collectionCount) ? collectionCount : null;
+        const hasValidCounts = mongo !== null && collection !== null;
+        const matches = hasValidCounts && mongo === collection;
+
+        if (!hasValidCounts) {
+            button.style.background = '#9e9e9e';
+            button.style.color = '#ffffff';
+        } else if (matches) {
+            button.style.background = '#2e7d32';
+            button.style.color = '#ffffff';
+        } else {
+            button.style.background = '#c62828';
+            button.style.color = '#ffffff';
+        }
+
+        const mongoLabel = mongo === null ? '-' : mongo;
+        const collectionLabel = collection === null ? '-' : collection;
+        button.innerHTML = `${button.dataset.baseLabel}<span class="sync-btn-meta">Mongo: ${mongoLabel} / Egreta: ${collectionLabel}</span>`;
     }
 
     async function loadCollectionStats() {
@@ -254,6 +282,17 @@
         }
     }
 
+    async function refreshCollectionStatsWithRetry(maxAttempts = 5, waitMs = 1000) {
+        for (let attempt = 0; attempt < maxAttempts; attempt++) {
+            const loaded = await loadCollectionStats();
+            if (loaded) {
+                return true;
+            }
+            await new Promise(resolve => setTimeout(resolve, waitMs));
+        }
+        return false;
+    }
+
     async function bootstrapPage() {
         let statsLoaded = false;
         while (!statsLoaded) {
@@ -270,7 +309,7 @@
             btnAuthorcollaborations.disabled = true;
             setStatus('Sincronitzant Authorcollaborations...');
             try {
-                const res = await fetch('/egreta/sync/author-collaborations', { method: 'POST' });
+                const res = await fetch('/egreta/sync/authorcollaborations', { method: 'POST' });
                 if (res.ok) {
                     setStatus('Sincronització de Authorcollaborations iniciada correctament.');
                     pollProgress('Authorcollaborations', () => { btnAuthorcollaborations.disabled = false; });
@@ -675,9 +714,9 @@
                             progressFill.textContent = `100% (${data.total}/${data.total})`;
                             setStatus(`Sincronització completada (${data.total} registros).`, 'ok');
                             clearInterval(interval);
-                            setTimeout(() => {
+                            setTimeout(async () => {
                                 progressBar.style.display = 'none';
-                                loadCollectionStats();
+                                await refreshCollectionStatsWithRetry(6, 1000);
                                 if (onFinish) onFinish();
                             }, 2000);
                         } else {

@@ -9,6 +9,58 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="uab-theme.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .ai-tooltip {
+            position: relative;
+            cursor: help;
+        }
+
+        .ai-tooltip::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            left: 50%;
+            bottom: calc(100% + 10px);
+            transform: translateX(-50%) translateY(6px);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 120ms ease, transform 120ms ease;
+            z-index: 40;
+            width: max-content;
+            max-width: 320px;
+            padding: 8px 10px;
+            border-radius: 10px;
+            background: #0f172a;
+            color: #f8fafc;
+            font-size: 11px;
+            font-weight: 600;
+            line-height: 1.35;
+            white-space: pre-line;
+            box-shadow: 0 10px 30px rgba(15, 23, 42, 0.25);
+        }
+
+        .ai-tooltip::before {
+            content: "";
+            position: absolute;
+            left: 50%;
+            bottom: calc(100% + 4px);
+            transform: translateX(-50%) translateY(6px);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 120ms ease, transform 120ms ease;
+            z-index: 41;
+            border-width: 6px;
+            border-style: solid;
+            border-color: #0f172a transparent transparent transparent;
+        }
+
+        .ai-tooltip:hover::after,
+        .ai-tooltip:hover::before,
+        .ai-tooltip:focus-visible::after,
+        .ai-tooltip:focus-visible::before {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+    </style>
 </head>
 <body class="bg-slate-50 min-h-screen">
 <div class="mx-auto max-w-7xl px-4 py-10">
@@ -57,6 +109,8 @@
                     <th class="px-6 py-3 font-bold">Nom</th>
                     <th class="px-6 py-3 font-bold">Tipus</th>
                     <th class="px-10 py-3 font-bold">Tipus suggerit</th>
+                    <th class="px-6 py-3 font-bold">Financiacio</th>
+                    <th class="px-6 py-3 font-bold">Financiacio suggerida</th>
                     <th class="px-4 py-3 font-bold">Pais</th>
                     <th class="px-6 py-3 font-bold">Pais suggerit</th>
                     <th class="px-6 py-3 font-bold">Workflow</th>
@@ -105,6 +159,7 @@ const pageSize = 20;
 let debounceTimer = null;
 const countrySuggestionCache = new Map();
 const typeSuggestionCache = new Map();
+const fundingSuggestionCache = new Map();
 const suggestionBundleCache = new Map();
 let typeCatalogOptions = null;
 const EGRETA_EXTERNAL_ORG_BASE =
@@ -156,6 +211,19 @@ function getOrgCountryLabel(org) {
     return org.countryName || (org.address && org.address.country && org.address.country.term && (org.address.country.term.ca_ES || org.address.country.term.es_ES || org.address.country.term.en_GB)) || '';
 }
 
+function getOrgFundingLabel(org) {
+    const groups = (org && Array.isArray(org.keywordGroups)) ? org.keywordGroups : [];
+    for (const g of groups) {
+        const logicalName = String((g && g.logicalName) || '').trim();
+        if (logicalName !== '/uab/externalorganisations/caracter') continue;
+        const classifications = (g && Array.isArray(g.classifications)) ? g.classifications : [];
+        if (!classifications.length) return '';
+        const term = classifications[0] && classifications[0].term;
+        return (term && (term.ca_ES || term.es_ES || term.en_GB)) || '';
+    }
+    return '';
+}
+
 function getOrgEgretaUrl(org) {
     const pureId = org && org.pureId != null ? String(org.pureId).trim() : '';
     if (!pureId) return '';
@@ -196,7 +264,8 @@ async function fetchSuggestionBundle(org) {
     if (!key) {
         return {
             country: { country: '', uri: '', confidence: 0, reason: '' },
-            type: { type: '', confidence: 0, reason: '' }
+            type: { type: '', confidence: 0, reason: '' },
+            funding: { funding: '', confidence: 0, reason: '' }
         };
     }
     if (suggestionBundleCache.has(key)) return suggestionBundleCache.get(key);
@@ -205,17 +274,20 @@ async function fetchSuggestionBundle(org) {
     if (!orgName) {
         const emptyBundle = {
             country: { country: '', uri: '', confidence: 0, reason: 'empty-name' },
-            type: { type: '', confidence: 0, reason: 'empty-name' }
+            type: { type: '', confidence: 0, reason: 'empty-name' },
+            funding: { funding: '', confidence: 0, reason: 'empty-name' }
         };
         suggestionBundleCache.set(key, emptyBundle);
         countrySuggestionCache.set(key, emptyBundle.country);
         typeSuggestionCache.set(key, emptyBundle.type);
+        fundingSuggestionCache.set(key, emptyBundle.funding);
         return emptyBundle;
     }
 
     let bundle = {
         country: { country: '', uri: '', confidence: 0, reason: '' },
-        type: { type: '', confidence: 0, reason: '' }
+        type: { type: '', confidence: 0, reason: '' },
+        funding: { funding: '', confidence: 0, reason: '' }
     };
     try {
         const res = await apiFetch('/external-organizations/stats/suggest-metadata?name=' + encodeURIComponent(orgName));
@@ -232,6 +304,12 @@ async function fetchSuggestionBundle(org) {
                     type: String((data && data.suggestedType) || '').trim(),
                     confidence: Number((data && data.typeConfidence) || 0),
                     reason: String((data && data.typeReason) || '').trim()
+                },
+                funding: {
+                    funding: String((data && data.suggestedFunding) || '').trim(),
+                    uri: String((data && data.suggestedFundingUri) || '').trim(),
+                    confidence: Number((data && data.fundingConfidence) || 0),
+                    reason: String((data && data.fundingReason) || '').trim()
                 }
             };
         }
@@ -240,14 +318,12 @@ async function fetchSuggestionBundle(org) {
     suggestionBundleCache.set(key, bundle);
     countrySuggestionCache.set(key, bundle.country);
     typeSuggestionCache.set(key, bundle.type);
+    fundingSuggestionCache.set(key, bundle.funding);
     return bundle;
 }
 
 async function preloadSuggestionsForPage(rows) {
-    const targets = (rows || []).filter(org => {
-        const typeLabel = getOrgTypeLabel(org);
-        return !hasCountry(org) || !typeLabel || isUnknownTypeLabel(typeLabel);
-    });
+    const targets = (rows || []);
     if (!targets.length) return;
 
     // Separar los que ya están en caché
@@ -284,11 +360,18 @@ async function preloadSuggestionsForPage(rows) {
                     type: String(item.suggestedType || '').trim(),
                     confidence: Number(item.typeConfidence || 0),
                     reason: String(item.typeReason || '').trim()
+                },
+                funding: {
+                    funding: String(item.suggestedFunding || '').trim(),
+                    uri: String(item.suggestedFundingUri || '').trim(),
+                    confidence: Number(item.fundingConfidence || 0),
+                    reason: String(item.fundingReason || '').trim()
                 }
             };
             suggestionBundleCache.set(key, bundle);
             countrySuggestionCache.set(key, bundle.country);
             typeSuggestionCache.set(key, bundle.type);
+            fundingSuggestionCache.set(key, bundle.funding);
         }
     } catch (_) {
         // Fallback silencioso — las celdas quedarán vacías
@@ -302,7 +385,7 @@ async function preloadCountrySuggestions(rows) {
 async function preloadTypeSuggestions(rows) {
     // Ya cubierto por preloadSuggestionsForPage, no hace nada extra
 }
-function buildConfidenceChip(label, confidence, reason) {
+function buildConfidenceChip(label, confidence, reason, metricLabel) {
     const safeLabel = String(label || '').trim();
     if (!safeLabel) return '<span class="text-slate-400">—</span>';
 
@@ -317,7 +400,10 @@ function buildConfidenceChip(label, confidence, reason) {
         pctClasses = 'text-amber-500';
     }
 
-    return '<span class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-semibold ' + chipClasses + '" title="Confianca: ' + esc(String(confidencePct)) + '% | senyal: ' + esc(reason || 'n/a') + '">' + esc(safeLabel) + '<span class="text-[10px] ' + pctClasses + '">' + esc(String(confidencePct)) + '%</span></span>';
+    const safeReason = String(reason || '').trim() || 'n/a';
+    const tooltip = 'Motiu IA: ' + safeReason;
+
+    return '<span tabindex="0" class="ai-tooltip inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-semibold ' + chipClasses + '" data-tooltip="' + esc(tooltip) + '" title="' + esc(tooltip) + '">' + esc(safeLabel) + '<span class="text-[10px] ' + pctClasses + '">' + esc(String(confidencePct)) + '%</span></span>';
 }
 
 async function ensureTypeCatalogOptions() {
@@ -427,7 +513,13 @@ function markRowUpdated(rowEl, kind, payload, result, buttonEl) {
 
     if (kind === 'country') {
         const appliedCountry = String((result && result.appliedCountry) || payload.suggestedCountry || '').trim() || '—';
-        if (cells[3]) cells[3].textContent = appliedCountry;
+        if (cells[5]) cells[5].textContent = appliedCountry;
+        if (cells[6]) cells[6].innerHTML = updatedChip;
+    }
+
+    if (kind === 'funding') {
+        const appliedFunding = String((result && result.appliedFunding) || payload.suggestedFunding || '').trim() || '—';
+        if (cells[3]) cells[3].textContent = appliedFunding;
         if (cells[4]) cells[4].innerHTML = updatedChip;
     }
 
@@ -489,7 +581,7 @@ async function loadKpis() {
 function renderTable(rows) {
     const body = document.getElementById('tableBody');
     if (!rows || rows.length === 0) {
-        body.innerHTML = '<tr><td colspan="7" class="px-6 py-10 text-center text-slate-400 italic">No hi ha registres per aquest KPI.</td></tr>';
+        body.innerHTML = '<tr><td colspan="9" class="px-6 py-10 text-center text-slate-400 italic">No hi ha registres per aquest KPI.</td></tr>';
         return;
     }
 
@@ -519,9 +611,20 @@ function renderTable(rows) {
         const cachedCountrySuggestion = countrySuggestionCache.get(getOrgSuggestionKey(org)) || { country: '', uri: '', confidence: 0, reason: '' };
         const suggestedCountryRaw = !countryRaw ? cachedCountrySuggestion.country : '';
         const suggestedCountryUri = !countryRaw ? String(cachedCountrySuggestion.uri || '').trim() : '';
-        const suggestedCountryChip = buildConfidenceChip(suggestedCountryRaw, cachedCountrySuggestion.confidence, cachedCountrySuggestion.reason);
+        const suggestedCountryChip = buildConfidenceChip(suggestedCountryRaw, cachedCountrySuggestion.confidence, cachedCountrySuggestion.reason, 'pais');
         const applyCountryBtn = !countryRaw ? buildApplySuggestionButton('country', org.uuid, suggestedCountryRaw, suggestedCountryUri) : '';
         const suggestedCountryCell = (suggestedCountryChip + (applyCountryBtn ? '<div class="mt-2">' + applyCountryBtn + '</div>' : ''));
+
+        const persistedFundingRaw = String(getOrgFundingLabel(org) || '').trim();
+        const funding = esc(persistedFundingRaw || '—');
+        const cachedFundingSuggestion = fundingSuggestionCache.get(getOrgSuggestionKey(org)) || { funding: '', uri: '', confidence: 0, reason: '' };
+        const fundingChip = !persistedFundingRaw
+            ? buildConfidenceChip(cachedFundingSuggestion.funding, cachedFundingSuggestion.confidence, cachedFundingSuggestion.reason, 'financiacion')
+            : '<span class="text-slate-400">—</span>';
+        const applyFundingBtn = (!persistedFundingRaw && cachedFundingSuggestion.funding)
+            ? buildApplySuggestionButton('funding', org.uuid, cachedFundingSuggestion.funding, cachedFundingSuggestion.uri)
+            : '';
+        const suggestedFundingCell = (fundingChip + (applyFundingBtn ? '<div class="mt-2">' + applyFundingBtn + '</div>' : ''));
 
         const uuid = org.uuid ? '<span class="font-mono text-xs text-slate-400">' + esc(org.uuid) + '</span>' : '—';
         const wf = workflowBadge(org.workflow && org.workflow.step);
@@ -530,6 +633,8 @@ function renderTable(rows) {
             <td class="px-6 py-3 font-semibold text-slate-800">${name}</td>
             <td class="px-6 py-3 text-slate-600">${type}</td>
             <td class="px-6 py-3 text-slate-600">${suggestedTypeCell}</td>
+            <td class="px-6 py-3 text-slate-600">${funding}</td>
+            <td class="px-6 py-3 text-slate-600">${suggestedFundingCell}</td>
             <td class="px-6 py-3 text-slate-600">${country}</td>
             <td class="px-6 py-3 text-slate-600">${suggestedCountryCell}</td>
             <td class="px-6 py-3">${wf}</td>
@@ -562,11 +667,19 @@ async function applySuggestedValue(kind, uuid, suggested, buttonEl) {
             showToast('No hi ha pais suggerit per aplicar.', 'error');
             return;
         }
+    } else if (kind === 'funding') {
+        endpoint = '/external-organizations/stats/apply-suggested-funding';
+        payload.suggestedFundingUri = String(buttonEl && buttonEl.getAttribute('data-suggested-uri') || '').trim();
+        payload.suggestedFunding = String(suggested || '').trim();
+        if (!payload.suggestedFundingUri && !payload.suggestedFunding) {
+            showToast('No hi ha financiacio suggerida per aplicar.', 'error');
+            return;
+        }
     } else {
         return;
     }
 
-    if (!payload.uuid || (!payload.suggestedTypeUri && !payload.suggestedCountryUri && !payload.suggestedCountry)) return;
+    if (!payload.uuid || (!payload.suggestedTypeUri && !payload.suggestedCountryUri && !payload.suggestedCountry && !payload.suggestedFundingUri && !payload.suggestedFunding)) return;
 
     const originalHtml = buttonEl ? buttonEl.innerHTML : '';
     if (buttonEl) {
@@ -589,6 +702,7 @@ async function applySuggestedValue(kind, uuid, suggested, buttonEl) {
         const key = 'uuid:' + payload.uuid;
         countrySuggestionCache.delete(key);
         typeSuggestionCache.delete(key);
+        fundingSuggestionCache.delete(key);
         suggestionBundleCache.delete(key);
 
         const rowEl = buttonEl ? buttonEl.closest('tr') : null;
@@ -629,7 +743,7 @@ async function loadTable() {
     if (search) params.set('buscar', search);
 
     const body = document.getElementById('tableBody');
-    body.innerHTML = '<tr><td colspan="7" class="px-6 py-10 text-center text-slate-400 italic">Carregant...</td></tr>';
+    body.innerHTML = '<tr><td colspan="9" class="px-6 py-10 text-center text-slate-400 italic">Carregant...</td></tr>';
 
     try {
         await ensureTypeCatalogOptions();
@@ -643,7 +757,7 @@ async function loadTable() {
         renderTable(data.content || []);
         updatePager(data);
     } catch (e) {
-        body.innerHTML = '<tr><td colspan="7" class="px-6 py-10 text-center text-rose-500">Error carregant dades: ' + esc(e.message) + '</td></tr>';
+        body.innerHTML = '<tr><td colspan="9" class="px-6 py-10 text-center text-rose-500">Error carregant dades: ' + esc(e.message) + '</td></tr>';
     }
 }
 

@@ -1,6 +1,7 @@
 
 package com.example.demo.egreta;
 
+import io.swagger.v3.oas.annotations.Hidden;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,6 +16,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/egreta")
+@Hidden
 public class EgretaSyncController {
 
     @Autowired
