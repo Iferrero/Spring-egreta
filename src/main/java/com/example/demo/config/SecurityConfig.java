@@ -25,6 +25,12 @@ public class SecurityConfig {
         // The CasBridgeFilter populates the Spring Security context from the CAS session.
         http
             .authorizeHttpRequests(auth -> auth
+                // Permitir acceso público a Swagger UI y OpenAPI docs
+                .requestMatchers(
+                    "/v3/api-docs/**",
+                    "/swagger-ui/**",
+                    "/swagger-ui.html"
+                ).permitAll()
                 .anyRequest().authenticated()
             )
             .exceptionHandling(e -> e

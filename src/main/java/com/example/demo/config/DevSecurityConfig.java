@@ -25,7 +25,14 @@ public class DevSecurityConfig {
     @Bean
     SecurityFilterChain devSecurityFilterChain(HttpSecurity http) throws Exception {
         http
-            .authorizeHttpRequests(auth -> auth.anyRequest().authenticated())
+            .authorizeHttpRequests(auth -> auth
+                // Permitir acceso público a Swagger UI y OpenAPI docs
+                .requestMatchers(
+                    "/v3/api-docs/**",
+                    "/swagger-ui/**",
+                    "/swagger-ui.html"
+                ).permitAll()
+                .anyRequest().authenticated())
             .httpBasic(Customizer.withDefaults())
             .formLogin(form -> form.disable())
             .csrf(csrf -> csrf.disable());
