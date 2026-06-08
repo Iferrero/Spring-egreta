@@ -14,6 +14,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
 
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+
 /**
  * Seguridad para desarrollo local (cas.enabled=false): Basic Auth con usuario local.
  * NO usar en producción — en prod se usa CAS vía SecurityConfig + CasConfig.
@@ -22,15 +24,21 @@ import org.springframework.security.web.SecurityFilterChain;
 @ConditionalOnProperty(name = "cas.enabled", havingValue = "false")
 public class DevSecurityConfig {
 
+    @Value("${app.api.key}")
+    private String expectedApiKey;
+
     @Bean
     SecurityFilterChain devSecurityFilterChain(HttpSecurity http) throws Exception {
         http
+            .addFilterBefore(new ApiKeyAuthenticationFilter(expectedApiKey), UsernamePasswordAuthenticationFilter.class)
             .authorizeHttpRequests(auth -> auth
-                // Permitir acceso público a Swagger UI y OpenAPI docs
+                // Permitir acceso público a Swagger UI, RapiDoc y OpenAPI docs
                 .requestMatchers(
+                    "/v3/api-docs",
                     "/v3/api-docs/**",
                     "/swagger-ui/**",
-                    "/swagger-ui.html"
+                    "/swagger-ui.html",
+                    "/rapidoc.html"
                 ).permitAll()
                 .anyRequest().authenticated())
             .httpBasic(Customizer.withDefaults())

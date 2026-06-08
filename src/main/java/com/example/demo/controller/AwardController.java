@@ -66,10 +66,11 @@ public class AwardController {
 
     @GetMapping
     public PagedModel<Award> getAwards(
-            @RequestParam(defaultValue = "0") int page) {
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
 
         return new PagedModel<>(
-                repository.findValidated(PageRequest.of(page, 10)));
+                repository.findValidated(PageRequest.of(page, size)));
     }
 
     /*
