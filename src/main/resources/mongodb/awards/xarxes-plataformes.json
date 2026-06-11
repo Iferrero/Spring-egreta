@@ -1,0 +1,25 @@
+{
+  "collection": "Awards",
+  "pipeline": [
+    {
+      "$match": {
+        "workflow.step": "validated",
+        "type.term.ca_ES": "Grups i Xarxes de Recerca externs a la UAB"
+      }
+    },
+    {
+      "$match": {
+        "$or": [
+          { "managingOrganization.uuid": "__MANAGING_UUID__" },
+          { "coManagingOrganizations.uuid": "__MANAGING_UUID__" }
+        ]
+      }
+    },
+    {
+      "$group": {
+        "_id": null,
+        "total": { "$sum": 1 }
+      }
+    }
+  ]
+}

@@ -35,6 +35,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.apache.poi.xwpf.usermodel.*;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.*;
 import org.springframework.beans.factory.annotation.Autowired;
+import java.text.Normalizer;
 
 @RestController
 @RequestMapping("/api/awards")
@@ -114,6 +115,25 @@ public class AwardController {
 
         return service.getPowerTable(desde, hasta, modoAnio, collaboratorUuid);
     }
+
+    @GetMapping("/stats/map-convenis")
+    public List<Document> getMapConvenis(
+            @RequestParam(required = false) Integer desde,
+            @RequestParam(required = false) Integer hasta,
+            @RequestParam(required = false) String collaboratorUuid) {
+
+        return service.getMapConvenis(desde, hasta, collaboratorUuid);
+    }
+
+    @GetMapping("/stats/xarxes-plataformes")
+    public int getXarxesPlataformesCount(
+            @RequestParam(required = false) Integer desde,
+            @RequestParam(required = false) Integer hasta,
+            @RequestParam(required = false) String collaboratorUuid) {
+
+        return service.getXarxesPlataformesCount(desde, hasta, collaboratorUuid);
+    }
+
 
     @GetMapping("/stats/llista-ajuts-institut")
     public List<Document> getLlistaAjutsInstitut(
@@ -1571,5 +1591,360 @@ public class AwardController {
             cur = d.get(key);
         }
         return cur instanceof String s ? s : null;
+    }
+
+    @GetMapping("/stats/scholarships")
+    public Map<String, Object> getScholarshipStats(
+            @RequestParam(required = false) String nature,
+            @RequestParam(required = false) String role,
+            @RequestParam(defaultValue = "false") boolean excludeResigned) {
+
+        List<String> availableTypes = mongoTemplate.getCollection("Awards")
+                .distinct("type.term.ca_ES", new Document("workflow.step", "validated"), String.class)
+                .into(new ArrayList<>())
+                .stream()
+                .filter(t -> t != null && (t.contains("Beques") || t.contains("Becas") || t.contains("Fellowship")))
+                .collect(java.util.stream.Collectors.toList());
+
+        if (availableTypes.isEmpty()) {
+            availableTypes = Arrays.asList("Beques", "Beques Internacionals");
+        }
+
+        List<String> availableNatures = mongoTemplate.getCollection("Awards")
+                .distinct("natureTypes.term.ca_ES", new Document("workflow.step", "validated")
+                        .append("type.term.ca_ES", new Document("$in", availableTypes)), String.class)
+                .into(new ArrayList<>())
+                .stream()
+                .filter(java.util.Objects::nonNull)
+                .sorted()
+                .collect(java.util.stream.Collectors.toList());
+
+        List<Document> pipeline = new ArrayList<>();
+
+        Document matchStage = new Document("workflow.step", "validated")
+                .append("type.term.ca_ES", new Document("$in", availableTypes));
+
+        if (nature != null && !nature.isBlank() && !"all".equalsIgnoreCase(nature)) {
+            matchStage.append("natureTypes.term.ca_ES", nature);
+        }
+        pipeline.add(new Document("$match", matchStage));
+
+        pipeline.add(new Document("$addFields", new Document("awardDateReal",
+                new Document("$convert", new Document()
+                        .append("input", "$awardDate")
+                        .append("to", "date")
+                        .append("onError", null)
+                        .append("onNull", null)))));
+
+        pipeline.add(new Document("$addFields", new Document("startDateReal",
+                new Document("$convert", new Document()
+                        .append("input", "$actualPeriod.startDate")
+                        .append("to", "date")
+                        .append("onError", null)
+                        .append("onNull", null)))));
+
+        pipeline.add(new Document("$addFields", new Document("anyo",
+                new Document("$cond", Arrays.asList(
+                        new Document("$ne", Arrays.asList("$awardDateReal", null)),
+                        new Document("$year", "$awardDateReal"),
+                        new Document("$cond", Arrays.asList(
+                                new Document("$ne", Arrays.asList("$startDateReal", null)),
+                                new Document("$year", "$startDateReal"),
+                                null
+                        ))
+                )))));
+
+        pipeline.add(new Document("$unwind", "$awardHolders"));
+
+        pipeline.add(new Document("$lookup", new Document()
+                .append("from", "Persons")
+                .append("localField", "awardHolders.person.uuid")
+                .append("foreignField", "uuid")
+                .append("as", "holderPerson")));
+
+        pipeline.add(new Document("$unwind", new Document()
+                .append("path", "$holderPerson")
+                .append("preserveNullAndEmptyArrays", true)));
+
+        pipeline.add(new Document("$project", new Document()
+                .append("_id", 0)
+                .append("uuid", "$uuid")
+                .append("anyo", "$anyo")
+                .append("personUuid", "$holderPerson.uuid")
+                .append("gender", "$holderPerson.gender")
+                .append("sex", "$holderPerson.sex")
+                .append("roleUri", "$awardHolders.role.uri")
+                .append("roleCa", "$awardHolders.role.term.ca_ES")
+                .append("roleEs", "$awardHolders.role.term.es_ES")
+                .append("statusDiscriminator", "$status.typeDiscriminator")));
+
+        List<Document> docs = mongoTemplate.getCollection("Awards")
+                .aggregate(pipeline)
+                .into(new ArrayList<>());
+
+        Map<Integer, Set<String>> evolutionMap = new TreeMap<>();
+        Map<String, Set<String>> genderMap = new LinkedHashMap<>();
+        genderMap.put("Femení", new HashSet<>());
+        genderMap.put("Masculí", new HashSet<>());
+
+        Map<Integer, Map<String, Set<String>>> genderEvolutionMap = new TreeMap<>();
+
+        for (Document d : docs) {
+            Integer anyo = d.getInteger("anyo");
+            if (anyo == null || anyo < 2000 || anyo > 2100) {
+                continue;
+            }
+
+            String awardUuid = d.getString("uuid");
+            if (awardUuid == null || awardUuid.isBlank()) {
+                continue;
+            }
+
+            // Filtrem les renúncies si està habilitat (només descartem DeclinedAwardStatus)
+            String status = d.getString("statusDiscriminator");
+            if (excludeResigned && "DeclinedAwardStatus".equals(status)) {
+                continue;
+            }
+
+            // El gràfic d'evolució compta els awards únics de la natura corresponent,
+            // independentment de quin rol tinguin els titulars associats.
+            evolutionMap.computeIfAbsent(anyo, k -> new HashSet<>()).add(awardUuid);
+
+            String personUuid = d.getString("personUuid");
+            if (personUuid == null || personUuid.isBlank()) {
+                continue;
+            }
+
+            String roleUri = d.getString("roleUri");
+            String roleCa = d.getString("roleCa");
+            String roleEs = d.getString("roleEs");
+
+            boolean matchesRole = false;
+            if (role == null || role.isBlank()) {
+                matchesRole = true;
+            } else if ("beneficiari".equalsIgnoreCase(role)) {
+                matchesRole = isBeneficiaryRole(roleUri, roleCa, roleEs);
+            } else if ("investigador".equalsIgnoreCase(role)) {
+                matchesRole = isInvestigatorRole(roleUri, roleCa, roleEs);
+            }
+
+            if (!matchesRole) {
+                continue;
+            }
+
+            String rawGender = extractGender(d);
+            String classified = classifyGender(rawGender);
+            if (!"female".equals(classified) && !"male".equals(classified)) {
+                continue;
+            }
+
+            String displayGender = "female".equals(classified) ? "Femení" : "Masculí";
+
+            genderMap.computeIfAbsent(displayGender, k -> new HashSet<>()).add(awardUuid);
+
+            Map<String, Set<String>> yearlyGender = genderEvolutionMap.computeIfAbsent(anyo, k -> {
+                Map<String, Set<String>> m = new LinkedHashMap<>();
+                m.put("Femení", new HashSet<>());
+                m.put("Masculí", new HashSet<>());
+                return m;
+            });
+            yearlyGender.computeIfAbsent(displayGender, k -> new HashSet<>()).add(awardUuid);
+        }
+
+        List<Map<String, Object>> evolutionList = new ArrayList<>();
+        evolutionMap.forEach((year, pSet) -> {
+            Map<String, Object> point = new LinkedHashMap<>();
+            point.put("year", year);
+            point.put("count", (long) pSet.size());
+            evolutionList.add(point);
+        });
+
+        List<Map<String, Object>> genderList = new ArrayList<>();
+        genderMap.forEach((g, pSet) -> {
+            Map<String, Object> point = new LinkedHashMap<>();
+            point.put("gender", g);
+            point.put("count", (long) pSet.size());
+            genderList.add(point);
+        });
+
+        List<Map<String, Object>> genderEvolutionList = new ArrayList<>();
+        genderEvolutionMap.forEach((year, gMap) -> {
+            Map<String, Object> point = new LinkedHashMap<>();
+            point.put("year", year);
+            point.put("female", (long) gMap.get("Femení").size());
+            point.put("male", (long) gMap.get("Masculí").size());
+            genderEvolutionList.add(point);
+        });
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("natures", availableNatures);
+        response.put("evolution", evolutionList);
+        response.put("gender", genderList);
+        response.put("genderEvolution", genderEvolutionList);
+
+        return response;
+    }
+
+    private boolean isBeneficiaryRole(String uri, String ca, String es) {
+        List<String> uris = Arrays.asList(
+            "/dk/atira/pure/award/roles/award/ben",
+            "/dk/atira/pure/award/roles/award/bec",
+            "/dk/atira/pure/award/roles/award/can"
+        );
+        List<String> terms = Arrays.asList(
+            "beneficiari/a", "becari/a", "candidat/a",
+            "beneficiario/a", "becario/a", "candidato/a"
+        );
+        if (uri != null && uris.contains(uri)) return true;
+        if (ca != null && terms.contains(ca.toLowerCase())) return true;
+        if (es != null && terms.contains(es.toLowerCase())) return true;
+        return false;
+    }
+
+    private boolean isInvestigatorRole(String uri, String ca, String es) {
+        List<String> uris = Arrays.asList(
+            "/dk/atira/pure/award/roles/award/pi",
+            "/dk/atira/pure/award/roles/award/copi",
+            "/dk/atira/pure/award/roles/award/pi2",
+            "/dk/atira/pure/award/roles/award/inv"
+        );
+        List<String> terms = Arrays.asList(
+            "investigador/a principal", "co-investigador/a principal", "investigador/a",
+            "co-investigador/a principal (extern uab)", "investigador/a principal (externo uab)"
+        );
+        if (uri != null && uris.contains(uri)) return true;
+        if (ca != null && terms.contains(ca.toLowerCase())) return true;
+        if (es != null && terms.contains(es.toLowerCase())) return true;
+        return false;
+    }
+
+    private String extractGender(Document doc) {
+        String[] genderPaths = {
+            "gender.term",
+            "gender.term.ca_ES",
+            "gender.term.es_ES",
+            "gender.term.en_GB",
+            "gender.ca_ES",
+            "gender.es_ES",
+            "gender.en_GB",
+            "gender",
+            "sex",
+            "sex.term.ca_ES",
+            "sex.term.es_ES",
+            "sex.term.en_GB"
+        };
+
+        for (String path : genderPaths) {
+            Object value = getByPath(doc, path);
+            String text = extractTextValue(value);
+            if (text != null && !text.isBlank()) {
+                return text;
+            }
+        }
+
+        return "";
+    }
+
+    private String extractTextValue(Object value) {
+        if (value == null) {
+            return null;
+        }
+
+        if (value instanceof String str) {
+            return str;
+        }
+
+        if (value instanceof Document doc) {
+            return extractTextValueFromMap(doc);
+        }
+
+        if (value instanceof Map<?, ?> map) {
+            return extractTextValueFromMap(map);
+        }
+
+        if (value instanceof List<?> list) {
+            for (Object item : list) {
+                String nested = extractTextValue(item);
+                if (nested != null && !nested.isBlank()) {
+                    return nested;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private String extractTextValueFromMap(Map<?, ?> map) {
+        String[] keys = {"ca_ES", "es_ES", "en_GB", "value", "text", "term", "label", "name"};
+        for (String key : keys) {
+            String nested = extractTextValue(map.get(key));
+            if (nested != null && !nested.isBlank()) {
+                return nested;
+            }
+        }
+
+        Object locale = map.get("locale");
+        Object value = map.get("value");
+        if (locale instanceof String && value instanceof String str && !str.isBlank()) {
+            return str;
+        }
+
+        return null;
+    }
+
+    private boolean isMale(String value) {
+        String normalized = normalize(value);
+        return normalized.contains("male")
+            || normalized.contains("hombre")
+            || normalized.contains("masculi")
+            || normalized.contains("home")
+            || normalized.equals("m");
+    }
+
+    private boolean isFemale(String value) {
+        String normalized = normalize(value);
+        return normalized.contains("female")
+            || normalized.contains("mujer")
+            || normalized.contains("femeni")
+            || normalized.contains("dona")
+            || normalized.equals("f");
+    }
+
+    private String classifyGender(String value) {
+        if (isMale(value)) {
+            return "male";
+        }
+        if (isFemale(value)) {
+            return "female";
+        }
+        return "other";
+    }
+
+    private String normalize(String value) {
+        if (value == null) {
+            return "";
+        }
+        return Normalizer.normalize(value, Normalizer.Form.NFD)
+            .replaceAll("\\p{M}", "")
+            .toLowerCase();
+    }
+
+    private Object getByPath(Object root, String path) {
+        if (root == null || path == null || path.isBlank()) {
+            return null;
+        }
+
+        Object current = root;
+        for (String segment : path.split("\\.")) {
+            if (current instanceof Document doc) {
+                current = doc.get(segment);
+            } else if (current instanceof Map<?, ?> map) {
+                current = map.get(segment);
+            } else {
+                return null;
+            }
+        }
+
+        return current;
     }
 }

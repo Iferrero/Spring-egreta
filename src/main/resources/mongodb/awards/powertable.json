@@ -7,9 +7,55 @@
       }
     },
     {
+      "$match": {
+        "type.term.ca_ES": {
+          "$ne": "Grups i Xarxes de Recerca externs a la UAB"
+        }
+      }
+    },
+    {
+      "$lookup": {
+        "from": "Applications",
+        "localField": "applications.uuid",
+        "foreignField": "uuid",
+        "as": "appDocs"
+      }
+    },
+    {
+      "$unwind": {
+        "path": "$appDocs",
+        "preserveNullAndEmptyArrays": true
+      }
+    },
+    {
+      "$lookup": {
+        "from": "FundingOpportunities",
+        "localField": "appDocs.fundingOpportunity.uuid",
+        "foreignField": "uuid",
+        "as": "fOpp"
+      }
+    },
+    {
+      "$unwind": {
+        "path": "$fOpp",
+        "preserveNullAndEmptyArrays": true
+      }
+    },
+    {
       "$addFields": {
         "anio": {
-          "$year": "$awardDate"
+          "$cond": [
+            {
+              "$ifNull": [
+                "$awardDate",
+                false
+              ]
+            },
+            {
+              "$year": "$awardDate"
+            },
+            null
+          ]
         }
       }
     },
@@ -26,46 +72,28 @@
     },
     {
       "$lookup": {
-        "from": "Organizations",
-        "localField": "managingOrganization.uuid",
+        "from": "ExternalOrganizations",
+        "localField": "fundings.funder.uuid",
         "foreignField": "uuid",
-        "as": "org_info"
+        "as": "funder_info"
       }
     },
     {
       "$unwind": {
-        "path": "$org_info",
+        "path": "$funder_info",
         "preserveNullAndEmptyArrays": true
       }
     },
     {
-      "$match": {
-        "$and": [
-          {
-            "type.term.ca_ES": {
-              "$ne": "Grups i Xarxes de Recerca externs a la UAB"
-            }
-          },
-          {
-            "$or": [
-              {
-                "type.term.ca_ES": {
-                  "$ne": "Conveni extern a la UAB"
-                }
-              },
-              {
-                "$and": [
-                  {
-                    "type.term.ca_ES": "Conveni extern a la UAB"
-                  },
-                  {
-                    "org_info.type.term.ca_ES": "Centres de Recerca Participats"
-                  }
-                ]
-              }
-            ]
-          }
-        ]
+      "$unwind": {
+        "path": "$funder_info.keywordGroups",
+        "preserveNullAndEmptyArrays": true
+      }
+    },
+    {
+      "$unwind": {
+        "path": "$funder_info.keywordGroups.classifications",
+        "preserveNullAndEmptyArrays": true
       }
     },
     {
@@ -77,58 +105,89 @@
             "onError": 0,
             "onNull": 0
           }
-        }
-      }
-    },
-    {
-      "$addFields": {
-        "categoria": {
-          "$let": {
-            "vars": {
-              "tipoCa": "$type.term.ca_ES",
-              "tipoEn": "$type.term.en_GB",
-              "candidatas": [
-                "$classification.term.ca_ES",
-                "$classification.term.en_GB",
-                "$classification.ca_ES",
-                "$classification.en_GB",
-                "$classification.0.term.ca_ES",
-                "$classification.0.term.en_GB",
-                "$classification.0.ca_ES",
-                "$classification.0.en_GB",
-                "$categoria"
-              ]
-            },
-            "in": {
-              "$let": {
-                "vars": {
-                  "categoriaRaw": {
-                    "$arrayElemAt": [
-                      {
-                        "$filter": {
-                          "input": "$$candidatas",
-                          "as": "c",
-                          "cond": {
-                            "$and": [
-                              { "$ne": ["$$c", null] },
-                              { "$ne": ["$$c", ""] },
-                              { "$ne": ["$$c", "$$tipoCa"] },
-                              { "$ne": ["$$c", "$$tipoEn"] }
-                            ]
-                          }
-                        }
-                      },
-                      0
+        },
+        "award_tipo": {
+          "$switch": {
+            "branches": [
+              {
+                "case": {
+                  "$in": [
+                    "$type.term.ca_ES",
+                    [
+                      "Concessió conveni",
+                      "Conveni extern a la UAB"
                     ]
-                  }
+                  ]
                 },
-                "in": {
-                  "$ifNull": [
-                    "$$categoriaRaw",
-                    "Sense categoria"
+                "then": {
+                  "$concat": [
+                    "$type.term.ca_ES",
+                    " - ",
+                    {
+                      "$ifNull": [
+                        "$funder_info.keywordGroups.classifications.term.ca_ES",
+                        "Sense classificar"
+                      ]
+                    }
                   ]
                 }
+              },
+              {
+                "case": {
+                  "$eq": [
+                    "$fOpp.type.uri",
+                    "/dk/atira/pure/fundingopportunity/fundingopportunitytypes/externalfundingopportunity/pro/pje"
+                  ]
+                },
+                "then": "Programa Marc Europeu"
+              },
+              {
+                "case": {
+                  "$eq": [
+                    "$fOpp.type.uri",
+                    "/dk/atira/pure/fundingopportunity/fundingopportunitytypes/externalfundingopportunity/pro/itn"
+                  ]
+                },
+                "then": "Altres ajuts int"
+              },
+              {
+                "case": {
+                  "$eq": [
+                    "$fOpp.type.uri",
+                    "/dk/atira/pure/fundingopportunity/fundingopportunitytypes/externalfundingopportunity/pro/pjn"
+                  ]
+                },
+                "then": "Projectes R+D"
               }
+            ],
+            "default": "$type.term.ca_ES"
+          }
+        },
+        "esLider": {
+          "$let": {
+            "vars": {
+              "internalLeads": {
+                "$filter": {
+                  "input": { "$ifNull": ["$collaborators", []] },
+                  "as": "c",
+                  "cond": {
+                    "$and": [
+                      { "$eq": ["$$c.leadCollaborator", true] },
+                      { "$eq": ["$$c.typeDiscriminator", "InternalCollaboratorAssociation"] }
+                    ]
+                  }
+                }
+              },
+              "hasCollaborators": {
+                "$gt": [{ "$size": { "$ifNull": ["$collaborators", []] } }, 0]
+              }
+            },
+            "in": {
+              "$cond": [
+                "$$hasCollaborators",
+                { "$gt": [{ "$size": "$$internalLeads" }, 0] },
+                true
+              ]
             }
           }
         }
@@ -137,9 +196,42 @@
     {
       "$group": {
         "_id": {
+          "awardUuid": "$uuid",
           "anio": "$anio",
-          "tipo": "$type.term.ca_ES",
+          "tipo": "$award_tipo",
           "categoria": "$categoria"
+        },
+        "totalImporte": {
+          "$sum": "$importe"
+        },
+        "esLider": {
+          "$first": "$esLider"
+        }
+      }
+    },
+    {
+      "$project": {
+        "_id": 0,
+        "awardUuid": "$_id.awardUuid",
+        "anio": "$_id.anio",
+        "tipo": "$_id.tipo",
+        "categoria": {
+          "$ifNull": [
+            "$_id.categoria",
+            "Sense categoria"
+          ]
+        },
+        "importe": "$totalImporte",
+        "esLider": 1
+      }
+    },
+    {
+      "$group": {
+        "_id": {
+          "anio": "$anio",
+          "tipo": "$tipo",
+          "categoria": "$categoria",
+          "esLider": "$esLider"
         },
         "ajuts": {
           "$sum": 1
@@ -155,7 +247,8 @@
         "anio": "$_id.anio",
         "categoria": "$_id.categoria",
         "tipo": "$_id.tipo",
-        "ajuts": "$ajuts",
+        "esLider": "$_id.esLider",
+        "ajuts": 1,
         "import": {
           "$round": [
             "$import",

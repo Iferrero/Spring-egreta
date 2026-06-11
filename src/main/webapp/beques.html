@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Anàlisi de Beques de Recerca - Portal de Recerca UAB</title>
+    <script src="config.js"></script>
+    <script src="uab-brand.js" defer></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="uab-theme.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <!-- noUiSlider CSS & JS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.7.1/nouislider.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.7.1/nouislider.min.js"></script>
+    <!-- ECharts CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+    <style>
+        .chart-container {
+            position: relative;
+            width: 100%;
+            height: 380px;
+        }
+        .kpi-card {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .kpi-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.03);
+        }
+    </style>
+</head>
+<body class="bg-[#f1f2f4] min-h-screen">
+
+    <div class="mx-auto px-6 py-8 max-w-7xl">
+        <header hidden class="mb-8">
+            <h1 class="text-2xl font-bold text-slate-800">Anàlisi de Beques de Recerca</h1>
+            <p class="text-sm text-slate-500 mt-1">Evolució temporal i distribució per gènere de les beques concedides (darrers 5 anys complets)</p>
+        </header>
+
+        <!-- Filtros e Info de la Colección -->
+        <section class="bg-white border border-slate-200 rounded-2xl shadow-sm p-4 mb-6">
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-3 items-end">
+                <!-- Select de tipo -->
+                <div class="lg:col-span-4">
+                    <label for="selectTipo" class="block text-xs font-bold text-slate-500 uppercase mb-1">Natura de la Beca</label>
+                    <select id="selectTipo" class="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm bg-white cursor-pointer">
+                        <option value="all">Totes les beques (totes les natures)</option>
+                    </select>
+                </div>
+
+                
+
+                <!-- Checkbox Excloure Renúncies -->
+                <div class="lg:col-span-2 pb-1.5 flex items-center justify-center lg:justify-start">
+                    <label class="flex items-center gap-2.5 cursor-pointer select-none">
+                        <input type="checkbox" id="chkExcludeResigned" class="w-4 h-4 rounded text-indigo-600 border-slate-300 focus:ring-indigo-500 cursor-pointer">
+                        <span class="text-xs font-bold text-slate-500 uppercase">Excloure renúncies</span>
+                    </label>
+                </div>
+
+                <!-- Slider de años -->
+                <div class="lg:col-span-4">
+                    <div class="flex items-center justify-between mb-1">
+                        <label class="block text-xs font-bold text-slate-500 uppercase">Rang d'anys</label>
+                        <span id="valorRango" class="text-xs font-bold text-indigo-600"></span>
+                    </div>
+                    <div id="sliderAnios"></div>
+                </div>
+
+                
+            </div>
+        </section>
+
+        <!-- Spinner de Carga -->
+        <div id="loader" class="flex flex-col items-center justify-center py-24 gap-4">
+            <div class="w-12 h-12 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
+            <p class="text-slate-500 font-medium">Carregant dades i generant gràfics...</p>
+        </div>
+
+        <!-- Contenido de Estadísticas -->
+        <div id="contenido" class="hidden">
+            <!-- Tabs de Roles -->
+            <div class="mb-6 border-b border-slate-200">
+                <nav class="flex gap-1" id="roleTabs">
+                    <button id="tabBeneficiaris" onclick="switchRoleTab('beneficiari')"
+                        class="tab-btn px-5 py-2.5 text-sm font-semibold rounded-t-xl border border-b-0 border-slate-200 bg-white text-indigo-700">
+                        <i class="fa-solid fa-graduation-cap mr-1.5"></i>Beneficiaris
+                    </button>
+                    <button id="tabInvestigadors" onclick="switchRoleTab('investigador')"
+                        class="tab-btn px-5 py-2.5 text-sm font-semibold rounded-t-xl border border-b-0 border-slate-200 bg-slate-50 text-slate-500">
+                        <i class="fa-solid fa-user-tie mr-1.5"></i>Investigadors principals
+                    </button>
+                </nav>
+            </div>
+
+            <!-- KPIs Grid -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8">
+                <!-- KPI 1: Total Beques -->
+                <div class="kpi-card bg-white border border-slate-200 rounded-2xl shadow-sm p-5 flex items-center gap-4">
+                    <div class="w-12 h-12 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
+                        <i class="fa-solid fa-award text-2xl"></i>
+                    </div>
+                    <div>
+                        <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Concedit</p>
+                        <p id="kpiTotal" class="text-2xl font-black text-slate-800">0</p>
+                    </div>
+                </div>
+
+                <!-- KPI 2: Dones -->
+                <div class="kpi-card bg-white border border-slate-200 rounded-2xl shadow-sm p-5 flex items-center gap-4">
+                    <div class="w-12 h-12 rounded-xl bg-amber-50 flex items-center justify-center text-[#faae57]">
+                        <i class="fa-solid fa-venus text-2xl"></i>
+                    </div>
+                    <div>
+                        <p id="lblDones" class="text-xs font-bold text-slate-400 uppercase tracking-wider">Dones Beneficiàries</p>
+                        <p id="kpiDones" class="text-2xl font-black text-slate-800">0% <span class="text-xs font-medium text-slate-500">(0)</span></p>
+                    </div>
+                </div>
+
+                <!-- KPI 3: Homes -->
+                <div class="kpi-card bg-white border border-slate-200 rounded-2xl shadow-sm p-5 flex items-center gap-4">
+                    <div class="w-12 h-12 rounded-xl bg-emerald-50 flex items-center justify-center text-[#008037]">
+                        <i class="fa-solid fa-mars text-2xl"></i>
+                    </div>
+                    <div>
+                        <p id="lblHomes" class="text-xs font-bold text-slate-400 uppercase tracking-wider">Homes Beneficiaris</p>
+                        <p id="kpiHomes" class="text-2xl font-black text-slate-800">0% <span class="text-xs font-medium text-slate-500">(0)</span></p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Gráficos Fila 1: Evolución General + Distribución Género -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+                <!-- Gráfico de Evolución Total -->
+                <div class="lg:col-span-2 bg-white border border-slate-200 rounded-2xl shadow-sm p-5 relative">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-base font-bold text-slate-800">Evolució anual de concessions</h2>
+                        <i class="fa-solid fa-chart-line text-slate-300"></i>
+                    </div>
+                    <div id="chartEvolucion" class="chart-container"></div>
+                </div>
+
+                <!-- Gráfico de Torta Género -->
+                <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-5 relative">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-base font-bold text-slate-800">Distribució per gènere</h2>
+                        <i class="fa-solid fa-chart-pie text-slate-300"></i>
+                    </div>
+                    <div id="chartGenero" class="chart-container"></div>
+                </div>
+            </div>
+
+            <!-- Gráficos Fila 2: Evolución Género -->
+            <div class="grid grid-cols-1 gap-6">
+                <!-- Gráfico Barras Apiladas Gènero por Any -->
+                <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-5 relative">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 id="lblTitolGenEvolucion" class="text-base font-bold text-slate-800">Evolució del gènere per any (becats)</h2>
+                        <i class="fa-solid fa-chart-bar text-slate-300"></i>
+                    </div>
+                    <div id="chartGenEvolucion" class="chart-container"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Mensaje de Error -->
+        <div id="errorMsg" class="hidden bg-rose-50 border border-rose-100 rounded-2xl p-6 text-center text-rose-600 font-medium">
+            <i class="fa-solid fa-triangle-exclamation text-2xl mb-2 block"></i>
+            <span>S'ha produït un error al carregar els gràfics de beques. Torna-ho a provar en uns minuts.</span>
+        </div>
+    </div>
+
+    <script>
+        let chartEvolucion = null;
+        let chartGenero = null;
+        let chartGenEvolucion = null;
+        let naturesLoaded = false;
+        let activeRole = 'beneficiari';
+
+        function switchRoleTab(role) {
+            if (activeRole === role) return;
+            activeRole = role;
+
+            const tabBen = document.getElementById('tabBeneficiaris');
+            const tabInv = document.getElementById('tabInvestigadors');
+
+            if (role === 'beneficiari') {
+                tabBen.className = "tab-btn px-5 py-2.5 text-sm font-semibold rounded-t-xl border border-b-0 border-slate-200 bg-white text-indigo-700";
+                tabInv.className = "tab-btn px-5 py-2.5 text-sm font-semibold rounded-t-xl border border-b-0 border-slate-200 bg-slate-50 text-slate-500";
+                
+                document.getElementById('lblDones').textContent = "Dones Beneficiàries";
+                document.getElementById('lblHomes').textContent = "Homes Beneficiaris";
+                document.getElementById('lblTitolGenEvolucion').textContent = "Evolució del gènere per any (becats)";
+            } else {
+                tabBen.className = "tab-btn px-5 py-2.5 text-sm font-semibold rounded-t-xl border border-b-0 border-slate-200 bg-slate-50 text-slate-500";
+                tabInv.className = "tab-btn px-5 py-2.5 text-sm font-semibold rounded-t-xl border border-b-0 border-slate-200 bg-white text-indigo-700";
+                
+                document.getElementById('lblDones').textContent = "Dones Investigadores";
+                document.getElementById('lblHomes').textContent = "Homes Investigadors";
+                document.getElementById('lblTitolGenEvolucion').textContent = "Evolució del gènere per any (investigadors)";
+            }
+
+            loadData();
+        }
+
+        // Inicializar los gráficos vacíos
+        function initCharts() {
+            chartEvolucion = echarts.init(document.getElementById('chartEvolucion'));
+            chartGenero = echarts.init(document.getElementById('chartGenero'));
+            chartGenEvolucion = echarts.init(document.getElementById('chartGenEvolucion'));
+
+            // Escuchar cambios de tamaño para redimensionar los gráficos
+            window.addEventListener('resize', () => {
+                chartEvolucion.resize();
+                chartGenero.resize();
+                chartGenEvolucion.resize();
+            });
+        }
+
+        // Cargar las natures de beques disponibles en el selector
+        function populateNatures(natures) {
+            if (naturesLoaded) return;
+            const select = document.getElementById('selectTipo');
+            natures.forEach(n => {
+                const opt = document.createElement('option');
+                opt.value = n;
+                opt.textContent = n;
+                select.appendChild(opt);
+            });
+            naturesLoaded = true;
+        }
+        // Actualizar KPIs superiors
+        function updateKPIs(genderList, total) {
+            document.getElementById('kpiTotal').textContent = total;
+
+            const femaleObj = genderList.find(g => g.gender === 'Dones');
+            const maleObj = genderList.find(g => g.gender === 'Homes');
+
+            const femaleCount = femaleObj ? femaleObj.count : 0;
+            const maleCount = maleObj ? maleObj.count : 0;
+
+            const femalePct = total > 0 ? ((femaleCount / total) * 100).toFixed(1) : 0;
+            const malePct = total > 0 ? ((maleCount / total) * 100).toFixed(1) : 0;
+
+            document.getElementById('kpiDones').innerHTML = `${femalePct}% <span class="text-xs font-semibold text-slate-400">(${femaleCount})</span>`;
+            document.getElementById('kpiHomes').innerHTML = `${malePct}% <span class="text-xs font-semibold text-slate-400">(${maleCount})</span>`;
+        }
+
+        // Renderizar el Gráfico 1: Evolución General
+        function renderChartEvolucion(evolution) {
+            const years = evolution.map(d => d.year);
+            const counts = evolution.map(d => d.count);
+
+            const option = {
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: { type: 'shadow' }
+                },
+                grid: { top: 30, right: 20, bottom: 40, left: 50 },
+                xAxis: {
+                    type: 'category',
+                    data: years,
+                    axisLine: { lineStyle: { color: '#cbd5e1' } },
+                    axisLabel: { color: '#475569', fontWeight: 600 }
+                },
+                yAxis: {
+                    type: 'value',
+                    splitLine: { lineStyle: { color: '#f1f5f9' } },
+                    axisLabel: { color: '#475569', fontWeight: 600 }
+                },
+                series: [{
+                    name: 'Beques',
+                    type: 'line',
+                    data: counts,
+                    smooth: true,
+                    symbolSize: 8,
+                    lineStyle: { width: 3.5, color: '#008037' },
+                    itemStyle: { color: '#008037', borderSize: 2 },
+                    areaStyle: {
+                        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                            { offset: 0, color: 'rgba(0, 128, 55, 0.25)' },
+                            { offset: 1, color: 'rgba(0, 128, 55, 0.01)' }
+                        ])
+                    }
+                }]
+            };
+
+            chartEvolucion.setOption(option);
+        }
+
+        // Renderizar el Gráfico 2: Torta de Distribución Género
+        function renderChartGenero(gender) {
+            const chartData = gender.map(d => ({
+                value: d.count,
+                name: d.gender
+            })).filter(d => d.value > 0);
+
+            const option = {
+                tooltip: {
+                    trigger: 'item',
+                    formatter: '{b}: {c} ({d}%)'
+                },
+                legend: {
+                    bottom: '0%',
+                    left: 'center',
+                    textStyle: { color: '#475569', fontWeight: 600 }
+                },
+                color: ['#faae57', '#008037'],
+                series: [
+                    {
+                        name: 'Gènere',
+                        type: 'pie',
+                        radius: ['45%', '75%'],
+                        avoidLabelOverlap: false,
+                        itemStyle: {
+                            borderRadius: 8,
+                            borderColor: '#fff',
+                            borderWidth: 2
+                        },
+                        label: {
+                            show: false,
+                            position: 'center'
+                        },
+                        emphasis: {
+                            label: {
+                                show: true,
+                                fontSize: 16,
+                                fontWeight: 'bold',
+                                formatter: '{b}\n{d}%'
+                            }
+                        },
+                        labelLine: {
+                            show: false
+                        },
+                        data: chartData
+                    }
+                ]
+            };
+
+            chartGenero.setOption(option);
+        }
+
+        // Renderizar el Gráfico 3: Evolución Género por Año (Apilado %)
+        function renderChartGenEvolucion(genderEvolution) {
+            const years = genderEvolution.map(d => d.year);
+            
+            const femaleData = [];
+            const maleData = [];
+
+            genderEvolution.forEach(d => {
+                const f = d.female || 0;
+                const m = d.male || 0;
+                const total = f + m;
+
+                if (total > 0) {
+                    femaleData.push({
+                        value: Number(((f / total) * 100).toFixed(1)),
+                        absolute: f
+                    });
+                    maleData.push({
+                        value: Number(((m / total) * 100).toFixed(1)),
+                        absolute: m
+                    });
+                } else {
+                    femaleData.push({ value: 0, absolute: 0 });
+                    maleData.push({ value: 0, absolute: 0 });
+                }
+            });
+
+            const option = {
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: { type: 'shadow' },
+                    formatter: function (params) {
+                        let html = `<div class="font-bold text-slate-800 border-b border-slate-100 pb-1.5 mb-1.5 text-sm">${params[0].name}</div>`;
+                        params.forEach(p => {
+                            if (p.value !== undefined) {
+                                const val = p.value;
+                                const abs = p.data.absolute;
+                                html += `
+                                    <div class="flex items-center justify-between gap-6 text-xs text-slate-600 my-1">
+                                        <div class="flex items-center gap-2">
+                                            <span class="inline-block w-2.5 h-2.5 rounded-full" style="background-color: ${p.color}"></span>
+                                            <span class="font-medium text-slate-500">${p.seriesName}:</span>
+                                        </div>
+                                        <span class="font-bold text-slate-700">${val}% <span class="font-normal text-slate-400">(${abs})</span></span>
+                                    </div>
+                                `;
+                            }
+                        });
+                        return html;
+                    }
+                },
+                legend: {
+                    top: '0%',
+                    textStyle: { color: '#475569', fontWeight: 600 }
+                },
+                grid: { top: 40, right: 20, bottom: 40, left: 55 },
+                xAxis: {
+                    type: 'category',
+                    data: years,
+                    axisLine: { lineStyle: { color: '#cbd5e1' } },
+                    axisLabel: { color: '#475569', fontWeight: 600 }
+                },
+                yAxis: {
+                    type: 'value',
+                    min: 0,
+                    max: 100,
+                    interval: 20,
+                    splitLine: { lineStyle: { color: '#f1f5f9' } },
+                    axisLabel: { 
+                        color: '#475569', 
+                        fontWeight: 600,
+                        formatter: '{value}%'
+                    }
+                },
+                color: ['#faae57', '#008037'],
+                series: [
+                    {
+                        name: 'Dones',
+                        type: 'bar',
+                        stack: 'gender',
+                        emphasis: { focus: 'series' },
+                        data: femaleData,
+                        barWidth: '55%'
+                    },
+                    {
+                        name: 'Homes',
+                        type: 'bar',
+                        stack: 'gender',
+                        emphasis: { focus: 'series' },
+                        data: maleData
+                    }
+                ]
+            };
+
+            chartGenEvolucion.setOption(option);
+        }
+
+        let slider = null;
+        let rawScholarshipData = null;
+
+        // Inicializar noUiSlider
+        function initSlider() {
+            const currentYear = new Date().getFullYear();
+            const minYear = 2015;
+            const maxYear = currentYear - 1; // Excluimos el año actual por la petición del usuario
+            const startDefault = currentYear - 5; // 2021
+            const endDefault = currentYear - 1;   // 2025
+
+            slider = document.getElementById('sliderAnios');
+            noUiSlider.create(slider, {
+                start: [startDefault, endDefault],
+                connect: true,
+                step: 1,
+                range: {
+                    'min': minYear,
+                    'max': maxYear
+                },
+                format: {
+                    to: v => Math.round(v),
+                    from: v => Number(v)
+                }
+            });
+
+            const valorRango = document.getElementById('valorRango');
+            slider.noUiSlider.on('update', (vals) => {
+                valorRango.textContent = `${vals[0]} — ${vals[1]}`;
+            });
+
+            // Al cambiar el valor, aplicamos filtros y redibujamos
+            slider.noUiSlider.on('change', () => {
+                applyFiltersAndRender();
+            });
+        }
+
+        // Filtrar datos en memoria y redibujar gráficos y KPIs
+        function applyFiltersAndRender() {
+            if (!rawScholarshipData || !slider) return;
+
+            // Obtener rango de años del slider
+            const [startYear, endYear] = slider.noUiSlider.get();
+
+            // Actualizar subtítulo con los años dinámicos en la barra de marca UAB
+            const brandbarSubtitle = document.querySelector('.uab-brandbar__subtitle');
+            if (brandbarSubtitle) {
+                brandbarSubtitle.textContent = `Evolució temporal i distribució per gènere de les beques concedides (${startYear} — ${endYear})`;
+            }
+
+            // Generar la lista completa y continua de años en el rango seleccionado
+            const allYears = [];
+            for (let y = startYear; y <= endYear; y++) {
+                allYears.push(y);
+            }
+
+            // Mapear los datos de evolución asegurando que cada año tenga su valor (o 0 si no existe)
+            const evolutionMap = {};
+            (rawScholarshipData.evolution || []).forEach(d => {
+                evolutionMap[d.year] = d.count;
+            });
+            const filteredEvolution = allYears.map(y => ({
+                year: y,
+                count: evolutionMap[y] || 0
+            }));
+
+            // Mapear los datos de evolución de género asegurando que cada año tenga su valor (o 0 si no existe)
+            const genderEvolMap = {};
+            (rawScholarshipData.genderEvolution || []).forEach(d => {
+                genderEvolMap[d.year] = d;
+            });
+            const filteredGenderEvolution = allYears.map(y => {
+                const exist = genderEvolMap[y];
+                return {
+                    year: y,
+                    female: exist ? (exist.female || 0) : 0,
+                    male: exist ? (exist.male || 0) : 0
+                };
+            });
+
+            let femaleCount = 0;
+            let maleCount = 0;
+            filteredGenderEvolution.forEach(d => {
+                femaleCount += d.female || 0;
+                maleCount += d.male || 0;
+            });
+
+            const totalFiltered = femaleCount + maleCount;
+            const recalculatedGender = [
+                { gender: 'Dones', count: femaleCount },
+                { gender: 'Homes', count: maleCount }
+            ];
+
+            // Actualizar KPIs y gráficos con los datos filtrados
+            updateKPIs(recalculatedGender, totalFiltered);
+            renderChartEvolucion(filteredEvolution);
+            renderChartGenero(recalculatedGender);
+            renderChartGenEvolucion(filteredGenderEvolution);
+        }
+
+        // Cargar datos de la API y refrescar gráficos
+        async function loadData() {
+            const nature = document.getElementById('selectTipo').value;
+            const excludeResigned = document.getElementById('chkExcludeResigned').checked;
+            const loader = document.getElementById('loader');
+            const contenido = document.getElementById('contenido');
+            const errorMsg = document.getElementById('errorMsg');
+
+            loader.classList.remove('hidden');
+            contenido.classList.add('hidden');
+            errorMsg.classList.add('hidden');
+
+            try {
+                const url = apiUrl(`/awards/stats/scholarships?nature=${encodeURIComponent(nature)}&role=${encodeURIComponent(activeRole)}&excludeResigned=${excludeResigned}`);
+                const response = await fetch(url);
+                
+                if (!response.ok) throw new Error('Error de conexión');
+
+                const data = await response.json();
+                rawScholarshipData = data;
+
+                // Poblar el selector de natures en la primera carga
+                populateNatures(data.natures || []);
+
+                // Aplicar filtros e inicializar vista
+                applyFiltersAndRender();
+
+                loader.classList.add('hidden');
+                contenido.classList.remove('hidden');
+
+                // Redimensionar gráficos para asegurar que tomen el tamaño correcto del contenedor
+                setTimeout(() => {
+                    chartEvolucion.resize();
+                    chartGenero.resize();
+                    chartGenEvolucion.resize();
+                }, 50);
+
+            } catch (error) {
+                console.error("Error al cargar las estadísticas de becas:", error);
+                loader.classList.add('hidden');
+                errorMsg.classList.remove('hidden');
+            }
+        }
+
+        // Inicializar la vista
+        document.addEventListener('DOMContentLoaded', () => {
+            initCharts();
+            initSlider();
+            loadData();
+
+            // Escuchar cambios en el selector de tipo y checkbox de renuncia
+            document.getElementById('selectTipo').addEventListener('change', loadData);
+            document.getElementById('chkExcludeResigned').addEventListener('change', loadData);
+        });
+    </script>
+</body>
+</html>
