@@ -1245,6 +1245,92 @@ public class PersonaController {
         return result;
     }
 
+    @GetMapping("/stats/ips-gender-distribution")
+    public Map<String, Integer> getIpsGenderDistribution(
+            @RequestParam(required = false) String deptUuid,
+            @RequestParam(required = false) Integer desde,
+            @RequestParam(required = false) Integer hasta) {
+        
+        List<Document> pipeline = new ArrayList<>();
+        
+        // 1. Filtrar proyectos validados
+        Document matchAwards = new Document("workflow.step", "validated");
+        
+        // 2. Si hay departamento, filtrar por proyectos gestionados o co-gestionados
+        if (deptUuid != null && !deptUuid.isBlank()) {
+            matchAwards.append("$or", Arrays.asList(
+                new Document("managingOrganization.uuid", deptUuid),
+                new Document("coManagingOrganizations.uuid", deptUuid)
+            ));
+        }
+
+        // Filtro por rango de años (awardDate)
+        if (desde != null || hasta != null) {
+            Document range = new Document();
+            if (desde != null) {
+                range.put("$gte", Date.from(java.time.LocalDate.of(desde, 1, 1).atStartOfDay(java.time.ZoneId.systemDefault()).toInstant()));
+            }
+            if (hasta != null) {
+                range.put("$lte", Date.from(java.time.LocalDate.of(hasta, 12, 31).atTime(23, 59, 59).atZone(java.time.ZoneId.systemDefault()).toInstant()));
+            }
+            matchAwards.append("awardDate", range);
+        }
+
+        pipeline.add(new Document("$match", matchAwards));
+        
+        // 3. Desplegar awardHolders
+        pipeline.add(new Document("$unwind", "$awardHolders"));
+        
+        // 4. Filtrar por roles de IP confirmados (pi y pi2)
+        pipeline.add(new Document("$match", new Document("$and", Arrays.asList(
+            new Document("awardHolders.person.uuid", new Document("$exists", true).append("$ne", null)),
+            new Document("awardHolders.role.uri", new Document("$in", Arrays.asList(
+                "/dk/atira/pure/award/roles/award/pi",
+                "/dk/atira/pure/award/roles/award/pi2"
+            )))
+        ))));
+        
+        // 5. Lookup a la colección de Persons para obtener el género
+        pipeline.add(new Document("$lookup", new Document()
+            .append("from", "Persons")
+            .append("localField", "awardHolders.person.uuid")
+            .append("foreignField", "uuid")
+            .append("as", "personInfo")
+        ));
+        
+        // 6. Desplegar el resultado del lookup
+        pipeline.add(new Document("$unwind", "$personInfo"));
+        
+        // 7. Agrupar por UUID de persona única para evitar duplicidades
+        pipeline.add(new Document("$group", new Document()
+            .append("_id", "$personInfo.uuid")
+            .append("gender", new Document("$first", "$personInfo.gender"))
+            .append("sex", new Document("$first", "$personInfo.sex"))
+        ));
+        
+        // Ejecutar agregación en la colección "Awards"
+        List<Document> docs = new ArrayList<>();
+        mongoTemplate.getDb().getCollection("Awards").aggregate(pipeline).into(docs);
+        
+        int hombres = 0, mujeres = 0, otros = 0;
+        for (Document doc : docs) {
+            String genero = extractGender(doc);
+            if (isMale(genero)) {
+                hombres++;
+            } else if (isFemale(genero)) {
+                mujeres++;
+            } else {
+                otros++;
+            }
+        }
+        
+        Map<String, Integer> result = new LinkedHashMap<>();
+        result.put("hombres", hombres);
+        result.put("mujeres", mujeres);
+        result.put("otros", otros);
+        return result;
+    }
+
     @GetMapping("/stats/nationality")
     public List<Map<String, Object>> getNationalityStats(
             @RequestParam(required = false) String personalType,

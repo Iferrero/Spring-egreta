@@ -1,0 +1,103 @@
+{
+  "collection": "Awards",
+  "pipeline": [
+    {
+      "$match": {
+        "workflow.step": "validated",
+        "type.term.ca_ES": {
+          "$in": [
+            "Concessió conveni",
+            "Conveni extern a la UAB"
+          ]
+        }
+      }
+    },
+    {
+      "$match": {
+        "$or": [
+          { "managingOrganization.uuid": "__MANAGING_UUID__" },
+          { "coManagingOrganizations.uuid": "__MANAGING_UUID__" }
+        ]
+      }
+    },
+    {
+      "$unwind": "$fundings"
+    },
+    {
+      "$unwind": "$fundings.fundingCollaborators"
+    },
+    {
+      "$match": {
+        "fundings.fundingCollaborators.collaborator.uuid": "84443078-1a60-462d-9d0a-b04312afd9eb"
+      }
+    },
+    {
+      "$lookup": {
+        "from": "ExternalOrganizations",
+        "localField": "fundings.funder.uuid",
+        "foreignField": "uuid",
+        "as": "funder_info"
+      }
+    },
+    {
+      "$unwind": "$funder_info"
+    },
+    {
+      "$match": {
+        "$or": [
+          { "funder_info.address.geoLocation.point": { "$ne": null } },
+          { "funder_info.address.city": { "$ne": null } },
+          { "funder_info.address.country.term.ca_ES": { "$ne": null } }
+        ]
+      }
+    },
+    {
+      "$project": {
+        "_id": 0,
+        "uuid": "$uuid",
+        "title": {
+          "$ifNull": [
+            "$title.ca_ES",
+            {
+              "$ifNull": [
+                "$title.es_ES",
+                {
+                  "$ifNull": [
+                    "$title.en_GB",
+                    "Sense títol"
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "funder": {
+          "$ifNull": [
+            "$funder_info.name.ca_ES",
+            {
+              "$ifNull": [
+                "$funder_info.name.es_ES",
+                {
+                  "$ifNull": [
+                    "$funder_info.name.en_GB",
+                    "Entitat"
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "amount": {
+          "$convert": {
+            "input": "$fundings.fundingCollaborators.institutionalPart.value",
+            "to": "double",
+            "onError": 0,
+            "onNull": 0
+          }
+        },
+        "coords": "$funder_info.address.geoLocation.point",
+        "address": "$funder_info.address"
+      }
+    }
+  ]
+}

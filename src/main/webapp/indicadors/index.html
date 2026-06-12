@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recursos Econòmics | Universitat Autònoma de Barcelona</title>
+    <!-- Google Fonts: Inter & Outfit -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- noUiSlider CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.7.1/nouislider.min.css">
+    <script>
+    window.addEventListener('error', function(e) {
+        let errorDiv = document.getElementById('debug-error-banner');
+        if (!errorDiv) {
+            errorDiv = document.createElement('div');
+            errorDiv.id = 'debug-error-banner';
+            errorDiv.style.position = 'fixed';
+            errorDiv.style.top = '0';
+            errorDiv.style.left = '0';
+            errorDiv.style.width = '100%';
+            errorDiv.style.background = 'rgba(220, 38, 38, 0.95)';
+            errorDiv.style.color = 'white';
+            errorDiv.style.padding = '10px';
+            errorDiv.style.zIndex = '99999';
+            errorDiv.style.fontFamily = 'monospace';
+            errorDiv.style.fontSize = '12px';
+            errorDiv.style.maxHeight = '200px';
+            errorDiv.style.overflowY = 'auto';
+            document.body.appendChild(errorDiv);
+        }
+        errorDiv.innerHTML += `<div>ERROR: ${e.message} at ${e.filename}:${e.lineno}:${e.colno}</div>`;
+    });
+    window.addEventListener('unhandledrejection', function(e) {
+        let errorDiv = document.getElementById('debug-error-banner');
+        if (!errorDiv) {
+            errorDiv = document.createElement('div');
+            errorDiv.id = 'debug-error-banner';
+            errorDiv.style.position = 'fixed';
+            errorDiv.style.top = '0';
+            errorDiv.style.left = '0';
+            errorDiv.style.width = '100%';
+            errorDiv.style.background = 'rgba(220, 38, 38, 0.95)';
+            errorDiv.style.color = 'white';
+            errorDiv.style.padding = '10px';
+            errorDiv.style.zIndex = '99999';
+            errorDiv.style.fontFamily = 'monospace';
+            errorDiv.style.fontSize = '12px';
+            errorDiv.style.maxHeight = '200px';
+            errorDiv.style.overflowY = 'auto';
+            document.body.appendChild(errorDiv);
+        }
+        errorDiv.innerHTML += `<div>PROMISE REJECTION: ${e.reason}</div>`;
+    });
+    </script>
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <!-- Header UAB Logo -->
+    <header class="uab-header">
+        <div class="uab-header__logo-container">
+            <img src="https://www.uab.cat/Xcelerate/WAI/img/UAB-2linies-verd.svg" alt="Universitat Autònoma de Barcelona Logo" class="uab-logo">
+        </div>
+    </header>
+
+
+
+    <!-- Main App Container -->
+    <div class="app-container">
+        
+        <!-- Left Sidebar Navigation -->
+        <aside class="sidebar-nav">
+            <div class="sidebar-btn border-gray active" onclick="switchSidebarTab('portada')">
+                <div class="sidebar-btn-content bg-gray">Portada</div>
+                <!-- Tooltip speech bubble from design -->
+                <div class="sidebar-tooltip">Feu clic aquí per seguir...</div>
+            </div>
+            <div class="sidebar-btn" onclick="switchSidebarTab('inputs')">
+                <div class="sidebar-btn-content">Inputs</div>
+            </div>
+            <div class="sidebar-btn" onclick="switchSidebarTab('activitats')">
+                <div class="sidebar-btn-content">Activitats</div>
+            </div>
+            <div class="sidebar-btn" onclick="switchSidebarTab('outputs')">
+                <div class="sidebar-btn-content">Outputs</div>
+            </div>
+            <div class="sidebar-btn" onclick="switchSidebarTab('outcomes')">
+                <div class="sidebar-btn-content">Outcomes</div>
+            </div>
+            <div class="sidebar-btn" onclick="switchSidebarTab('impact')">
+                <div class="sidebar-btn-content">Impact</div>
+            </div>
+        </aside>
+
+        <!-- Main Content Panel -->
+        <main class="main-content">
+            
+            <!-- Top Navigation Bar -->
+            <nav class="uab-topnav">
+                <!-- Container for Inputs -->
+                <div class="uab-topnav__container" id="topnavInputs">
+                    <button class="topnav-btn active" onclick="switchTopTab('recursos-economics')">Recursos econòmics</button>
+                    <button class="topnav-btn" onclick="switchTopTab('recursos-humans')">Recursos humans</button>
+                    <button class="topnav-btn" onclick="switchTopTab('estructures-recerca')">Estructures de recerca</button>
+                    <button class="topnav-btn" onclick="switchTopTab('recursos-digitals')">Recursos digitals</button>
+                </div>
+                <!-- Container for Activitats -->
+                <div class="uab-topnav__container hidden" id="topnavActivitats">
+                    <button class="topnav-btn active" onclick="switchTopTab('projectes-recerca')">Projectes de recerca</button>
+                    <button class="topnav-btn" onclick="switchTopTab('contractes-convenis')">Contractes i convenis</button>
+                    <button class="topnav-btn" onclick="switchTopTab('tesis-doctorals')">Tesis doctorals en desenvolupament</button>
+                    <button class="topnav-btn" onclick="switchTopTab('xarxes-plataformes')">Participació amb...</button>
+                </div>
+                <!-- Container for Outputs -->
+                <div class="uab-topnav__container hidden" id="topnavOutputs">
+                    <button class="topnav-btn active" onclick="switchTopTab('publicacions-recerca')">Publicacions de recerca</button>
+                    <button class="topnav-btn" onclick="switchTopTab('tesis-llegides')">Tesis llegides</button>
+                    <button class="topnav-btn" onclick="switchTopTab('innovacions')">Innovacions</button>
+                </div>
+                <!-- Container for Outcomes -->
+                <div class="uab-topnav__container hidden" id="topnavOutcomes">
+                    <button class="topnav-btn" onclick="switchTopTab('reconeixement-academic')">Reconeixement acadèmic</button>
+                    <button class="topnav-btn active" onclick="switchTopTab('desenvolupament-professional')">Desenvolupament...</button>
+                    <button class="topnav-btn" onclick="switchTopTab('collaboracions')">Col·laboracions</button>
+                    <button class="topnav-btn" onclick="switchTopTab('acords-transferencia')">Acords de transferència signats</button>
+                </div>
+                <!-- Container for Impact -->
+                <div class="uab-topnav__container hidden" id="topnavImpact">
+                    <button class="topnav-btn" onclick="switchTopTab('beneficis-societat')">Beneficis per a la societat</button>
+                    <button class="topnav-btn active" onclick="switchTopTab('contribucio-al')">Contribució al desenvolupament econòmic</button>
+                    <button class="topnav-btn" onclick="switchTopTab('influencia-politiques')">Influència en noves polítiques</button>
+                    <button class="topnav-btn" onclick="switchTopTab('benefici-reputacional')">Benefici reputacional</button>
+                </div>
+            </nav>
+
+            <!-- Bottom Filters Bar -->
+            <div class="filters-bar">
+                <div class="filter-item filter-slider">
+                    <label class="filter-label">Any de l'ajut</label>
+                    <div class="slider-inputs">
+                        <span id="sliderYearStart" class="year-badge">2021</span>
+                        <span id="sliderYearEnd" class="year-badge">2025</span>
+                    </div>
+                    <div class="slider-container-wrapper">
+                        <div id="sliderAnios"></div>
+                    </div>
+                </div>
+                
+                <div class="filter-item filter-select">
+                    <label for="selectDept" class="filter-label">Departaments / Instituts</label>
+                    <div class="select-wrapper">
+                        <select id="selectDept">
+                            <option value="all">Tot</option>
+                            <option value="fisica">Departament de Física</option>
+                            <option value="quimica">Departament de Química</option>
+                            <option value="biologia">Departament de Biologia</option>
+                            <option value="filologia">Departament de Filologia</option>
+                            <option value="medicina">Departament de Medicina</option>
+                            <option value="institut-neuro">Institut de Neurociències</option>
+                            <option value="institut-ia">Institut d'Intel·ligència Artificial</option>
+                        </select>
+                        <i class="fa-solid fa-chevron-down select-arrow"></i>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Dashboard Card Container -->
+            <div class="dashboard-card" id="dashboardPanel">
+                <h1 class="dashboard-title">Finançament extern</h1>
+                
+                <div class="funding-grid">
+                    
+                    <!-- LEFT COLUMN: COMPETITIUS (50%) -->
+                    <div class="funding-col col-50">
+                        <h2 class="funding-section-title">Competitius</h2>
+                        
+                        <!-- Group 1: Projectes nacionals -->
+                        <div class="funding-group">
+                            <h3 class="funding-group-title">Projectes nacionals</h3>
+                            <div class="charts-row">
+                                <div class="chart-box">
+                                    <h4 class="chart-title">Projectes R+D</h4>
+                                    <div id="chartRD" class="chart-container"></div>
+                                </div>
+                                <div class="chart-box">
+                                    <h4 class="chart-title">Altres</h4>
+                                    <div id="chartNacAltres" class="chart-container"></div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Group 2: Projectes internacionals -->
+                        <div class="funding-group mt-6">
+                            <h3 class="funding-group-title">Projectes internacionals</h3>
+                            <div class="charts-row three-cols">
+                                <div class="chart-box">
+                                    <h4 class="chart-title">Programa Marc Europeu</h4>
+                                    <div id="chartMarcEuropeu" class="chart-container"></div>
+                                </div>
+                                <div class="chart-box">
+                                    <h4 class="chart-title">Altres</h4>
+                                    <div id="chartIntAltres" class="chart-container"></div>
+                                </div>
+                                <div class="chart-box">
+                                    <h4 class="chart-title">Educatius</h4>
+                                    <div id="chartEducatius" class="chart-container"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- RIGHT COLUMN: NO COMPETITIUS (50%) -->
+                    <div class="funding-col col-50">
+                        <h2 class="funding-section-title">No competitius</h2>
+                        
+                        <!-- Group 1: Contractes i convenis -->
+                        <div class="funding-group">
+                            <h3 class="funding-group-title">Contractes i convenis</h3>
+                            <div class="charts-row">
+                                <div class="chart-box">
+                                    <h4 class="chart-title">Públic</h4>
+                                    <div id="chartPublic" class="chart-container"></div>
+                                </div>
+                                <div class="chart-box">
+                                    <h4 class="chart-title">Privat</h4>
+                                    <div id="chartPrivat" class="chart-container"></div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Group 2: Facturació directa -->
+                        <div class="funding-group mt-6">
+                            <h3 class="funding-group-title">Facturació directa</h3>
+                            <div class="charts-row">
+                                <div class="chart-box full-width">
+                                    <h4 class="chart-title">Facturació directa</h4>
+                                    <div id="chartFacturacioDirecta" class="chart-container"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- Portada Cover Panel -->
+            <div class="dashboard-card cover-card" id="portadaPanel">
+                <div class="cover-content">
+                    <h1 class="cover-title">Indicadors<br>Pla Estratègic</h1>
+                </div>
+            </div>
+
+            <!-- Recursos Humans Panel (Inputs) -->
+            <div class="dashboard-card hidden" id="rhPanel">
+                <div class="rh-grid">
+                    <!-- Row 1: KPI Cards -->
+                    <div class="rh-row">
+                        <!-- Card 1: Permanent -->
+                        <div class="rh-kpi-card">
+                            <h2 class="rh-card-title">Permanent</h2>
+                            <div class="rh-kpis-flex">
+                                <div class="rh-kpi-sub">
+                                    <span class="rh-kpi-label">LOSU amb possibilitat de trams de recerca</span>
+                                    <span class="rh-kpi-val" id="kpiLosu">1214</span>
+                                </div>
+                                <div class="rh-kpi-sub">
+                                    <span class="rh-kpi-label">ICREA</span>
+                                    <span class="rh-kpi-val" id="kpiIcrea">26</span>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Card 2: Personal investigador en formació -->
+                        <div class="rh-kpi-card">
+                            <h2 class="rh-card-title">Personal investigador en formació</h2>
+                            <div class="rh-kpi-subtitle">Doctorants industrials</div>
+                            <div class="rh-kpis-flex">
+                                <div class="rh-kpi-sub">
+                                    <span class="rh-kpi-label">Nous</span>
+                                    <span class="rh-kpi-val text-truncated" id="kpiNous">(En ...</span>
+                                </div>
+                                <div class="rh-kpi-sub">
+                                    <span class="rh-kpi-label">Vigents</span>
+                                    <span class="rh-kpi-val text-truncated" id="kpiVigents">(En ...</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Row 2: Charts -->
+                    <div class="rh-row mt-6">
+                        <!-- Chart Card 1: IPs per gènere -->
+                        <div class="rh-chart-card col-40">
+                            <h2 class="rh-card-title left-align">Ips per gènere</h2>
+                            <div id="chartRhGenPie" class="rh-chart-container"></div>
+                        </div>
+                        <!-- Chart Card 2: Evolució per gènere -->
+                        <div class="rh-chart-card col-60">
+                            <div id="chartRhGenBar" class="rh-chart-container"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Estructures de Recerca Panel (Inputs) -->
+            <div class="dashboard-card hidden" id="erPanel">
+                <h1 class="dashboard-title">Estructures de recerca</h1>
+                <div class="er-grid">
+                    <!-- Card 1: Bàsiques UAB -->
+                    <div class="er-card">
+                        <h2 class="er-card-title">Bàsiques UAB</h2>
+                        <div class="er-subgrid">
+                            <div class="er-subcard">
+                                <span class="er-subcard-label">Departaments</span>
+                                <span class="er-subcard-val" id="kpiDepts">57</span>
+                            </div>
+                            <div class="er-subcard">
+                                <span class="er-subcard-label">CERS</span>
+                                <span class="er-subcard-val" id="kpiCers">19</span>
+                            </div>
+                            <div class="er-subcard">
+                                <span class="er-subcard-label">Instituts propis</span>
+                                <span class="er-subcard-val" id="kpiInstPropis">9</span>
+                            </div>
+                            <div class="er-subcard">
+                                <span class="er-subcard-label">SGRs</span>
+                                <span class="er-subcard-val" id="kpiSgrs">180</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Card 2: Esfera UAB -->
+                    <div class="er-card">
+                        <h2 class="er-card-title">Esfera UAB</h2>
+                        <div class="er-subgrid single-center">
+                            <div class="er-subcard">
+                                <span class="er-subcard-label">Esfera</span>
+                                <span class="er-subcard-val" id="kpiEsfera">167</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Activitats - Projectes de Recerca Panel (Activitats) -->
+            <div class="dashboard-card transparent-card hidden" id="actPrPanel">
+                <div class="act-pr-grid">
+                    <!-- Card 1: Grans projectes Participació -->
+                    <div class="act-pr-card">
+                        <span class="act-pr-label-main">Grans projectes</span>
+                        <span class="act-pr-label-sub">Participació</span>
+                        <span class="act-pr-val" id="kpiActPrPart">6606</span>
+                    </div>
+                    <!-- Card 2: Grans projectes Lideratge -->
+                    <div class="act-pr-card">
+                        <span class="act-pr-label-main">Grans projectes</span>
+                        <span class="act-pr-label-sub">Lideratge</span>
+                        <span class="act-pr-val" id="kpiActPrLid">6606</span>
+                    </div>
+                    <!-- Card 3: Nacionals -->
+                    <div class="act-pr-card">
+                        <span class="act-pr-label-main">Nacionals</span>
+                        <span class="act-pr-val" id="kpiActPrNac">839</span>
+                    </div>
+                    <!-- Card 4: Internacionals -->
+                    <div class="act-pr-card">
+                        <span class="act-pr-label-main">Internacionals</span>
+                        <span class="act-pr-val" id="kpiActPrInt">345</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Activitats - Contractes i Convenis Panel (Activitats) -->
+            <div class="dashboard-card transparent-card hidden" id="actCcPanel">
+                <div class="act-cc-grid">
+                    <!-- Card 1: amb empreses -->
+                    <div class="act-pr-card">
+                        <span class="act-pr-label-main">Contractes i convenis</span>
+                        <span class="act-pr-label-sub">amb empreses</span>
+                        <span class="act-pr-val" id="kpiActCcEmp">430</span>
+                    </div>
+                    <!-- Card 2: amb entitats públiques -->
+                    <div class="act-pr-card">
+                        <span class="act-pr-label-main">Contractes i convenis amb</span>
+                        <span class="act-pr-label-sub">entitats públiques</span>
+                        <span class="act-pr-val" id="kpiActCcPub">924</span>
+                    </div>
+                </div>
+                
+                <!-- Map Container -->
+                <div class="map-container-box mt-6" style="padding: 0; display: block; position: relative; width: 100%; height: 380px; flex-shrink: 0;">
+                    <div id="leaflet-map" style="width: 100%; height: 100%; border-radius: 8px;"></div>
+                </div>
+            </div>
+
+            <!-- Activitats - Participació amb Xarxes i Plataformes Panel (Activitats) -->
+            <div class="dashboard-card transparent-card hidden" id="actXpPanel">
+                <div class="act-xp-grid">
+                    <div class="act-pr-card centered-single-card">
+                        <span class="act-pr-label-main text-large">Participació amb xarxes i plataformes</span>
+                        <span class="act-pr-val val-large" id="kpiActXpVal">213</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Outputs - Publicacions de Recerca Panel (Outputs) -->
+            <div class="dashboard-card transparent-card hidden" id="outPrPanel">
+                <div class="out-pr-grid">
+                    <div class="out-pr-chart-card">
+                        <h2 class="chart-section-title">Publicacions per any (SCOPUS)</h2>
+                        <div id="chartScopus" class="out-chart-container"></div>
+                    </div>
+                    <div class="out-pr-chart-card">
+                        <h2 class="chart-section-title">Publicacions per any (WOS)</h2>
+                        <div id="chartWos" class="out-chart-container"></div>
+                    </div>
+                    <div class="out-pr-chart-card">
+                        <h2 class="chart-section-title">Publicacions per any (OpenAlex)</h2>
+                        <div id="chartOpenAlex" class="out-chart-container"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Outputs - Tesis Llegides Panel (Outputs) -->
+            <div class="dashboard-card transparent-card hidden" id="outTlPanel">
+                <div class="out-pr-grid">
+                    <div class="out-pr-chart-card">
+                        <h2 class="chart-section-title">Tesis llegides per any natural</h2>
+                        <div id="chartTesisNatural" class="out-chart-container"></div>
+                    </div>
+                    <div class="out-pr-chart-card">
+                        <h2 class="chart-section-title">Tesis llegides per any acadèmic</h2>
+                        <div id="chartTesisAcademic" class="out-chart-container"></div>
+                    </div>
+                </div>
+                <div class="out-tl-row mt-6">
+                    <div class="rh-chart-card full-width">
+                        <h2 class="rh-card-title left-align">Directors per gènere</h2>
+                        <div id="chartDirectorsGen" class="out-chart-container-tall"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Outcomes - Desenvolupament Panel (Outcomes) -->
+            <div class="dashboard-card transparent-card hidden" id="outcDevPanel">
+                <div class="outc-dev-grid">
+                    <!-- Card 1: Trams de recerca vius -->
+                    <div class="act-pr-card outcomes-card">
+                        <span class="act-pr-label-main">Trams de recerca vius</span>
+                        <span class="act-pr-label-sub">Desembre 2024</span>
+                        <span class="act-pr-val" id="kpiOutcTrams">1132</span>
+                    </div>
+                    <!-- Card 2: % professorat amb trams vius -->
+                    <div class="act-pr-card outcomes-card">
+                        <span class="act-pr-label-main">% professorat amb trams vius</span>
+                        <span class="act-pr-label-sub">Desembre 2024</span>
+                        <span class="act-pr-val" id="kpiOutcPct">69,79%</span>
+                    </div>
+                    <!-- Card 3: ICREA Acadèmia -->
+                    <div class="act-pr-card outcomes-card">
+                        <span class="act-pr-label-main">ICREA Acadèmia</span>
+                        <span class="act-pr-label-sub">&nbsp;</span>
+                        <span class="act-pr-val" id="kpiOutcIcrea">43</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Outcomes - Col·laboracions Panel (Outcomes) -->
+            <div class="dashboard-card transparent-card hidden" id="outcColPanel">
+                <div class="outc-col-grid">
+                    <!-- Left Column: KPI & Map -->
+                    <div class="outc-col-left">
+                        <div class="act-pr-card full-width mb-6">
+                            <span class="act-pr-label-main">Empreses amb contractes i convenis</span>
+                            <span class="act-pr-val" id="kpiOutcColEmp">422</span>
+                        </div>
+                        <div class="map-container-box">
+                            <div class="world-map-wrapper">
+                                <img src="clean_world_map.png" alt="Mapa de distribució mundial de col·laboracions" class="world-map-image">
+                                
+                                <!-- Map Text Labels -->
+                                <span class="map-label label-na" style="left: 15%; top: 32%;">AMÈRICA DEL NORD</span>
+                                <span class="map-label label-sa" style="left: 28%; top: 68%;">AMÈRICA DEL SUD</span>
+                                <span class="map-label label-pa" style="left: 5%; top: 52%;">Oceà Pacífic</span>
+                                <span class="map-label label-at" style="left: 36%; top: 52%;">Oceà Atlàntic</span>
+                                <span class="map-label label-af" style="left: 49%; top: 62%;">ÀFRICA</span>
+                                <span class="map-label label-eu" style="left: 49%; top: 28%;">EUROPA</span>
+                                <span class="map-label label-as" style="left: 65%; top: 32%;">ÀSIA</span>
+                                <span class="map-label label-in" style="left: 56%; top: 68%;">Oceà Índic</span>
+                                <span class="map-label label-au" style="left: 80%; top: 68%;">CONTINENT<br>AUSTRALIÀ</span>
+
+                                <!-- Map Markers (Blue dots clustered visually to match design) -->
+                                <!-- Europe cluster -->
+                                <div class="map-marker-col" style="left: 46%; top: 25%;"></div>
+                                <div class="map-marker-col" style="left: 47%; top: 26%;"></div>
+                                <div class="map-marker-col" style="left: 48%; top: 24%;"></div>
+                                <div class="map-marker-col" style="left: 49%; top: 25%;"></div>
+                                <div class="map-marker-col" style="left: 50%; top: 26%;"></div>
+                                <div class="map-marker-col" style="left: 51%; top: 28%;"></div>
+                                <div class="map-marker-col" style="left: 52%; top: 25%;"></div>
+                                <div class="map-marker-col" style="left: 47%; top: 28%;"></div>
+                                <div class="map-marker-col" style="left: 48%; top: 29%;"></div>
+                                <div class="map-marker-col" style="left: 49%; top: 28%;"></div>
+                                <div class="map-marker-col" style="left: 50%; top: 30%;"></div>
+                                <div class="map-marker-col" style="left: 51%; top: 31%;"></div>
+                                <div class="map-marker-col" style="left: 52%; top: 29%;"></div>
+                                <div class="map-marker-col" style="left: 48%; top: 32%;"></div>
+                                <div class="map-marker-col" style="left: 49%; top: 33%;"></div>
+                                <!-- North America -->
+                                <div class="map-marker-col" style="left: 15%; top: 35%;"></div>
+                                <div class="map-marker-col" style="left: 18%; top: 30%;"></div>
+                                <div class="map-marker-col" style="left: 20%; top: 34%;"></div>
+                                <div class="map-marker-col" style="left: 22%; top: 38%;"></div>
+                                <div class="map-marker-col" style="left: 24%; top: 37%;"></div>
+                                <!-- South America -->
+                                <div class="map-marker-col" style="left: 29%; top: 58%;"></div>
+                                <div class="map-marker-col" style="left: 31%; top: 62%;"></div>
+                                <div class="map-marker-col" style="left: 34%; top: 70%;"></div>
+                                <!-- Asia -->
+                                <div class="map-marker-col" style="left: 70%; top: 42%;"></div>
+                                <div class="map-marker-col" style="left: 72%; top: 48%;"></div>
+                                <div class="map-marker-col" style="left: 74%; top: 54%;"></div>
+                                <!-- Australia -->
+                                <div class="map-marker-col" style="left: 82%; top: 70%;"></div>
+
+                                <!-- Azure & TomTom branding -->
+                                <div class="map-brand-left">
+                                    <span style="display:inline-block; width:6px; height:6px; background-color:#0078d4; margin-right:4px; border-radius:1px;"></span>Microsoft Azure
+                                </div>
+                                <div class="map-brand-right">
+                                    © 2026 TomTom <span class="feedback-link">Feedback</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Right Column: Table -->
+                    <div class="outc-col-right">
+                        <div class="loyalty-card">
+                            <h2 class="loyalty-title">Fidelitat empresarial</h2>
+                            <div class="loyalty-table-wrapper">
+                                <table class="loyalty-table">
+                                    <thead>
+                                        <tr>
+                                            <th class="text-left">nom</th>
+                                            <th class="text-right">Ajuts</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="loyaltyTableBody">
+                                        <!-- Will be filled dynamically -->
+                                    </tbody>
+                                    <tfoot>
+                                        <tr class="total-row">
+                                            <td>Total</td>
+                                            <td class="text-right" id="loyaltyTableTotal">422</td>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Impact - Contribució Panel -->
+            <div class="dashboard-card transparent-card hidden" id="impContPanel">
+                <div class="imp-grid">
+                    <div class="act-pr-card">
+                        <span class="act-pr-label-main">Spinoffs</span>
+                        <span class="act-pr-label-sub">creades</span>
+                        <span class="act-pr-val" id="kpiImpSpinoff">6</span>
+                    </div>
+                    <div class="act-pr-card">
+                        <span class="act-pr-label-main">Startups</span>
+                        <span class="act-pr-label-sub">creades</span>
+                        <span class="act-pr-val" id="kpiImpStartup">45</span>
+                    </div>
+                    <div class="act-pr-card">
+                        <span class="act-pr-label-main">Empreses de Base</span>
+                        <span class="act-pr-label-sub">Tecnològica (EBTS) actives</span>
+                        <span class="act-pr-val" id="kpiImpEbts">17</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Impact - Reputacional Panel -->
+            <div class="dashboard-card transparent-card hidden" id="impRepPanel">
+                <div class="imp-grid">
+                    <div class="act-pr-card">
+                        <span class="act-pr-label-main">Ranking CyD 2024</span>
+                        <span class="act-pr-val" style="font-size: 64px; font-weight: 900; margin-top: 20px;">1</span>
+                    </div>
+                    <div class="act-pr-card">
+                        <span class="act-pr-label-main">U-Ranking 2024</span>
+                        <span class="act-pr-val" style="font-size: 64px; font-weight: 900; margin-top: 20px;">3</span>
+                    </div>
+                    <div class="act-pr-card">
+                        <span class="act-pr-label-main">QS WUR 2025</span>
+                        <span class="act-pr-val" style="font-size: 64px; font-weight: 900; margin-top: 20px;">175</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Alternative Panels for other views (to make it a full-featured mockup) -->
+            <div class="dashboard-card hidden" id="placeholderPanel">
+                <h1 class="dashboard-title" id="placeholderTitle">Secció</h1>
+                <div class="placeholder-content">
+                    <i class="fa-solid fa-folder-open text-slate-300 text-6xl mb-4"></i>
+                    <p class="text-slate-500 font-medium">Aquesta secció està en desenvolupament per a la vista seleccionada.</p>
+                </div>
+            </div>
+
+
+
+        </main>
+    </div>
+
+    <!-- ECharts CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+    <!-- noUiSlider JS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.7.1/nouislider.min.js"></script>
+    <!-- Leaflet JS -->
+    <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+    <!-- Custom JS -->
+    <script src="app.js"></script>
+</body>
+</html>

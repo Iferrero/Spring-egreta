@@ -365,8 +365,9 @@ public class AwardService {
                                         String modoAnio,
                                         String collaboratorUuid) {
 
-        if (collaboratorUuid != null && !collaboratorUuid.isBlank()) {
-            List<Document> mongoResult = runPipeline(
+        List<Document> mongoResult;
+        if (collaboratorUuid != null && !collaboratorUuid.isBlank() && !"all".equalsIgnoreCase(collaboratorUuid)) {
+            mongoResult = runPipeline(
                     "mongodb/awards/managing-powertable.json",
                     builder -> {
                         builder.replaceManagingUuid(collaboratorUuid);
@@ -377,29 +378,106 @@ public class AwardService {
                             builder.awardDateBetween(desde, hasta);
                         }
                     });
-
-            List<Document> excelResult = getExcelPrestacioRows(collaboratorUuid, desde, hasta);
-            List<Document> combined = new ArrayList<>(mongoResult);
-            combined.addAll(excelResult);
-            return combined;
+        } else {
+            mongoResult = runPipeline(
+                    "mongodb/awards/powertable.json",
+                    builder -> {
+                        if ("vigencia".equalsIgnoreCase(modoAnio)) {
+                            builder.vigenciaYears(desde, hasta);
+                        } else {
+                            builder.awardDateBetween(desde, hasta);
+                        }
+                    });
         }
 
+        List<Document> excelResult = getExcelPrestacioRows(collaboratorUuid, desde, hasta);
+        List<Document> combined = new ArrayList<>(mongoResult);
+        combined.addAll(excelResult);
+        return combined;
+    }
+
+    public List<Document> getMapConvenis(Integer desde, Integer hasta, String collaboratorUuid) {
         return runPipeline(
-                "mongodb/awards/powertable.json",
+                "mongodb/awards/map-convenis.json",
                 builder -> {
-                    if ("vigencia".equalsIgnoreCase(modoAnio)) {
-                        builder.vigenciaYears(desde, hasta);
+                    if (collaboratorUuid != null && !collaboratorUuid.isBlank() && !"all".equalsIgnoreCase(collaboratorUuid)) {
+                        builder.replaceManagingUuid(collaboratorUuid);
                     } else {
-                        builder.awardDateBetween(desde, hasta);
+                        List<Document> pipeline = builder.build();
+                        pipeline.removeIf(stage -> {
+                            Document match = stage.get("$match", Document.class);
+                            if (match == null) return false;
+                            List<?> orList = (List<?>) match.get("$or");
+                            if (orList == null) return false;
+                            for (Object condition : orList) {
+                                if (!(condition instanceof Document cond)) continue;
+                                if (cond.containsKey("managingOrganization.uuid")) {
+                                    return true;
+                                }
+                            }
+                            return false;
+                        });
                     }
+                    builder.awardDateBetween(desde, hasta);
                 });
     }
+
+    public int getXarxesPlataformesCount(Integer desde, Integer hasta, String collaboratorUuid) {
+        List<Document> result = runPipeline(
+                "mongodb/awards/xarxes-plataformes.json",
+                builder -> {
+                    if (collaboratorUuid != null && !collaboratorUuid.isBlank() && !"all".equalsIgnoreCase(collaboratorUuid)) {
+                        builder.replaceManagingUuid(collaboratorUuid);
+                    } else {
+                        List<Document> pipeline = builder.build();
+                        pipeline.removeIf(stage -> {
+                            Document match = stage.get("$match", Document.class);
+                            if (match == null) return false;
+                            List<?> orList = (List<?>) match.get("$or");
+                            if (orList == null) return false;
+                            for (Object condition : orList) {
+                                if (!(condition instanceof Document cond)) continue;
+                                if (cond.containsKey("managingOrganization.uuid")) {
+                                    return true;
+                                }
+                            }
+                            return false;
+                        });
+                    }
+                    builder.awardDateBetween(desde, hasta);
+                });
+        if (result == null || result.isEmpty()) {
+            return 0;
+        }
+        Document doc = result.get(0);
+        Object totalVal = doc.get("total");
+        if (totalVal instanceof Number num) {
+            return num.intValue();
+        }
+        return 0;
+    }
+
 
     private static final String EXCEL_PRESTACIO_PATH = "TABLON-Balanç de recursos - detallat (RC0025R).xlsx";
     private static final int EXCEL_DATA_START_ROW = 6; // rows 0-5 are metadata/header
 
     private List<Document> getExcelPrestacioRows(String orgUuid, Integer desde, Integer hasta) {
-        Map<Integer, Map<String, Double>> byYear = excelCache.get(orgUuid);
+        Map<Integer, Map<String, Double>> byYear;
+        if (orgUuid == null || orgUuid.isBlank() || "all".equalsIgnoreCase(orgUuid)) {
+            // Aggregate all organizations
+            byYear = new LinkedHashMap<>();
+            for (Map<Integer, Map<String, Double>> orgCache : excelCache.values()) {
+                orgCache.forEach((year, ids) -> {
+                    Map<String, Double> aggregatedIds = byYear.computeIfAbsent(year, k -> new LinkedHashMap<>());
+                    ids.forEach((id, val) -> {
+                        aggregatedIds.merge(id, val, Double::sum);
+                    });
+                });
+            }
+        } else {
+            byYear = excelCache.get(orgUuid);
+        }
+
         if (byYear == null || byYear.isEmpty()) return List.of();
 
         List<Document> result = new ArrayList<>();
@@ -412,7 +490,8 @@ public class AwardService {
                     .append("categoria", "Prestació de Serveis")
                     .append("tipo", "Prestació de Serveis")
                     .append("ajuts", ids.size())
-                    .append("import", Math.round(totalImport * 100.0) / 100.0));
+                    .append("import", Math.round(totalImport * 100.0) / 100.0)
+                    .append("esLider", true));
         });
         return result;
     }

@@ -9,8 +9,12 @@
     {
       "$match": {
         "$or": [
-          { "managingOrganization.uuid": "__MANAGING_UUID__" },
-          { "coManagingOrganizations.uuid": "__MANAGING_UUID__" }
+          {
+            "managingOrganization.uuid": "__MANAGING_UUID__"
+          },
+          {
+            "coManagingOrganizations.uuid": "__MANAGING_UUID__"
+          }
         ]
       }
     },
@@ -22,11 +26,46 @@
       }
     },
     {
+      "$lookup": {
+        "from": "Applications",
+        "localField": "applications.uuid",
+        "foreignField": "uuid",
+        "as": "appDocs"
+      }
+    },
+    {
+      "$unwind": {
+        "path": "$appDocs",
+        "preserveNullAndEmptyArrays": true
+      }
+    },
+    {
+      "$lookup": {
+        "from": "FundingOpportunities",
+        "localField": "appDocs.fundingOpportunity.uuid",
+        "foreignField": "uuid",
+        "as": "fOpp"
+      }
+    },
+    {
+      "$unwind": {
+        "path": "$fOpp",
+        "preserveNullAndEmptyArrays": true
+      }
+    },
+    {
       "$addFields": {
         "anio": {
           "$cond": [
-            { "$ifNull": ["$awardDate", false] },
-            { "$year": "$awardDate" },
+            {
+              "$ifNull": [
+                "$awardDate",
+                false
+              ]
+            },
+            {
+              "$year": "$awardDate"
+            },
             null
           ]
         }
@@ -40,8 +79,33 @@
     },
     {
       "$match": {
-        "fundings.fundingCollaborators.collaborator.uuid":
-          "84443078-1a60-462d-9d0a-b04312afd9eb"
+        "fundings.fundingCollaborators.collaborator.uuid": "84443078-1a60-462d-9d0a-b04312afd9eb"
+      }
+    },
+    {
+      "$lookup": {
+        "from": "ExternalOrganizations",
+        "localField": "fundings.funder.uuid",
+        "foreignField": "uuid",
+        "as": "funder_info"
+      }
+    },
+    {
+      "$unwind": {
+        "path": "$funder_info",
+        "preserveNullAndEmptyArrays": true
+      }
+    },
+    {
+      "$unwind": {
+        "path": "$funder_info.keywordGroups",
+        "preserveNullAndEmptyArrays": true
+      }
+    },
+    {
+      "$unwind": {
+        "path": "$funder_info.keywordGroups.classifications",
+        "preserveNullAndEmptyArrays": true
       }
     },
     {
@@ -53,6 +117,91 @@
             "onError": 0,
             "onNull": 0
           }
+        },
+        "award_tipo": {
+          "$switch": {
+            "branches": [
+              {
+                "case": {
+                  "$in": [
+                    "$type.term.ca_ES",
+                    [
+                      "Concessió conveni",
+                      "Conveni extern a la UAB"
+                    ]
+                  ]
+                },
+                "then": {
+                  "$concat": [
+                    "$type.term.ca_ES",
+                    " - ",
+                    {
+                      "$ifNull": [
+                        "$funder_info.keywordGroups.classifications.term.ca_ES",
+                        "Sense classificar"
+                      ]
+                    }
+                  ]
+                }
+              },
+              {
+                "case": {
+                  "$eq": [
+                    "$fOpp.type.uri",
+                    "/dk/atira/pure/fundingopportunity/fundingopportunitytypes/externalfundingopportunity/pro/pje"
+                  ]
+                },
+                "then": "Programa Marc Europeu"
+              },
+              {
+                "case": {
+                  "$eq": [
+                    "$fOpp.type.uri",
+                    "/dk/atira/pure/fundingopportunity/fundingopportunitytypes/externalfundingopportunity/pro/itn"
+                  ]
+                },
+                "then": "Altres ajuts int"
+              },
+              {
+                "case": {
+                  "$eq": [
+                    "$fOpp.type.uri",
+                    "/dk/atira/pure/fundingopportunity/fundingopportunitytypes/externalfundingopportunity/pro/pjn"
+                  ]
+                },
+                "then": "Projectes R+D"
+              }
+            ],
+            "default": "$type.term.ca_ES"
+          }
+        },
+        "esLider": {
+          "$let": {
+            "vars": {
+              "internalLeads": {
+                "$filter": {
+                  "input": { "$ifNull": ["$collaborators", []] },
+                  "as": "c",
+                  "cond": {
+                    "$and": [
+                      { "$eq": ["$$c.leadCollaborator", true] },
+                      { "$eq": ["$$c.typeDiscriminator", "InternalCollaboratorAssociation"] }
+                    ]
+                  }
+                }
+              },
+              "hasCollaborators": {
+                "$gt": [{ "$size": { "$ifNull": ["$collaborators", []] } }, 0]
+              }
+            },
+            "in": {
+              "$cond": [
+                "$$hasCollaborators",
+                { "$gt": [{ "$size": "$$internalLeads" }, 0] },
+                true
+              ]
+            }
+          }
         }
       }
     },
@@ -61,11 +210,14 @@
         "_id": {
           "awardUuid": "$uuid",
           "anio": "$anio",
-          "tipo": "$type.term.ca_ES",
+          "tipo": "$award_tipo",
           "categoria": "$categoria"
         },
         "totalImporte": {
           "$sum": "$importe"
+        },
+        "esLider": {
+          "$first": "$esLider"
         }
       }
     },
@@ -76,9 +228,13 @@
         "anio": "$_id.anio",
         "tipo": "$_id.tipo",
         "categoria": {
-          "$ifNull": ["$_id.categoria", "Sense categoria"]
+          "$ifNull": [
+            "$_id.categoria",
+            "Sense categoria"
+          ]
         },
-        "importe": "$totalImporte"
+        "importe": "$totalImporte",
+        "esLider": 1
       }
     },
     {
@@ -86,7 +242,8 @@
         "_id": {
           "anio": "$anio",
           "tipo": "$tipo",
-          "categoria": "$categoria"
+          "categoria": "$categoria",
+          "esLider": "$esLider"
         },
         "ajuts": {
           "$sum": 1
@@ -102,9 +259,13 @@
         "anio": "$_id.anio",
         "categoria": "$_id.categoria",
         "tipo": "$_id.tipo",
+        "esLider": "$_id.esLider",
         "ajuts": 1,
         "import": {
-          "$round": ["$import", 2]
+          "$round": [
+            "$import",
+            2
+          ]
         }
       }
     },

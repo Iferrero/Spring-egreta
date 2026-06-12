@@ -25,10 +25,11 @@ public class OpenApiConfig {
 
     @Bean
     public OpenAPI customOpenAPI() {
-        String securitySchemeName = "basicAuth";
+        String basicAuthScheme = "basicAuth";
+        String apiKeyScheme = "apiKey";
         String authDescription = casEnabled 
-            ? "API REST protegida con CAS. En desarrollo local usa Basic Auth (usuario: recerca, contraseña: UAB)"
-            : "API REST protegida con Basic Auth. Usuario por defecto: recerca, contraseña: UAB";
+            ? "API REST protegida con CAS / API Key. En desarrollo local usa Basic Auth (usuario: recerca, contraseña: UAB) o API Key."
+            : "API REST protegida con Basic Auth / API Key. Usuario por defecto: recerca, contraseña: UAB.";
 
         return new OpenAPI()
                 .info(new Info()
@@ -47,12 +48,19 @@ public class OpenApiConfig {
                                 .description("Servidor local")
                 ))
                 .components(new Components()
-                        .addSecuritySchemes(securitySchemeName,
+                        .addSecuritySchemes(basicAuthScheme,
                                 new SecurityScheme()
-                                        .name(securitySchemeName)
+                                        .name(basicAuthScheme)
                                         .type(SecurityScheme.Type.HTTP)
                                         .scheme("basic")
-                                        .description("Autenticación Basic HTTP (usuario/contraseña)")))
-                .addSecurityItem(new SecurityRequirement().addList(securitySchemeName));
+                                        .description("Autenticación Basic HTTP (usuario/contraseña)"))
+                        .addSecuritySchemes(apiKeyScheme,
+                                new SecurityScheme()
+                                        .name("api-key")
+                                        .type(SecurityScheme.Type.APIKEY)
+                                        .in(SecurityScheme.In.HEADER)
+                                        .description("Autenticación por API Key en la cabecera 'api-key' o 'X-API-KEY'")))
+                .addSecurityItem(new SecurityRequirement().addList(basicAuthScheme))
+                .addSecurityItem(new SecurityRequirement().addList(apiKeyScheme));
     }
 }

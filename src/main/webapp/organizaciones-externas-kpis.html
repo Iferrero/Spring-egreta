@@ -63,20 +63,20 @@
     </style>
 </head>
 <body class="bg-slate-50 min-h-screen">
-<div class="mx-auto max-w-7xl px-4 py-10">
+<div  class="mx-auto max-w-7xl px-4 py-10">
     <header class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5 mb-8">
         <a href="index-orgaext.html" class="hover:opacity-80 transition-opacity">
-            <div>
+            <div class="hidden">
                 <h1 class="text-2xl font-extrabold text-slate-800 tracking-tight">Gestio d'organitzacions externes</h1>
                 <p class="text-sm text-slate-500 mt-1">KPIs de qualitat de dades i llistat detallat per cada KPI</p>
             </div>
         </a>
-        <div class="flex gap-3">
+        <div class="flex gap-3 hidden">
             <a href="organizaciones-externas.html" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-sm text-slate-600 shadow-sm">
                 <i class="fa-solid fa-list"></i> Llistat complet
             </a>
             <a href="organizaciones-externas-grafo.html" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-sm text-slate-600 shadow-sm">
-                <i class="fa-solid fa-diagram-project"></i> Grafo
+                <i class="fa-solid fa-diagram-project"></i> Similitud entre organitzacions
             </a>
             <a href="organizaciones-externas-stats.html" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-sm text-slate-600 shadow-sm">
                 <i class="fa-solid fa-chart-column"></i> Estadistiques
@@ -87,6 +87,118 @@
     <section class="mb-6">
         <h2 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">KPIs</h2>
         <div id="kpiGrid" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4"></div>
+    </section>
+
+    <!-- Auto-apply country section -->
+    <section id="autoApplySection" class="mb-6 bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+                <h3 id="autoApplyTitle" class="text-sm font-bold text-slate-800">Auto-aplicar País</h3>
+                <p id="autoApplyDescription" class="text-xs text-slate-500 mt-1">Cerca automàticament suggeriments de país per a organitzacions que no en tenen i aplica els que superen la confiança mínima.</p>
+            </div>
+            <div class="flex flex-col sm:flex-row items-start sm:items-center gap-4 shrink-0">
+                <!-- Environment Selector -->
+                <div class="flex items-center gap-2">
+                    <label for="autoApplyEnv" class="text-xs font-bold text-slate-500 uppercase tracking-wider">Entorn:</label>
+                    <select id="autoApplyEnv" class="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-400 text-xs text-slate-700 font-semibold cursor-pointer">
+                        <option value="test" selected>Test (egretat.uab.cat)</option>
+                        <option value="prod">Producció (egreta.uab.cat)</option>
+                    </select>
+                </div>
+                <!-- Confidence Selector -->
+                <div class="flex items-center gap-2">
+                    <label for="autoApplyMinConfidence" class="text-xs font-bold text-slate-500 uppercase tracking-wider">Confiança mín.:</label>
+                    <select id="autoApplyMinConfidence" class="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-400 text-xs text-slate-700 font-semibold cursor-pointer">
+                        <option value="1.00">100%</option>
+                        <option value="0.95">95%</option>
+                        <option value="0.90" selected>90% (Recomanat)</option>
+                        <option value="0.85">85%</option>
+                        <option value="0.80">80%</option>
+                        <option value="0.70">70%</option>
+                    </select>
+                </div>
+                <div class="flex gap-3 shrink-0">
+                    <button id="btnStartAutoApply" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold shadow-sm flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                        <i class="fa-solid fa-play"></i> Iniciar procés
+                    </button>
+                    <button id="btnStopAutoApply" class="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-sm font-semibold shadow-sm flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                        <i class="fa-solid fa-stop"></i> Aturar procés
+                    </button>
+                    <a id="btnDownloadAutoLog" href="/external-organizations/stats/auto-apply-country/download-log" class="px-4 py-2 border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 rounded-xl text-sm font-semibold shadow-sm flex items-center gap-2 transition-colors hidden" download>
+                        <i class="fa-solid fa-download"></i> Descarregar Log
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Progress bar and log console -->
+        <div id="autoApplyProgressContainer" class="mt-4 hidden">
+            <div class="w-full bg-slate-100 rounded-full h-2.5 mb-2 overflow-hidden">
+                <div id="autoApplyProgressBar" class="bg-indigo-600 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+            </div>
+            <div class="flex justify-between text-xs text-slate-500 mb-4 font-semibold">
+                <span id="autoApplyProgressText">Processant: 0 / 0</span>
+                <span id="autoApplyAppliedText">Aplicats: 0</span>
+            </div>
+            
+            <div class="relative">
+                <div class="absolute right-2 top-2 z-10 flex gap-2">
+                    <button id="btnClearConsole" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 rounded font-semibold transition-colors">Netejar</button>
+                    <button id="btnCloseApplyConsole" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 rounded font-semibold transition-colors">Tancar</button>
+                </div>
+                <pre id="autoApplyConsole" class="bg-slate-950 text-slate-200 p-4 rounded-xl font-mono text-xs h-48 overflow-y-auto whitespace-pre-wrap select-text"></pre>
+            </div>
+        </div>
+    </section>
+
+    <!-- Auto-validate section -->
+    <section id="autoValidateSection" class="mb-6 bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+                <h3 class="text-sm font-bold text-slate-800">Validació Automàtica</h3>
+                <p class="text-xs text-slate-500 mt-1">Valida automàticament les organitzacions pendents (estat diferent d'Approved) que ja tenen informats el Tipus, el Finançament i el País.</p>
+            </div>
+            <div class="flex flex-col sm:flex-row items-start sm:items-center gap-4 shrink-0">
+                <!-- Environment Selector -->
+                <div class="flex items-center gap-2">
+                    <label for="autoValidateEnv" class="text-xs font-bold text-slate-500 uppercase tracking-wider">Entorn:</label>
+                    <select id="autoValidateEnv" class="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-400 text-xs text-slate-700 font-semibold cursor-pointer">
+                        <option value="test" selected>Test (egretat.uab.cat)</option>
+                        <option value="prod">Producció (egreta.uab.cat)</option>
+                    </select>
+                </div>
+                <div class="flex gap-3 shrink-0">
+                    <button id="btnStartAutoValidate" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-semibold shadow-sm flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                        <i class="fa-solid fa-play"></i> Iniciar validació
+                    </button>
+                    <button id="btnStopAutoValidate" class="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-sm font-semibold shadow-sm flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                        <i class="fa-solid fa-stop"></i> Aturar
+                    </button>
+                    <a id="btnDownloadValidateLog" href="#" class="px-4 py-2 border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 rounded-xl text-sm font-semibold shadow-sm flex items-center gap-2 transition-colors hidden" download>
+                        <i class="fa-solid fa-download"></i> Descarregar Log
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Progress bar and log console -->
+        <div id="autoValidateProgressContainer" class="mt-4 hidden">
+            <div class="w-full bg-slate-100 rounded-full h-2.5 mb-2 overflow-hidden">
+                <div id="autoValidateProgressBar" class="bg-emerald-600 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+            </div>
+            <div class="flex justify-between text-xs text-slate-500 mb-4 font-semibold">
+                <span id="autoValidateProgressText">Processant: 0 / 0</span>
+                <span id="autoValidateAppliedText">Validats: 0</span>
+            </div>
+            
+            <div class="relative">
+                <div class="absolute right-2 top-2 z-10 flex gap-2">
+                    <button id="btnClearValidateConsole" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 rounded font-semibold transition-colors">Netejar</button>
+                    <button id="btnCloseValidateConsole" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 rounded font-semibold transition-colors">Tancar</button>
+                </div>
+                <pre id="autoValidateConsole" class="bg-slate-950 text-slate-200 p-4 rounded-xl font-mono text-xs h-48 overflow-y-auto whitespace-pre-wrap select-text"></pre>
+            </div>
+        </div>
     </section>
 
     <section class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
@@ -105,16 +217,25 @@
         <div class="overflow-x-auto">
             <table class="w-full text-left border-collapse">
                 <thead>
-                <tr class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider">
-                    <th class="px-6 py-3 font-bold">Nom</th>
-                    <th class="px-6 py-3 font-bold">Tipus</th>
+                <tr class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider select-none">
+                    <th class="px-6 py-3 font-bold cursor-pointer hover:text-indigo-600 transition-colors" data-sort="name">
+                        Nom <i class="fa-solid fa-sort ml-1 text-slate-300"></i>
+                    </th>
+                    <th class="px-6 py-3 font-bold cursor-pointer hover:text-indigo-600 transition-colors" data-sort="type">
+                        Tipus <i class="fa-solid fa-sort ml-1 text-slate-300"></i>
+                    </th>
                     <th class="px-10 py-3 font-bold">Tipus suggerit</th>
-                    <th class="px-6 py-3 font-bold">Financiacio</th>
+                    <th class="px-6 py-3 font-bold cursor-pointer hover:text-indigo-600 transition-colors" data-sort="funding">
+                        Financiacio <i class="fa-solid fa-sort ml-1 text-slate-300"></i>
+                    </th>
                     <th class="px-6 py-3 font-bold">Financiacio suggerida</th>
-                    <th class="px-4 py-3 font-bold">Pais</th>
+                    <th class="px-4 py-3 font-bold cursor-pointer hover:text-indigo-600 transition-colors" data-sort="country">
+                        Pais <i class="fa-solid fa-sort ml-1 text-slate-300"></i>
+                    </th>
                     <th class="px-6 py-3 font-bold">Pais suggerit</th>
-                    <th class="px-6 py-3 font-bold">Workflow</th>
-                    <th class="px-6 py-3 font-bold text-right">UUID</th>
+                    <th class="px-6 py-3 font-bold cursor-pointer hover:text-indigo-600 transition-colors" data-sort="workflow">
+                        Workflow <i class="fa-solid fa-sort ml-1 text-slate-300"></i>
+                    </th>
                 </tr>
                 </thead>
                 <tbody id="tableBody" class="divide-y divide-slate-100 text-sm"></tbody>
@@ -124,7 +245,7 @@
         <div class="px-6 py-4 bg-slate-50/70 flex items-center justify-between border-t border-slate-100">
             <button id="btnPrev" class="px-4 py-2 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed text-sm">Anterior</button>
             <span id="pageInfo" class="text-sm font-semibold text-slate-600">Pagina 1 de 1</span>
-            <button id="btnNext" class="px-4 py-2 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed text-sm">Seguent</button>
+            <button id="btnNext" class="px-4 py-2 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed text-sm">Següent</button>
         </div>
     </section>
 </div>
@@ -141,6 +262,16 @@ const KPI_DEFS = {
         listEndpoint: '/external-organizations/stats/no-type',
         subtitle: 'Registres sense tipus informat'
     },
+    withoutFunding: {
+        id: 'withoutFunding',
+        label: 'Organitzacions sense financiacio',
+        icon: 'fa-coins',
+        color: 'emerald',
+        countKey: 'withoutFunding',
+        countEndpoint: '/external-organizations/stats/no-funding/count',
+        listEndpoint: '/external-organizations/stats/no-funding',
+        subtitle: 'Registres sense financiacio informada'
+    },
     withoutCountry: {
         id: 'withoutCountry',
         label: 'Organitzacions sense pais',
@@ -156,11 +287,15 @@ const KPI_DEFS = {
 let activeKpi = 'withoutType';
 let currentPage = 0;
 const pageSize = 20;
+let currentSortBy = 'name';
+let currentSortDirection = 'asc';
 let debounceTimer = null;
+let currentLoadId = 0;
 const countrySuggestionCache = new Map();
 const typeSuggestionCache = new Map();
 const fundingSuggestionCache = new Map();
 const suggestionBundleCache = new Map();
+const uuidsBeingFetched = new Set();
 let typeCatalogOptions = null;
 const EGRETA_EXTERNAL_ORG_BASE =
     'https://egreta.uab.cat/admin/editor/dk/atira/pure/api/shared/model/ueo/externalorganisation/editor/ueoexternalorganisationeditor.xhtml?scheme=&type=&id=';
@@ -177,7 +312,8 @@ function esc(v) {
 function colorClasses(color) {
     const map = {
         rose: { bg: 'bg-rose-100', fg: 'text-rose-600', ring: 'ring-rose-300' },
-        indigo: { bg: 'bg-indigo-100', fg: 'text-indigo-600', ring: 'ring-indigo-300' }
+        indigo: { bg: 'bg-indigo-100', fg: 'text-indigo-600', ring: 'ring-indigo-300' },
+        emerald: { bg: 'bg-emerald-100', fg: 'text-emerald-600', ring: 'ring-emerald-300' }
     };
     return map[color] || map.indigo;
 }
@@ -185,8 +321,21 @@ function colorClasses(color) {
 function workflowBadge(step) {
     const v = (step || '').toLowerCase();
     if (v === 'approved' || v === 'validated') return '<span class="px-2 py-1 rounded-full text-[10px] font-bold uppercase bg-emerald-100 text-emerald-700">' + esc(step) + '</span>';
-    if (v === 'draft') return '<span class="px-2 py-1 rounded-full text-[10px] font-bold uppercase bg-amber-100 text-amber-700">Draft</span>';
+    if (v === 'forapproval') return '<span class="px-2 py-1 rounded-full text-[10px] font-bold uppercase bg-sky-100 text-sky-700">For Approval</span>';
     return '<span class="px-2 py-1 rounded-full text-[10px] font-bold uppercase bg-slate-100 text-slate-600">' + esc(step || 'N/A') + '</span>';
+}
+
+function workflowCell(org) {
+    const step = (org.workflow && org.workflow.step) || '';
+    const v = step.toLowerCase();
+    const badge = workflowBadge(step);
+    
+    if (v === 'approved' || v === 'validated') {
+        return badge;
+    }
+    
+    const btn = `<button type="button" class="approve-workflow-btn inline-flex items-center gap-1 ml-2 px-2 py-1 rounded-lg border border-emerald-300 bg-white hover:bg-emerald-50 text-[11px] font-semibold text-emerald-700 transition-colors" data-uuid="${esc(org.uuid)}"><i class="fa-solid fa-check"></i> Validar</button>`;
+    return `<div class="flex items-center">${badge}${btn}</div>`;
 }
 
 function normalizeText(v) {
@@ -227,7 +376,12 @@ function getOrgFundingLabel(org) {
 function getOrgEgretaUrl(org) {
     const pureId = org && org.pureId != null ? String(org.pureId).trim() : '';
     if (!pureId) return '';
-    return EGRETA_EXTERNAL_ORG_BASE + encodeURIComponent(pureId);
+    const select = document.getElementById('autoApplyEnv');
+    const env = select ? select.value : 'test';
+    const baseUrl = env === 'prod'
+        ? 'https://egreta.uab.cat/admin/editor/dk/atira/pure/api/shared/model/ueo/externalorganisation/editor/ueoexternalorganisationeditor.xhtml?scheme=&type=&id='
+        : 'https://egretat.uab.cat/admin/editor/dk/atira/pure/api/shared/model/ueo/externalorganisation/editor/ueoexternalorganisationeditor.xhtml?scheme=&type=&id=';
+    return baseUrl + encodeURIComponent(pureId);
 }
 
 function hasCountry(org) {
@@ -322,7 +476,7 @@ async function fetchSuggestionBundle(org) {
     return bundle;
 }
 
-async function preloadSuggestionsForPage(rows) {
+async function preloadSuggestionsForPage(rows, loadId) {
     const targets = (rows || []);
     if (!targets.length) return;
 
@@ -333,53 +487,81 @@ async function preloadSuggestionsForPage(rows) {
     });
     if (!needsFetch.length) return;
 
-    const uuids = needsFetch.map(org => org.uuid).filter(Boolean);
-    if (!uuids.length) return;
+    // Registrar todos en el Set de fetching
+    needsFetch.forEach(org => uuidsBeingFetched.add(org.uuid));
 
-    try {
-        const res = await apiFetch('/external-organizations/stats/suggest-metadata/batch', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ uuids })
-        });
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        const results = await res.json();
+    // Forzar renderizado para mostrar los spinners "Analitzant..."
+    if (loadId === currentLoadId) {
+        renderTable(targets);
+    }
 
-        // Poblar caché con los resultados del batch
-        for (const item of (results || [])) {
-            const key = 'uuid:' + String(item.uuid || '').trim();
-            if (!key || key === 'uuid:') continue;
+    // Mapear cada org a una promesa individual de fetch
+    const fetchPromises = needsFetch.map(async (org) => {
+        const orgName = getOrgNameLabel(org);
+        if (!orgName) {
+            if (loadId === currentLoadId) {
+                uuidsBeingFetched.delete(org.uuid);
+            }
+            return;
+        }
+
+        try {
+            const res = await apiFetch('/external-organizations/stats/suggest-metadata?name=' + encodeURIComponent(orgName));
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            const data = await res.json();
+
+            const key = 'uuid:' + String(org.uuid || '').trim();
             const bundle = {
                 country: {
-                    country: String(item.suggestedCountry || '').trim(),
-                    uri: String(item.suggestedCountryUri || '').trim(),
-                    confidence: Number(item.countryConfidence || 0),
-                    reason: String(item.countryReason || '').trim()
+                    country: String(data.suggestedCountry || '').trim(),
+                    uri: String(data.suggestedCountryUri || '').trim(),
+                    confidence: Number(data.countryConfidence || 0),
+                    reason: String(data.countryReason || '').trim()
                 },
                 type: {
-                    type: String(item.suggestedType || '').trim(),
-                    confidence: Number(item.typeConfidence || 0),
-                    reason: String(item.typeReason || '').trim()
+                    type: String(data.suggestedType || '').trim(),
+                    confidence: Number(data.typeConfidence || 0),
+                    reason: String(data.typeReason || '').trim()
                 },
                 funding: {
-                    funding: String(item.suggestedFunding || '').trim(),
-                    uri: String(item.suggestedFundingUri || '').trim(),
-                    confidence: Number(item.fundingConfidence || 0),
-                    reason: String(item.fundingReason || '').trim()
+                    funding: String(data.suggestedFunding || '').trim(),
+                    uri: String(data.suggestedFundingUri || '').trim(),
+                    confidence: Number(data.fundingConfidence || 0),
+                    reason: String(data.fundingReason || '').trim()
                 }
             };
+            
             suggestionBundleCache.set(key, bundle);
             countrySuggestionCache.set(key, bundle.country);
             typeSuggestionCache.set(key, bundle.type);
             fundingSuggestionCache.set(key, bundle.funding);
+        } catch (_) {
+            // Fallback silencioso
+        } finally {
+            if (loadId === currentLoadId) {
+                // Quitar este UUID de fetching y actualizar de inmediato el DOM para este registro
+                uuidsBeingFetched.delete(org.uuid);
+                
+                const rowEl = document.querySelector(`tr[data-uuid="${org.uuid}"]`);
+                if (rowEl) {
+                    const typeCell = rowEl.querySelector('td[data-cell="suggested-type"]');
+                    const fundingCell = rowEl.querySelector('td[data-cell="suggested-funding"]');
+                    const countryCell = rowEl.querySelector('td[data-cell="suggested-country"]');
+                    
+                    if (typeCell) typeCell.innerHTML = getSuggestedTypeHtml(org);
+                    if (fundingCell) fundingCell.innerHTML = getSuggestedFundingHtml(org);
+                    if (countryCell) countryCell.innerHTML = getSuggestedCountryHtml(org);
+                }
+            }
         }
-    } catch (_) {
-        // Fallback silencioso — las celdas quedarán vacías
-    }
+    });
+
+    // Esperar a que todas las llamadas concurrentes finalicen
+    await Promise.allSettled(fetchPromises);
 }
 
-async function preloadCountrySuggestions(rows) {
-    await preloadSuggestionsForPage(rows);
+async function preloadCountrySuggestions(rows, loadId) {
+    await preloadSuggestionsForPage(rows, loadId);
 }
 
 async function preloadTypeSuggestions(rows) {
@@ -536,35 +718,40 @@ function markRowUpdated(rowEl, kind, payload, result, buttonEl) {
 
 async function loadKpis() {
     const grid = document.getElementById('kpiGrid');
-    grid.innerHTML = '<div class="col-span-full text-sm text-slate-400">Carregant KPIs...</div>';
-
-    const cards = [];
-    for (const kpi of Object.values(KPI_DEFS)) {
-        let count = 0;
-        try {
-            const res = await apiFetch(kpi.countEndpoint);
-            if (res.ok) {
-                const data = await res.json();
-                count = Number(data[kpi.countKey] || 0);
-            }
-        } catch (_) {}
-        cards.push({ ...kpi, count });
+    if (!grid.innerHTML || grid.innerHTML.includes('Carregant')) {
+        grid.innerHTML = '<div class="col-span-full text-sm text-slate-400">Carregant KPIs...</div>';
     }
 
-    grid.innerHTML = cards.map(kpi => {
-        const c = colorClasses(kpi.color);
-        const active = kpi.id === activeKpi;
-        return `
-        <button data-kpi="${esc(kpi.id)}" class="kpi-card text-left bg-white rounded-xl border border-slate-200 shadow-sm p-4 flex items-center gap-3 ${active ? 'ring-2 ' + c.ring : ''}">
-            <div class="w-10 h-10 ${c.bg} rounded-full flex items-center justify-center shrink-0">
-                <i class="fa-solid ${esc(kpi.icon)} ${c.fg}"></i>
-            </div>
-            <div class="min-w-0">
-                <p class="text-xs text-slate-400 uppercase font-bold truncate">${esc(kpi.label)}</p>
-                <p class="text-xl font-black text-slate-700 leading-tight">${Number(kpi.count).toLocaleString('ca-ES')}</p>
-            </div>
-        </button>`;
-    }).join('');
+    try {
+        const promises = Object.values(KPI_DEFS).map(async (kpi) => {
+            let count = 0;
+            try {
+                const res = await apiFetch(kpi.countEndpoint);
+                if (res.ok) {
+                    const data = await res.json();
+                    count = Number(data[kpi.countKey] || 0);
+                }
+            } catch (_) {}
+            return { ...kpi, count };
+        });
+
+        const cards = await Promise.all(promises);
+
+        grid.innerHTML = cards.map(kpi => {
+            const c = colorClasses(kpi.color);
+            const active = kpi.id === activeKpi;
+            return `
+            <button data-kpi="${esc(kpi.id)}" class="kpi-card text-left bg-white rounded-xl border border-slate-200 shadow-sm p-4 flex items-center gap-3 ${active ? 'ring-2 ' + c.ring : ''}">
+                <div class="w-10 h-10 ${c.bg} rounded-full flex items-center justify-center shrink-0">
+                    <i class="fa-solid ${esc(kpi.icon)} ${c.fg}"></i>
+                </div>
+                <div class="min-w-0">
+                    <p class="text-xs text-slate-400 uppercase font-bold truncate">${esc(kpi.label)}</p>
+                    <p class="text-xl font-black text-slate-700 leading-tight">${Number(kpi.count).toLocaleString('ca-ES')}</p>
+                </div>
+            </button>`;
+        }).join('');
+    } catch (_) {}
 
     document.querySelectorAll('.kpi-card').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -572,16 +759,111 @@ async function loadKpis() {
             if (!id || id === activeKpi) return;
             activeKpi = id;
             currentPage = 0;
+            currentSortBy = 'name';
+            currentSortDirection = 'asc';
+            
+            // Clean up old interval
+            if (autoApplyInterval) {
+                clearInterval(autoApplyInterval);
+                autoApplyInterval = null;
+            }
+            
+            // Reset progress bar / container visibility / button states
+            autoApplyVisible = false;
+            document.getElementById('autoApplyProgressContainer').classList.add('hidden');
+            document.getElementById('btnDownloadAutoLog').classList.add('hidden');
+            document.getElementById('autoApplyProgressBar').style.width = '0%';
+            document.getElementById('autoApplyConsole').textContent = '';
+            
+            updateAutoApplyTexts();
+            checkAutoApplyStatus();
+            
+            // Check status for the newly selected KPI to see if we need to poll
+            const metric = getActiveMetric();
+            apiFetch(`/external-organizations/stats/auto-apply-${metric}/status`)
+                .then(res => {
+                    if (metric !== getActiveMetric()) return null;
+                    return res.json();
+                })
+                .then(data => {
+                    if (!data) return;
+                    if (data.running) {
+                        autoApplyInterval = setInterval(checkAutoApplyStatus, 1500);
+                    }
+                })
+                .catch(() => {});
+            
             loadKpis();
             loadTable();
         });
     });
 }
 
+function getSuggestedTypeHtml(org) {
+    const typeRaw = getOrgTypeLabel(org);
+    const shouldSuggestType = !typeRaw || isUnknownTypeLabel(typeRaw);
+    if (!shouldSuggestType) return '<span class="text-slate-400">—</span>';
+
+    const key = getOrgSuggestionKey(org);
+    const cachedTypeSuggestion = typeSuggestionCache.get(key) || { type: '', confidence: 0, reason: '' };
+    const isFetching = uuidsBeingFetched.has(org.uuid);
+
+    if (isFetching && !cachedTypeSuggestion.type) {
+        return '<span class="text-slate-400 text-xs italic flex items-center gap-1.5"><i class="fa-solid fa-circle-notch fa-spin text-indigo-500"></i> Analitzant...</span>';
+    }
+
+    const htmlSuggestedTypeRaw = cachedTypeSuggestion.type;
+    const currentTypeUri = String((org && org.type && org.type.uri) || '').trim();
+    const suggestedTypeOption = findTypeOptionByLabel(htmlSuggestedTypeRaw);
+    const selectedTypeUri = (suggestedTypeOption && suggestedTypeOption.uri) || currentTypeUri;
+    const selectedTypeLabel = (suggestedTypeOption && suggestedTypeOption.label) || htmlSuggestedTypeRaw || typeRaw || '';
+    const typeSelect = buildTypeSuggestionSelect(org.uuid, selectedTypeUri, selectedTypeLabel);
+    const applyTypeBtn = buildApplySuggestionButton('type', org.uuid, '', '');
+    return typeSelect + (applyTypeBtn ? '<div class="mt-2">' + applyTypeBtn + '</div>' : '');
+}
+
+function getSuggestedCountryHtml(org) {
+    const countryRaw = getOrgCountryLabel(org);
+    if (countryRaw) return '<span class="text-slate-400">—</span>';
+
+    const key = getOrgSuggestionKey(org);
+    const cachedCountrySuggestion = countrySuggestionCache.get(key) || { country: '', uri: '', confidence: 0, reason: '' };
+    const isFetching = uuidsBeingFetched.has(org.uuid);
+
+    if (isFetching && !cachedCountrySuggestion.country) {
+        return '<span class="text-slate-400 text-xs italic flex items-center gap-1.5"><i class="fa-solid fa-circle-notch fa-spin text-indigo-500"></i> Analitzant...</span>';
+    }
+
+    const suggestedCountryRaw = cachedCountrySuggestion.country;
+    const suggestedCountryUri = String(cachedCountrySuggestion.uri || '').trim();
+    const suggestedCountryChip = buildConfidenceChip(suggestedCountryRaw, cachedCountrySuggestion.confidence, cachedCountrySuggestion.reason, 'pais');
+    const applyCountryBtn = buildApplySuggestionButton('country', org.uuid, suggestedCountryRaw, suggestedCountryUri);
+    return suggestedCountryChip + (applyCountryBtn ? '<div class="mt-2">' + applyCountryBtn + '</div>' : '');
+}
+
+function getSuggestedFundingHtml(org) {
+    const persistedFundingRaw = String(getOrgFundingLabel(org) || '').trim();
+    if (persistedFundingRaw) return '<span class="text-slate-400">—</span>';
+
+    const key = getOrgSuggestionKey(org);
+    const cachedFundingSuggestion = fundingSuggestionCache.get(key) || { funding: '', uri: '', confidence: 0, reason: '' };
+    const isFetching = uuidsBeingFetched.has(org.uuid);
+
+    if (isFetching && !cachedFundingSuggestion.funding) {
+        return '<span class="text-slate-400 text-xs italic flex items-center gap-1.5"><i class="fa-solid fa-circle-notch fa-spin text-indigo-500"></i> Analitzant...</span>';
+    }
+
+    const fundingChip = buildConfidenceChip(cachedFundingSuggestion.funding, cachedFundingSuggestion.confidence, cachedFundingSuggestion.reason, 'financiacion');
+    const applyFundingBtn = cachedFundingSuggestion.funding
+        ? buildApplySuggestionButton('funding', org.uuid, cachedFundingSuggestion.funding, cachedFundingSuggestion.uri)
+        : '';
+    return fundingChip + (applyFundingBtn ? '<div class="mt-2">' + applyFundingBtn + '</div>' : '');
+}
+
 function renderTable(rows) {
     const body = document.getElementById('tableBody');
     if (!rows || rows.length === 0) {
-        body.innerHTML = '<tr><td colspan="9" class="px-6 py-10 text-center text-slate-400 italic">No hi ha registres per aquest KPI.</td></tr>';
+        body.innerHTML = '<tr><td colspan="8" class="px-6 py-10 text-center text-slate-400 italic">No hi ha registres per aquest KPI.</td></tr>';
         return;
     }
 
@@ -596,49 +878,24 @@ function renderTable(rows) {
         const type = esc(typeRaw || '—');
         const countryRaw = getOrgCountryLabel(org);
         const country = esc(countryRaw || '—');
-
-        const cachedTypeSuggestion = typeSuggestionCache.get(getOrgSuggestionKey(org)) || { type: '', confidence: 0, reason: '' };
-        const shouldSuggestType = !typeRaw || isUnknownTypeLabel(typeRaw);
-        const suggestedTypeRaw = shouldSuggestType ? cachedTypeSuggestion.type : '';
-        const currentTypeUri = String((org && org.type && org.type.uri) || '').trim();
-        const suggestedTypeOption = findTypeOptionByLabel(suggestedTypeRaw);
-        const selectedTypeUri = (suggestedTypeOption && suggestedTypeOption.uri) || currentTypeUri;
-        const selectedTypeLabel = (suggestedTypeOption && suggestedTypeOption.label) || suggestedTypeRaw || typeRaw || '';
-        const typeSelect = buildTypeSuggestionSelect(org.uuid, selectedTypeUri, selectedTypeLabel);
-        const applyTypeBtn = buildApplySuggestionButton('type', org.uuid, '', '');
-        const suggestedTypeCell = (typeSelect + (applyTypeBtn ? '<div class="mt-2">' + applyTypeBtn + '</div>' : ''));
-
-        const cachedCountrySuggestion = countrySuggestionCache.get(getOrgSuggestionKey(org)) || { country: '', uri: '', confidence: 0, reason: '' };
-        const suggestedCountryRaw = !countryRaw ? cachedCountrySuggestion.country : '';
-        const suggestedCountryUri = !countryRaw ? String(cachedCountrySuggestion.uri || '').trim() : '';
-        const suggestedCountryChip = buildConfidenceChip(suggestedCountryRaw, cachedCountrySuggestion.confidence, cachedCountrySuggestion.reason, 'pais');
-        const applyCountryBtn = !countryRaw ? buildApplySuggestionButton('country', org.uuid, suggestedCountryRaw, suggestedCountryUri) : '';
-        const suggestedCountryCell = (suggestedCountryChip + (applyCountryBtn ? '<div class="mt-2">' + applyCountryBtn + '</div>' : ''));
-
         const persistedFundingRaw = String(getOrgFundingLabel(org) || '').trim();
         const funding = esc(persistedFundingRaw || '—');
-        const cachedFundingSuggestion = fundingSuggestionCache.get(getOrgSuggestionKey(org)) || { funding: '', uri: '', confidence: 0, reason: '' };
-        const fundingChip = !persistedFundingRaw
-            ? buildConfidenceChip(cachedFundingSuggestion.funding, cachedFundingSuggestion.confidence, cachedFundingSuggestion.reason, 'financiacion')
-            : '<span class="text-slate-400">—</span>';
-        const applyFundingBtn = (!persistedFundingRaw && cachedFundingSuggestion.funding)
-            ? buildApplySuggestionButton('funding', org.uuid, cachedFundingSuggestion.funding, cachedFundingSuggestion.uri)
-            : '';
-        const suggestedFundingCell = (fundingChip + (applyFundingBtn ? '<div class="mt-2">' + applyFundingBtn + '</div>' : ''));
 
-        const uuid = org.uuid ? '<span class="font-mono text-xs text-slate-400">' + esc(org.uuid) + '</span>' : '—';
-        const wf = workflowBadge(org.workflow && org.workflow.step);
+        const suggestedTypeCell = getSuggestedTypeHtml(org);
+        const suggestedFundingCell = getSuggestedFundingHtml(org);
+        const suggestedCountryCell = getSuggestedCountryHtml(org);
+
+        const wf = workflowCell(org);
         return `
-        <tr class="hover:bg-slate-50 transition-colors">
+        <tr data-uuid="${esc(org.uuid)}" class="hover:bg-slate-50 transition-colors">
             <td class="px-6 py-3 font-semibold text-slate-800">${name}</td>
             <td class="px-6 py-3 text-slate-600">${type}</td>
-            <td class="px-6 py-3 text-slate-600">${suggestedTypeCell}</td>
+            <td data-cell="suggested-type" class="px-6 py-3 text-slate-600">${suggestedTypeCell}</td>
             <td class="px-6 py-3 text-slate-600">${funding}</td>
-            <td class="px-6 py-3 text-slate-600">${suggestedFundingCell}</td>
+            <td data-cell="suggested-funding" class="px-6 py-3 text-slate-600">${suggestedFundingCell}</td>
             <td class="px-6 py-3 text-slate-600">${country}</td>
-            <td class="px-6 py-3 text-slate-600">${suggestedCountryCell}</td>
+            <td data-cell="suggested-country" class="px-6 py-3 text-slate-600">${suggestedCountryCell}</td>
             <td class="px-6 py-3">${wf}</td>
-            <td class="px-6 py-3 text-right">${uuid}</td>
         </tr>`;
     }).join('');
 }
@@ -720,6 +977,51 @@ async function applySuggestedValue(kind, uuid, suggested, buttonEl) {
     }
 }
 
+async function approveWorkflowStep(uuid, buttonEl) {
+    const safeUuid = String(uuid || '').trim();
+    if (!safeUuid) return;
+
+    const originalHtml = buttonEl.innerHTML;
+    buttonEl.disabled = true;
+    buttonEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Validant...';
+
+    const select = document.getElementById('autoApplyEnv');
+    const env = select ? select.value : 'test';
+
+    try {
+        const res = await apiFetch('/external-organizations/stats/approve-workflow', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ uuid: safeUuid, env })
+        });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const result = await res.json();
+        if (!result || result.updated !== true) {
+            throw new Error((result && (result.reason || result.message)) || 'approve-failed');
+        }
+
+        showToast('Workflow actualitzat a Approved correctament.', 'success');
+        
+        // Actualitzar la celda del workflow en la fila
+        const rowEl = buttonEl.closest('tr');
+        if (rowEl) {
+            const cells = rowEl.querySelectorAll('td');
+            if (cells[7]) { // La columna del workflow es la 8ª (índice 7)
+                cells[7].innerHTML = workflowBadge('Approved');
+            }
+            rowEl.classList.add('bg-emerald-50/60');
+            setTimeout(() => rowEl.classList.remove('bg-emerald-50/60'), 1500);
+        }
+
+        // Recarregar KPIs per actualitzar els comptadors
+        loadKpis();
+    } catch (e) {
+        buttonEl.disabled = false;
+        buttonEl.innerHTML = originalHtml;
+        showToast('No s\'ha pogut aprovar el registre: ' + (e && e.message ? e.message : 'error'), 'error');
+    }
+}
+
 function updatePager(pageData) {
     // Usar los datos anidados en pageData.page
     const page = pageData.page || {};
@@ -735,29 +1037,46 @@ async function loadTable() {
     const kpi = KPI_DEFS[activeKpi];
     if (!kpi) return;
 
+    currentLoadId++;
+    const myLoadId = currentLoadId;
+
+    uuidsBeingFetched.clear();
+
     document.getElementById('detailTitle').textContent = kpi.label;
     document.getElementById('detailSubtitle').textContent = kpi.subtitle;
 
     const search = document.getElementById('searchInput').value.trim();
-    const params = new URLSearchParams({ page: String(currentPage), size: String(pageSize) });
+    const params = new URLSearchParams({
+        page: String(currentPage),
+        size: String(pageSize),
+        sortBy: currentSortBy,
+        sortDirection: currentSortDirection
+    });
     if (search) params.set('buscar', search);
 
     const body = document.getElementById('tableBody');
-    body.innerHTML = '<tr><td colspan="9" class="px-6 py-10 text-center text-slate-400 italic">Carregant...</td></tr>';
+    body.innerHTML = '<tr><td colspan="8" class="px-6 py-10 text-center text-slate-400 italic">Carregant...</td></tr>';
 
     try {
         await ensureTypeCatalogOptions();
+        if (myLoadId !== currentLoadId) return;
         const res = await apiFetch(kpi.listEndpoint + '?' + params.toString());
         if (!res.ok) throw new Error('HTTP ' + res.status);
         const data = await res.json();
-        await Promise.all([
-            preloadTypeSuggestions(data.content || []),
-            preloadCountrySuggestions(data.content || [])
-        ]);
+        if (myLoadId !== currentLoadId) return;
+        
+        // Renderizar la tabla inmediatamente con los datos básicos
         renderTable(data.content || []);
         updatePager(data);
+        updateSortHeaders();
+
+        // Lanzar la pre-carga asíncrona de sugerencias en segundo plano.
+        // Se encarga automáticamente de pintar spinners y de repintar al terminar.
+        preloadCountrySuggestions(data.content || [], myLoadId);
     } catch (e) {
-        body.innerHTML = '<tr><td colspan="9" class="px-6 py-10 text-center text-rose-500">Error carregant dades: ' + esc(e.message) + '</td></tr>';
+        if (myLoadId === currentLoadId) {
+            body.innerHTML = '<tr><td colspan="8" class="px-6 py-10 text-center text-rose-500">Error carregant dades: ' + esc(e.message) + '</td></tr>';
+        }
     }
 }
 
@@ -797,6 +1116,13 @@ document.getElementById('tableBody').addEventListener('click', (ev) => {
         return;
     }
 
+    const approveBtn = ev.target.closest('.approve-workflow-btn');
+    if (approveBtn) {
+        const uuid = approveBtn.getAttribute('data-uuid') || '';
+        approveWorkflowStep(uuid, approveBtn);
+        return;
+    }
+
     const btn = ev.target.closest('.apply-suggestion-btn');
     if (!btn) return;
 
@@ -804,6 +1130,355 @@ document.getElementById('tableBody').addEventListener('click', (ev) => {
     const uuid = btn.getAttribute('data-uuid') || '';
     const suggested = btn.getAttribute('data-suggested') || '';
     applySuggestedValue(kind, uuid, suggested, btn);
+});
+
+document.querySelectorAll('th[data-sort]').forEach(th => {
+    th.addEventListener('click', () => {
+        const field = th.getAttribute('data-sort');
+        if (currentSortBy === field) {
+            currentSortDirection = currentSortDirection === 'asc' ? 'desc' : 'asc';
+        } else {
+            currentSortBy = field;
+            currentSortDirection = 'asc';
+        }
+        currentPage = 0;
+        loadTable();
+    });
+});
+
+function updateSortHeaders() {
+    document.querySelectorAll('th[data-sort]').forEach(th => {
+        const field = th.getAttribute('data-sort');
+        const icon = th.querySelector('i');
+        if (!icon) return;
+
+        icon.className = 'fa-solid fa-sort ml-1 text-slate-300';
+        th.classList.remove('text-indigo-600');
+
+        if (field === currentSortBy) {
+            th.classList.add('text-indigo-600');
+            if (currentSortDirection === 'asc') {
+                icon.className = 'fa-solid fa-sort-up ml-1 text-indigo-600';
+            } else {
+                icon.className = 'fa-solid fa-sort-down ml-1 text-indigo-600';
+            }
+        }
+    });
+}
+
+// =========================================================================
+// Auto-apply logic
+// =========================================================================
+let autoApplyInterval = null;
+let autoApplyVisible = false;
+
+function getActiveMetric() {
+    if (activeKpi === 'withoutCountry') return 'country';
+    if (activeKpi === 'withoutType') return 'type';
+    if (activeKpi === 'withoutFunding') return 'funding';
+    return 'country';
+}
+
+function updateAutoApplyTexts() {
+    const titleEl = document.getElementById('autoApplyTitle');
+    const descEl = document.getElementById('autoApplyDescription');
+    const btnDownload = document.getElementById('btnDownloadAutoLog');
+    const metric = getActiveMetric();
+
+    if (activeKpi === 'withoutCountry') {
+        titleEl.textContent = 'Auto-aplicar País';
+        descEl.textContent = 'Cerca automàticament suggeriments de país per a organitzacions que no en tenen i aplica els que superen la confiança mínima.';
+    } else if (activeKpi === 'withoutType') {
+        titleEl.textContent = 'Auto-aplicar Tipus';
+        descEl.textContent = "Cerca automàticament suggeriments de tipus d'organització per a les que no en tenen i aplica els que superen la confiança mínima.";
+    } else if (activeKpi === 'withoutFunding') {
+        titleEl.textContent = 'Auto-aplicar Finançament';
+        descEl.textContent = 'Cerca automàticament suggeriments de finançament (Pública o Privada) per a les organitzacions que no en tenen i aplica els que superen la confiança mínima.';
+    }
+
+    btnDownload.href = window.apiUrl('/external-organizations/stats/auto-apply-' + metric + '/download-log');
+}
+
+function checkAutoApplyStatus() {
+    const metric = getActiveMetric();
+    apiFetch(`/external-organizations/stats/auto-apply-${metric}/status`)
+        .then(res => {
+            if (!res.ok) throw new Error();
+            return res.json();
+        })
+        .then(data => {
+            const container = document.getElementById('autoApplyProgressContainer');
+            const btnStart = document.getElementById('btnStartAutoApply');
+            const btnStop = document.getElementById('btnStopAutoApply');
+            const btnDownload = document.getElementById('btnDownloadAutoLog');
+            const bar = document.getElementById('autoApplyProgressBar');
+            const progressTxt = document.getElementById('autoApplyProgressText');
+            const appliedTxt = document.getElementById('autoApplyAppliedText');
+            const consoleEl = document.getElementById('autoApplyConsole');
+            
+            if (data.running) {
+                autoApplyVisible = true;
+            }
+            if (autoApplyVisible) {
+                container.classList.remove('hidden');
+                btnDownload.classList.remove('hidden');
+            } else {
+                container.classList.add('hidden');
+                btnDownload.classList.add('hidden');
+            }
+            
+            if (data.running) {
+                btnStart.disabled = true;
+                btnStop.disabled = false;
+                document.getElementById('autoApplyEnv').disabled = true;
+                const minConf = document.getElementById('autoApplyMinConfidence');
+                if (minConf) minConf.disabled = true;
+                if (data.confidenceThreshold != null) {
+                    const thresholdVal = String(data.confidenceThreshold);
+                    if (minConf && minConf.value !== thresholdVal) {
+                        minConf.value = thresholdVal;
+                    }
+                }
+            } else {
+                btnStart.disabled = false;
+                btnStop.disabled = true;
+                document.getElementById('autoApplyEnv').disabled = false;
+                const minConf = document.getElementById('autoApplyMinConfidence');
+                if (minConf) minConf.disabled = false;
+                if (autoApplyInterval) {
+                    clearInterval(autoApplyInterval);
+                    autoApplyInterval = null;
+                    loadKpis();
+                    loadTable();
+                }
+            }
+            
+            const total = data.total || 0;
+            const processed = data.processed || 0;
+            const applied = data.applied || 0;
+            const pct = total > 0 ? Math.round((processed / total) * 100) : 0;
+            
+            bar.style.width = pct + '%';
+            progressTxt.textContent = `Processant: ${processed} / ${total} (${pct}%)`;
+            appliedTxt.textContent = `Aplicats: ${applied}`;
+            
+            if (data.logs) {
+                const wasScrolledToBottom = consoleEl.scrollHeight - consoleEl.clientHeight <= consoleEl.scrollTop + 30;
+                consoleEl.textContent = data.logs;
+                if (wasScrolledToBottom || consoleEl.scrollTop === 0) {
+                    consoleEl.scrollTop = consoleEl.scrollHeight;
+                }
+            }
+        })
+        .catch(err => console.error('Error checking auto-apply status', err));
+}
+
+document.getElementById('btnStartAutoApply').addEventListener('click', () => {
+    const env = document.getElementById('autoApplyEnv').value;
+    const confidence = document.getElementById('autoApplyMinConfidence').value;
+    const metric = getActiveMetric();
+    apiFetch(`/external-organizations/stats/auto-apply-${metric}/start?env=${env}&confidence=${confidence}`, { method: 'POST' })
+        .then(res => {
+            if (!res.ok) throw new Error();
+            return res.json();
+        })
+        .then(data => {
+            if (data.started) {
+                showToast('Procés iniciat correctament.', 'success');
+                autoApplyVisible = true;
+                document.getElementById('autoApplyProgressContainer').classList.remove('hidden');
+                document.getElementById('autoApplyConsole').textContent = 'Iniciant procés...';
+                document.getElementById('btnStartAutoApply').disabled = true;
+                document.getElementById('btnStopAutoApply').disabled = false;
+                document.getElementById('autoApplyEnv').disabled = true;
+                const minConf = document.getElementById('autoApplyMinConfidence');
+                if (minConf) minConf.disabled = true;
+                if (autoApplyInterval) clearInterval(autoApplyInterval);
+                autoApplyInterval = setInterval(checkAutoApplyStatus, 1500);
+                checkAutoApplyStatus();
+            } else {
+                showToast('No s\'ha pogut iniciar el procés: ' + (data.reason || 'error'), 'error');
+            }
+        })
+        .catch(() => showToast('Error connectant amb el servidor.', 'error'));
+});
+
+document.getElementById('btnStopAutoApply').addEventListener('click', () => {
+    const metric = getActiveMetric();
+    apiFetch(`/external-organizations/stats/auto-apply-${metric}/stop`, { method: 'POST' })
+        .then(res => {
+            if (!res.ok) throw new Error();
+            return res.json();
+        })
+        .then(data => {
+            if (data.stopped) {
+                showToast('Petició d\'aturar el procés enviada.', 'success');
+                checkAutoApplyStatus();
+            }
+        })
+        .catch(() => showToast('Error en aturar el procés.', 'error'));
+});
+
+document.getElementById('btnClearConsole').addEventListener('click', () => {
+    document.getElementById('autoApplyConsole').textContent = '';
+});
+
+// Check status on load
+updateAutoApplyTexts();
+checkAutoApplyStatus();
+apiFetch(`/external-organizations/stats/auto-apply-${getActiveMetric()}/status`)
+    .then(res => res.json())
+    .then(data => {
+        if (data.running) {
+            autoApplyVisible = true;
+            autoApplyInterval = setInterval(checkAutoApplyStatus, 1500);
+        }
+    })
+    .catch(() => {});
+
+document.getElementById('btnCloseApplyConsole').addEventListener('click', () => {
+    autoApplyVisible = false;
+    document.getElementById('autoApplyProgressContainer').classList.add('hidden');
+    document.getElementById('btnDownloadAutoLog').classList.add('hidden');
+});
+
+document.getElementById('autoApplyEnv').addEventListener('change', () => {
+    currentPage = 0;
+    loadKpis().then(loadTable);
+});
+
+// =========================================================================
+// Auto-validate logic
+// =========================================================================
+let autoValidateInterval = null;
+let autoValidateVisible = false;
+
+function checkAutoValidateStatus() {
+    apiFetch(`/external-organizations/stats/auto-validate/status`)
+        .then(res => {
+            if (!res.ok) throw new Error();
+            return res.json();
+        })
+        .then(data => {
+            const container = document.getElementById('autoValidateProgressContainer');
+            const btnStart = document.getElementById('btnStartAutoValidate');
+            const btnStop = document.getElementById('btnStopAutoValidate');
+            const btnDownload = document.getElementById('btnDownloadValidateLog');
+            const bar = document.getElementById('autoValidateProgressBar');
+            const progressTxt = document.getElementById('autoValidateProgressText');
+            const appliedTxt = document.getElementById('autoValidateAppliedText');
+            const consoleEl = document.getElementById('autoValidateConsole');
+            
+            btnDownload.href = window.apiUrl('/external-organizations/stats/auto-validate/download-log');
+
+            if (data.running) {
+                autoValidateVisible = true;
+            }
+            if (autoValidateVisible) {
+                container.classList.remove('hidden');
+                btnDownload.classList.remove('hidden');
+            } else {
+                container.classList.add('hidden');
+                btnDownload.classList.add('hidden');
+            }
+            
+            if (data.running) {
+                btnStart.disabled = true;
+                btnStop.disabled = false;
+                document.getElementById('autoValidateEnv').disabled = true;
+            } else {
+                btnStart.disabled = false;
+                btnStop.disabled = true;
+                document.getElementById('autoValidateEnv').disabled = false;
+                if (autoValidateInterval) {
+                    clearInterval(autoValidateInterval);
+                    autoValidateInterval = null;
+                    loadKpis();
+                    loadTable();
+                }
+            }
+            
+            const total = data.total || 0;
+            const processed = data.processed || 0;
+            const applied = data.applied || 0;
+            const pct = total > 0 ? Math.round((processed / total) * 100) : 0;
+            
+            bar.style.width = pct + '%';
+            progressTxt.textContent = `Processant: ${processed} / ${total} (${pct}%)`;
+            appliedTxt.textContent = `Validats: ${applied}`;
+            
+            if (data.logs) {
+                const wasScrolledToBottom = consoleEl.scrollHeight - consoleEl.clientHeight <= consoleEl.scrollTop + 30;
+                consoleEl.textContent = data.logs;
+                if (wasScrolledToBottom || consoleEl.scrollTop === 0) {
+                    consoleEl.scrollTop = consoleEl.scrollHeight;
+                }
+            }
+        })
+        .catch(err => console.error('Error checking auto-validate status', err));
+}
+
+document.getElementById('btnStartAutoValidate').addEventListener('click', () => {
+    const env = document.getElementById('autoValidateEnv').value;
+    apiFetch(`/external-organizations/stats/auto-validate/start?env=${env}`, { method: 'POST' })
+        .then(res => {
+            if (!res.ok) throw new Error();
+            return res.json();
+        })
+        .then(data => {
+            if (data.started) {
+                showToast('Procés de validació iniciat.', 'success');
+                autoValidateVisible = true;
+                document.getElementById('autoValidateProgressContainer').classList.remove('hidden');
+                document.getElementById('autoValidateConsole').textContent = 'Iniciant procés...';
+                document.getElementById('btnStartAutoValidate').disabled = true;
+                document.getElementById('btnStopAutoValidate').disabled = false;
+                document.getElementById('autoValidateEnv').disabled = true;
+                if (autoValidateInterval) clearInterval(autoValidateInterval);
+                autoValidateInterval = setInterval(checkAutoValidateStatus, 1500);
+                checkAutoValidateStatus();
+            } else {
+                showToast('No s\'ha pogut iniciar el procés: ' + (data.reason || 'error'), 'error');
+            }
+        })
+        .catch(() => showToast('Error connectant amb el servidor.', 'error'));
+});
+
+document.getElementById('btnStopAutoValidate').addEventListener('click', () => {
+    apiFetch(`/external-organizations/stats/auto-validate/stop`, { method: 'POST' })
+        .then(res => {
+            if (!res.ok) throw new Error();
+            return res.json();
+        })
+        .then(data => {
+            if (data.stopped) {
+                showToast('Petició d\'aturar el procés enviada.', 'success');
+                checkAutoValidateStatus();
+            }
+        })
+        .catch(() => showToast('Error en aturar el procés.', 'error'));
+});
+
+document.getElementById('btnClearValidateConsole').addEventListener('click', () => {
+    document.getElementById('autoValidateConsole').textContent = '';
+});
+
+// Check auto-validate status on load
+checkAutoValidateStatus();
+apiFetch(`/external-organizations/stats/auto-validate/status`)
+    .then(res => res.json())
+    .then(data => {
+        if (data.running) {
+            autoValidateVisible = true;
+            autoValidateInterval = setInterval(checkAutoValidateStatus, 1500);
+        }
+    })
+    .catch(() => {});
+
+document.getElementById('btnCloseValidateConsole').addEventListener('click', () => {
+    autoValidateVisible = false;
+    document.getElementById('autoValidateProgressContainer').classList.add('hidden');
+    document.getElementById('btnDownloadValidateLog').classList.add('hidden');
 });
 
 loadKpis().then(loadTable);

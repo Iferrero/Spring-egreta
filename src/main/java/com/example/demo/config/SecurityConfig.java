@@ -8,6 +8,8 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.LoginUrlAuthenticationEntryPoint;
 
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+
 @Configuration
 @ConditionalOnProperty(name = "cas.enabled", havingValue = "true", matchIfMissing = false)
 public class SecurityConfig {
@@ -18,18 +20,24 @@ public class SecurityConfig {
     @Value("${cas.service.server-name}")
     private String serverName;
 
+    @Value("${app.api.key}")
+    private String expectedApiKey;
+
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         // CAS servlet filters (registered in CasConfig) intercept requests BEFORE
         // Spring Security and redirect unauthenticated users to CAS login.
         // The CasBridgeFilter populates the Spring Security context from the CAS session.
         http
+            .addFilterBefore(new ApiKeyAuthenticationFilter(expectedApiKey), UsernamePasswordAuthenticationFilter.class)
             .authorizeHttpRequests(auth -> auth
-                // Permitir acceso público a Swagger UI y OpenAPI docs
+                // Permitir acceso público a Swagger UI, RapiDoc y OpenAPI docs
                 .requestMatchers(
+                    "/v3/api-docs",
                     "/v3/api-docs/**",
                     "/swagger-ui/**",
-                    "/swagger-ui.html"
+                    "/swagger-ui.html",
+                    "/rapidoc.html"
                 ).permitAll()
                 .anyRequest().authenticated()
             )

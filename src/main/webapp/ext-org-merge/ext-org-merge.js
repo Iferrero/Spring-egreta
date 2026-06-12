@@ -214,6 +214,10 @@ mergeForm.onsubmit = async (e) => {
     if (!resp.ok) throw new Error('Error al fusionar: ' + (await resp.text()));
     const data = await resp.json();
     showSuccess('Fusión completada. Target: ' + data.targetId + (data.egreta ? ' (Egreta)' : ''));
+    // Notificar al opener para que actualice su lista/grafo si es necesario
+    if (window.opener && typeof window.opener.handleOrgsMerged === 'function') {
+      window.opener.handleOrgsMerged(data.targetId, data.removed || filteredSources);
+    }
     // Eliminar del cluster las organizaciones fusionadas (sources y target)
     const removedUuids = [data.targetId, ...(data.removed || [])];
     orgResults = orgResults.filter(org => !removedUuids.includes(org.uuid));

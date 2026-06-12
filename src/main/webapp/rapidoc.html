@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Documentació API - Portal de Recerca UAB</title>
+    <!-- Fonts de Google per a una tipografia moderna y elegant -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Hubot+Sans:wght@400;500;600;700;800&family=Mona+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <!-- Script de RapiDoc -->
+    <script type="module" src="https://unpkg.com/rapidoc/dist/rapidoc-min.js"></script>
+    
+    <style>
+        body {
+            margin: 0;
+            font-family: "Mona Sans", Inter, "Helvetica Neue", Arial, sans-serif;
+            background-color: #f1f2f4;
+            overflow: hidden;
+        }
+
+        rapi-doc {
+            width: 100%;
+            height: 100vh;
+        }
+
+        /* Estil per al botó de tornada a l'inici */
+        .home-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #ffffff;
+            text-decoration: none;
+            padding: 8px 16px;
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            border-radius: 8px;
+            background-color: rgba(255, 255, 255, 0.08);
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            font-family: "Mona Sans", sans-serif;
+        }
+
+        .home-btn:hover {
+            background-color: rgba(255, 255, 255, 0.18);
+            border-color: rgba(255, 255, 255, 0.5);
+            transform: translateY(-1px);
+        }
+
+        .home-btn:active {
+            transform: translateY(1px);
+        }
+    </style>
+</head>
+<body>
+
+    <rapi-doc 
+        id="rapidoc-el"
+        theme="light"
+        primary-color="#008037"
+        header-color="#004d21"
+        bg-color="#ffffff"
+        text-color="#2a3037"
+        nav-bg-color="#f1f2f4"
+        nav-text-color="#2a3037"
+        nav-hover-bg-color="#d4d8de"
+        nav-hover-text-color="#008037"
+        nav-accent-color="#008037"
+        regular-font="'Mona Sans', sans-serif"
+        mono-font="'Courier New', monospace"
+        font-size="large"
+        render-style="focused"
+        show-header="true"
+        show-info="true"
+        allow-authentication="true"
+        allow-spec-file-load="false"
+        allow-spec-file-download="true"
+        allow-search="true"
+        layout="row"
+        schema-style="table"
+        sort-tags="true"
+        sort-endpoints-by="path"
+    >
+        <!-- Logotip y titol personalitzats de la UAB en la cabecera -->
+        <div slot="logo" style="display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 0 10px 0 5px; box-sizing: border-box;">
+            <div style="display: flex; align-items: center; gap: 14px;">
+                <a href="https://www.uab.cat/" target="_blank" rel="noopener noreferrer" style="display: flex; align-items: center;">
+                    <img src="https://www.uab.cat/Xcelerate/WAI/img/UAB-2linies-verd.svg" style="height: 38px; filter: brightness(0) invert(1);" alt="UAB Logo">
+                </a>
+                <div style="display: flex; flex-direction: column; line-height: 1.25;">
+                    <span style="color: #ffffff; font-family: 'Hubot Sans', sans-serif; font-weight: 800; font-size: 1.15rem; letter-spacing: -0.01em;">API Portal de Recerca</span>
+                    <span style="color: rgba(255, 255, 255, 0.7); font-family: 'Mona Sans', sans-serif; font-size: 0.78rem; font-weight: 500;">Documentació interactiva amb RapiDoc</span>
+                </div>
+            </div>
+            
+            <a href="index.html" class="home-btn">
+                <i class="fa-solid fa-house"></i>
+                <span>Inici</span>
+            </a>
+        </div>
+    </rapi-doc>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const path = window.location.pathname || '';
+            const isOtrContext = path === '/otr' || path.startsWith('/otr/');
+            
+            // Si estem sota el path /otr (entorn de producció amb Tomcat/WAR),
+            // el document OpenAPI està a /otr/v3/api-docs, altrament està a /v3/api-docs
+            const specUrl = isOtrContext ? '/otr/v3/api-docs' : '/v3/api-docs';
+            
+            const rapiDocEl = document.getElementById('rapidoc-el');
+            rapiDocEl.setAttribute('spec-url', specUrl);
+        });
+    </script>
+</body>
+</html>

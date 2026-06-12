@@ -7,6 +7,36 @@
       }
     },
     {
+      "$lookup": {
+        "from": "Applications",
+        "localField": "applications.uuid",
+        "foreignField": "uuid",
+        "as": "appDocs"
+      }
+    },
+    {
+      "$unwind": "$appDocs"
+    },
+    {
+      "$lookup": {
+        "from": "FundingOpportunities",
+        "localField": "appDocs.fundingOpportunity.uuid",
+        "foreignField": "uuid",
+        "as": "fOpp"
+      }
+    },
+    {
+      "$unwind": "$fOpp"
+    },
+    {
+      "$match": {
+        "$or": [
+          { "fOpp.type.key": { "$in": ["pro", "pjn"] } },
+          { "fOpp.type.uri": { "$regex": "/(pro|pjn)$" } }
+        ]
+      }
+    },
+    {
       "$addFields": {
         "awardDateReal": {
           "$convert": {

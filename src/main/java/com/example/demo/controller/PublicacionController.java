@@ -34,11 +34,21 @@ import java.time.ZoneId;
 import java.util.Date;
 import java.util.concurrent.ConcurrentHashMap;
 import org.bson.Document;
+import org.springframework.beans.factory.annotation.Value;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.net.URI;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 
 @RestController
 @RequestMapping("/api/pure")
 @CrossOrigin(origins = "*")
 public class PublicacionController {
+
+    @Value("${app.scopus.api-key:}")
+    private String scopusApiKey;
 
     private final PublicacionRepository repository;
     private final MongoTemplate mongoTemplate;
@@ -276,13 +286,66 @@ public List<Map> statsAnios() {
         // que ves en MongoDB Compass. A veces es "Researchoutputs" (con R mayúscula)
         AggregationResults<Map> results = mongoTemplate.aggregate(agg, "Researchoutputs", Map.class);
         return results.getMappedResults();
-        
-    } catch (Exception e) {
-        // Esto imprimirá el error real en tu consola de Java
-        e.printStackTrace();
-        return List.of(Map.of("error", e.getMessage()));
+            } catch (Exception e) {
+            // Esto imprimirá el error real en tu consola de Java
+            e.printStackTrace();
+            return List.of(Map.of("error", e.getMessage()));
+        }
     }
-}
+
+    @GetMapping("/stats/scopus")
+    public Map<String, Object> statsScopus() {
+        Map<String, Object> response = new LinkedHashMap<>();
+        if (scopusApiKey == null || scopusApiKey.isBlank()) {
+            response.put("error", "API Key not configured");
+            return response;
+        }
+
+        try {
+            HttpClient client = HttpClient.newBuilder()
+                    .connectTimeout(java.time.Duration.ofSeconds(5))
+                    .build();
+
+            for (int year = 2020; year <= 2026; year++) {
+                String query = "AF-ID(60012977) AND PUBYEAR(" + year + ")";
+                String encodedQuery = URLEncoder.encode(query, StandardCharsets.UTF_8);
+                String urlString = "https://api.elsevier.com/content/search/scopus?query=" + encodedQuery;
+
+                HttpRequest request = HttpRequest.newBuilder()
+                        .uri(URI.create(urlString))
+                        .header("X-ELS-APIKey", scopusApiKey.trim())
+                        .header("Accept", "application/json")
+                        .timeout(java.time.Duration.ofSeconds(8))
+                        .GET()
+                        .build();
+
+                HttpResponse<String> httpResponse = client.send(request, HttpResponse.BodyHandlers.ofString());
+
+                if (httpResponse.statusCode() == 200) {
+                    Document doc = Document.parse(httpResponse.body());
+                    Document searchResults = (Document) doc.get("search-results");
+                    if (searchResults != null) {
+                        String totalResultsStr = searchResults.getString("opensearch:totalResults");
+                        if (totalResultsStr != null) {
+                            try {
+                                int count = Integer.parseInt(totalResultsStr);
+                                response.put(String.valueOf(year), count);
+                            } catch (NumberFormatException e) {
+                                response.put(String.valueOf(year), 0);
+                            }
+                        }
+                    }
+                } else {
+                    response.put("error", "HTTP " + httpResponse.statusCode() + " from Scopus API");
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            response.put("error", e.getMessage());
+        }
+
+        return response;
+    }
 
     // Estadísticas para Gráfico de Donut (Tipos)
     @GetMapping("/stats/types")
