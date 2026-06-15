@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="ca">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -62,685 +63,724 @@
         }
     </style>
 </head>
+
 <body class="bg-slate-50 min-h-screen">
-<div  class="mx-auto max-w-7xl px-4 py-10">
-    <header class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5 mb-8">
-        <a href="index-orgaext.html" class="hover:opacity-80 transition-opacity">
-            <div class="hidden">
-                <h1 class="text-2xl font-extrabold text-slate-800 tracking-tight">Gestio d'organitzacions externes</h1>
-                <p class="text-sm text-slate-500 mt-1">KPIs de qualitat de dades i llistat detallat per cada KPI</p>
-            </div>
-        </a>
-        <div class="flex gap-3 hidden">
-            <a href="organizaciones-externas.html" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-sm text-slate-600 shadow-sm">
-                <i class="fa-solid fa-list"></i> Llistat complet
+    <div class="mx-auto max-w-7xl px-4 py-10">
+        <header class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5 mb-8">
+            <a href="index-orgaext.html" class="hover:opacity-80 transition-opacity">
+                <div class="hidden">
+                    <h1 class="text-2xl font-extrabold text-slate-800 tracking-tight">Gestio d'organitzacions externes
+                    </h1>
+                    <p class="text-sm text-slate-500 mt-1">KPIs de qualitat de dades i llistat detallat per cada KPI</p>
+                </div>
             </a>
-            <a href="organizaciones-externas-grafo.html" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-sm text-slate-600 shadow-sm">
-                <i class="fa-solid fa-diagram-project"></i> Similitud entre organitzacions
-            </a>
-            <a href="organizaciones-externas-stats.html" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-sm text-slate-600 shadow-sm">
-                <i class="fa-solid fa-chart-column"></i> Estadistiques
-            </a>
-        </div>
-    </header>
+            <div class="flex gap-3 hidden">
+                <a href="organizaciones-externas.html"
+                    class="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-sm text-slate-600 shadow-sm">
+                    <i class="fa-solid fa-list"></i> Llistat complet
+                </a>
+                <a href="organizaciones-externas-grafo.html"
+                    class="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-sm text-slate-600 shadow-sm">
+                    <i class="fa-solid fa-diagram-project"></i> Similitud entre organitzacions
+                </a>
+                <a href="organizaciones-externas-stats.html"
+                    class="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-sm text-slate-600 shadow-sm">
+                    <i class="fa-solid fa-chart-column"></i> Estadistiques
+                </a>
+            </div>
+        </header>
 
-    <section class="mb-6">
-        <h2 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">KPIs</h2>
-        <div id="kpiGrid" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4"></div>
-    </section>
+        <section class="mb-6">
+            <h2 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">KPIs</h2>
+            <div id="kpiGrid" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4"></div>
+        </section>
 
-    <!-- Auto-apply country section -->
-    <section id="autoApplySection" class="mb-6 bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
-        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <div>
-                <h3 id="autoApplyTitle" class="text-sm font-bold text-slate-800">Auto-aplicar País</h3>
-                <p id="autoApplyDescription" class="text-xs text-slate-500 mt-1">Cerca automàticament suggeriments de país per a organitzacions que no en tenen i aplica els que superen la confiança mínima.</p>
-            </div>
-            <div class="flex flex-col sm:flex-row items-start sm:items-center gap-4 shrink-0">
-                <!-- Environment Selector -->
-                <div class="flex items-center gap-2">
-                    <label for="autoApplyEnv" class="text-xs font-bold text-slate-500 uppercase tracking-wider">Entorn:</label>
-                    <select id="autoApplyEnv" class="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-400 text-xs text-slate-700 font-semibold cursor-pointer">
-                        <option value="test" selected>Test (egretat.uab.cat)</option>
-                        <option value="prod">Producció (egreta.uab.cat)</option>
-                    </select>
+        <!-- Auto-apply country section -->
+        <section id="autoApplySection" class="mb-6 bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                <div>
+                    <h3 id="autoApplyTitle" class="text-sm font-bold text-slate-800">Auto-aplicar País</h3>
+                    <p id="autoApplyDescription" class="text-xs text-slate-500 mt-1">Cerca automàticament suggeriments
+                        de país per a organitzacions que no en tenen i aplica els que superen la confiança mínima.</p>
                 </div>
-                <!-- Confidence Selector -->
-                <div class="flex items-center gap-2">
-                    <label for="autoApplyMinConfidence" class="text-xs font-bold text-slate-500 uppercase tracking-wider">Confiança mín.:</label>
-                    <select id="autoApplyMinConfidence" class="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-400 text-xs text-slate-700 font-semibold cursor-pointer">
-                        <option value="1.00">100%</option>
-                        <option value="0.95">95%</option>
-                        <option value="0.90" selected>90% (Recomanat)</option>
-                        <option value="0.85">85%</option>
-                        <option value="0.80">80%</option>
-                        <option value="0.70">70%</option>
-                    </select>
-                </div>
-                <div class="flex gap-3 shrink-0">
-                    <button id="btnStartAutoApply" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold shadow-sm flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                        <i class="fa-solid fa-play"></i> Iniciar procés
-                    </button>
-                    <button id="btnStopAutoApply" class="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-sm font-semibold shadow-sm flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled>
-                        <i class="fa-solid fa-stop"></i> Aturar procés
-                    </button>
-                    <a id="btnDownloadAutoLog" href="/external-organizations/stats/auto-apply-country/download-log" class="px-4 py-2 border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 rounded-xl text-sm font-semibold shadow-sm flex items-center gap-2 transition-colors hidden" download>
-                        <i class="fa-solid fa-download"></i> Descarregar Log
-                    </a>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Progress bar and log console -->
-        <div id="autoApplyProgressContainer" class="mt-4 hidden">
-            <div class="w-full bg-slate-100 rounded-full h-2.5 mb-2 overflow-hidden">
-                <div id="autoApplyProgressBar" class="bg-indigo-600 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
-            </div>
-            <div class="flex justify-between text-xs text-slate-500 mb-4 font-semibold">
-                <span id="autoApplyProgressText">Processant: 0 / 0</span>
-                <span id="autoApplyAppliedText">Aplicats: 0</span>
-            </div>
-            
-            <div class="relative">
-                <div class="absolute right-2 top-2 z-10 flex gap-2">
-                    <button id="btnClearConsole" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 rounded font-semibold transition-colors">Netejar</button>
-                    <button id="btnCloseApplyConsole" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 rounded font-semibold transition-colors">Tancar</button>
-                </div>
-                <pre id="autoApplyConsole" class="bg-slate-950 text-slate-200 p-4 rounded-xl font-mono text-xs h-48 overflow-y-auto whitespace-pre-wrap select-text"></pre>
-            </div>
-        </div>
-    </section>
-
-    <!-- Auto-validate section -->
-    <section id="autoValidateSection" class="mb-6 bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
-        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <div>
-                <h3 class="text-sm font-bold text-slate-800">Validació Automàtica</h3>
-                <p class="text-xs text-slate-500 mt-1">Valida automàticament les organitzacions pendents (estat diferent d'Approved) que ja tenen informats el Tipus, el Finançament i el País.</p>
-            </div>
-            <div class="flex flex-col sm:flex-row items-start sm:items-center gap-4 shrink-0">
-                <!-- Environment Selector -->
-                <div class="flex items-center gap-2">
-                    <label for="autoValidateEnv" class="text-xs font-bold text-slate-500 uppercase tracking-wider">Entorn:</label>
-                    <select id="autoValidateEnv" class="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-400 text-xs text-slate-700 font-semibold cursor-pointer">
-                        <option value="test" selected>Test (egretat.uab.cat)</option>
-                        <option value="prod">Producció (egreta.uab.cat)</option>
-                    </select>
-                </div>
-                <div class="flex gap-3 shrink-0">
-                    <button id="btnStartAutoValidate" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-semibold shadow-sm flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                        <i class="fa-solid fa-play"></i> Iniciar validació
-                    </button>
-                    <button id="btnStopAutoValidate" class="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-sm font-semibold shadow-sm flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled>
-                        <i class="fa-solid fa-stop"></i> Aturar
-                    </button>
-                    <a id="btnDownloadValidateLog" href="#" class="px-4 py-2 border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 rounded-xl text-sm font-semibold shadow-sm flex items-center gap-2 transition-colors hidden" download>
-                        <i class="fa-solid fa-download"></i> Descarregar Log
-                    </a>
+                <div class="flex flex-col sm:flex-row items-start sm:items-center gap-4 shrink-0">
+                    <!-- Environment Selector -->
+                    <div class="flex items-center gap-2">
+                        <label for="autoApplyEnv"
+                            class="text-xs font-bold text-slate-500 uppercase tracking-wider">Entorn:</label>
+                        <select id="autoApplyEnv"
+                            class="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-400 text-xs text-slate-700 font-semibold cursor-pointer">
+                            <option value="test" selected>Test (egretat.uab.cat)</option>
+                            <option value="prod">Producció (egreta.uab.cat)</option>
+                        </select>
+                    </div>
+                    <!-- Confidence Selector -->
+                    <div class="flex items-center gap-2">
+                        <label for="autoApplyMinConfidence"
+                            class="text-xs font-bold text-slate-500 uppercase tracking-wider">Confiança mín.:</label>
+                        <select id="autoApplyMinConfidence"
+                            class="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-400 text-xs text-slate-700 font-semibold cursor-pointer">
+                            <option value="1.00">100%</option>
+                            <option value="0.95">95%</option>
+                            <option value="0.90" selected>90% (Recomanat)</option>
+                            <option value="0.85">85%</option>
+                            <option value="0.80">80%</option>
+                            <option value="0.70">70%</option>
+                        </select>
+                    </div>
+                    <div class="flex gap-3 shrink-0">
+                        <button id="btnStartAutoApply"
+                            class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold shadow-sm flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                            <i class="fa-solid fa-play"></i> Iniciar procés
+                        </button>
+                        <button id="btnStopAutoApply"
+                            class="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-sm font-semibold shadow-sm flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            disabled>
+                            <i class="fa-solid fa-stop"></i> Aturar procés
+                        </button>
+                        <a id="btnDownloadAutoLog" href="/external-organizations/stats/auto-apply-country/download-log"
+                            class="px-4 py-2 border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 rounded-xl text-sm font-semibold shadow-sm flex items-center gap-2 transition-colors hidden"
+                            download>
+                            <i class="fa-solid fa-download"></i> Descarregar Log
+                        </a>
+                    </div>
                 </div>
             </div>
-        </div>
-        
-        <!-- Progress bar and log console -->
-        <div id="autoValidateProgressContainer" class="mt-4 hidden">
-            <div class="w-full bg-slate-100 rounded-full h-2.5 mb-2 overflow-hidden">
-                <div id="autoValidateProgressBar" class="bg-emerald-600 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
-            </div>
-            <div class="flex justify-between text-xs text-slate-500 mb-4 font-semibold">
-                <span id="autoValidateProgressText">Processant: 0 / 0</span>
-                <span id="autoValidateAppliedText">Validats: 0</span>
-            </div>
-            
-            <div class="relative">
-                <div class="absolute right-2 top-2 z-10 flex gap-2">
-                    <button id="btnClearValidateConsole" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 rounded font-semibold transition-colors">Netejar</button>
-                    <button id="btnCloseValidateConsole" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 rounded font-semibold transition-colors">Tancar</button>
+
+            <!-- Progress bar and log console -->
+            <div id="autoApplyProgressContainer" class="mt-4 hidden">
+                <div class="w-full bg-slate-100 rounded-full h-2.5 mb-2 overflow-hidden">
+                    <div id="autoApplyProgressBar" class="bg-indigo-600 h-2.5 rounded-full transition-all duration-300"
+                        style="width: 0%"></div>
                 </div>
-                <pre id="autoValidateConsole" class="bg-slate-950 text-slate-200 p-4 rounded-xl font-mono text-xs h-48 overflow-y-auto whitespace-pre-wrap select-text"></pre>
+                <div class="flex justify-between text-xs text-slate-500 mb-4 font-semibold">
+                    <span id="autoApplyProgressText">Processant: 0 / 0</span>
+                    <span id="autoApplyAppliedText">Aplicats: 0</span>
+                </div>
+
+                <div class="relative">
+                    <div class="absolute right-2 top-2 z-10 flex gap-2">
+                        <button id="btnClearConsole"
+                            class="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 rounded font-semibold transition-colors">Netejar</button>
+                        <button id="btnCloseApplyConsole"
+                            class="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 rounded font-semibold transition-colors">Tancar</button>
+                    </div>
+                    <pre id="autoApplyConsole"
+                        class="bg-slate-950 text-slate-200 p-4 rounded-xl font-mono text-xs h-48 overflow-y-auto whitespace-pre-wrap select-text"></pre>
+                </div>
             </div>
-        </div>
-    </section>
+        </section>
 
-    <section class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-        <div class="px-6 py-4 border-b border-slate-100 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-            <div>
-                <h3 id="detailTitle" class="text-sm font-bold text-slate-700">Detall KPI</h3>
-                <p id="detailSubtitle" class="text-xs text-slate-400">Selecciona un KPI</p>
+        <!-- Auto-validate section -->
+        <section id="autoValidateSection" class="mb-6 bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                <div>
+                    <h3 class="text-sm font-bold text-slate-800">Validació Automàtica</h3>
+                    <p class="text-xs text-slate-500 mt-1">Valida automàticament les organitzacions pendents (estat
+                        diferent d'Approved) que ja tenen informats el Tipus, el Finançament i el País.</p>
+                </div>
+                <div class="flex flex-col sm:flex-row items-start sm:items-center gap-4 shrink-0">
+                    <!-- Environment Selector -->
+                    <div class="flex items-center gap-2">
+                        <label for="autoValidateEnv"
+                            class="text-xs font-bold text-slate-500 uppercase tracking-wider">Entorn:</label>
+                        <select id="autoValidateEnv"
+                            class="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-400 text-xs text-slate-700 font-semibold cursor-pointer">
+                            <option value="test" selected>Test (egretat.uab.cat)</option>
+                            <option value="prod">Producció (egreta.uab.cat)</option>
+                        </select>
+                    </div>
+                    <div class="flex gap-3 shrink-0">
+                        <button id="btnStartAutoValidate"
+                            class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-semibold shadow-sm flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                            <i class="fa-solid fa-play"></i> Iniciar validació
+                        </button>
+                        <button id="btnStopAutoValidate"
+                            class="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-sm font-semibold shadow-sm flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            disabled>
+                            <i class="fa-solid fa-stop"></i> Aturar
+                        </button>
+                        <a id="btnDownloadValidateLog" href="#"
+                            class="px-4 py-2 border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 rounded-xl text-sm font-semibold shadow-sm flex items-center gap-2 transition-colors hidden"
+                            download>
+                            <i class="fa-solid fa-download"></i> Descarregar Log
+                        </a>
+                    </div>
+                </div>
             </div>
-            <div class="relative w-full md:w-[360px]">
-                <i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-slate-400"></i>
-                <input id="searchInput" type="text" placeholder="Cercar organitzacio..."
-                       class="w-full pl-10 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-400 text-sm">
+
+            <!-- Progress bar and log console -->
+            <div id="autoValidateProgressContainer" class="mt-4 hidden">
+                <div class="w-full bg-slate-100 rounded-full h-2.5 mb-2 overflow-hidden">
+                    <div id="autoValidateProgressBar"
+                        class="bg-emerald-600 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+                </div>
+                <div class="flex justify-between text-xs text-slate-500 mb-4 font-semibold">
+                    <span id="autoValidateProgressText">Processant: 0 / 0</span>
+                    <span id="autoValidateAppliedText">Validats: 0</span>
+                </div>
+
+                <div class="relative">
+                    <div class="absolute right-2 top-2 z-10 flex gap-2">
+                        <button id="btnClearValidateConsole"
+                            class="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 rounded font-semibold transition-colors">Netejar</button>
+                        <button id="btnCloseValidateConsole"
+                            class="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 rounded font-semibold transition-colors">Tancar</button>
+                    </div>
+                    <pre id="autoValidateConsole"
+                        class="bg-slate-950 text-slate-200 p-4 rounded-xl font-mono text-xs h-48 overflow-y-auto whitespace-pre-wrap select-text"></pre>
+                </div>
             </div>
-        </div>
+        </section>
 
-        <div class="overflow-x-auto">
-            <table class="w-full text-left border-collapse">
-                <thead>
-                <tr class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider select-none">
-                    <th class="px-6 py-3 font-bold cursor-pointer hover:text-indigo-600 transition-colors" data-sort="name">
-                        Nom <i class="fa-solid fa-sort ml-1 text-slate-300"></i>
-                    </th>
-                    <th class="px-6 py-3 font-bold cursor-pointer hover:text-indigo-600 transition-colors" data-sort="type">
-                        Tipus <i class="fa-solid fa-sort ml-1 text-slate-300"></i>
-                    </th>
-                    <th class="px-10 py-3 font-bold">Tipus suggerit</th>
-                    <th class="px-6 py-3 font-bold cursor-pointer hover:text-indigo-600 transition-colors" data-sort="funding">
-                        Financiacio <i class="fa-solid fa-sort ml-1 text-slate-300"></i>
-                    </th>
-                    <th class="px-6 py-3 font-bold">Financiacio suggerida</th>
-                    <th class="px-4 py-3 font-bold cursor-pointer hover:text-indigo-600 transition-colors" data-sort="country">
-                        Pais <i class="fa-solid fa-sort ml-1 text-slate-300"></i>
-                    </th>
-                    <th class="px-6 py-3 font-bold">Pais suggerit</th>
-                    <th class="px-6 py-3 font-bold cursor-pointer hover:text-indigo-600 transition-colors" data-sort="workflow">
-                        Workflow <i class="fa-solid fa-sort ml-1 text-slate-300"></i>
-                    </th>
-                </tr>
-                </thead>
-                <tbody id="tableBody" class="divide-y divide-slate-100 text-sm"></tbody>
-            </table>
-        </div>
+        <section class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+            <div
+                class="px-6 py-4 border-b border-slate-100 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                <div>
+                    <h3 id="detailTitle" class="text-sm font-bold text-slate-700">Detall KPI</h3>
+                    <p id="detailSubtitle" class="text-xs text-slate-400">Selecciona un KPI</p>
+                </div>
+                <div class="relative w-full md:w-[360px]">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-slate-400"></i>
+                    <input id="searchInput" type="text" placeholder="Cercar organitzacio..."
+                        class="w-full pl-10 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-400 text-sm">
+                </div>
+            </div>
 
-        <div class="px-6 py-4 bg-slate-50/70 flex items-center justify-between border-t border-slate-100">
-            <button id="btnPrev" class="px-4 py-2 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed text-sm">Anterior</button>
-            <span id="pageInfo" class="text-sm font-semibold text-slate-600">Pagina 1 de 1</span>
-            <button id="btnNext" class="px-4 py-2 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed text-sm">Següent</button>
-        </div>
-    </section>
-</div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider select-none">
+                            <th class="px-6 py-3 font-bold cursor-pointer hover:text-indigo-600 transition-colors"
+                                data-sort="name">
+                                Nom <i class="fa-solid fa-sort ml-1 text-slate-300"></i>
+                            </th>
+                            <th class="px-6 py-3 font-bold cursor-pointer hover:text-indigo-600 transition-colors"
+                                data-sort="type">
+                                Tipus <i class="fa-solid fa-sort ml-1 text-slate-300"></i>
+                            </th>
+                            <th class="px-10 py-3 font-bold">Tipus suggerit</th>
+                            <th class="px-6 py-3 font-bold cursor-pointer hover:text-indigo-600 transition-colors"
+                                data-sort="funding">
+                                Financiacio <i class="fa-solid fa-sort ml-1 text-slate-300"></i>
+                            </th>
+                            <th class="px-6 py-3 font-bold">Financiacio suggerida</th>
+                            <th class="px-4 py-3 font-bold cursor-pointer hover:text-indigo-600 transition-colors"
+                                data-sort="country">
+                                Pais <i class="fa-solid fa-sort ml-1 text-slate-300"></i>
+                            </th>
+                            <th class="px-6 py-3 font-bold">Pais suggerit</th>
+                            <th class="px-6 py-3 font-bold cursor-pointer hover:text-indigo-600 transition-colors"
+                                data-sort="workflow">
+                                Workflow <i class="fa-solid fa-sort ml-1 text-slate-300"></i>
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody" class="divide-y divide-slate-100 text-sm"></tbody>
+                </table>
+            </div>
 
-<script>
-const KPI_DEFS = {
-    withoutType: {
-        id: 'withoutType',
-        label: 'Organitzacions sense tipus',
-        icon: 'fa-tags',
-        color: 'indigo',
-        countKey: 'withoutType',
-        countEndpoint: '/external-organizations/stats/no-type/count',
-        listEndpoint: '/external-organizations/stats/no-type',
-        subtitle: 'Registres sense tipus informat'
-    },
-    withoutFunding: {
-        id: 'withoutFunding',
-        label: 'Organitzacions sense financiacio',
-        icon: 'fa-coins',
-        color: 'emerald',
-        countKey: 'withoutFunding',
-        countEndpoint: '/external-organizations/stats/no-funding/count',
-        listEndpoint: '/external-organizations/stats/no-funding',
-        subtitle: 'Registres sense financiacio informada'
-    },
-    withoutCountry: {
-        id: 'withoutCountry',
-        label: 'Organitzacions sense pais',
-        icon: 'fa-earth-europe',
-        color: 'rose',
-        countKey: 'withoutCountry',
-        countEndpoint: '/external-organizations/stats/no-country/count',
-        listEndpoint: '/external-organizations/stats/no-country',
-        subtitle: 'Registres sense pais informat'
-    }
-};
+            <div class="px-6 py-4 bg-slate-50/70 flex items-center justify-between border-t border-slate-100">
+                <button id="btnPrev"
+                    class="px-4 py-2 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed text-sm">Anterior</button>
+                <span id="pageInfo" class="text-sm font-semibold text-slate-600">Pagina 1 de 1</span>
+                <button id="btnNext"
+                    class="px-4 py-2 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed text-sm">Següent</button>
+            </div>
+        </section>
+    </div>
 
-let activeKpi = 'withoutType';
-let currentPage = 0;
-const pageSize = 20;
-let currentSortBy = 'name';
-let currentSortDirection = 'asc';
-let debounceTimer = null;
-let currentLoadId = 0;
-const countrySuggestionCache = new Map();
-const typeSuggestionCache = new Map();
-const fundingSuggestionCache = new Map();
-const suggestionBundleCache = new Map();
-const uuidsBeingFetched = new Set();
-let typeCatalogOptions = null;
-const EGRETA_EXTERNAL_ORG_BASE =
-    'https://egreta.uab.cat/admin/editor/dk/atira/pure/api/shared/model/ueo/externalorganisation/editor/ueoexternalorganisationeditor.xhtml?scheme=&type=&id=';
-function esc(v) {
-    if (v == null) return '';
-    return String(v)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
-}
-
-function colorClasses(color) {
-    const map = {
-        rose: { bg: 'bg-rose-100', fg: 'text-rose-600', ring: 'ring-rose-300' },
-        indigo: { bg: 'bg-indigo-100', fg: 'text-indigo-600', ring: 'ring-indigo-300' },
-        emerald: { bg: 'bg-emerald-100', fg: 'text-emerald-600', ring: 'ring-emerald-300' }
-    };
-    return map[color] || map.indigo;
-}
-
-function workflowBadge(step) {
-    const v = (step || '').toLowerCase();
-    if (v === 'approved' || v === 'validated') return '<span class="px-2 py-1 rounded-full text-[10px] font-bold uppercase bg-emerald-100 text-emerald-700">' + esc(step) + '</span>';
-    if (v === 'forapproval') return '<span class="px-2 py-1 rounded-full text-[10px] font-bold uppercase bg-sky-100 text-sky-700">For Approval</span>';
-    return '<span class="px-2 py-1 rounded-full text-[10px] font-bold uppercase bg-slate-100 text-slate-600">' + esc(step || 'N/A') + '</span>';
-}
-
-function workflowCell(org) {
-    const step = (org.workflow && org.workflow.step) || '';
-    const v = step.toLowerCase();
-    const badge = workflowBadge(step);
-    
-    if (v === 'approved' || v === 'validated') {
-        return badge;
-    }
-    
-    const btn = `<button type="button" class="approve-workflow-btn inline-flex items-center gap-1 ml-2 px-2 py-1 rounded-lg border border-emerald-300 bg-white hover:bg-emerald-50 text-[11px] font-semibold text-emerald-700 transition-colors" data-uuid="${esc(org.uuid)}"><i class="fa-solid fa-check"></i> Validar</button>`;
-    return `<div class="flex items-center">${badge}${btn}</div>`;
-}
-
-function normalizeText(v) {
-    return String(v || '')
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .toLowerCase()
-        .replace(/[^a-z0-9\s]/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim();
-}
-
-function getOrgNameLabel(org) {
-    return org.displayName || (org.name && (org.name.ca_ES || org.name.es_ES || org.name.en_GB)) || '';
-}
-
-function getOrgTypeLabel(org) {
-    return org.typeName || (org.type && org.type.term && (org.type.term.ca_ES || org.type.term.es_ES || org.type.term.en_GB)) || '';
-}
-
-function getOrgCountryLabel(org) {
-    return org.countryName || (org.address && org.address.country && org.address.country.term && (org.address.country.term.ca_ES || org.address.country.term.es_ES || org.address.country.term.en_GB)) || '';
-}
-
-function getOrgFundingLabel(org) {
-    const groups = (org && Array.isArray(org.keywordGroups)) ? org.keywordGroups : [];
-    for (const g of groups) {
-        const logicalName = String((g && g.logicalName) || '').trim();
-        if (logicalName !== '/uab/externalorganisations/caracter') continue;
-        const classifications = (g && Array.isArray(g.classifications)) ? g.classifications : [];
-        if (!classifications.length) return '';
-        const term = classifications[0] && classifications[0].term;
-        return (term && (term.ca_ES || term.es_ES || term.en_GB)) || '';
-    }
-    return '';
-}
-
-function getOrgEgretaUrl(org) {
-    const pureId = org && org.pureId != null ? String(org.pureId).trim() : '';
-    if (!pureId) return '';
-    const select = document.getElementById('autoApplyEnv');
-    const env = select ? select.value : 'test';
-    const baseUrl = env === 'prod'
-        ? 'https://egreta.uab.cat/admin/editor/dk/atira/pure/api/shared/model/ueo/externalorganisation/editor/ueoexternalorganisationeditor.xhtml?scheme=&type=&id='
-        : 'https://egretat.uab.cat/admin/editor/dk/atira/pure/api/shared/model/ueo/externalorganisation/editor/ueoexternalorganisationeditor.xhtml?scheme=&type=&id=';
-    return baseUrl + encodeURIComponent(pureId);
-}
-
-function hasCountry(org) {
-    return !!(getOrgCountryLabel(org) || '').trim();
-}
-
-function hasType(org) {
-    return !!(getOrgTypeLabel(org) || '').trim();
-}
-
-function isUnknownTypeLabel(typeLabel) {
-    const normalized = normalizeText(typeLabel);
-    return normalized === 'desconegut' || normalized === 'unknown';
-}
-
-function getOrgSuggestionKey(org) {
-    const uuid = String(org && org.uuid || '').trim();
-    if (uuid) return 'uuid:' + uuid;
-    return 'name:' + normalizeText(getOrgNameLabel(org));
-}
-
-async function fetchCountrySuggestion(org) {
-    const bundle = await fetchSuggestionBundle(org);
-    return bundle.country;
-}
-
-async function fetchTypeSuggestion(org) {
-    const bundle = await fetchSuggestionBundle(org);
-    return bundle.type;
-}
-
-async function fetchSuggestionBundle(org) {
-    const key = getOrgSuggestionKey(org);
-    if (!key) {
-        return {
-            country: { country: '', uri: '', confidence: 0, reason: '' },
-            type: { type: '', confidence: 0, reason: '' },
-            funding: { funding: '', confidence: 0, reason: '' }
-        };
-    }
-    if (suggestionBundleCache.has(key)) return suggestionBundleCache.get(key);
-
-    const orgName = String(getOrgNameLabel(org) || '').trim();
-    if (!orgName) {
-        const emptyBundle = {
-            country: { country: '', uri: '', confidence: 0, reason: 'empty-name' },
-            type: { type: '', confidence: 0, reason: 'empty-name' },
-            funding: { funding: '', confidence: 0, reason: 'empty-name' }
-        };
-        suggestionBundleCache.set(key, emptyBundle);
-        countrySuggestionCache.set(key, emptyBundle.country);
-        typeSuggestionCache.set(key, emptyBundle.type);
-        fundingSuggestionCache.set(key, emptyBundle.funding);
-        return emptyBundle;
-    }
-
-    let bundle = {
-        country: { country: '', uri: '', confidence: 0, reason: '' },
-        type: { type: '', confidence: 0, reason: '' },
-        funding: { funding: '', confidence: 0, reason: '' }
-    };
-    try {
-        const res = await apiFetch('/external-organizations/stats/suggest-metadata?name=' + encodeURIComponent(orgName));
-        if (res.ok) {
-            const data = await res.json();
-            bundle = {
-                country: {
-                    country: String((data && data.suggestedCountry) || '').trim(),
-                    uri: String((data && data.suggestedCountryUri) || '').trim(),
-                    confidence: Number((data && data.countryConfidence) || 0),
-                    reason: String((data && data.countryReason) || '').trim()
-                },
-                type: {
-                    type: String((data && data.suggestedType) || '').trim(),
-                    confidence: Number((data && data.typeConfidence) || 0),
-                    reason: String((data && data.typeReason) || '').trim()
-                },
-                funding: {
-                    funding: String((data && data.suggestedFunding) || '').trim(),
-                    uri: String((data && data.suggestedFundingUri) || '').trim(),
-                    confidence: Number((data && data.fundingConfidence) || 0),
-                    reason: String((data && data.fundingReason) || '').trim()
-                }
-            };
-        }
-    } catch (_) {}
-
-    suggestionBundleCache.set(key, bundle);
-    countrySuggestionCache.set(key, bundle.country);
-    typeSuggestionCache.set(key, bundle.type);
-    fundingSuggestionCache.set(key, bundle.funding);
-    return bundle;
-}
-
-async function preloadSuggestionsForPage(rows, loadId) {
-    const targets = (rows || []);
-    if (!targets.length) return;
-
-    // Separar los que ya están en caché
-    const needsFetch = targets.filter(org => {
-        const key = getOrgSuggestionKey(org);
-        return key && !suggestionBundleCache.has(key);
-    });
-    if (!needsFetch.length) return;
-
-    // Registrar todos en el Set de fetching
-    needsFetch.forEach(org => uuidsBeingFetched.add(org.uuid));
-
-    // Forzar renderizado para mostrar los spinners "Analitzant..."
-    if (loadId === currentLoadId) {
-        renderTable(targets);
-    }
-
-    // Mapear cada org a una promesa individual de fetch
-    const fetchPromises = needsFetch.map(async (org) => {
-        const orgName = getOrgNameLabel(org);
-        if (!orgName) {
-            if (loadId === currentLoadId) {
-                uuidsBeingFetched.delete(org.uuid);
+    <script>
+        const KPI_DEFS = {
+            withoutCountry: {
+                id: 'withoutCountry',
+                label: 'Organitzacions sense pais',
+                icon: 'fa-earth-europe',
+                color: 'rose',
+                countKey: 'withoutCountry',
+                countEndpoint: '/external-organizations/stats/no-country/count',
+                listEndpoint: '/external-organizations/stats/no-country',
+                subtitle: 'Registres sense pais informat'
+            },
+            withoutFunding: {
+                id: 'withoutFunding',
+                label: 'Organitzacions sense financiacio',
+                icon: 'fa-coins',
+                color: 'emerald',
+                countKey: 'withoutFunding',
+                countEndpoint: '/external-organizations/stats/no-funding/count',
+                listEndpoint: '/external-organizations/stats/no-funding',
+                subtitle: 'Registres sense financiacio informada'
+            },
+            withoutType: {
+                id: 'withoutType',
+                label: 'Organitzacions sense tipus',
+                icon: 'fa-tags',
+                color: 'indigo',
+                countKey: 'withoutType',
+                countEndpoint: '/external-organizations/stats/no-type/count',
+                listEndpoint: '/external-organizations/stats/no-type',
+                subtitle: 'Registres sense tipus informat'
             }
-            return;
+        };
+
+        let activeKpi = 'withoutCountry';
+        let currentPage = 0;
+        const pageSize = 20;
+        let currentSortBy = 'name';
+        let currentSortDirection = 'asc';
+        let debounceTimer = null;
+        let currentLoadId = 0;
+        const countrySuggestionCache = new Map();
+        const typeSuggestionCache = new Map();
+        const fundingSuggestionCache = new Map();
+        const suggestionBundleCache = new Map();
+        const uuidsBeingFetched = new Set();
+        let typeCatalogOptions = null;
+        const EGRETA_EXTERNAL_ORG_BASE =
+            'https://egreta.uab.cat/admin/editor/dk/atira/pure/api/shared/model/ueo/externalorganisation/editor/ueoexternalorganisationeditor.xhtml?scheme=&type=&id=';
+        function esc(v) {
+            if (v == null) return '';
+            return String(v)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
         }
 
-        try {
-            const res = await apiFetch('/external-organizations/stats/suggest-metadata?name=' + encodeURIComponent(orgName));
-            if (!res.ok) throw new Error('HTTP ' + res.status);
-            const data = await res.json();
-
-            const key = 'uuid:' + String(org.uuid || '').trim();
-            const bundle = {
-                country: {
-                    country: String(data.suggestedCountry || '').trim(),
-                    uri: String(data.suggestedCountryUri || '').trim(),
-                    confidence: Number(data.countryConfidence || 0),
-                    reason: String(data.countryReason || '').trim()
-                },
-                type: {
-                    type: String(data.suggestedType || '').trim(),
-                    confidence: Number(data.typeConfidence || 0),
-                    reason: String(data.typeReason || '').trim()
-                },
-                funding: {
-                    funding: String(data.suggestedFunding || '').trim(),
-                    uri: String(data.suggestedFundingUri || '').trim(),
-                    confidence: Number(data.fundingConfidence || 0),
-                    reason: String(data.fundingReason || '').trim()
-                }
+        function colorClasses(color) {
+            const map = {
+                rose: { bg: 'bg-rose-100', fg: 'text-rose-600', ring: 'ring-rose-300' },
+                indigo: { bg: 'bg-indigo-100', fg: 'text-indigo-600', ring: 'ring-indigo-300' },
+                emerald: { bg: 'bg-emerald-100', fg: 'text-emerald-600', ring: 'ring-emerald-300' }
             };
-            
+            return map[color] || map.indigo;
+        }
+
+        function workflowBadge(step) {
+            const v = (step || '').toLowerCase();
+            if (v === 'approved' || v === 'validated') return '<span class="px-2 py-1 rounded-full text-[10px] font-bold uppercase bg-emerald-100 text-emerald-700">' + esc(step) + '</span>';
+            if (v === 'forapproval') return '<span class="px-2 py-1 rounded-full text-[10px] font-bold uppercase bg-sky-100 text-sky-700">For Approval</span>';
+            return '<span class="px-2 py-1 rounded-full text-[10px] font-bold uppercase bg-slate-100 text-slate-600">' + esc(step || 'N/A') + '</span>';
+        }
+
+        function workflowCell(org) {
+            const step = (org.workflow && org.workflow.step) || '';
+            const v = step.toLowerCase();
+            const badge = workflowBadge(step);
+
+            if (v === 'approved' || v === 'validated') {
+                return badge;
+            }
+
+            const btn = `<button type="button" class="approve-workflow-btn inline-flex items-center gap-1 ml-2 px-2 py-1 rounded-lg border border-emerald-300 bg-white hover:bg-emerald-50 text-[11px] font-semibold text-emerald-700 transition-colors" data-uuid="${esc(org.uuid)}"><i class="fa-solid fa-check"></i> Validar</button>`;
+            return `<div class="flex items-center">${badge}${btn}</div>`;
+        }
+
+        function normalizeText(v) {
+            return String(v || '')
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .toLowerCase()
+                .replace(/[^a-z0-9\s]/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim();
+        }
+
+        function getOrgNameLabel(org) {
+            return org.displayName || (org.name && (org.name.ca_ES || org.name.es_ES || org.name.en_GB)) || '';
+        }
+
+        function getOrgTypeLabel(org) {
+            return org.typeName || (org.type && org.type.term && (org.type.term.ca_ES || org.type.term.es_ES || org.type.term.en_GB)) || '';
+        }
+
+        function getOrgCountryLabel(org) {
+            return org.countryName || (org.address && org.address.country && org.address.country.term && (org.address.country.term.ca_ES || org.address.country.term.es_ES || org.address.country.term.en_GB)) || '';
+        }
+
+        function getOrgFundingLabel(org) {
+            const groups = (org && Array.isArray(org.keywordGroups)) ? org.keywordGroups : [];
+            for (const g of groups) {
+                const logicalName = String((g && g.logicalName) || '').trim();
+                if (logicalName !== '/uab/externalorganisations/caracter') continue;
+                const classifications = (g && Array.isArray(g.classifications)) ? g.classifications : [];
+                if (!classifications.length) return '';
+                const term = classifications[0] && classifications[0].term;
+                return (term && (term.ca_ES || term.es_ES || term.en_GB)) || '';
+            }
+            return '';
+        }
+
+        function getOrgEgretaUrl(org) {
+            const pureId = org && org.pureId != null ? String(org.pureId).trim() : '';
+            if (!pureId) return '';
+            const select = document.getElementById('autoApplyEnv');
+            const env = select ? select.value : 'test';
+            const baseUrl = env === 'prod'
+                ? 'https://egreta.uab.cat/admin/editor/dk/atira/pure/api/shared/model/ueo/externalorganisation/editor/ueoexternalorganisationeditor.xhtml?scheme=&type=&id='
+                : 'https://egretat.uab.cat/admin/editor/dk/atira/pure/api/shared/model/ueo/externalorganisation/editor/ueoexternalorganisationeditor.xhtml?scheme=&type=&id=';
+            return baseUrl + encodeURIComponent(pureId);
+        }
+
+        function hasCountry(org) {
+            return !!(getOrgCountryLabel(org) || '').trim();
+        }
+
+        function hasType(org) {
+            return !!(getOrgTypeLabel(org) || '').trim();
+        }
+
+        function isUnknownTypeLabel(typeLabel) {
+            const normalized = normalizeText(typeLabel);
+            return normalized === 'desconegut' || normalized === 'unknown';
+        }
+
+        function getOrgSuggestionKey(org) {
+            const uuid = String(org && org.uuid || '').trim();
+            if (uuid) return 'uuid:' + uuid;
+            return 'name:' + normalizeText(getOrgNameLabel(org));
+        }
+
+        async function fetchCountrySuggestion(org) {
+            const bundle = await fetchSuggestionBundle(org);
+            return bundle.country;
+        }
+
+        async function fetchTypeSuggestion(org) {
+            const bundle = await fetchSuggestionBundle(org);
+            return bundle.type;
+        }
+
+        async function fetchSuggestionBundle(org) {
+            const key = getOrgSuggestionKey(org);
+            if (!key) {
+                return {
+                    country: { country: '', uri: '', confidence: 0, reason: '' },
+                    type: { type: '', confidence: 0, reason: '' },
+                    funding: { funding: '', confidence: 0, reason: '' }
+                };
+            }
+            if (suggestionBundleCache.has(key)) return suggestionBundleCache.get(key);
+
+            const orgName = String(getOrgNameLabel(org) || '').trim();
+            if (!orgName) {
+                const emptyBundle = {
+                    country: { country: '', uri: '', confidence: 0, reason: 'empty-name' },
+                    type: { type: '', confidence: 0, reason: 'empty-name' },
+                    funding: { funding: '', confidence: 0, reason: 'empty-name' }
+                };
+                suggestionBundleCache.set(key, emptyBundle);
+                countrySuggestionCache.set(key, emptyBundle.country);
+                typeSuggestionCache.set(key, emptyBundle.type);
+                fundingSuggestionCache.set(key, emptyBundle.funding);
+                return emptyBundle;
+            }
+
+            let bundle = {
+                country: { country: '', uri: '', confidence: 0, reason: '' },
+                type: { type: '', confidence: 0, reason: '' },
+                funding: { funding: '', confidence: 0, reason: '' }
+            };
+            try {
+                const res = await apiFetch('/external-organizations/stats/suggest-metadata?name=' + encodeURIComponent(orgName));
+                if (res.ok) {
+                    const data = await res.json();
+                    bundle = {
+                        country: {
+                            country: String((data && data.suggestedCountry) || '').trim(),
+                            uri: String((data && data.suggestedCountryUri) || '').trim(),
+                            confidence: Number((data && data.countryConfidence) || 0),
+                            reason: String((data && data.countryReason) || '').trim()
+                        },
+                        type: {
+                            type: String((data && data.suggestedType) || '').trim(),
+                            confidence: Number((data && data.typeConfidence) || 0),
+                            reason: String((data && data.typeReason) || '').trim()
+                        },
+                        funding: {
+                            funding: String((data && data.suggestedFunding) || '').trim(),
+                            uri: String((data && data.suggestedFundingUri) || '').trim(),
+                            confidence: Number((data && data.fundingConfidence) || 0),
+                            reason: String((data && data.fundingReason) || '').trim()
+                        }
+                    };
+                }
+            } catch (_) { }
+
             suggestionBundleCache.set(key, bundle);
             countrySuggestionCache.set(key, bundle.country);
             typeSuggestionCache.set(key, bundle.type);
             fundingSuggestionCache.set(key, bundle.funding);
-        } catch (_) {
-            // Fallback silencioso
-        } finally {
-            if (loadId === currentLoadId) {
-                // Quitar este UUID de fetching y actualizar de inmediato el DOM para este registro
-                uuidsBeingFetched.delete(org.uuid);
-                
-                const rowEl = document.querySelector(`tr[data-uuid="${org.uuid}"]`);
-                if (rowEl) {
-                    const typeCell = rowEl.querySelector('td[data-cell="suggested-type"]');
-                    const fundingCell = rowEl.querySelector('td[data-cell="suggested-funding"]');
-                    const countryCell = rowEl.querySelector('td[data-cell="suggested-country"]');
-                    
-                    if (typeCell) typeCell.innerHTML = getSuggestedTypeHtml(org);
-                    if (fundingCell) fundingCell.innerHTML = getSuggestedFundingHtml(org);
-                    if (countryCell) countryCell.innerHTML = getSuggestedCountryHtml(org);
-                }
-            }
+            return bundle;
         }
-    });
 
-    // Esperar a que todas las llamadas concurrentes finalicen
-    await Promise.allSettled(fetchPromises);
-}
+        async function preloadSuggestionsForPage(rows, loadId) {
+            const targets = (rows || []);
+            if (!targets.length) return;
 
-async function preloadCountrySuggestions(rows, loadId) {
-    await preloadSuggestionsForPage(rows, loadId);
-}
+            // Separar los que ya están en caché
+            const needsFetch = targets.filter(org => {
+                const key = getOrgSuggestionKey(org);
+                return key && !suggestionBundleCache.has(key);
+            });
+            if (!needsFetch.length) return;
 
-async function preloadTypeSuggestions(rows) {
-    // Ya cubierto por preloadSuggestionsForPage, no hace nada extra
-}
-function buildConfidenceChip(label, confidence, reason, metricLabel) {
-    const safeLabel = String(label || '').trim();
-    if (!safeLabel) return '<span class="text-slate-400">—</span>';
+            // Registrar todos en el Set de fetching
+            needsFetch.forEach(org => uuidsBeingFetched.add(org.uuid));
 
-    const confidencePct = Math.round((Number(confidence) || 0) * 100);
-    let chipClasses = 'bg-rose-50 text-rose-700';
-    let pctClasses = 'text-rose-500';
-    if (confidencePct >= 80) {
-        chipClasses = 'bg-emerald-50 text-emerald-700';
-        pctClasses = 'text-emerald-500';
-    } else if (confidencePct >= 55) {
-        chipClasses = 'bg-amber-50 text-amber-700';
-        pctClasses = 'text-amber-500';
-    }
+            // Forzar renderizado para mostrar los spinners "Analitzant..."
+            if (loadId === currentLoadId) {
+                renderTable(targets);
+            }
 
-    const safeReason = String(reason || '').trim() || 'n/a';
-    const tooltip = 'Motiu IA: ' + safeReason;
-
-    return '<span tabindex="0" class="ai-tooltip inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-semibold ' + chipClasses + '" data-tooltip="' + esc(tooltip) + '" title="' + esc(tooltip) + '">' + esc(safeLabel) + '<span class="text-[10px] ' + pctClasses + '">' + esc(String(confidencePct)) + '%</span></span>';
-}
-
-async function ensureTypeCatalogOptions() {
-    if (Array.isArray(typeCatalogOptions)) return typeCatalogOptions;
-
-    try {
-        const res = await apiFetch('/external-organizations/stats/type-catalog');
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        const data = await res.json();
-
-        typeCatalogOptions = (Array.isArray(data) ? data : [])
-            .map(row => {
-                const uri = String((row && row.uri) || '').trim();
-                const label = String((row && row.label) || '').trim();
-                return { uri, label };
-            })
-            .filter(row => !!row.uri && !!row.label && normalizeText(row.label) !== normalizeText('(desconegut)'));
-    } catch (_) {
-        typeCatalogOptions = [];
-    }
-
-    return typeCatalogOptions;
-}
-
-function findTypeOptionByLabel(label) {
-    const normalized = normalizeText(label || '');
-    if (!normalized || !Array.isArray(typeCatalogOptions)) return null;
-    return typeCatalogOptions.find(opt => normalizeText(opt.label) === normalized) || null;
-}
-
-function buildTypeSuggestionSelect(uuid, selectedTypeUri, selectedTypeLabel) {
-    const safeUuid = String(uuid || '').trim();
-    if (!safeUuid) return '<span class="text-slate-400">—</span>';
-
-    const selectedUri = String(selectedTypeUri || '').trim();
-    const selectedLabel = String(selectedTypeLabel || '').trim();
-    const options = Array.isArray(typeCatalogOptions) ? [...typeCatalogOptions] : [];
-
-    if (selectedUri && !options.some(opt => String(opt.uri || '').trim() === selectedUri)) {
-        options.unshift({ uri: selectedUri, label: selectedLabel || selectedUri });
-    }
-
-    const placeholder = '<option value="">Selecciona tipus...</option>';
-    const rendered = options.map(opt => {
-        const uri = String((opt && opt.uri) || '').trim();
-        const label = String((opt && opt.label) || '').trim();
-        const isSelected = selectedUri && uri === selectedUri;
-        return '<option value="' + esc(uri) + '"' + (isSelected ? ' selected' : '') + '>' + esc(label || uri) + '</option>';
-    }).join('');
-
-    return '<select class="type-suggest-select w-full max-w-[280px] px-2 py-1.5 rounded-lg border border-slate-300 bg-white text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-300" data-uuid="' + esc(safeUuid) + '">' + placeholder + rendered + '</select>';
-}
-
-function buildApplySuggestionButton(kind, uuid, suggestedLabel, suggestedUri) {
-    const safeUuid = String(uuid || '').trim();
-    const safeLabel = String(suggestedLabel || '').trim();
-    const safeUri = String(suggestedUri || '').trim();
-    if (!safeUuid) return '';
-
-    const suggestedAttr = safeLabel ? ' data-suggested="' + esc(safeLabel) + '"' : '';
-    const suggestedUriAttr = safeUri ? ' data-suggested-uri="' + esc(safeUri) + '"' : '';
-
-    return '<button type="button" class="apply-suggestion-btn inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-[11px] font-semibold text-slate-700" data-kind="' + esc(kind) + '" data-uuid="' + esc(safeUuid) + '"' + suggestedAttr + suggestedUriAttr + '><i class="fa-solid fa-floppy-disk"></i> Aplicar</button>';
-}
-
-function showToast(message, type) {
-    let root = document.getElementById('toastRoot');
-    if (!root) {
-        root = document.createElement('div');
-        root.id = 'toastRoot';
-        root.className = 'fixed top-4 right-4 z-50 space-y-2 w-[min(92vw,360px)]';
-        document.body.appendChild(root);
-    }
-
-    const variant = type === 'error'
-        ? 'bg-rose-50 border-rose-200 text-rose-700'
-        : 'bg-emerald-50 border-emerald-200 text-emerald-700';
-    const icon = type === 'error' ? 'fa-circle-exclamation' : 'fa-circle-check';
-
-    const toast = document.createElement('div');
-    toast.className = 'rounded-xl border px-3 py-2 text-sm shadow-sm bg-white ' + variant;
-    toast.innerHTML = '<div class="flex items-start gap-2"><i class="fa-solid ' + icon + ' mt-0.5"></i><span>' + esc(message || '') + '</span></div>';
-    root.appendChild(toast);
-
-    setTimeout(() => {
-        toast.classList.add('opacity-0', 'translate-y-[-4px]', 'transition', 'duration-300');
-        setTimeout(() => toast.remove(), 320);
-    }, 2600);
-}
-
-function markRowUpdated(rowEl, kind, payload, result, buttonEl) {
-    if (!rowEl) return;
-
-    const cells = rowEl.querySelectorAll('td');
-    const updatedChip = '<span class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-semibold bg-black text-white"><i class="fa-solid fa-circle-check"></i> Actualitzat</span>';
-
-    if (kind === 'type') {
-        const select = rowEl.querySelector('.type-suggest-select');
-        const selectedLabel = select && select.options && select.selectedIndex >= 0
-            ? (select.options[select.selectedIndex].text || '').trim()
-            : '';
-        const appliedLabel = selectedLabel || String((result && result.appliedType) || '').trim() || '—';
-
-        if (cells[1]) cells[1].textContent = appliedLabel;
-        if (cells[2]) cells[2].innerHTML = updatedChip;
-    }
-
-    if (kind === 'country') {
-        const appliedCountry = String((result && result.appliedCountry) || payload.suggestedCountry || '').trim() || '—';
-        if (cells[5]) cells[5].textContent = appliedCountry;
-        if (cells[6]) cells[6].innerHTML = updatedChip;
-    }
-
-    if (kind === 'funding') {
-        const appliedFunding = String((result && result.appliedFunding) || payload.suggestedFunding || '').trim() || '—';
-        if (cells[3]) cells[3].textContent = appliedFunding;
-        if (cells[4]) cells[4].innerHTML = updatedChip;
-    }
-
-    if (buttonEl) {
-        buttonEl.disabled = true;
-        buttonEl.innerHTML = '<i class="fa-solid fa-circle-check"></i> Actualitzat';
-        buttonEl.classList.remove('hover:bg-slate-50', 'text-slate-700');
-        buttonEl.classList.add('bg-emerald-50', 'border-emerald-200', 'text-emerald-700', 'cursor-default');
-    }
-
-    rowEl.classList.add('bg-emerald-50/60');
-    setTimeout(() => rowEl.classList.remove('bg-emerald-50/60'), 1500);
-}
-
-async function loadKpis() {
-    const grid = document.getElementById('kpiGrid');
-    if (!grid.innerHTML || grid.innerHTML.includes('Carregant')) {
-        grid.innerHTML = '<div class="col-span-full text-sm text-slate-400">Carregant KPIs...</div>';
-    }
-
-    try {
-        const promises = Object.values(KPI_DEFS).map(async (kpi) => {
-            let count = 0;
-            try {
-                const res = await apiFetch(kpi.countEndpoint);
-                if (res.ok) {
-                    const data = await res.json();
-                    count = Number(data[kpi.countKey] || 0);
+            // Mapear cada org a una promesa individual de fetch
+            const fetchPromises = needsFetch.map(async (org) => {
+                const orgName = getOrgNameLabel(org);
+                if (!orgName) {
+                    if (loadId === currentLoadId) {
+                        uuidsBeingFetched.delete(org.uuid);
+                    }
+                    return;
                 }
-            } catch (_) {}
-            return { ...kpi, count };
-        });
 
-        const cards = await Promise.all(promises);
+                try {
+                    const res = await apiFetch('/external-organizations/stats/suggest-metadata?name=' + encodeURIComponent(orgName));
+                    if (!res.ok) throw new Error('HTTP ' + res.status);
+                    const data = await res.json();
 
-        grid.innerHTML = cards.map(kpi => {
-            const c = colorClasses(kpi.color);
-            const active = kpi.id === activeKpi;
-            return `
+                    const key = 'uuid:' + String(org.uuid || '').trim();
+                    const bundle = {
+                        country: {
+                            country: String(data.suggestedCountry || '').trim(),
+                            uri: String(data.suggestedCountryUri || '').trim(),
+                            confidence: Number(data.countryConfidence || 0),
+                            reason: String(data.countryReason || '').trim()
+                        },
+                        type: {
+                            type: String(data.suggestedType || '').trim(),
+                            confidence: Number(data.typeConfidence || 0),
+                            reason: String(data.typeReason || '').trim()
+                        },
+                        funding: {
+                            funding: String(data.suggestedFunding || '').trim(),
+                            uri: String(data.suggestedFundingUri || '').trim(),
+                            confidence: Number(data.fundingConfidence || 0),
+                            reason: String(data.fundingReason || '').trim()
+                        }
+                    };
+
+                    suggestionBundleCache.set(key, bundle);
+                    countrySuggestionCache.set(key, bundle.country);
+                    typeSuggestionCache.set(key, bundle.type);
+                    fundingSuggestionCache.set(key, bundle.funding);
+                } catch (_) {
+                    // Fallback silencioso
+                } finally {
+                    if (loadId === currentLoadId) {
+                        // Quitar este UUID de fetching y actualizar de inmediato el DOM para este registro
+                        uuidsBeingFetched.delete(org.uuid);
+
+                        const rowEl = document.querySelector(`tr[data-uuid="${org.uuid}"]`);
+                        if (rowEl) {
+                            const typeCell = rowEl.querySelector('td[data-cell="suggested-type"]');
+                            const fundingCell = rowEl.querySelector('td[data-cell="suggested-funding"]');
+                            const countryCell = rowEl.querySelector('td[data-cell="suggested-country"]');
+
+                            if (typeCell) typeCell.innerHTML = getSuggestedTypeHtml(org);
+                            if (fundingCell) fundingCell.innerHTML = getSuggestedFundingHtml(org);
+                            if (countryCell) countryCell.innerHTML = getSuggestedCountryHtml(org);
+                        }
+                    }
+                }
+            });
+
+            // Esperar a que todas las llamadas concurrentes finalicen
+            await Promise.allSettled(fetchPromises);
+        }
+
+        async function preloadCountrySuggestions(rows, loadId) {
+            await preloadSuggestionsForPage(rows, loadId);
+        }
+
+        async function preloadTypeSuggestions(rows) {
+            // Ya cubierto por preloadSuggestionsForPage, no hace nada extra
+        }
+        function buildConfidenceChip(label, confidence, reason, metricLabel) {
+            const safeLabel = String(label || '').trim();
+            if (!safeLabel) return '<span class="text-slate-400">—</span>';
+
+            const confidencePct = Math.round((Number(confidence) || 0) * 100);
+            let chipClasses = 'bg-rose-50 text-rose-700';
+            let pctClasses = 'text-rose-500';
+            if (confidencePct >= 80) {
+                chipClasses = 'bg-emerald-50 text-emerald-700';
+                pctClasses = 'text-emerald-500';
+            } else if (confidencePct >= 55) {
+                chipClasses = 'bg-amber-50 text-amber-700';
+                pctClasses = 'text-amber-500';
+            }
+
+            const safeReason = String(reason || '').trim() || 'n/a';
+            const tooltip = 'Motiu IA: ' + safeReason;
+
+            return '<span tabindex="0" class="ai-tooltip inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-semibold ' + chipClasses + '" data-tooltip="' + esc(tooltip) + '" title="' + esc(tooltip) + '">' + esc(safeLabel) + '<span class="text-[10px] ' + pctClasses + '">' + esc(String(confidencePct)) + '%</span></span>';
+        }
+
+        async function ensureTypeCatalogOptions() {
+            if (Array.isArray(typeCatalogOptions)) return typeCatalogOptions;
+
+            try {
+                const res = await apiFetch('/external-organizations/stats/type-catalog');
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const data = await res.json();
+
+                typeCatalogOptions = (Array.isArray(data) ? data : [])
+                    .map(row => {
+                        const uri = String((row && row.uri) || '').trim();
+                        const label = String((row && row.label) || '').trim();
+                        return { uri, label };
+                    })
+                    .filter(row => !!row.uri && !!row.label && normalizeText(row.label) !== normalizeText('(desconegut)'));
+            } catch (_) {
+                typeCatalogOptions = [];
+            }
+
+            return typeCatalogOptions;
+        }
+
+        function findTypeOptionByLabel(label) {
+            const normalized = normalizeText(label || '');
+            if (!normalized || !Array.isArray(typeCatalogOptions)) return null;
+            return typeCatalogOptions.find(opt => normalizeText(opt.label) === normalized) || null;
+        }
+
+        function buildTypeSuggestionSelect(uuid, selectedTypeUri, selectedTypeLabel) {
+            const safeUuid = String(uuid || '').trim();
+            if (!safeUuid) return '<span class="text-slate-400">—</span>';
+
+            const selectedUri = String(selectedTypeUri || '').trim();
+            const selectedLabel = String(selectedTypeLabel || '').trim();
+            const options = Array.isArray(typeCatalogOptions) ? [...typeCatalogOptions] : [];
+
+            if (selectedUri && !options.some(opt => String(opt.uri || '').trim() === selectedUri)) {
+                options.unshift({ uri: selectedUri, label: selectedLabel || selectedUri });
+            }
+
+            const placeholder = '<option value="">Selecciona tipus...</option>';
+            const rendered = options.map(opt => {
+                const uri = String((opt && opt.uri) || '').trim();
+                const label = String((opt && opt.label) || '').trim();
+                const isSelected = selectedUri && uri === selectedUri;
+                return '<option value="' + esc(uri) + '"' + (isSelected ? ' selected' : '') + '>' + esc(label || uri) + '</option>';
+            }).join('');
+
+            return '<select class="type-suggest-select w-full max-w-[280px] px-2 py-1.5 rounded-lg border border-slate-300 bg-white text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-300" data-uuid="' + esc(safeUuid) + '">' + placeholder + rendered + '</select>';
+        }
+
+        function buildApplySuggestionButton(kind, uuid, suggestedLabel, suggestedUri) {
+            const safeUuid = String(uuid || '').trim();
+            const safeLabel = String(suggestedLabel || '').trim();
+            const safeUri = String(suggestedUri || '').trim();
+            if (!safeUuid) return '';
+
+            const suggestedAttr = safeLabel ? ' data-suggested="' + esc(safeLabel) + '"' : '';
+            const suggestedUriAttr = safeUri ? ' data-suggested-uri="' + esc(safeUri) + '"' : '';
+
+            return '<button type="button" class="apply-suggestion-btn inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-[11px] font-semibold text-slate-700" data-kind="' + esc(kind) + '" data-uuid="' + esc(safeUuid) + '"' + suggestedAttr + suggestedUriAttr + '><i class="fa-solid fa-floppy-disk"></i> Aplicar</button>';
+        }
+
+        function showToast(message, type) {
+            let root = document.getElementById('toastRoot');
+            if (!root) {
+                root = document.createElement('div');
+                root.id = 'toastRoot';
+                root.className = 'fixed top-4 right-4 z-50 space-y-2 w-[min(92vw,360px)]';
+                document.body.appendChild(root);
+            }
+
+            const variant = type === 'error'
+                ? 'bg-rose-50 border-rose-200 text-rose-700'
+                : 'bg-emerald-50 border-emerald-200 text-emerald-700';
+            const icon = type === 'error' ? 'fa-circle-exclamation' : 'fa-circle-check';
+
+            const toast = document.createElement('div');
+            toast.className = 'rounded-xl border px-3 py-2 text-sm shadow-sm bg-white ' + variant;
+            toast.innerHTML = '<div class="flex items-start gap-2"><i class="fa-solid ' + icon + ' mt-0.5"></i><span>' + esc(message || '') + '</span></div>';
+            root.appendChild(toast);
+
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-[-4px]', 'transition', 'duration-300');
+                setTimeout(() => toast.remove(), 320);
+            }, 2600);
+        }
+
+        function markRowUpdated(rowEl, kind, payload, result, buttonEl) {
+            if (!rowEl) return;
+
+            const cells = rowEl.querySelectorAll('td');
+            const updatedChip = '<span class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-semibold bg-black text-white"><i class="fa-solid fa-circle-check"></i> Actualitzat</span>';
+
+            if (kind === 'type') {
+                const select = rowEl.querySelector('.type-suggest-select');
+                const selectedLabel = select && select.options && select.selectedIndex >= 0
+                    ? (select.options[select.selectedIndex].text || '').trim()
+                    : '';
+                const appliedLabel = selectedLabel || String((result && result.appliedType) || '').trim() || '—';
+
+                if (cells[1]) cells[1].textContent = appliedLabel;
+                if (cells[2]) cells[2].innerHTML = updatedChip;
+            }
+
+            if (kind === 'country') {
+                const appliedCountry = String((result && result.appliedCountry) || payload.suggestedCountry || '').trim() || '—';
+                if (cells[5]) cells[5].textContent = appliedCountry;
+                if (cells[6]) cells[6].innerHTML = updatedChip;
+            }
+
+            if (kind === 'funding') {
+                const appliedFunding = String((result && result.appliedFunding) || payload.suggestedFunding || '').trim() || '—';
+                if (cells[3]) cells[3].textContent = appliedFunding;
+                if (cells[4]) cells[4].innerHTML = updatedChip;
+            }
+
+            if (buttonEl) {
+                buttonEl.disabled = true;
+                buttonEl.innerHTML = '<i class="fa-solid fa-circle-check"></i> Actualitzat';
+                buttonEl.classList.remove('hover:bg-slate-50', 'text-slate-700');
+                buttonEl.classList.add('bg-emerald-50', 'border-emerald-200', 'text-emerald-700', 'cursor-default');
+            }
+
+            rowEl.classList.add('bg-emerald-50/60');
+            setTimeout(() => rowEl.classList.remove('bg-emerald-50/60'), 1500);
+        }
+
+        async function loadKpis() {
+            const grid = document.getElementById('kpiGrid');
+            if (!grid.innerHTML || grid.innerHTML.includes('Carregant')) {
+                grid.innerHTML = '<div class="col-span-full text-sm text-slate-400">Carregant KPIs...</div>';
+            }
+
+            try {
+                const promises = Object.values(KPI_DEFS).map(async (kpi) => {
+                    let count = 0;
+                    try {
+                        const res = await apiFetch(kpi.countEndpoint);
+                        if (res.ok) {
+                            const data = await res.json();
+                            count = Number(data[kpi.countKey] || 0);
+                        }
+                    } catch (_) { }
+                    return { ...kpi, count };
+                });
+
+                const cards = await Promise.all(promises);
+
+                grid.innerHTML = cards.map(kpi => {
+                    const c = colorClasses(kpi.color);
+                    const active = kpi.id === activeKpi;
+                    return `
             <button data-kpi="${esc(kpi.id)}" class="kpi-card text-left bg-white rounded-xl border border-slate-200 shadow-sm p-4 flex items-center gap-3 ${active ? 'ring-2 ' + c.ring : ''}">
                 <div class="w-10 h-10 ${c.bg} rounded-full flex items-center justify-center shrink-0">
                     <i class="fa-solid ${esc(kpi.icon)} ${c.fg}"></i>
@@ -750,143 +790,143 @@ async function loadKpis() {
                     <p class="text-xl font-black text-slate-700 leading-tight">${Number(kpi.count).toLocaleString('ca-ES')}</p>
                 </div>
             </button>`;
-        }).join('');
-    } catch (_) {}
+                }).join('');
+            } catch (_) { }
 
-    document.querySelectorAll('.kpi-card').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const id = btn.getAttribute('data-kpi');
-            if (!id || id === activeKpi) return;
-            activeKpi = id;
-            currentPage = 0;
-            currentSortBy = 'name';
-            currentSortDirection = 'asc';
-            
-            // Clean up old interval
-            if (autoApplyInterval) {
-                clearInterval(autoApplyInterval);
-                autoApplyInterval = null;
-            }
-            
-            // Reset progress bar / container visibility / button states
-            autoApplyVisible = false;
-            document.getElementById('autoApplyProgressContainer').classList.add('hidden');
-            document.getElementById('btnDownloadAutoLog').classList.add('hidden');
-            document.getElementById('autoApplyProgressBar').style.width = '0%';
-            document.getElementById('autoApplyConsole').textContent = '';
-            
-            updateAutoApplyTexts();
-            checkAutoApplyStatus();
-            
-            // Check status for the newly selected KPI to see if we need to poll
-            const metric = getActiveMetric();
-            apiFetch(`/external-organizations/stats/auto-apply-${metric}/status`)
-                .then(res => {
-                    if (metric !== getActiveMetric()) return null;
-                    return res.json();
-                })
-                .then(data => {
-                    if (!data) return;
-                    if (data.running) {
-                        autoApplyInterval = setInterval(checkAutoApplyStatus, 1500);
+            document.querySelectorAll('.kpi-card').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const id = btn.getAttribute('data-kpi');
+                    if (!id || id === activeKpi) return;
+                    activeKpi = id;
+                    currentPage = 0;
+                    currentSortBy = 'name';
+                    currentSortDirection = 'asc';
+
+                    // Clean up old interval
+                    if (autoApplyInterval) {
+                        clearInterval(autoApplyInterval);
+                        autoApplyInterval = null;
                     }
-                })
-                .catch(() => {});
-            
-            loadKpis();
-            loadTable();
-        });
-    });
-}
 
-function getSuggestedTypeHtml(org) {
-    const typeRaw = getOrgTypeLabel(org);
-    const shouldSuggestType = !typeRaw || isUnknownTypeLabel(typeRaw);
-    if (!shouldSuggestType) return '<span class="text-slate-400">—</span>';
+                    // Reset progress bar / container visibility / button states
+                    autoApplyVisible = false;
+                    document.getElementById('autoApplyProgressContainer').classList.add('hidden');
+                    document.getElementById('btnDownloadAutoLog').classList.add('hidden');
+                    document.getElementById('autoApplyProgressBar').style.width = '0%';
+                    document.getElementById('autoApplyConsole').textContent = '';
 
-    const key = getOrgSuggestionKey(org);
-    const cachedTypeSuggestion = typeSuggestionCache.get(key) || { type: '', confidence: 0, reason: '' };
-    const isFetching = uuidsBeingFetched.has(org.uuid);
+                    updateAutoApplyTexts();
+                    checkAutoApplyStatus();
 
-    if (isFetching && !cachedTypeSuggestion.type) {
-        return '<span class="text-slate-400 text-xs italic flex items-center gap-1.5"><i class="fa-solid fa-circle-notch fa-spin text-indigo-500"></i> Analitzant...</span>';
-    }
+                    // Check status for the newly selected KPI to see if we need to poll
+                    const metric = getActiveMetric();
+                    apiFetch(`/external-organizations/stats/auto-apply-${metric}/status`)
+                        .then(res => {
+                            if (metric !== getActiveMetric()) return null;
+                            return res.json();
+                        })
+                        .then(data => {
+                            if (!data) return;
+                            if (data.running) {
+                                autoApplyInterval = setInterval(checkAutoApplyStatus, 1500);
+                            }
+                        })
+                        .catch(() => { });
 
-    const htmlSuggestedTypeRaw = cachedTypeSuggestion.type;
-    const currentTypeUri = String((org && org.type && org.type.uri) || '').trim();
-    const suggestedTypeOption = findTypeOptionByLabel(htmlSuggestedTypeRaw);
-    const selectedTypeUri = (suggestedTypeOption && suggestedTypeOption.uri) || currentTypeUri;
-    const selectedTypeLabel = (suggestedTypeOption && suggestedTypeOption.label) || htmlSuggestedTypeRaw || typeRaw || '';
-    const typeSelect = buildTypeSuggestionSelect(org.uuid, selectedTypeUri, selectedTypeLabel);
-    const applyTypeBtn = buildApplySuggestionButton('type', org.uuid, '', '');
-    return typeSelect + (applyTypeBtn ? '<div class="mt-2">' + applyTypeBtn + '</div>' : '');
-}
+                    loadKpis();
+                    loadTable();
+                });
+            });
+        }
 
-function getSuggestedCountryHtml(org) {
-    const countryRaw = getOrgCountryLabel(org);
-    if (countryRaw) return '<span class="text-slate-400">—</span>';
+        function getSuggestedTypeHtml(org) {
+            const typeRaw = getOrgTypeLabel(org);
+            const shouldSuggestType = !typeRaw || isUnknownTypeLabel(typeRaw);
+            if (!shouldSuggestType) return '<span class="text-slate-400">—</span>';
 
-    const key = getOrgSuggestionKey(org);
-    const cachedCountrySuggestion = countrySuggestionCache.get(key) || { country: '', uri: '', confidence: 0, reason: '' };
-    const isFetching = uuidsBeingFetched.has(org.uuid);
+            const key = getOrgSuggestionKey(org);
+            const cachedTypeSuggestion = typeSuggestionCache.get(key) || { type: '', confidence: 0, reason: '' };
+            const isFetching = uuidsBeingFetched.has(org.uuid);
 
-    if (isFetching && !cachedCountrySuggestion.country) {
-        return '<span class="text-slate-400 text-xs italic flex items-center gap-1.5"><i class="fa-solid fa-circle-notch fa-spin text-indigo-500"></i> Analitzant...</span>';
-    }
+            if (isFetching && !cachedTypeSuggestion.type) {
+                return '<span class="text-slate-400 text-xs italic flex items-center gap-1.5"><i class="fa-solid fa-circle-notch fa-spin text-indigo-500"></i> Analitzant...</span>';
+            }
 
-    const suggestedCountryRaw = cachedCountrySuggestion.country;
-    const suggestedCountryUri = String(cachedCountrySuggestion.uri || '').trim();
-    const suggestedCountryChip = buildConfidenceChip(suggestedCountryRaw, cachedCountrySuggestion.confidence, cachedCountrySuggestion.reason, 'pais');
-    const applyCountryBtn = buildApplySuggestionButton('country', org.uuid, suggestedCountryRaw, suggestedCountryUri);
-    return suggestedCountryChip + (applyCountryBtn ? '<div class="mt-2">' + applyCountryBtn + '</div>' : '');
-}
+            const htmlSuggestedTypeRaw = cachedTypeSuggestion.type;
+            const currentTypeUri = String((org && org.type && org.type.uri) || '').trim();
+            const suggestedTypeOption = findTypeOptionByLabel(htmlSuggestedTypeRaw);
+            const selectedTypeUri = (suggestedTypeOption && suggestedTypeOption.uri) || currentTypeUri;
+            const selectedTypeLabel = (suggestedTypeOption && suggestedTypeOption.label) || htmlSuggestedTypeRaw || typeRaw || '';
+            const typeSelect = buildTypeSuggestionSelect(org.uuid, selectedTypeUri, selectedTypeLabel);
+            const applyTypeBtn = buildApplySuggestionButton('type', org.uuid, '', '');
+            return typeSelect + (applyTypeBtn ? '<div class="mt-2">' + applyTypeBtn + '</div>' : '');
+        }
 
-function getSuggestedFundingHtml(org) {
-    const persistedFundingRaw = String(getOrgFundingLabel(org) || '').trim();
-    if (persistedFundingRaw) return '<span class="text-slate-400">—</span>';
+        function getSuggestedCountryHtml(org) {
+            const countryRaw = getOrgCountryLabel(org);
+            if (countryRaw) return '<span class="text-slate-400">—</span>';
 
-    const key = getOrgSuggestionKey(org);
-    const cachedFundingSuggestion = fundingSuggestionCache.get(key) || { funding: '', uri: '', confidence: 0, reason: '' };
-    const isFetching = uuidsBeingFetched.has(org.uuid);
+            const key = getOrgSuggestionKey(org);
+            const cachedCountrySuggestion = countrySuggestionCache.get(key) || { country: '', uri: '', confidence: 0, reason: '' };
+            const isFetching = uuidsBeingFetched.has(org.uuid);
 
-    if (isFetching && !cachedFundingSuggestion.funding) {
-        return '<span class="text-slate-400 text-xs italic flex items-center gap-1.5"><i class="fa-solid fa-circle-notch fa-spin text-indigo-500"></i> Analitzant...</span>';
-    }
+            if (isFetching && !cachedCountrySuggestion.country) {
+                return '<span class="text-slate-400 text-xs italic flex items-center gap-1.5"><i class="fa-solid fa-circle-notch fa-spin text-indigo-500"></i> Analitzant...</span>';
+            }
 
-    const fundingChip = buildConfidenceChip(cachedFundingSuggestion.funding, cachedFundingSuggestion.confidence, cachedFundingSuggestion.reason, 'financiacion');
-    const applyFundingBtn = cachedFundingSuggestion.funding
-        ? buildApplySuggestionButton('funding', org.uuid, cachedFundingSuggestion.funding, cachedFundingSuggestion.uri)
-        : '';
-    return fundingChip + (applyFundingBtn ? '<div class="mt-2">' + applyFundingBtn + '</div>' : '');
-}
+            const suggestedCountryRaw = cachedCountrySuggestion.country;
+            const suggestedCountryUri = String(cachedCountrySuggestion.uri || '').trim();
+            const suggestedCountryChip = buildConfidenceChip(suggestedCountryRaw, cachedCountrySuggestion.confidence, cachedCountrySuggestion.reason, 'pais');
+            const applyCountryBtn = buildApplySuggestionButton('country', org.uuid, suggestedCountryRaw, suggestedCountryUri);
+            return suggestedCountryChip + (applyCountryBtn ? '<div class="mt-2">' + applyCountryBtn + '</div>' : '');
+        }
 
-function renderTable(rows) {
-    const body = document.getElementById('tableBody');
-    if (!rows || rows.length === 0) {
-        body.innerHTML = '<tr><td colspan="8" class="px-6 py-10 text-center text-slate-400 italic">No hi ha registres per aquest KPI.</td></tr>';
-        return;
-    }
+        function getSuggestedFundingHtml(org) {
+            const persistedFundingRaw = String(getOrgFundingLabel(org) || '').trim();
+            if (persistedFundingRaw) return '<span class="text-slate-400">—</span>';
 
-    body.innerHTML = rows.map(org => {
-        const nameRaw = getOrgNameLabel(org);
-        const nameText = esc(nameRaw || '—');
-        const egretaUrl = getOrgEgretaUrl(org);
-        const name = egretaUrl
-            ? '<button type="button" class="open-egreta-org text-left text-indigo-700 hover:text-indigo-900 hover:underline" data-egreta-url="' + esc(egretaUrl) + '">' + nameText + '</button>'
-            : nameText;
-        const typeRaw = getOrgTypeLabel(org);
-        const type = esc(typeRaw || '—');
-        const countryRaw = getOrgCountryLabel(org);
-        const country = esc(countryRaw || '—');
-        const persistedFundingRaw = String(getOrgFundingLabel(org) || '').trim();
-        const funding = esc(persistedFundingRaw || '—');
+            const key = getOrgSuggestionKey(org);
+            const cachedFundingSuggestion = fundingSuggestionCache.get(key) || { funding: '', uri: '', confidence: 0, reason: '' };
+            const isFetching = uuidsBeingFetched.has(org.uuid);
 
-        const suggestedTypeCell = getSuggestedTypeHtml(org);
-        const suggestedFundingCell = getSuggestedFundingHtml(org);
-        const suggestedCountryCell = getSuggestedCountryHtml(org);
+            if (isFetching && !cachedFundingSuggestion.funding) {
+                return '<span class="text-slate-400 text-xs italic flex items-center gap-1.5"><i class="fa-solid fa-circle-notch fa-spin text-indigo-500"></i> Analitzant...</span>';
+            }
 
-        const wf = workflowCell(org);
-        return `
+            const fundingChip = buildConfidenceChip(cachedFundingSuggestion.funding, cachedFundingSuggestion.confidence, cachedFundingSuggestion.reason, 'financiacion');
+            const applyFundingBtn = cachedFundingSuggestion.funding
+                ? buildApplySuggestionButton('funding', org.uuid, cachedFundingSuggestion.funding, cachedFundingSuggestion.uri)
+                : '';
+            return fundingChip + (applyFundingBtn ? '<div class="mt-2">' + applyFundingBtn + '</div>' : '');
+        }
+
+        function renderTable(rows) {
+            const body = document.getElementById('tableBody');
+            if (!rows || rows.length === 0) {
+                body.innerHTML = '<tr><td colspan="8" class="px-6 py-10 text-center text-slate-400 italic">No hi ha registres per aquest KPI.</td></tr>';
+                return;
+            }
+
+            body.innerHTML = rows.map(org => {
+                const nameRaw = getOrgNameLabel(org);
+                const nameText = esc(nameRaw || '—');
+                const egretaUrl = getOrgEgretaUrl(org);
+                const name = egretaUrl
+                    ? '<button type="button" class="open-egreta-org text-left text-indigo-700 hover:text-indigo-900 hover:underline" data-egreta-url="' + esc(egretaUrl) + '">' + nameText + '</button>'
+                    : nameText;
+                const typeRaw = getOrgTypeLabel(org);
+                const type = esc(typeRaw || '—');
+                const countryRaw = getOrgCountryLabel(org);
+                const country = esc(countryRaw || '—');
+                const persistedFundingRaw = String(getOrgFundingLabel(org) || '').trim();
+                const funding = esc(persistedFundingRaw || '—');
+
+                const suggestedTypeCell = getSuggestedTypeHtml(org);
+                const suggestedFundingCell = getSuggestedFundingHtml(org);
+                const suggestedCountryCell = getSuggestedCountryHtml(org);
+
+                const wf = workflowCell(org);
+                return `
         <tr data-uuid="${esc(org.uuid)}" class="hover:bg-slate-50 transition-colors">
             <td class="px-6 py-3 font-semibold text-slate-800">${name}</td>
             <td class="px-6 py-3 text-slate-600">${type}</td>
@@ -897,592 +937,593 @@ function renderTable(rows) {
             <td data-cell="suggested-country" class="px-6 py-3 text-slate-600">${suggestedCountryCell}</td>
             <td class="px-6 py-3">${wf}</td>
         </tr>`;
-    }).join('');
-}
-
-async function applySuggestedValue(kind, uuid, suggested, buttonEl) {
-    const payload = { uuid: String(uuid || '').trim() };
-    let endpoint = '';
-
-    if (kind === 'type') {
-        endpoint = '/external-organizations/stats/apply-suggested-type';
-        payload.suggestedTypeUri = String(suggested || '').trim();
-        if (!payload.suggestedTypeUri && buttonEl) {
-            const row = buttonEl.closest('tr');
-            const select = row ? row.querySelector('.type-suggest-select') : null;
-            payload.suggestedTypeUri = String(select && select.value || '').trim();
+            }).join('');
         }
-        if (!payload.suggestedTypeUri) {
-            showToast('Selecciona un tipus abans d\'aplicar.', 'error');
-            return;
-        }
-    } else if (kind === 'country') {
-        endpoint = '/external-organizations/stats/apply-suggested-country';
-        payload.suggestedCountryUri = String(buttonEl && buttonEl.getAttribute('data-suggested-uri') || '').trim();
-        payload.suggestedCountry = String(suggested || '').trim();
-        if (!payload.suggestedCountryUri && !payload.suggestedCountry) {
-            showToast('No hi ha pais suggerit per aplicar.', 'error');
-            return;
-        }
-    } else if (kind === 'funding') {
-        endpoint = '/external-organizations/stats/apply-suggested-funding';
-        payload.suggestedFundingUri = String(buttonEl && buttonEl.getAttribute('data-suggested-uri') || '').trim();
-        payload.suggestedFunding = String(suggested || '').trim();
-        if (!payload.suggestedFundingUri && !payload.suggestedFunding) {
-            showToast('No hi ha financiacio suggerida per aplicar.', 'error');
-            return;
-        }
-    } else {
-        return;
-    }
 
-    if (!payload.uuid || (!payload.suggestedTypeUri && !payload.suggestedCountryUri && !payload.suggestedCountry && !payload.suggestedFundingUri && !payload.suggestedFunding)) return;
+        async function applySuggestedValue(kind, uuid, suggested, buttonEl) {
+            const payload = { uuid: String(uuid || '').trim() };
+            let endpoint = '';
 
-    const originalHtml = buttonEl ? buttonEl.innerHTML : '';
-    if (buttonEl) {
-        buttonEl.disabled = true;
-        buttonEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Guardant...';
-    }
+            if (kind === 'type') {
+                endpoint = '/external-organizations/stats/apply-suggested-type';
+                payload.suggestedTypeUri = String(suggested || '').trim();
+                if (!payload.suggestedTypeUri && buttonEl) {
+                    const row = buttonEl.closest('tr');
+                    const select = row ? row.querySelector('.type-suggest-select') : null;
+                    payload.suggestedTypeUri = String(select && select.value || '').trim();
+                }
+                if (!payload.suggestedTypeUri) {
+                    showToast('Selecciona un tipus abans d\'aplicar.', 'error');
+                    return;
+                }
+            } else if (kind === 'country') {
+                endpoint = '/external-organizations/stats/apply-suggested-country';
+                payload.suggestedCountryUri = String(buttonEl && buttonEl.getAttribute('data-suggested-uri') || '').trim();
+                payload.suggestedCountry = String(suggested || '').trim();
+                if (!payload.suggestedCountryUri && !payload.suggestedCountry) {
+                    showToast('No hi ha pais suggerit per aplicar.', 'error');
+                    return;
+                }
+            } else if (kind === 'funding') {
+                endpoint = '/external-organizations/stats/apply-suggested-funding';
+                payload.suggestedFundingUri = String(buttonEl && buttonEl.getAttribute('data-suggested-uri') || '').trim();
+                payload.suggestedFunding = String(suggested || '').trim();
+                if (!payload.suggestedFundingUri && !payload.suggestedFunding) {
+                    showToast('No hi ha financiacio suggerida per aplicar.', 'error');
+                    return;
+                }
+            } else {
+                return;
+            }
 
-    try {
-        const res = await apiFetch(endpoint, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
+            if (!payload.uuid || (!payload.suggestedTypeUri && !payload.suggestedCountryUri && !payload.suggestedCountry && !payload.suggestedFundingUri && !payload.suggestedFunding)) return;
+
+            const originalHtml = buttonEl ? buttonEl.innerHTML : '';
+            if (buttonEl) {
+                buttonEl.disabled = true;
+                buttonEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Guardant...';
+            }
+
+            try {
+                const res = await apiFetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const result = await res.json();
+                if (!result || result.updated !== true) {
+                    throw new Error((result && (result.reason || result.message)) || 'update-failed');
+                }
+
+                const key = 'uuid:' + payload.uuid;
+                countrySuggestionCache.delete(key);
+                typeSuggestionCache.delete(key);
+                fundingSuggestionCache.delete(key);
+                suggestionBundleCache.delete(key);
+
+                const rowEl = buttonEl ? buttonEl.closest('tr') : null;
+                markRowUpdated(rowEl, kind, payload, result, buttonEl);
+                showToast('Registre actualitzat correctament.', 'success');
+
+                // Recarregar KPIs per actualitzar els comptadors
+                loadKpis();
+            } catch (e) {
+                if (buttonEl) {
+                    buttonEl.disabled = false;
+                    buttonEl.innerHTML = originalHtml;
+                }
+                showToast('No s\'ha pogut actualitzar el registre: ' + (e && e.message ? e.message : 'error'), 'error');
+            }
+        }
+
+        async function approveWorkflowStep(uuid, buttonEl) {
+            const safeUuid = String(uuid || '').trim();
+            if (!safeUuid) return;
+
+            const originalHtml = buttonEl.innerHTML;
+            buttonEl.disabled = true;
+            buttonEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Validant...';
+
+            const select = document.getElementById('autoApplyEnv');
+            const env = select ? select.value : 'test';
+
+            try {
+                const res = await apiFetch('/external-organizations/stats/approve-workflow', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ uuid: safeUuid, env })
+                });
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const result = await res.json();
+                if (!result || result.updated !== true) {
+                    throw new Error((result && (result.reason || result.message)) || 'approve-failed');
+                }
+
+                showToast('Workflow actualitzat a Approved correctament.', 'success');
+
+                // Actualitzar la celda del workflow en la fila
+                const rowEl = buttonEl.closest('tr');
+                if (rowEl) {
+                    const cells = rowEl.querySelectorAll('td');
+                    if (cells[7]) { // La columna del workflow es la 8ª (índice 7)
+                        cells[7].innerHTML = workflowBadge('Approved');
+                    }
+                    rowEl.classList.add('bg-emerald-50/60');
+                    setTimeout(() => rowEl.classList.remove('bg-emerald-50/60'), 1500);
+                }
+
+                // Recarregar KPIs per actualitzar els comptadors
+                loadKpis();
+            } catch (e) {
+                buttonEl.disabled = false;
+                buttonEl.innerHTML = originalHtml;
+                showToast('No s\'ha pogut aprovar el registre: ' + (e && e.message ? e.message : 'error'), 'error');
+            }
+        }
+
+        function updatePager(pageData) {
+            // Usar los datos anidados en pageData.page
+            const page = pageData.page || {};
+            const totalPages = (page.totalPages != null && page.totalPages > 0) ? page.totalPages : 1;
+            const pageNum = (page.number || 0) + 1;
+            document.getElementById('pageInfo').textContent = 'Pagina ' + pageNum + ' de ' + totalPages;
+            // Si tienes flags first/last, ajústalos aquí, si no, deshabilita según número de página
+            document.getElementById('btnPrev').disabled = pageNum <= 1;
+            document.getElementById('btnNext').disabled = pageNum >= totalPages;
+        }
+
+        async function loadTable() {
+            const kpi = KPI_DEFS[activeKpi];
+            if (!kpi) return;
+
+            currentLoadId++;
+            const myLoadId = currentLoadId;
+
+            uuidsBeingFetched.clear();
+
+            document.getElementById('detailTitle').textContent = kpi.label;
+            document.getElementById('detailSubtitle').textContent = kpi.subtitle;
+
+            const search = document.getElementById('searchInput').value.trim();
+            const params = new URLSearchParams({
+                page: String(currentPage),
+                size: String(pageSize),
+                sortBy: currentSortBy,
+                sortDirection: currentSortDirection
+            });
+            if (search) params.set('buscar', search);
+
+            const body = document.getElementById('tableBody');
+            body.innerHTML = '<tr><td colspan="8" class="px-6 py-10 text-center text-slate-400 italic">Carregant...</td></tr>';
+
+            try {
+                await ensureTypeCatalogOptions();
+                if (myLoadId !== currentLoadId) return;
+                const res = await apiFetch(kpi.listEndpoint + '?' + params.toString());
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const data = await res.json();
+                if (myLoadId !== currentLoadId) return;
+
+                // Renderizar la tabla inmediatamente con los datos básicos
+                renderTable(data.content || []);
+                updatePager(data);
+                updateSortHeaders();
+
+                // Lanzar la pre-carga asíncrona de sugerencias en segundo plano.
+                // Se encarga automáticamente de pintar spinners y de repintar al terminar.
+                preloadCountrySuggestions(data.content || [], myLoadId);
+            } catch (e) {
+                if (myLoadId === currentLoadId) {
+                    body.innerHTML = '<tr><td colspan="8" class="px-6 py-10 text-center text-rose-500">Error carregant dades: ' + esc(e.message) + '</td></tr>';
+                }
+            }
+        }
+
+        document.getElementById('btnPrev').addEventListener('click', () => {
+            if (currentPage <= 0) return;
+            currentPage -= 1;
+            loadTable();
         });
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        const result = await res.json();
-        if (!result || result.updated !== true) {
-            throw new Error((result && (result.reason || result.message)) || 'update-failed');
-        }
 
-        const key = 'uuid:' + payload.uuid;
-        countrySuggestionCache.delete(key);
-        typeSuggestionCache.delete(key);
-        fundingSuggestionCache.delete(key);
-        suggestionBundleCache.delete(key);
-
-        const rowEl = buttonEl ? buttonEl.closest('tr') : null;
-        markRowUpdated(rowEl, kind, payload, result, buttonEl);
-        showToast('Registre actualitzat correctament.', 'success');
-        
-        // Recarregar KPIs per actualitzar els comptadors
-        loadKpis();
-    } catch (e) {
-        if (buttonEl) {
-            buttonEl.disabled = false;
-            buttonEl.innerHTML = originalHtml;
-        }
-        showToast('No s\'ha pogut actualitzar el registre: ' + (e && e.message ? e.message : 'error'), 'error');
-    }
-}
-
-async function approveWorkflowStep(uuid, buttonEl) {
-    const safeUuid = String(uuid || '').trim();
-    if (!safeUuid) return;
-
-    const originalHtml = buttonEl.innerHTML;
-    buttonEl.disabled = true;
-    buttonEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Validant...';
-
-    const select = document.getElementById('autoApplyEnv');
-    const env = select ? select.value : 'test';
-
-    try {
-        const res = await apiFetch('/external-organizations/stats/approve-workflow', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ uuid: safeUuid, env })
+        document.getElementById('btnNext').addEventListener('click', () => {
+            currentPage += 1;
+            loadTable();
         });
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        const result = await res.json();
-        if (!result || result.updated !== true) {
-            throw new Error((result && (result.reason || result.message)) || 'approve-failed');
-        }
 
-        showToast('Workflow actualitzat a Approved correctament.', 'success');
-        
-        // Actualitzar la celda del workflow en la fila
-        const rowEl = buttonEl.closest('tr');
-        if (rowEl) {
-            const cells = rowEl.querySelectorAll('td');
-            if (cells[7]) { // La columna del workflow es la 8ª (índice 7)
-                cells[7].innerHTML = workflowBadge('Approved');
+        document.getElementById('searchInput').addEventListener('input', () => {
+            // Ahora la búsqueda solo se activa con Enter, no en cada input
+        });
+
+        document.getElementById('searchInput').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                currentPage = 0;
+                loadTable();
             }
-            rowEl.classList.add('bg-emerald-50/60');
-            setTimeout(() => rowEl.classList.remove('bg-emerald-50/60'), 1500);
-        }
+        });
 
-        // Recarregar KPIs per actualitzar els comptadors
-        loadKpis();
-    } catch (e) {
-        buttonEl.disabled = false;
-        buttonEl.innerHTML = originalHtml;
-        showToast('No s\'ha pogut aprovar el registre: ' + (e && e.message ? e.message : 'error'), 'error');
-    }
-}
-
-function updatePager(pageData) {
-    // Usar los datos anidados en pageData.page
-    const page = pageData.page || {};
-    const totalPages = (page.totalPages != null && page.totalPages > 0) ? page.totalPages : 1;
-    const pageNum = (page.number || 0) + 1;
-    document.getElementById('pageInfo').textContent = 'Pagina ' + pageNum + ' de ' + totalPages;
-    // Si tienes flags first/last, ajústalos aquí, si no, deshabilita según número de página
-    document.getElementById('btnPrev').disabled = pageNum <= 1;
-    document.getElementById('btnNext').disabled = pageNum >= totalPages;
-}
-
-async function loadTable() {
-    const kpi = KPI_DEFS[activeKpi];
-    if (!kpi) return;
-
-    currentLoadId++;
-    const myLoadId = currentLoadId;
-
-    uuidsBeingFetched.clear();
-
-    document.getElementById('detailTitle').textContent = kpi.label;
-    document.getElementById('detailSubtitle').textContent = kpi.subtitle;
-
-    const search = document.getElementById('searchInput').value.trim();
-    const params = new URLSearchParams({
-        page: String(currentPage),
-        size: String(pageSize),
-        sortBy: currentSortBy,
-        sortDirection: currentSortDirection
-    });
-    if (search) params.set('buscar', search);
-
-    const body = document.getElementById('tableBody');
-    body.innerHTML = '<tr><td colspan="8" class="px-6 py-10 text-center text-slate-400 italic">Carregant...</td></tr>';
-
-    try {
-        await ensureTypeCatalogOptions();
-        if (myLoadId !== currentLoadId) return;
-        const res = await apiFetch(kpi.listEndpoint + '?' + params.toString());
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        const data = await res.json();
-        if (myLoadId !== currentLoadId) return;
-        
-        // Renderizar la tabla inmediatamente con los datos básicos
-        renderTable(data.content || []);
-        updatePager(data);
-        updateSortHeaders();
-
-        // Lanzar la pre-carga asíncrona de sugerencias en segundo plano.
-        // Se encarga automáticamente de pintar spinners y de repintar al terminar.
-        preloadCountrySuggestions(data.content || [], myLoadId);
-    } catch (e) {
-        if (myLoadId === currentLoadId) {
-            body.innerHTML = '<tr><td colspan="8" class="px-6 py-10 text-center text-rose-500">Error carregant dades: ' + esc(e.message) + '</td></tr>';
-        }
-    }
-}
-
-document.getElementById('btnPrev').addEventListener('click', () => {
-    if (currentPage <= 0) return;
-    currentPage -= 1;
-    loadTable();
-});
-
-document.getElementById('btnNext').addEventListener('click', () => {
-    currentPage += 1;
-    loadTable();
-});
-
-document.getElementById('searchInput').addEventListener('input', () => {
-    // Ahora la búsqueda solo se activa con Enter, no en cada input
-});
-
-document.getElementById('searchInput').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-        currentPage = 0;
-        loadTable();
-    }
-});
-
-document.getElementById('tableBody').addEventListener('click', (ev) => {
-    const egretaBtn = ev.target.closest('.open-egreta-org');
-    if (egretaBtn) {
-        const url = egretaBtn.getAttribute('data-egreta-url') || '';
-        if (url) {
-            if (typeof window.abrirEgretaModal === 'function') {
-                window.abrirEgretaModal(url);
-            } else {
-                window.open(url, '_blank', 'noopener,noreferrer');
-            }
-        }
-        return;
-    }
-
-    const approveBtn = ev.target.closest('.approve-workflow-btn');
-    if (approveBtn) {
-        const uuid = approveBtn.getAttribute('data-uuid') || '';
-        approveWorkflowStep(uuid, approveBtn);
-        return;
-    }
-
-    const btn = ev.target.closest('.apply-suggestion-btn');
-    if (!btn) return;
-
-    const kind = btn.getAttribute('data-kind') || '';
-    const uuid = btn.getAttribute('data-uuid') || '';
-    const suggested = btn.getAttribute('data-suggested') || '';
-    applySuggestedValue(kind, uuid, suggested, btn);
-});
-
-document.querySelectorAll('th[data-sort]').forEach(th => {
-    th.addEventListener('click', () => {
-        const field = th.getAttribute('data-sort');
-        if (currentSortBy === field) {
-            currentSortDirection = currentSortDirection === 'asc' ? 'desc' : 'asc';
-        } else {
-            currentSortBy = field;
-            currentSortDirection = 'asc';
-        }
-        currentPage = 0;
-        loadTable();
-    });
-});
-
-function updateSortHeaders() {
-    document.querySelectorAll('th[data-sort]').forEach(th => {
-        const field = th.getAttribute('data-sort');
-        const icon = th.querySelector('i');
-        if (!icon) return;
-
-        icon.className = 'fa-solid fa-sort ml-1 text-slate-300';
-        th.classList.remove('text-indigo-600');
-
-        if (field === currentSortBy) {
-            th.classList.add('text-indigo-600');
-            if (currentSortDirection === 'asc') {
-                icon.className = 'fa-solid fa-sort-up ml-1 text-indigo-600';
-            } else {
-                icon.className = 'fa-solid fa-sort-down ml-1 text-indigo-600';
-            }
-        }
-    });
-}
-
-// =========================================================================
-// Auto-apply logic
-// =========================================================================
-let autoApplyInterval = null;
-let autoApplyVisible = false;
-
-function getActiveMetric() {
-    if (activeKpi === 'withoutCountry') return 'country';
-    if (activeKpi === 'withoutType') return 'type';
-    if (activeKpi === 'withoutFunding') return 'funding';
-    return 'country';
-}
-
-function updateAutoApplyTexts() {
-    const titleEl = document.getElementById('autoApplyTitle');
-    const descEl = document.getElementById('autoApplyDescription');
-    const btnDownload = document.getElementById('btnDownloadAutoLog');
-    const metric = getActiveMetric();
-
-    if (activeKpi === 'withoutCountry') {
-        titleEl.textContent = 'Auto-aplicar País';
-        descEl.textContent = 'Cerca automàticament suggeriments de país per a organitzacions que no en tenen i aplica els que superen la confiança mínima.';
-    } else if (activeKpi === 'withoutType') {
-        titleEl.textContent = 'Auto-aplicar Tipus';
-        descEl.textContent = "Cerca automàticament suggeriments de tipus d'organització per a les que no en tenen i aplica els que superen la confiança mínima.";
-    } else if (activeKpi === 'withoutFunding') {
-        titleEl.textContent = 'Auto-aplicar Finançament';
-        descEl.textContent = 'Cerca automàticament suggeriments de finançament (Pública o Privada) per a les organitzacions que no en tenen i aplica els que superen la confiança mínima.';
-    }
-
-    btnDownload.href = window.apiUrl('/external-organizations/stats/auto-apply-' + metric + '/download-log');
-}
-
-function checkAutoApplyStatus() {
-    const metric = getActiveMetric();
-    apiFetch(`/external-organizations/stats/auto-apply-${metric}/status`)
-        .then(res => {
-            if (!res.ok) throw new Error();
-            return res.json();
-        })
-        .then(data => {
-            const container = document.getElementById('autoApplyProgressContainer');
-            const btnStart = document.getElementById('btnStartAutoApply');
-            const btnStop = document.getElementById('btnStopAutoApply');
-            const btnDownload = document.getElementById('btnDownloadAutoLog');
-            const bar = document.getElementById('autoApplyProgressBar');
-            const progressTxt = document.getElementById('autoApplyProgressText');
-            const appliedTxt = document.getElementById('autoApplyAppliedText');
-            const consoleEl = document.getElementById('autoApplyConsole');
-            
-            if (data.running) {
-                autoApplyVisible = true;
-            }
-            if (autoApplyVisible) {
-                container.classList.remove('hidden');
-                btnDownload.classList.remove('hidden');
-            } else {
-                container.classList.add('hidden');
-                btnDownload.classList.add('hidden');
-            }
-            
-            if (data.running) {
-                btnStart.disabled = true;
-                btnStop.disabled = false;
-                document.getElementById('autoApplyEnv').disabled = true;
-                const minConf = document.getElementById('autoApplyMinConfidence');
-                if (minConf) minConf.disabled = true;
-                if (data.confidenceThreshold != null) {
-                    const thresholdVal = String(data.confidenceThreshold);
-                    if (minConf && minConf.value !== thresholdVal) {
-                        minConf.value = thresholdVal;
+        document.getElementById('tableBody').addEventListener('click', (ev) => {
+            const egretaBtn = ev.target.closest('.open-egreta-org');
+            if (egretaBtn) {
+                const url = egretaBtn.getAttribute('data-egreta-url') || '';
+                if (url) {
+                    if (typeof window.abrirEgretaModal === 'function') {
+                        window.abrirEgretaModal(url);
+                    } else {
+                        window.open(url, '_blank', 'noopener,noreferrer');
                     }
                 }
-            } else {
-                btnStart.disabled = false;
-                btnStop.disabled = true;
-                document.getElementById('autoApplyEnv').disabled = false;
-                const minConf = document.getElementById('autoApplyMinConfidence');
-                if (minConf) minConf.disabled = false;
-                if (autoApplyInterval) {
-                    clearInterval(autoApplyInterval);
-                    autoApplyInterval = null;
-                    loadKpis();
-                    loadTable();
+                return;
+            }
+
+            const approveBtn = ev.target.closest('.approve-workflow-btn');
+            if (approveBtn) {
+                const uuid = approveBtn.getAttribute('data-uuid') || '';
+                approveWorkflowStep(uuid, approveBtn);
+                return;
+            }
+
+            const btn = ev.target.closest('.apply-suggestion-btn');
+            if (!btn) return;
+
+            const kind = btn.getAttribute('data-kind') || '';
+            const uuid = btn.getAttribute('data-uuid') || '';
+            const suggested = btn.getAttribute('data-suggested') || '';
+            applySuggestedValue(kind, uuid, suggested, btn);
+        });
+
+        document.querySelectorAll('th[data-sort]').forEach(th => {
+            th.addEventListener('click', () => {
+                const field = th.getAttribute('data-sort');
+                if (currentSortBy === field) {
+                    currentSortDirection = currentSortDirection === 'asc' ? 'desc' : 'asc';
+                } else {
+                    currentSortBy = field;
+                    currentSortDirection = 'asc';
                 }
-            }
-            
-            const total = data.total || 0;
-            const processed = data.processed || 0;
-            const applied = data.applied || 0;
-            const pct = total > 0 ? Math.round((processed / total) * 100) : 0;
-            
-            bar.style.width = pct + '%';
-            progressTxt.textContent = `Processant: ${processed} / ${total} (${pct}%)`;
-            appliedTxt.textContent = `Aplicats: ${applied}`;
-            
-            if (data.logs) {
-                const wasScrolledToBottom = consoleEl.scrollHeight - consoleEl.clientHeight <= consoleEl.scrollTop + 30;
-                consoleEl.textContent = data.logs;
-                if (wasScrolledToBottom || consoleEl.scrollTop === 0) {
-                    consoleEl.scrollTop = consoleEl.scrollHeight;
+                currentPage = 0;
+                loadTable();
+            });
+        });
+
+        function updateSortHeaders() {
+            document.querySelectorAll('th[data-sort]').forEach(th => {
+                const field = th.getAttribute('data-sort');
+                const icon = th.querySelector('i');
+                if (!icon) return;
+
+                icon.className = 'fa-solid fa-sort ml-1 text-slate-300';
+                th.classList.remove('text-indigo-600');
+
+                if (field === currentSortBy) {
+                    th.classList.add('text-indigo-600');
+                    if (currentSortDirection === 'asc') {
+                        icon.className = 'fa-solid fa-sort-up ml-1 text-indigo-600';
+                    } else {
+                        icon.className = 'fa-solid fa-sort-down ml-1 text-indigo-600';
+                    }
                 }
-            }
-        })
-        .catch(err => console.error('Error checking auto-apply status', err));
-}
-
-document.getElementById('btnStartAutoApply').addEventListener('click', () => {
-    const env = document.getElementById('autoApplyEnv').value;
-    const confidence = document.getElementById('autoApplyMinConfidence').value;
-    const metric = getActiveMetric();
-    apiFetch(`/external-organizations/stats/auto-apply-${metric}/start?env=${env}&confidence=${confidence}`, { method: 'POST' })
-        .then(res => {
-            if (!res.ok) throw new Error();
-            return res.json();
-        })
-        .then(data => {
-            if (data.started) {
-                showToast('Procés iniciat correctament.', 'success');
-                autoApplyVisible = true;
-                document.getElementById('autoApplyProgressContainer').classList.remove('hidden');
-                document.getElementById('autoApplyConsole').textContent = 'Iniciant procés...';
-                document.getElementById('btnStartAutoApply').disabled = true;
-                document.getElementById('btnStopAutoApply').disabled = false;
-                document.getElementById('autoApplyEnv').disabled = true;
-                const minConf = document.getElementById('autoApplyMinConfidence');
-                if (minConf) minConf.disabled = true;
-                if (autoApplyInterval) clearInterval(autoApplyInterval);
-                autoApplyInterval = setInterval(checkAutoApplyStatus, 1500);
-                checkAutoApplyStatus();
-            } else {
-                showToast('No s\'ha pogut iniciar el procés: ' + (data.reason || 'error'), 'error');
-            }
-        })
-        .catch(() => showToast('Error connectant amb el servidor.', 'error'));
-});
-
-document.getElementById('btnStopAutoApply').addEventListener('click', () => {
-    const metric = getActiveMetric();
-    apiFetch(`/external-organizations/stats/auto-apply-${metric}/stop`, { method: 'POST' })
-        .then(res => {
-            if (!res.ok) throw new Error();
-            return res.json();
-        })
-        .then(data => {
-            if (data.stopped) {
-                showToast('Petició d\'aturar el procés enviada.', 'success');
-                checkAutoApplyStatus();
-            }
-        })
-        .catch(() => showToast('Error en aturar el procés.', 'error'));
-});
-
-document.getElementById('btnClearConsole').addEventListener('click', () => {
-    document.getElementById('autoApplyConsole').textContent = '';
-});
-
-// Check status on load
-updateAutoApplyTexts();
-checkAutoApplyStatus();
-apiFetch(`/external-organizations/stats/auto-apply-${getActiveMetric()}/status`)
-    .then(res => res.json())
-    .then(data => {
-        if (data.running) {
-            autoApplyVisible = true;
-            autoApplyInterval = setInterval(checkAutoApplyStatus, 1500);
+            });
         }
-    })
-    .catch(() => {});
 
-document.getElementById('btnCloseApplyConsole').addEventListener('click', () => {
-    autoApplyVisible = false;
-    document.getElementById('autoApplyProgressContainer').classList.add('hidden');
-    document.getElementById('btnDownloadAutoLog').classList.add('hidden');
-});
+        // =========================================================================
+        // Auto-apply logic
+        // =========================================================================
+        let autoApplyInterval = null;
+        let autoApplyVisible = false;
 
-document.getElementById('autoApplyEnv').addEventListener('change', () => {
-    currentPage = 0;
-    loadKpis().then(loadTable);
-});
-
-// =========================================================================
-// Auto-validate logic
-// =========================================================================
-let autoValidateInterval = null;
-let autoValidateVisible = false;
-
-function checkAutoValidateStatus() {
-    apiFetch(`/external-organizations/stats/auto-validate/status`)
-        .then(res => {
-            if (!res.ok) throw new Error();
-            return res.json();
-        })
-        .then(data => {
-            const container = document.getElementById('autoValidateProgressContainer');
-            const btnStart = document.getElementById('btnStartAutoValidate');
-            const btnStop = document.getElementById('btnStopAutoValidate');
-            const btnDownload = document.getElementById('btnDownloadValidateLog');
-            const bar = document.getElementById('autoValidateProgressBar');
-            const progressTxt = document.getElementById('autoValidateProgressText');
-            const appliedTxt = document.getElementById('autoValidateAppliedText');
-            const consoleEl = document.getElementById('autoValidateConsole');
-            
-            btnDownload.href = window.apiUrl('/external-organizations/stats/auto-validate/download-log');
-
-            if (data.running) {
-                autoValidateVisible = true;
-            }
-            if (autoValidateVisible) {
-                container.classList.remove('hidden');
-                btnDownload.classList.remove('hidden');
-            } else {
-                container.classList.add('hidden');
-                btnDownload.classList.add('hidden');
-            }
-            
-            if (data.running) {
-                btnStart.disabled = true;
-                btnStop.disabled = false;
-                document.getElementById('autoValidateEnv').disabled = true;
-            } else {
-                btnStart.disabled = false;
-                btnStop.disabled = true;
-                document.getElementById('autoValidateEnv').disabled = false;
-                if (autoValidateInterval) {
-                    clearInterval(autoValidateInterval);
-                    autoValidateInterval = null;
-                    loadKpis();
-                    loadTable();
-                }
-            }
-            
-            const total = data.total || 0;
-            const processed = data.processed || 0;
-            const applied = data.applied || 0;
-            const pct = total > 0 ? Math.round((processed / total) * 100) : 0;
-            
-            bar.style.width = pct + '%';
-            progressTxt.textContent = `Processant: ${processed} / ${total} (${pct}%)`;
-            appliedTxt.textContent = `Validats: ${applied}`;
-            
-            if (data.logs) {
-                const wasScrolledToBottom = consoleEl.scrollHeight - consoleEl.clientHeight <= consoleEl.scrollTop + 30;
-                consoleEl.textContent = data.logs;
-                if (wasScrolledToBottom || consoleEl.scrollTop === 0) {
-                    consoleEl.scrollTop = consoleEl.scrollHeight;
-                }
-            }
-        })
-        .catch(err => console.error('Error checking auto-validate status', err));
-}
-
-document.getElementById('btnStartAutoValidate').addEventListener('click', () => {
-    const env = document.getElementById('autoValidateEnv').value;
-    apiFetch(`/external-organizations/stats/auto-validate/start?env=${env}`, { method: 'POST' })
-        .then(res => {
-            if (!res.ok) throw new Error();
-            return res.json();
-        })
-        .then(data => {
-            if (data.started) {
-                showToast('Procés de validació iniciat.', 'success');
-                autoValidateVisible = true;
-                document.getElementById('autoValidateProgressContainer').classList.remove('hidden');
-                document.getElementById('autoValidateConsole').textContent = 'Iniciant procés...';
-                document.getElementById('btnStartAutoValidate').disabled = true;
-                document.getElementById('btnStopAutoValidate').disabled = false;
-                document.getElementById('autoValidateEnv').disabled = true;
-                if (autoValidateInterval) clearInterval(autoValidateInterval);
-                autoValidateInterval = setInterval(checkAutoValidateStatus, 1500);
-                checkAutoValidateStatus();
-            } else {
-                showToast('No s\'ha pogut iniciar el procés: ' + (data.reason || 'error'), 'error');
-            }
-        })
-        .catch(() => showToast('Error connectant amb el servidor.', 'error'));
-});
-
-document.getElementById('btnStopAutoValidate').addEventListener('click', () => {
-    apiFetch(`/external-organizations/stats/auto-validate/stop`, { method: 'POST' })
-        .then(res => {
-            if (!res.ok) throw new Error();
-            return res.json();
-        })
-        .then(data => {
-            if (data.stopped) {
-                showToast('Petició d\'aturar el procés enviada.', 'success');
-                checkAutoValidateStatus();
-            }
-        })
-        .catch(() => showToast('Error en aturar el procés.', 'error'));
-});
-
-document.getElementById('btnClearValidateConsole').addEventListener('click', () => {
-    document.getElementById('autoValidateConsole').textContent = '';
-});
-
-// Check auto-validate status on load
-checkAutoValidateStatus();
-apiFetch(`/external-organizations/stats/auto-validate/status`)
-    .then(res => res.json())
-    .then(data => {
-        if (data.running) {
-            autoValidateVisible = true;
-            autoValidateInterval = setInterval(checkAutoValidateStatus, 1500);
+        function getActiveMetric() {
+            if (activeKpi === 'withoutCountry') return 'country';
+            if (activeKpi === 'withoutType') return 'type';
+            if (activeKpi === 'withoutFunding') return 'funding';
+            return 'country';
         }
-    })
-    .catch(() => {});
 
-document.getElementById('btnCloseValidateConsole').addEventListener('click', () => {
-    autoValidateVisible = false;
-    document.getElementById('autoValidateProgressContainer').classList.add('hidden');
-    document.getElementById('btnDownloadValidateLog').classList.add('hidden');
-});
+        function updateAutoApplyTexts() {
+            const titleEl = document.getElementById('autoApplyTitle');
+            const descEl = document.getElementById('autoApplyDescription');
+            const btnDownload = document.getElementById('btnDownloadAutoLog');
+            const metric = getActiveMetric();
 
-loadKpis().then(loadTable);
-</script>
-<script src="egreta-modal.js"></script>
+            if (activeKpi === 'withoutCountry') {
+                titleEl.textContent = 'Auto-aplicar País';
+                descEl.textContent = 'Cerca automàticament suggeriments de país per a organitzacions que no en tenen i aplica els que superen la confiança mínima.';
+            } else if (activeKpi === 'withoutType') {
+                titleEl.textContent = 'Auto-aplicar Tipus';
+                descEl.textContent = "Cerca automàticament suggeriments de tipus d'organització per a les que no en tenen i aplica els que superen la confiança mínima.";
+            } else if (activeKpi === 'withoutFunding') {
+                titleEl.textContent = 'Auto-aplicar Finançament';
+                descEl.textContent = 'Cerca automàticament suggeriments de finançament (Pública o Privada) per a les organitzacions que no en tenen i aplica els que superen la confiança mínima.';
+            }
+
+            btnDownload.href = window.apiUrl('/external-organizations/stats/auto-apply-' + metric + '/download-log');
+        }
+
+        function checkAutoApplyStatus() {
+            const metric = getActiveMetric();
+            apiFetch(`/external-organizations/stats/auto-apply-${metric}/status`)
+                .then(res => {
+                    if (!res.ok) throw new Error();
+                    return res.json();
+                })
+                .then(data => {
+                    const container = document.getElementById('autoApplyProgressContainer');
+                    const btnStart = document.getElementById('btnStartAutoApply');
+                    const btnStop = document.getElementById('btnStopAutoApply');
+                    const btnDownload = document.getElementById('btnDownloadAutoLog');
+                    const bar = document.getElementById('autoApplyProgressBar');
+                    const progressTxt = document.getElementById('autoApplyProgressText');
+                    const appliedTxt = document.getElementById('autoApplyAppliedText');
+                    const consoleEl = document.getElementById('autoApplyConsole');
+
+                    if (data.running) {
+                        autoApplyVisible = true;
+                    }
+                    if (autoApplyVisible) {
+                        container.classList.remove('hidden');
+                        btnDownload.classList.remove('hidden');
+                    } else {
+                        container.classList.add('hidden');
+                        btnDownload.classList.add('hidden');
+                    }
+
+                    if (data.running) {
+                        btnStart.disabled = true;
+                        btnStop.disabled = false;
+                        document.getElementById('autoApplyEnv').disabled = true;
+                        const minConf = document.getElementById('autoApplyMinConfidence');
+                        if (minConf) minConf.disabled = true;
+                        if (data.confidenceThreshold != null) {
+                            const thresholdVal = String(data.confidenceThreshold);
+                            if (minConf && minConf.value !== thresholdVal) {
+                                minConf.value = thresholdVal;
+                            }
+                        }
+                    } else {
+                        btnStart.disabled = false;
+                        btnStop.disabled = true;
+                        document.getElementById('autoApplyEnv').disabled = false;
+                        const minConf = document.getElementById('autoApplyMinConfidence');
+                        if (minConf) minConf.disabled = false;
+                        if (autoApplyInterval) {
+                            clearInterval(autoApplyInterval);
+                            autoApplyInterval = null;
+                            loadKpis();
+                            loadTable();
+                        }
+                    }
+
+                    const total = data.total || 0;
+                    const processed = data.processed || 0;
+                    const applied = data.applied || 0;
+                    const pct = total > 0 ? Math.round((processed / total) * 100) : 0;
+
+                    bar.style.width = pct + '%';
+                    progressTxt.textContent = `Processant: ${processed} / ${total} (${pct}%)`;
+                    appliedTxt.textContent = `Aplicats: ${applied}`;
+
+                    if (data.logs) {
+                        const wasScrolledToBottom = consoleEl.scrollHeight - consoleEl.clientHeight <= consoleEl.scrollTop + 30;
+                        consoleEl.textContent = data.logs;
+                        if (wasScrolledToBottom || consoleEl.scrollTop === 0) {
+                            consoleEl.scrollTop = consoleEl.scrollHeight;
+                        }
+                    }
+                })
+                .catch(err => console.error('Error checking auto-apply status', err));
+        }
+
+        document.getElementById('btnStartAutoApply').addEventListener('click', () => {
+            const env = document.getElementById('autoApplyEnv').value;
+            const confidence = document.getElementById('autoApplyMinConfidence').value;
+            const metric = getActiveMetric();
+            apiFetch(`/external-organizations/stats/auto-apply-${metric}/start?env=${env}&confidence=${confidence}`, { method: 'POST' })
+                .then(res => {
+                    if (!res.ok) throw new Error();
+                    return res.json();
+                })
+                .then(data => {
+                    if (data.started) {
+                        showToast('Procés iniciat correctament.', 'success');
+                        autoApplyVisible = true;
+                        document.getElementById('autoApplyProgressContainer').classList.remove('hidden');
+                        document.getElementById('autoApplyConsole').textContent = 'Iniciant procés...';
+                        document.getElementById('btnStartAutoApply').disabled = true;
+                        document.getElementById('btnStopAutoApply').disabled = false;
+                        document.getElementById('autoApplyEnv').disabled = true;
+                        const minConf = document.getElementById('autoApplyMinConfidence');
+                        if (minConf) minConf.disabled = true;
+                        if (autoApplyInterval) clearInterval(autoApplyInterval);
+                        autoApplyInterval = setInterval(checkAutoApplyStatus, 1500);
+                        checkAutoApplyStatus();
+                    } else {
+                        showToast('No s\'ha pogut iniciar el procés: ' + (data.reason || 'error'), 'error');
+                    }
+                })
+                .catch(() => showToast('Error connectant amb el servidor.', 'error'));
+        });
+
+        document.getElementById('btnStopAutoApply').addEventListener('click', () => {
+            const metric = getActiveMetric();
+            apiFetch(`/external-organizations/stats/auto-apply-${metric}/stop`, { method: 'POST' })
+                .then(res => {
+                    if (!res.ok) throw new Error();
+                    return res.json();
+                })
+                .then(data => {
+                    if (data.stopped) {
+                        showToast('Petició d\'aturar el procés enviada.', 'success');
+                        checkAutoApplyStatus();
+                    }
+                })
+                .catch(() => showToast('Error en aturar el procés.', 'error'));
+        });
+
+        document.getElementById('btnClearConsole').addEventListener('click', () => {
+            document.getElementById('autoApplyConsole').textContent = '';
+        });
+
+        // Check status on load
+        updateAutoApplyTexts();
+        checkAutoApplyStatus();
+        apiFetch(`/external-organizations/stats/auto-apply-${getActiveMetric()}/status`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.running) {
+                    autoApplyVisible = true;
+                    autoApplyInterval = setInterval(checkAutoApplyStatus, 1500);
+                }
+            })
+            .catch(() => { });
+
+        document.getElementById('btnCloseApplyConsole').addEventListener('click', () => {
+            autoApplyVisible = false;
+            document.getElementById('autoApplyProgressContainer').classList.add('hidden');
+            document.getElementById('btnDownloadAutoLog').classList.add('hidden');
+        });
+
+        document.getElementById('autoApplyEnv').addEventListener('change', () => {
+            currentPage = 0;
+            loadKpis().then(loadTable);
+        });
+
+        // =========================================================================
+        // Auto-validate logic
+        // =========================================================================
+        let autoValidateInterval = null;
+        let autoValidateVisible = false;
+
+        function checkAutoValidateStatus() {
+            apiFetch(`/external-organizations/stats/auto-validate/status`)
+                .then(res => {
+                    if (!res.ok) throw new Error();
+                    return res.json();
+                })
+                .then(data => {
+                    const container = document.getElementById('autoValidateProgressContainer');
+                    const btnStart = document.getElementById('btnStartAutoValidate');
+                    const btnStop = document.getElementById('btnStopAutoValidate');
+                    const btnDownload = document.getElementById('btnDownloadValidateLog');
+                    const bar = document.getElementById('autoValidateProgressBar');
+                    const progressTxt = document.getElementById('autoValidateProgressText');
+                    const appliedTxt = document.getElementById('autoValidateAppliedText');
+                    const consoleEl = document.getElementById('autoValidateConsole');
+
+                    btnDownload.href = window.apiUrl('/external-organizations/stats/auto-validate/download-log');
+
+                    if (data.running) {
+                        autoValidateVisible = true;
+                    }
+                    if (autoValidateVisible) {
+                        container.classList.remove('hidden');
+                        btnDownload.classList.remove('hidden');
+                    } else {
+                        container.classList.add('hidden');
+                        btnDownload.classList.add('hidden');
+                    }
+
+                    if (data.running) {
+                        btnStart.disabled = true;
+                        btnStop.disabled = false;
+                        document.getElementById('autoValidateEnv').disabled = true;
+                    } else {
+                        btnStart.disabled = false;
+                        btnStop.disabled = true;
+                        document.getElementById('autoValidateEnv').disabled = false;
+                        if (autoValidateInterval) {
+                            clearInterval(autoValidateInterval);
+                            autoValidateInterval = null;
+                            loadKpis();
+                            loadTable();
+                        }
+                    }
+
+                    const total = data.total || 0;
+                    const processed = data.processed || 0;
+                    const applied = data.applied || 0;
+                    const pct = total > 0 ? Math.round((processed / total) * 100) : 0;
+
+                    bar.style.width = pct + '%';
+                    progressTxt.textContent = `Processant: ${processed} / ${total} (${pct}%)`;
+                    appliedTxt.textContent = `Validats: ${applied}`;
+
+                    if (data.logs) {
+                        const wasScrolledToBottom = consoleEl.scrollHeight - consoleEl.clientHeight <= consoleEl.scrollTop + 30;
+                        consoleEl.textContent = data.logs;
+                        if (wasScrolledToBottom || consoleEl.scrollTop === 0) {
+                            consoleEl.scrollTop = consoleEl.scrollHeight;
+                        }
+                    }
+                })
+                .catch(err => console.error('Error checking auto-validate status', err));
+        }
+
+        document.getElementById('btnStartAutoValidate').addEventListener('click', () => {
+            const env = document.getElementById('autoValidateEnv').value;
+            apiFetch(`/external-organizations/stats/auto-validate/start?env=${env}`, { method: 'POST' })
+                .then(res => {
+                    if (!res.ok) throw new Error();
+                    return res.json();
+                })
+                .then(data => {
+                    if (data.started) {
+                        showToast('Procés de validació iniciat.', 'success');
+                        autoValidateVisible = true;
+                        document.getElementById('autoValidateProgressContainer').classList.remove('hidden');
+                        document.getElementById('autoValidateConsole').textContent = 'Iniciant procés...';
+                        document.getElementById('btnStartAutoValidate').disabled = true;
+                        document.getElementById('btnStopAutoValidate').disabled = false;
+                        document.getElementById('autoValidateEnv').disabled = true;
+                        if (autoValidateInterval) clearInterval(autoValidateInterval);
+                        autoValidateInterval = setInterval(checkAutoValidateStatus, 1500);
+                        checkAutoValidateStatus();
+                    } else {
+                        showToast('No s\'ha pogut iniciar el procés: ' + (data.reason || 'error'), 'error');
+                    }
+                })
+                .catch(() => showToast('Error connectant amb el servidor.', 'error'));
+        });
+
+        document.getElementById('btnStopAutoValidate').addEventListener('click', () => {
+            apiFetch(`/external-organizations/stats/auto-validate/stop`, { method: 'POST' })
+                .then(res => {
+                    if (!res.ok) throw new Error();
+                    return res.json();
+                })
+                .then(data => {
+                    if (data.stopped) {
+                        showToast('Petició d\'aturar el procés enviada.', 'success');
+                        checkAutoValidateStatus();
+                    }
+                })
+                .catch(() => showToast('Error en aturar el procés.', 'error'));
+        });
+
+        document.getElementById('btnClearValidateConsole').addEventListener('click', () => {
+            document.getElementById('autoValidateConsole').textContent = '';
+        });
+
+        // Check auto-validate status on load
+        checkAutoValidateStatus();
+        apiFetch(`/external-organizations/stats/auto-validate/status`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.running) {
+                    autoValidateVisible = true;
+                    autoValidateInterval = setInterval(checkAutoValidateStatus, 1500);
+                }
+            })
+            .catch(() => { });
+
+        document.getElementById('btnCloseValidateConsole').addEventListener('click', () => {
+            autoValidateVisible = false;
+            document.getElementById('autoValidateProgressContainer').classList.add('hidden');
+            document.getElementById('btnDownloadValidateLog').classList.add('hidden');
+        });
+
+        loadKpis().then(loadTable);
+    </script>
+    <script src="egreta-modal.js"></script>
 </body>
+
 </html>
