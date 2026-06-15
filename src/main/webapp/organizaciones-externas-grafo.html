@@ -487,20 +487,28 @@ async function fetchSimilarityWithRealProgress(similarity, requestId) {
 function buildPairs() {
     if (!currentData || !Array.isArray(currentData.pairs)) { currentPairs = []; return; }
     currentPairs = currentData.pairs
-        .map(p => ({
-            from:       p.from,
-            to:         p.to,
-            similarity: p.value,
-            leftLabel:  formatNameWithPureId(p.leftLabel  || String(p.from), p.leftPureId),
-            rightLabel: formatNameWithPureId(p.rightLabel || String(p.to),   p.rightPureId),
-            leftTitle:  p.leftLabel  || '',
-            rightTitle: p.rightLabel || '',
-            rawTitle:   p.title      || '',
-            leftWorkflow:  (p.leftWorkflow || '').toLowerCase(),
-            rightWorkflow: (p.rightWorkflow || '').toLowerCase(),
-            leftPureId: p.leftPureId,
-            rightPureId: p.rightPureId
-        }))
+        .map(p => {
+            const leftLabel = formatNameWithPureId(p.leftLabel  || String(p.from), p.leftPureId);
+            const rightLabel = formatNameWithPureId(p.rightLabel || String(p.to),   p.rightPureId);
+            const leftTitle = p.leftLabel  || '';
+            const rightTitle = p.rightLabel || '';
+            const rawTitle = p.title      || '';
+            return {
+                from:       p.from,
+                to:         p.to,
+                similarity: p.value,
+                leftLabel,
+                rightLabel,
+                leftTitle,
+                rightTitle,
+                rawTitle,
+                searchKey: normalizeText(leftLabel + ' ' + rightLabel + ' ' + leftTitle + ' ' + rightTitle + ' ' + rawTitle),
+                leftWorkflow:  (p.leftWorkflow || '').toLowerCase(),
+                rightWorkflow: (p.rightWorkflow || '').toLowerCase(),
+                leftPureId: p.leftPureId,
+                rightPureId: p.rightPureId
+            };
+        })
         .sort((a, b) => b.similarity - a.similarity);
 }
 
@@ -543,12 +551,16 @@ function buildClusters() {
 
     currentClusters = Array.from(groups.values())
         .filter(g => g.length > 1)
-        .map(g => ({
-            size:  g.length,
-            uuids: g,
-            // Para mostrar, ordenar por label
-            sorted: g.map(id => idToInfo.get(id)).sort((a, b) => (a.label || '').localeCompare(b.label || ''))
-        }))
+        .map(g => {
+            const sorted = g.map(id => idToInfo.get(id)).sort((a, b) => (a.label || '').localeCompare(b.label || ''));
+            const searchKey = normalizeText(sorted.map(info => info.label).join(' '));
+            return {
+                size:  g.length,
+                uuids: g,
+                sorted,
+                searchKey
+            };
+        })
         .sort((a, b) => b.size - a.size || (a.sorted[0]?.label || '').localeCompare(b.sorted[0]?.label || ''));
 }
 
@@ -588,8 +600,7 @@ function renderTable() {
     // Preparar text de cerca per cada parell
     const filtered = currentPairs.filter(p => {
         if (!q) return true;
-        const text = normalizeText(p.leftLabel + ' ' + p.rightLabel + ' ' + p.leftTitle + ' ' + p.rightTitle + ' ' + p.rawTitle);
-        return text.includes(q);
+        return p.searchKey.includes(q);
     });
 
     const totalPages = Math.max(1, Math.ceil(filtered.length / tablePageSize));
@@ -618,10 +629,12 @@ function renderTable() {
         const rightUrl = p.rightPureId ? EGRETA_EXTERNAL_ORG_BASE + encodeURIComponent(p.rightPureId) : '#';
         const leftChip  = `<a href=\"${leftUrl}\" class=\"sim-chip\" style=\"background:${leftGreen ? '#4ade80' : '#e0f2fe'};color:${leftGreen ? '#14532d' : '#0c4a6e'};text-decoration:none;\" target=\"_blank\" onclick=\"window.open('${leftUrl}','egreta','width=900,height=700,scrollbars=yes');return false;\">${safeHtml(leftBase)}${leftPureId}</a>`;
         const rightChip = `<a href=\"${rightUrl}\" class=\"sim-chip\" style=\"background:${rightGreen ? '#4ade80' : '#e0f2fe'};color:${rightGreen ? '#14532d' : '#0c4a6e'};text-decoration:none;\" target=\"_blank\" onclick=\"window.open('${rightUrl}','egreta','width=900,height=700,scrollbars=yes');return false;\">${safeHtml(rightBase)}${rightPureId}</a>`;
+        const ignoreBtn = `<button class="px-2 py-1 rounded bg-slate-500 hover:bg-slate-600 text-white text-xs" onclick="ignorePair('${p.from}', '${p.to}')">Diferents</button>`;
         return '<tr>'
             + '<td>' + leftChip  + '</td>'
             + '<td>' + rightChip + '</td>'
             + '<td><span class="sim-chip">' + sim + '%</span></td>'
+            + '<td>' + ignoreBtn + '</td>'
             + '</tr>';
     }).join('');
 
@@ -637,7 +650,7 @@ function renderTable() {
 
     container.innerHTML = note
         + '<table class="fast-table">'
-        + '<thead><tr><th>Nom A</th><th>Nom B</th><th>Similitud</th></tr></thead>'
+        + '<thead><tr><th>Nom A</th><th>Nom B</th><th>Similitud</th><th style="width: 100px;">Acció</th></tr></thead>'
         + '<tbody>' + rows + '</tbody>'
         + '</table>'
         + pager;
@@ -651,8 +664,7 @@ function renderClusters() {
 
     const filtered = currentClusters.filter(c => {
         if (!q) return true;
-        // Buscar en los labels de los miembros del cluster
-        return c.sorted.some(info => normalizeText(info.label).includes(q));
+        return c.searchKey.includes(q);
     });
 
     const totalPages = Math.max(1, Math.ceil(filtered.length / clustersPageSize));
@@ -682,9 +694,10 @@ function renderClusters() {
         const extra   = c.sorted.length > 12 ? '<div class="text-slate-400">... +' + (c.sorted.length - 12) + ' més</div>' : '';
         // Botón para ir a merge
         const mergeBtn = `<button class=\"px-2 py-1 rounded bg-amber-500 hover:bg-amber-600 text-white text-xs ml-2\" onclick=\"goToMergeWithCluster([${clusterUuids.map(u => `'${u}'`).join(',')}])\">Merge cluster</button>`;
+        const ignoreBtn = `<button class=\"px-2 py-1 rounded bg-slate-500 hover:bg-slate-600 text-white text-xs ml-2\" onclick=\"ignoreCluster([${clusterUuids.map(u => `'${u}'`).join(',')}])\">Diferents</button>`;
         return '<div class="cluster-card">'
             + '<div class="cluster-title">'
-            + '<div class="font-semibold text-slate-700">' + safeHtml((c.sorted[0]?.label || '').split(' (')[0]) + mergeBtn + '</div>'
+            + '<div class="font-semibold text-slate-700">' + safeHtml((c.sorted[0]?.label || '').split(' (')[0]) + mergeBtn + ignoreBtn + '</div>'
             + '<span class="cluster-badge">' + c.size + ' noms</span>'
             + '</div>'
             + '<div class="cluster-items">' + preview + extra + '</div>'
@@ -713,6 +726,109 @@ function goToMergeWithCluster(uuids) {
     const left = Math.round((window.screen.width - w) / 2);
     const top = Math.round((window.screen.height - h) / 2);
     window.open(url, 'mergeWindow', `width=${w},height=${h},left=${left},top=${top},resizable=yes,scrollbars=yes`);
+}
+
+// ── Eliminar organitzacions fusionades de la llista ──────────────────────────
+function handleOrgsMerged(targetId, sourceIds) {
+    if (!currentData || !Array.isArray(currentData.pairs)) return;
+    if (!Array.isArray(sourceIds) || !sourceIds.length) return;
+
+    // Netejar la caché de consultes per evitar dades desactualitzades
+    queryCache.clear();
+
+    const sourceSet = new Set(sourceIds);
+
+    // Filtrar parelles: eliminar les que continguin algun dels IDs fusionats (sourceIds)
+    currentData.pairs = currentData.pairs.filter(p => !sourceSet.has(p.from) && !sourceSet.has(p.to));
+
+    // Recalcular estadístiques
+    const connectedNodes = new Set();
+    currentData.pairs.forEach(p => {
+        connectedNodes.add(p.from);
+        connectedNodes.add(p.to);
+    });
+
+    currentData.totalConnectedOrgs = connectedNodes.size;
+    currentData.totalPairs = currentData.pairs.length;
+
+    if (typeof currentData.totalProcessedOrgs === 'number') {
+        currentData.totalProcessedOrgs = Math.max(0, currentData.totalProcessedOrgs - sourceIds.length);
+    }
+    if (typeof currentData.totalAvailableOrgs === 'number') {
+        currentData.totalAvailableOrgs = Math.max(0, currentData.totalAvailableOrgs - sourceIds.length);
+    }
+
+    // Regenerar estructures locals i tornar a pintar la vista activa
+    buildPairs();
+    buildClusters();
+    updateStats();
+
+    if (currentMode === 'table') {
+        renderTable();
+    } else if (currentMode === 'clusters') {
+        renderClusters();
+    }
+}
+
+// ── Ignorar cluster (marcar com a diferents) ───────────────────────────────
+function ignoreCluster(uuids) {
+    if (!Array.isArray(uuids) || !uuids.length) return;
+    if (!currentData || !Array.isArray(currentData.pairs)) return;
+
+    const uuidSet = new Set(uuids);
+
+    // Filtrar parelles: eliminar aquelles on tant el "from" com el "to" pertanyin a aquest cluster
+    currentData.pairs = currentData.pairs.filter(p => !(uuidSet.has(p.from) && uuidSet.has(p.to)));
+
+    // Recalcular estadístiques i regenerar estructures
+    const connectedNodes = new Set();
+    currentData.pairs.forEach(p => {
+        connectedNodes.add(p.from);
+        connectedNodes.add(p.to);
+    });
+
+    currentData.totalConnectedOrgs = connectedNodes.size;
+    currentData.totalPairs = currentData.pairs.length;
+
+    buildPairs();
+    buildClusters();
+    updateStats();
+
+    if (currentMode === 'table') {
+        renderTable();
+    } else if (currentMode === 'clusters') {
+        renderClusters();
+    }
+}
+
+// ── Ignorar parella (marcar com a diferents) ───────────────────────────────
+function ignorePair(fromUuid, toUuid) {
+    if (!currentData || !Array.isArray(currentData.pairs)) return;
+
+    // Filtrar la parella específica
+    currentData.pairs = currentData.pairs.filter(p => 
+        !((p.from === fromUuid && p.to === toUuid) || (p.from === toUuid && p.to === fromUuid))
+    );
+
+    // Recalcular estadístiques i regenerar estructures
+    const connectedNodes = new Set();
+    currentData.pairs.forEach(p => {
+        connectedNodes.add(p.from);
+        connectedNodes.add(p.to);
+    });
+
+    currentData.totalConnectedOrgs = connectedNodes.size;
+    currentData.totalPairs = currentData.pairs.length;
+
+    buildPairs();
+    buildClusters();
+    updateStats();
+
+    if (currentMode === 'table') {
+        renderTable();
+    } else if (currentMode === 'clusters') {
+        renderClusters();
+    }
 }
 
 // ── Mode de vista ────────────────────────────────────────────────────────────

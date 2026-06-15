@@ -95,6 +95,7 @@ public class ExternalOrganizationController {
     private final MongoTemplate mongoTemplate;
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
+    private final HttpClient aiHttpClient;
     private final ExecutorService asyncExecutor;
 
     // Nombre de colección resuelto una sola vez al arrancar (mejora #9)
@@ -145,6 +146,47 @@ public class ExternalOrganizationController {
     @Value("${app.egreta.external-org.timeout-ms:12000}")
     private int egretaExternalOrgTimeoutMs;
 
+    // State variables for auto-apply country process
+    private final Object autoApplyLock = new Object();
+    private boolean autoApplyRunning = false;
+    private int autoApplyTotal = 0;
+    private int autoApplyProcessed = 0;
+    private int autoApplyApplied = 0;
+    private double autoApplyConfidenceThreshold = 0.90;
+    private final List<String> autoApplyLogs = new java.util.Vector<>();
+    private final String autoApplyLogFilePath = "logs/auto-apply-country.log";
+
+    // State variables for auto-apply type process
+    private final Object autoApplyTypeLock = new Object();
+    private boolean autoApplyTypeRunning = false;
+    private int autoApplyTypeTotal = 0;
+    private int autoApplyTypeProcessed = 0;
+    private int autoApplyTypeApplied = 0;
+    private double autoApplyTypeConfidenceThreshold = 0.90;
+    private final List<String> autoApplyTypeLogs = new java.util.Vector<>();
+    private final String autoApplyTypeLogFilePath = "logs/auto-apply-type.log";
+
+    // State variables for auto-apply funding process
+    private final Object autoApplyFundingLock = new Object();
+    private boolean autoApplyFundingRunning = false;
+    private int autoApplyFundingTotal = 0;
+    private int autoApplyFundingProcessed = 0;
+    private int autoApplyFundingApplied = 0;
+    private double autoApplyFundingConfidenceThreshold = 0.90;
+    private final List<String> autoApplyFundingLogs = new java.util.Vector<>();
+    private final String autoApplyFundingLogFilePath = "logs/auto-apply-funding.log";
+
+    // State variables for auto-validate process
+    private final Object autoValidateLock = new Object();
+    private boolean autoValidateRunning = false;
+    private int autoValidateTotal = 0;
+    private int autoValidateProcessed = 0;
+    private int autoValidateApplied = 0;
+    private final List<String> autoValidateLogs = new java.util.Vector<>();
+    private final String autoValidateLogFilePath = "logs/auto-validate.log";
+
+    private final ExecutorService aiExecutor;
+
     @Autowired
     public ExternalOrganizationController(
             ExternalOrganizationRepository repository,
@@ -159,6 +201,7 @@ public class ExternalOrganizationController {
             t.setDaemon(true);
             return t;
         };
+        
         RejectedExecutionHandler rejectionPolicy = new ThreadPoolExecutor.CallerRunsPolicy();
         this.asyncExecutor = new ThreadPoolExecutor(
             2,
@@ -169,6 +212,26 @@ public class ExternalOrganizationController {
             tf,
             rejectionPolicy
         );
+
+        ThreadFactory tfAi = r -> {
+            Thread t = new Thread(r);
+            t.setName("ext-org-ai-" + t.threadId());
+            t.setDaemon(true);
+            return t;
+        };
+        this.aiExecutor = new ThreadPoolExecutor(
+            16,
+            32,
+            60L,
+            TimeUnit.SECONDS,
+            new LinkedBlockingQueue<>(500),
+            tfAi,
+            rejectionPolicy
+        );
+
+        this.aiHttpClient = HttpClient.newBuilder()
+        .connectTimeout(Duration.ofMillis(500))
+        .build();
     }
 
     // Mejora #9: resolver la colección una sola vez al arrancar el contexto Spring
@@ -188,6 +251,7 @@ public class ExternalOrganizationController {
     @PreDestroy
     private void shutdownAsyncExecutor() {
         asyncExecutor.shutdown();
+        aiExecutor.shutdown();
     }
 
     // -------------------------------------------------------------------------
@@ -486,7 +550,9 @@ public class ExternalOrganizationController {
     public Page<ExternalOrganization> statsNoCountry(
             @RequestParam(defaultValue = "") String buscar,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) String sortBy,
+            @RequestParam(defaultValue = "asc") String sortDirection) {
 
         Criteria base = missingCountryCriteria();
         Query query = new Query(base);
@@ -501,7 +567,8 @@ public class ExternalOrganizationController {
             query = new Query(new Criteria().andOperator(base, nameCriteria));
         }
 
-        PageRequest pageable = PageRequest.of(page, size, buildNameSort());
+        Sort sort = buildSort(sortBy, sortDirection);
+        PageRequest pageable = PageRequest.of(page, size, sort);
         long total = mongoTemplate.count(Query.of(query).limit(-1).skip(-1), ExternalOrganization.class);
         query.with(pageable);
         List<ExternalOrganization> items = mongoTemplate.find(query, ExternalOrganization.class);
@@ -526,7 +593,9 @@ public class ExternalOrganizationController {
     public Page<ExternalOrganization> statsNoType(
             @RequestParam(defaultValue = "") String buscar,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) String sortBy,
+            @RequestParam(defaultValue = "asc") String sortDirection) {
 
         Criteria base = missingTypeCriteria();
         Query query = new Query(base);
@@ -541,7 +610,51 @@ public class ExternalOrganizationController {
             query = new Query(new Criteria().andOperator(base, nameCriteria));
         }
 
-        PageRequest pageable = PageRequest.of(page, size, buildNameSort());
+        Sort sort = buildSort(sortBy, sortDirection);
+        PageRequest pageable = PageRequest.of(page, size, sort);
+        long total = mongoTemplate.count(Query.of(query).limit(-1).skip(-1), ExternalOrganization.class);
+        query.with(pageable);
+        List<ExternalOrganization> items = mongoTemplate.find(query, ExternalOrganization.class);
+        return new PageImpl<>(items, pageable, total);
+    }
+
+    // -------------------------------------------------------------------------
+    // GET /external-organizations/stats/no-funding/count
+    // -------------------------------------------------------------------------
+    @GetMapping("/stats/no-funding/count")
+    public Map<String, Long> statsNoFundingCount() {
+        Criteria noFunding = missingFundingCriteria();
+        long count = mongoTemplate.count(new Query(noFunding), ExternalOrganization.class);
+        long total = repository.count();
+        return Map.of("withoutFunding", count, "total", total);
+    }
+
+    // -------------------------------------------------------------------------
+    // GET /external-organizations/stats/no-funding
+    // -------------------------------------------------------------------------
+    @GetMapping("/stats/no-funding")
+    public Page<ExternalOrganization> statsNoFunding(
+            @RequestParam(defaultValue = "") String buscar,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) String sortBy,
+            @RequestParam(defaultValue = "asc") String sortDirection) {
+
+        Criteria base = missingFundingCriteria();
+        Query query = new Query(base);
+
+        if (buscar != null && !buscar.isBlank()) {
+            String escaped = Pattern.quote(buscar.trim());
+            Criteria nameCriteria = new Criteria().orOperator(
+                Criteria.where("name.ca_ES").regex(escaped, "i"),
+                Criteria.where("name.es_ES").regex(escaped, "i"),
+                Criteria.where("name.en_GB").regex(escaped, "i")
+            );
+            query = new Query(new Criteria().andOperator(base, nameCriteria));
+        }
+
+        Sort sort = buildSort(sortBy, sortDirection);
+        PageRequest pageable = PageRequest.of(page, size, sort);
         long total = mongoTemplate.count(Query.of(query).limit(-1).skip(-1), ExternalOrganization.class);
         query.with(pageable);
         List<ExternalOrganization> items = mongoTemplate.find(query, ExternalOrganization.class);
@@ -737,6 +850,65 @@ public class ExternalOrganizationController {
 
     @GetMapping("/stats/type-catalog")
     public List<Map<String, String>> typeCatalog() {
+        Query query = new Query(Criteria.where("baseUri").is("/dk/atira/pure/ueoexternalorganisation/ueoexternalorganisationtypes"));
+        Document schemeDoc = mongoTemplate.findOne(query, Document.class, "Classificationschemes");
+        if (schemeDoc != null) {
+            @SuppressWarnings("unchecked")
+            List<Document> contained = (List<Document>) schemeDoc.get("containedClassifications");
+            if (contained != null && !contained.isEmpty()) {
+                List<Map<String, String>> types = new ArrayList<>();
+                for (Document c : contained) {
+                    String uri = Objects.toString(c.getString("uri"), "").trim();
+                    Boolean disabled = c.getBoolean("disabled");
+                    if (disabled != null && disabled) {
+                        continue;
+                    }
+                    if (uri.isBlank()) continue;
+
+                    // Excluir los tipos estándar de Pure
+                    String lowerUri = uri.toLowerCase();
+                    if (lowerUri.endsWith("/academic") 
+                            || lowerUri.endsWith("/corporate") 
+                            || lowerUri.endsWith("/government") 
+                            || lowerUri.endsWith("/medical") 
+                            || lowerUri.endsWith("/oth") 
+                            || lowerUri.endsWith("/unknown")) {
+                        continue;
+                    }
+
+                    String label = "";
+                    Document termDoc = (Document) c.get("term");
+                    if (termDoc != null) {
+                        @SuppressWarnings("unchecked")
+                        List<Document> textList = (List<Document>) termDoc.get("text");
+                        if (textList != null) {
+                            String ca = null, es = null, en = null;
+                            for (Document t : textList) {
+                                String locale = t.getString("locale");
+                                String val = t.getString("value");
+                                if ("ca_ES".equals(locale)) ca = val;
+                                else if ("es_ES".equals(locale)) es = val;
+                                else if ("en_GB".equals(locale)) en = val;
+                            }
+                            label = ca != null ? ca : (es != null ? es : (en != null ? en : ""));
+                        }
+                    }
+                    label = label.trim();
+                    if (!label.isBlank()) {
+                        types.add(Map.of("uri", uri, "label", label));
+                    }
+                }
+                if (!types.isEmpty()) {
+                    return types.stream()
+                        .sorted(Comparator.comparing(
+                            r -> r.get("label"),
+                            String.CASE_INSENSITIVE_ORDER))
+                        .collect(Collectors.toList());
+                }
+            }
+        }
+
+        // Fallback a la agregación sobre organizaciones existentes si no se encuentra en Classificationschemes
         Aggregation agg = Aggregation.newAggregation(
             Aggregation.match(Criteria.where("type").exists(true).ne(null)),
             Aggregation.group("type.uri").first("type.term").as("label"),
@@ -759,7 +931,18 @@ public class ExternalOrganizationController {
                             term.getOrDefault("en_GB", ""))).trim();
                 return Map.of("uri", uri, "label", label);
             })
-            .filter(row -> !row.get("uri").isBlank() && !row.get("label").isBlank())
+            .filter(row -> {
+                String uri = row.get("uri");
+                if (uri == null) return false;
+                String lowerUri = uri.toLowerCase();
+                boolean isStandard = lowerUri.endsWith("/academic") 
+                        || lowerUri.endsWith("/corporate") 
+                        || lowerUri.endsWith("/government") 
+                        || lowerUri.endsWith("/medical") 
+                        || lowerUri.endsWith("/oth") 
+                        || lowerUri.endsWith("/unknown");
+                return !row.get("label").isBlank() && !isStandard;
+            })
             .sorted(Comparator.comparing(
                 r -> r.get("label"),
                 String.CASE_INSENSITIVE_ORDER))
@@ -814,6 +997,144 @@ public class ExternalOrganizationController {
         return response;
     }
 
+    @PostMapping("/stats/approve-workflow")
+    public Map<String, Object> approveWorkflow(@RequestBody Map<String, String> payload) {
+        String uuid = payload == null ? "" : Objects.toString(payload.get("uuid"), "").trim();
+        String targetEnv = payload == null ? "" : Objects.toString(payload.get("env"), "").trim();
+
+        if (uuid.isBlank()) {
+            return Map.of("updated", false, "reason", "missing-uuid");
+        }
+
+        Query q = new Query(Criteria.where("uuid").is(uuid));
+        ExternalOrganization org = mongoTemplate.findOne(q, ExternalOrganization.class);
+        if (org == null) {
+            return Map.of("updated", false, "reason", "organization-not-found", "uuid", uuid);
+        }
+
+        ExternalOrganization.WorkflowStatus updatedWorkflow = org.getWorkflow();
+        if (updatedWorkflow == null) {
+            updatedWorkflow = new ExternalOrganization.WorkflowStatus();
+        }
+        updatedWorkflow.setStep("approved");
+
+        // Sync with Egreta
+        Map<String, Object> egretaSync = syncExternalOrganizationWorkflowToEgreta(org, updatedWorkflow, targetEnv);
+        boolean egretaUpdated = Boolean.TRUE.equals(egretaSync.get("updated"));
+        if (!egretaUpdated) {
+            return Map.of(
+                "updated", false,
+                "reason", Objects.toString(egretaSync.get("reason"), "egreta-sync-failed"),
+                "uuid", uuid,
+                "details", egretaSync
+            );
+        }
+
+        org.setWorkflow(updatedWorkflow);
+        repository.save(org);
+
+        return Map.of("updated", true, "uuid", uuid, "workflow", "approved");
+    }
+
+    private Map<String, Object> syncExternalOrganizationWorkflowToEgreta(
+            ExternalOrganization org,
+            ExternalOrganization.WorkflowStatus updatedWorkflow,
+            String targetEnv) {
+        if (!egretaExternalOrgEnabled) {
+            return Map.of("updated", true, "reason", "egreta-sync-disabled");
+        }
+
+        String orgUuid = org.getUuid();
+        if (orgUuid == null || orgUuid.isBlank()) {
+            return Map.of("updated", false, "reason", "missing-org-uuid");
+        }
+
+        String getUrl = resolveEgretaUrl(egretaExternalOrgGetUrlTemplate, orgUuid);
+        String putUrl = resolveEgretaUrl(egretaExternalOrgPutUrlTemplate, orgUuid);
+
+        if (getUrl.isBlank()) {
+            getUrl = resolveEgretaUrl(egretaExternalOrgBaseUrl + "/{uuid}", orgUuid);
+        }
+        if (putUrl.isBlank()) {
+            putUrl = resolveEgretaUrl(egretaExternalOrgBaseUrl + "/{uuid}", orgUuid);
+        }
+
+        if ("test".equalsIgnoreCase(targetEnv)) {
+            getUrl = getUrl.replace("egreta.uab.cat", "egretat.uab.cat");
+            putUrl = putUrl.replace("egreta.uab.cat", "egretat.uab.cat");
+        } else if ("prod".equalsIgnoreCase(targetEnv)) {
+            getUrl = getUrl.replace("egretat.uab.cat", "egreta.uab.cat");
+            putUrl = putUrl.replace("egretat.uab.cat", "egreta.uab.cat");
+        }
+
+        if (putUrl.isBlank()) {
+            return Map.of("updated", false, "reason", "missing-put-url-template");
+        }
+
+        try {
+            ObjectNode payloadNode;
+
+            if (!getUrl.isBlank()) {
+                HttpRequest.Builder getBuilder = HttpRequest.newBuilder()
+                    .uri(URI.create(getUrl))
+                    .timeout(Duration.ofMillis(Math.max(1000, egretaExternalOrgTimeoutMs)))
+                    .header("Accept", "application/json")
+                    .GET();
+                appendEgretaAuth(getBuilder);
+
+                HttpResponse<String> getResponse = httpClient.send(getBuilder.build(), HttpResponse.BodyHandlers.ofString());
+                if (getResponse.statusCode() < 200 || getResponse.statusCode() >= 300) {
+                    return Map.of(
+                        "updated", false,
+                        "reason", "egreta-get-failed",
+                        "status", getResponse.statusCode(),
+                        "body", trimResponseBody(getResponse.body())
+                    );
+                }
+
+                JsonNode root = objectMapper.readTree(getResponse.body());
+                if (root == null || !root.isObject()) {
+                    return Map.of("updated", false, "reason", "egreta-get-invalid-payload");
+                }
+                payloadNode = (ObjectNode) root;
+            } else {
+                payloadNode = objectMapper.valueToTree(org);
+            }
+
+            payloadNode.set("workflow", objectMapper.valueToTree(updatedWorkflow));
+
+            HttpRequest.Builder putBuilder = HttpRequest.newBuilder()
+                .uri(URI.create(putUrl))
+                .timeout(Duration.ofMillis(Math.max(1000, egretaExternalOrgTimeoutMs)))
+                .header("Content-Type", "application/json")
+                .header("Accept", "application/json")
+                .PUT(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(payloadNode)));
+            appendEgretaAuth(putBuilder);
+
+            HttpResponse<String> putResponse = httpClient.send(putBuilder.build(), HttpResponse.BodyHandlers.ofString());
+            if (putResponse.statusCode() < 200 || putResponse.statusCode() >= 300) {
+                return Map.of(
+                    "updated", false,
+                    "reason", "egreta-put-failed",
+                    "status", putResponse.statusCode(),
+                    "body", trimResponseBody(putResponse.body())
+                );
+            }
+
+            return Map.of(
+                "updated", true,
+                "uuid", orgUuid,
+                "status", putResponse.statusCode()
+            );
+        } catch (Exception e) {
+            return Map.of(
+                "updated", false,
+                "reason", "egreta-sync-exception",
+                "message", e.getMessage() == null ? "unknown" : e.getMessage()
+            );
+        }
+    }
+
     private ExternalOrganization.UriTerm resolveTypeUriTermFromPayload(
             String typeUri,
             String typeLabel,
@@ -834,6 +1155,44 @@ public class ExternalOrganizationController {
         String safeUri = uri == null ? "" : uri.trim();
         if (safeUri.isBlank()) {
             return current;
+        }
+
+        // 1. Intentar resolver desde Classificationschemes de Egreta
+        Query query = new Query(Criteria.where("baseUri").is("/dk/atira/pure/ueoexternalorganisation/ueoexternalorganisationtypes"));
+        Document schemeDoc = mongoTemplate.findOne(query, Document.class, "Classificationschemes");
+        if (schemeDoc != null) {
+            @SuppressWarnings("unchecked")
+            List<Document> contained = (List<Document>) schemeDoc.get("containedClassifications");
+            if (contained != null) {
+                for (Document c : contained) {
+                    String curi = Objects.toString(c.getString("uri"), "").trim();
+                    if (curi.equals(safeUri)) {
+                        ExternalOrganization.UriTerm term = new ExternalOrganization.UriTerm();
+                        term.setUri(safeUri);
+                        Map<String, String> localized = new LinkedHashMap<>();
+                        String ca = "", es = "", en = "";
+                        Document termDoc = (Document) c.get("term");
+                        if (termDoc != null) {
+                            @SuppressWarnings("unchecked")
+                            List<Document> textList = (List<Document>) termDoc.get("text");
+                            if (textList != null) {
+                                for (Document t : textList) {
+                                    String locale = t.getString("locale");
+                                    String val = t.getString("value");
+                                    if ("ca_ES".equals(locale)) ca = val;
+                                    else if ("es_ES".equals(locale)) es = val;
+                                    else if ("en_GB".equals(locale)) en = val;
+                                }
+                            }
+                        }
+                        localized.put("ca_ES", ca != null ? ca.trim() : "");
+                        localized.put("es_ES", es != null ? es.trim() : "");
+                        localized.put("en_GB", en != null ? en.trim() : "");
+                        term.setTerm(localized);
+                        return term;
+                    }
+                }
+            }
         }
 
         Query typeQuery = new Query(Criteria.where("type.uri").is(safeUri));
@@ -860,6 +1219,13 @@ public class ExternalOrganizationController {
     private Map<String, Object> syncExternalOrganizationTypeToEgreta(
             ExternalOrganization org,
             ExternalOrganization.UriTerm updatedType) {
+        return syncExternalOrganizationTypeToEgreta(org, updatedType, null);
+    }
+
+    private Map<String, Object> syncExternalOrganizationTypeToEgreta(
+            ExternalOrganization org,
+            ExternalOrganization.UriTerm updatedType,
+            String targetEnv) {
         if (!egretaExternalOrgEnabled) {
             return Map.of("updated", false, "reason", "egreta-sync-disabled");
         }
@@ -876,6 +1242,14 @@ public class ExternalOrganizationController {
         }
         if (putUrl.isBlank()) {
             putUrl = resolveEgretaUrl(egretaExternalOrgBaseUrl + "/{uuid}", orgUuid);
+        }
+
+        if ("test".equalsIgnoreCase(targetEnv)) {
+            getUrl = getUrl.replace("egreta.uab.cat", "egretat.uab.cat");
+            putUrl = putUrl.replace("egreta.uab.cat", "egretat.uab.cat");
+        } else if ("prod".equalsIgnoreCase(targetEnv)) {
+            getUrl = getUrl.replace("egretat.uab.cat", "egreta.uab.cat");
+            putUrl = putUrl.replace("egretat.uab.cat", "egreta.uab.cat");
         }
 
         if (putUrl.isBlank()) {
@@ -933,7 +1307,7 @@ public class ExternalOrganizationController {
             }
 
             return Map.of(
-            "updated", true,
+                "updated", true,
                 "uuid", orgUuid,
                 "status", putResponse.statusCode()
             );
@@ -1074,6 +1448,13 @@ public class ExternalOrganizationController {
     private Map<String, Object> syncExternalOrganizationFundingToEgreta(
             ExternalOrganization org,
             String normalizedFunding) {
+        return syncExternalOrganizationFundingToEgreta(org, normalizedFunding, null);
+    }
+
+    private Map<String, Object> syncExternalOrganizationFundingToEgreta(
+            ExternalOrganization org,
+            String normalizedFunding,
+            String targetEnv) {
         if (!egretaExternalOrgEnabled) {
             return Map.of("updated", false, "reason", "egreta-sync-disabled");
         }
@@ -1090,6 +1471,14 @@ public class ExternalOrganizationController {
         }
         if (putUrl.isBlank()) {
             putUrl = resolveEgretaUrl(egretaExternalOrgBaseUrl + "/{uuid}", orgUuid);
+        }
+
+        if ("test".equalsIgnoreCase(targetEnv)) {
+            getUrl = getUrl.replace("egreta.uab.cat", "egretat.uab.cat");
+            putUrl = putUrl.replace("egreta.uab.cat", "egretat.uab.cat");
+        } else if ("prod".equalsIgnoreCase(targetEnv)) {
+            getUrl = getUrl.replace("egretat.uab.cat", "egreta.uab.cat");
+            putUrl = putUrl.replace("egretat.uab.cat", "egreta.uab.cat");
         }
 
         if (putUrl.isBlank()) {
@@ -1331,6 +1720,13 @@ public class ExternalOrganizationController {
     private Map<String, Object> syncExternalOrganizationCountryToEgreta(
             ExternalOrganization org,
             ExternalOrganization.UriTerm updatedCountry) {
+        return syncExternalOrganizationCountryToEgreta(org, updatedCountry, null);
+    }
+
+    private Map<String, Object> syncExternalOrganizationCountryToEgreta(
+            ExternalOrganization org,
+            ExternalOrganization.UriTerm updatedCountry,
+            String targetEnv) {
         if (!egretaExternalOrgEnabled) {
             return Map.of("updated", false, "reason", "egreta-sync-disabled");
         }
@@ -1347,6 +1743,14 @@ public class ExternalOrganizationController {
         }
         if (putUrl.isBlank()) {
             putUrl = resolveEgretaUrl(egretaExternalOrgBaseUrl + "/{uuid}", orgUuid);
+        }
+
+        if ("test".equalsIgnoreCase(targetEnv)) {
+            getUrl = getUrl.replace("egreta.uab.cat", "egretat.uab.cat");
+            putUrl = putUrl.replace("egreta.uab.cat", "egretat.uab.cat");
+        } else if ("prod".equalsIgnoreCase(targetEnv)) {
+            getUrl = getUrl.replace("egretat.uab.cat", "egreta.uab.cat");
+            putUrl = putUrl.replace("egretat.uab.cat", "egreta.uab.cat");
         }
 
         if (putUrl.isBlank()) {
@@ -1850,6 +2254,15 @@ public class ExternalOrganizationController {
 
     private List<ExternalOrganization> findOrganizationsLimited(int limit) {
         Query query = new Query().limit(Math.max(1, limit));
+        query.fields()
+             .include("uuid")
+             .include("id")
+             .include("displayName")
+             .include("name")
+             .include("pureId")
+             .include("type")
+             .include("address")
+             .include("workflow");
         return mongoTemplate.find(query, ExternalOrganization.class);
     }
 
@@ -1962,6 +2375,51 @@ public class ExternalOrganizationController {
         String normalizedLabel = normalizeText(label);
         if (normalizedLabel.isBlank()) {
             return current;
+        }
+
+        // 1. Intentar resolver desde Classificationschemes de Egreta por coincidencia de texto
+        Query query = new Query(Criteria.where("baseUri").is("/dk/atira/pure/ueoexternalorganisation/ueoexternalorganisationtypes"));
+        Document schemeDoc = mongoTemplate.findOne(query, Document.class, "Classificationschemes");
+        if (schemeDoc != null) {
+            @SuppressWarnings("unchecked")
+            List<Document> contained = (List<Document>) schemeDoc.get("containedClassifications");
+            if (contained != null) {
+                for (Document c : contained) {
+                    Document termDoc = (Document) c.get("term");
+                    if (termDoc != null) {
+                        @SuppressWarnings("unchecked")
+                        List<Document> textList = (List<Document>) termDoc.get("text");
+                        if (textList != null) {
+                            String ca = "", es = "", en = "";
+                            boolean matched = false;
+                            for (Document t : textList) {
+                                String locale = t.getString("locale");
+                                String val = t.getString("value");
+                                if ("ca_ES".equals(locale)) {
+                                    ca = val;
+                                    if (normalizeText(val).equals(normalizedLabel)) matched = true;
+                                } else if ("es_ES".equals(locale)) {
+                                    es = val;
+                                    if (normalizeText(val).equals(normalizedLabel)) matched = true;
+                                } else if ("en_GB".equals(locale)) {
+                                    en = val;
+                                    if (normalizeText(val).equals(normalizedLabel)) matched = true;
+                                }
+                            }
+                            if (matched) {
+                                ExternalOrganization.UriTerm term = new ExternalOrganization.UriTerm();
+                                term.setUri(Objects.toString(c.getString("uri"), "").trim());
+                                Map<String, String> localized = new LinkedHashMap<>();
+                                localized.put("ca_ES", ca != null ? ca.trim() : "");
+                                localized.put("es_ES", es != null ? es.trim() : "");
+                                localized.put("en_GB", en != null ? en.trim() : "");
+                                term.setTerm(localized);
+                                return term;
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         Query typeQuery = new Query(new Criteria().orOperator(
@@ -2110,20 +2568,46 @@ public class ExternalOrganizationController {
         return (exactMatches + fuzzyMatches) / (double) maxLen;
     }
 
+    private static final ThreadLocal<int[]> LEVENSHTEIN_BUFFER = ThreadLocal.withInitial(() -> new int[128]);
+
     private int levenshteinDistance(String a, String b) {
-        int[] x = new int[b.length() + 1];
-        int[] y = new int[b.length() + 1];
-        for (int i = 1; i <= b.length(); i++) x[i] = i;
+        if (a.isEmpty()) return b.length();
+        if (b.isEmpty()) return a.length();
+
+        if (a.length() < b.length()) {
+            String temp = a;
+            a = b;
+            b = temp;
+        }
+
+        int bLen = b.length();
+        if (bLen >= 128) {
+            int[] dp = new int[bLen + 1];
+            return levenshteinDistanceWithArray(a, b, dp);
+        }
+
+        int[] dp = LEVENSHTEIN_BUFFER.get();
+        return levenshteinDistanceWithArray(a, b, dp);
+    }
+
+    private int levenshteinDistanceWithArray(String a, String b, int[] dp) {
+        int bLen = b.length();
+        for (int i = 0; i <= bLen; i++) {
+            dp[i] = i;
+        }
 
         for (int i = 1; i <= a.length(); i++) {
-            y[0] = i;
-            for (int j = 1; j <= b.length(); j++) {
-                int cost = a.charAt(i - 1) == b.charAt(j - 1) ? 0 : 1;
-                y[j] = Math.min(Math.min(y[j - 1] + 1, x[j] + 1), x[j - 1] + cost);
+            int prev = dp[0];
+            dp[0] = i;
+            char charA = a.charAt(i - 1);
+            for (int j = 1; j <= bLen; j++) {
+                int temp = dp[j];
+                int cost = charA == b.charAt(j - 1) ? 0 : 1;
+                dp[j] = Math.min(Math.min(dp[j - 1] + 1, dp[j] + 1), prev + cost);
+                prev = temp;
             }
-            int[] t = x; x = y; y = t;
         }
-        return x[b.length()];
+        return dp[bLen];
     }
 
     // =========================================================================
@@ -2256,34 +2740,34 @@ public class ExternalOrganizationController {
     );
 
     private static final Map<String, List<String>> COUNTRY_ALIASES = Map.ofEntries(
-        Map.entry("spain",          List.of("spain", "espana", "espanya")),
-        Map.entry("france",         List.of("france", "francia", "franca")),
-        Map.entry("germany",        List.of("germany", "deutschland", "alemania", "alemanya")),
-        Map.entry("italy",          List.of("italy", "italia")),
-        Map.entry("portugal",       List.of("portugal")),
-        Map.entry("united_kingdom", List.of("united kingdom", "uk", "great britain", "britain", "england", "scotland", "wales")),
-        Map.entry("united_states",  List.of("united states", "usa", "u s a", "eeuu", "estados unidos", "us")),
-        Map.entry("netherlands",    List.of("netherlands", "holland", "holanda", "paises bajos", "paisos baixos")),
-        Map.entry("belgium",        List.of("belgium", "belgica", "belgique")),
-        Map.entry("switzerland",    List.of("switzerland", "swiss", "suiza", "suissa", "suisse")),
-        Map.entry("austria",        List.of("austria", "osterreich")),
-        Map.entry("ireland",        List.of("ireland", "irlanda")),
-        Map.entry("denmark",        List.of("denmark", "dinamarca")),
-        Map.entry("sweden",         List.of("sweden", "suecia", "sverige")),
-        Map.entry("norway",         List.of("norway", "noruega", "norge")),
-        Map.entry("finland",        List.of("finland", "finlandia", "suomi")),
-        Map.entry("poland",         List.of("poland", "polonia", "polska")),
-        Map.entry("czech_republic", List.of("czech republic", "czechia", "republica checa", "txec")),
-        Map.entry("china",          List.of("china")),
-        Map.entry("japan",          List.of("japan", "japon", "japo")),
-        Map.entry("south_korea",    List.of("south korea", "korea", "corea")),
-        Map.entry("india",          List.of("india")),
-        Map.entry("mexico",         List.of("mexico", "mexic")),
-        Map.entry("brazil",         List.of("brazil", "brasil")),
-        Map.entry("argentina",      List.of("argentina")),
-        Map.entry("chile",          List.of("chile")),
-        Map.entry("colombia",       List.of("colombia")),
-        Map.entry("canada",         List.of("canada"))
+        Map.entry("spain",          List.of("spain", "espana", "espanya", "s l", "sl", "s a", "sa", "barcelona", "catalunya", "catalonia", "ajuntament", "generalitat", "ministerio", "ministeri", "uab", "universitat", "universidad")),
+        Map.entry("france",         List.of("france", "francia", "franca", "paris", "bordeaux", "burdeos", "montpellier", "dijon")),
+        Map.entry("germany",        List.of("germany", "deutschland", "alemania", "alemanya", "berlin", "munich", "muenchen", "giessen", "muelheim")),
+        Map.entry("italy",          List.of("italy", "italia", "roma", "milano", "venezia")),
+        Map.entry("portugal",       List.of("portugal", "lisboa", "lisbon")),
+        Map.entry("united_kingdom", List.of("united kingdom", "uk", "great britain", "britain", "england", "scotland", "wales", "london", "manchester", "oxford", "cambridge")),
+        Map.entry("united_states",  List.of("united states", "usa", "u s a", "eeuu", "estados unidos", "us", "new york", "boston", "bethesda", "austin", "arizona", "california")),
+        Map.entry("netherlands",    List.of("netherlands", "holland", "holanda", "paises bajos", "paisos baixos", "amsterdam")),
+        Map.entry("belgium",        List.of("belgium", "belgica", "belgique", "brussels", "bruxelles")),
+        Map.entry("switzerland",    List.of("switzerland", "swiss", "suiza", "suissa", "suisse", "geneva", "berne")),
+        Map.entry("austria",        List.of("austria", "osterreich", "vienna")),
+        Map.entry("ireland",        List.of("ireland", "irlanda", "dublin")),
+        Map.entry("denmark",        List.of("denmark", "dinamarca", "copenhagen")),
+        Map.entry("sweden",         List.of("sweden", "suecia", "sverige", "stockholm")),
+        Map.entry("norway",         List.of("norway", "noruega", "norge", "oslo")),
+        Map.entry("finland",        List.of("finland", "finlandia", "suomi", "helsinki")),
+        Map.entry("poland",         List.of("poland", "polonia", "polska", "warsaw")),
+        Map.entry("czech_republic", List.of("czech republic", "czechia", "republica checa", "txec", "prague")),
+        Map.entry("china",          List.of("china", "beijing", "shanghai")),
+        Map.entry("japan",          List.of("japan", "japon", "japo", "tokyo")),
+        Map.entry("south_korea",    List.of("south korea", "korea", "corea", "seoul")),
+        Map.entry("india",          List.of("india", "delhi", "mumbai")),
+        Map.entry("mexico",         List.of("mexico", "mexic", "mexico city")),
+        Map.entry("brazil",         List.of("brazil", "brasil", "sao paulo", "rio de janeiro")),
+        Map.entry("argentina",      List.of("argentina", "buenos aires")),
+        Map.entry("chile",          List.of("chile", "santiago")),
+        Map.entry("colombia",       List.of("colombia", "bogota")),
+        Map.entry("canada",         List.of("canada", "toronto", "montreal"))
     );
 
     private static final Map<String, String> KEYWORD_HINTS = Map.ofEntries(
@@ -2439,9 +2923,15 @@ public class ExternalOrganizationController {
         List<String> aliases = COUNTRY_ALIASES.getOrDefault(aliasKey, List.of());
         if (aliases.isEmpty() || catalog.isEmpty()) return "";
 
+        String normalizedAliasKey = normalizeText(aliasKey.replace('_', ' '));
+
         return catalog.stream()
-            .filter(c -> aliases.stream().anyMatch(alias ->
-                c.normalizedLabel.contains(alias) || alias.contains(c.normalizedLabel)))
+            .filter(c -> c.normalizedLabel.equals(normalizedAliasKey)
+                || aliases.stream().anyMatch(alias -> {
+                    String normalizedAlias = normalizeText(alias);
+                    return c.normalizedLabel.contains(normalizedAlias)
+                        || normalizedAlias.contains(c.normalizedLabel);
+                }))
             .max(Comparator.comparingInt(CountryAggregate::count))
             .map(CountryAggregate::label)
             .orElse("");
@@ -2509,7 +2999,7 @@ public class ExternalOrganizationController {
             String reason = (publicHit.isBlank() ? "" : "public:" + publicHit)
                 + (privateHit.isBlank() ? "" : " private:" + privateHit);
             if (reason.isBlank()) reason = "balanced-hints";
-            return new FundingInferenceResult("Mixta", 0.55, reason.trim());
+            return new FundingInferenceResult("", 0.0, reason.trim());
         }
 
         boolean isPublic = publicHits > privateHits;
@@ -2525,13 +3015,20 @@ public class ExternalOrganizationController {
     }
 
     private List<TypeAggregate> buildTypeCatalog() {
-        return statsByType().stream()
-            .map(row -> {
-                String label = Objects.toString(row.get("label"), "").trim();
-                int count = ((Number) row.getOrDefault("count", 0)).intValue();
+        List<Map<String, String>> egretaTypes = typeCatalog();
+        Map<String, Integer> counts = new HashMap<>();
+        for (Map<String, Object> row : statsByType()) {
+            String label = Objects.toString(row.get("label"), "").trim();
+            int count = ((Number) row.getOrDefault("count", 0)).intValue();
+            counts.put(normalizeText(label), count);
+        }
+
+        return egretaTypes.stream()
+            .map(t -> {
+                String label = t.get("label");
+                int count = counts.getOrDefault(normalizeText(label), 0);
                 return new TypeAggregate(label, normalizeText(label), count);
             })
-            .filter(t -> !t.label.isBlank() && !"(desconegut)".equalsIgnoreCase(t.label))
             .sorted(Comparator.comparingInt(TypeAggregate::count).reversed())
             .collect(Collectors.toList());
     }
@@ -2561,33 +3058,34 @@ public class ExternalOrganizationController {
             return CompletableFuture.completedFuture(null);
         }
 
-        return CompletableFuture.supplyAsync(() -> {
-            try {
-                String query = "\"" + orgName + "\" organization country";
-                String baseSearchUrl = resolveSearxngSearchUrl(searxngCountrySuggestUrl);
-                String separator = baseSearchUrl.contains("?") ? "&" : "?";
-                String requestUrl = baseSearchUrl
-                    + separator
-                    + "format=json&q="
-                    + URLEncoder.encode(query, StandardCharsets.UTF_8);
+        try {
+            String query = "\"" + orgName + "\" organization country";
+            String baseSearchUrl = resolveSearxngSearchUrl(searxngCountrySuggestUrl);
+            String separator = baseSearchUrl.contains("?") ? "&" : "?";
+            String requestUrl = baseSearchUrl
+                + separator
+                + "format=json&q="
+                + URLEncoder.encode(query, StandardCharsets.UTF_8);
 
-                HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(requestUrl))
-                    .timeout(Duration.ofMillis(Math.max(800, searxngCountrySuggestTimeoutMs)))
-                    .header("Accept", "application/json")
-                    .GET()
-                    .build();
+            HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(requestUrl))
+                .timeout(Duration.ofMillis(Math.max(800, searxngCountrySuggestTimeoutMs)))
+                .header("Accept", "application/json")
+                .GET()
+                .build();
 
-                HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-                if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                    return null;
-                }
-                return response.body();
-            } catch (Exception ignored) {
-                return null;
-            }
-        }, asyncExecutor).orTimeout(searxngCountrySuggestTimeoutMs, TimeUnit.MILLISECONDS)
-          .exceptionally(e -> null);
+            return httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString())
+                .thenApply(response -> {
+                    if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                        return null;
+                    }
+                    return response.body();
+                })
+                .orTimeout(searxngCountrySuggestTimeoutMs, TimeUnit.MILLISECONDS)
+                .exceptionally(e -> null);
+        } catch (Exception e) {
+            return CompletableFuture.completedFuture(null);
+        }
     }
 
     private String resolveSearxngSearchUrl(String configuredUrl) {
@@ -2705,41 +3203,45 @@ public class ExternalOrganizationController {
      * - Timeout corto (2 segundos, no 8) para fallback rápido a heurística
      * - Caché por prompt para evitar llamadas repetidas
      */
-    private CompletableFuture<String> callLocalAiApiAsync(String systemPrompt, String userPrompt) {
+    private CompletableFuture<String> callLocalAiApiAsync(String systemPrompt, String userPrompt, int maxTokens) {
         if (!aiCountrySuggestEnabled || aiCountrySuggestUrl == null || aiCountrySuggestUrl.isBlank()) {
             return CompletableFuture.completedFuture(null);
         }
 
-        return CompletableFuture.supplyAsync(() -> {
-            try {
-                Map<String, Object> payload = new LinkedHashMap<>();
-                payload.put("model", aiCountrySuggestModel == null || aiCountrySuggestModel.isBlank()
-                    ? "local-model" : aiCountrySuggestModel);
-                payload.put("temperature", 0);
-                payload.put("messages", List.of(
-                    Map.of("role", "system", "content", systemPrompt),
-                    Map.of("role", "user",   "content", userPrompt)
-                ));
-                payload.put("response_format", Map.of("type", "json_object"));
+        try {
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("model", aiCountrySuggestModel == null || aiCountrySuggestModel.isBlank()
+                ? "local-model" : aiCountrySuggestModel);
+            payload.put("temperature", 0);
+            payload.put("messages", List.of(
+                Map.of("role", "system", "content", systemPrompt),
+                Map.of("role", "user",   "content", userPrompt)
+            ));
+            payload.put("response_format", Map.of("type", "json_object"));
+            //payload.put("max_tokens", maxTokens);
 
-                HttpRequest.Builder builder = HttpRequest.newBuilder()
-                    .uri(URI.create(aiCountrySuggestUrl))
-                    .timeout(Duration.ofMillis(aiCountrySuggestTimeoutMs))
-                    .header("Content-Type", "application/json")
-                    .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(payload)));
+            HttpRequest.Builder builder = HttpRequest.newBuilder()
+                .uri(URI.create(aiCountrySuggestUrl))
+                .timeout(Duration.ofMillis(aiCountrySuggestTimeoutMs))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(payload)));
 
-                if (aiCountrySuggestApiKey != null && !aiCountrySuggestApiKey.isBlank()) {
-                    builder.header("Authorization", "Bearer " + aiCountrySuggestApiKey.trim());
-                }
-
-                HttpResponse<String> response = httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofString());
-                if (response.statusCode() < 200 || response.statusCode() >= 300) return null;
-                return response.body();
-            } catch (Exception ignored) {
-                return null;
+            if (aiCountrySuggestApiKey != null && !aiCountrySuggestApiKey.isBlank()) {
+                builder.header("Authorization", "Bearer " + aiCountrySuggestApiKey.trim());
             }
-        }, asyncExecutor).orTimeout(aiCountrySuggestTimeoutMs, TimeUnit.MILLISECONDS)
-          .exceptionally(e -> null);
+
+            return aiHttpClient.sendAsync(builder.build(), HttpResponse.BodyHandlers.ofString())
+                .thenApply(response -> {
+                    if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                        return null;
+                    }
+                    return response.body();
+                })
+                .orTimeout(aiCountrySuggestTimeoutMs, TimeUnit.MILLISECONDS)
+                .exceptionally(e -> null);
+        } catch (Exception e) {
+            return CompletableFuture.completedFuture(null);
+        }
     }
 
     private InferenceResult inferCountryWithLocalAi(String orgName, List<CountryAggregate> catalog) {
@@ -2767,7 +3269,7 @@ public class ExternalOrganizationController {
 
         String body = null;
         try {
-            body = callLocalAiApiAsync(systemPrompt, userPrompt)
+            body = callLocalAiApiAsync(systemPrompt, userPrompt,100)
                     .get(aiCountrySuggestTimeoutMs + AI_TIMEOUT_BUFFER_MS, TimeUnit.MILLISECONDS);
         } catch (java.util.concurrent.TimeoutException e) {
             log.debug("Local AI timeout inferring country for org '{}'", orgName);
@@ -2802,7 +3304,7 @@ public class ExternalOrganizationController {
 
         String systemPrompt =
                 "You are a data quality assistant specialized in research organizations. "
-            + "Given an organization name, infer the most likely country, organization type, and funding profile (Publica, Privada, or Mixta). "
+            + "Given an organization name, infer the most likely country, organization type, and funding profile (Publica or Privada). "
                 + "Return strict JSON with exactly these keys: "
             + "suggestedCountry, countryConfidence, countryReason, suggestedType, typeConfidence, typeReason, suggestedFunding, fundingConfidence, fundingReason. "
                 + "Confidence values must be between 0 and 1. "
@@ -2811,7 +3313,7 @@ public class ExternalOrganizationController {
 
         String userPrompt = "Organization: '" + orgName + "'. Candidate types: " + typeCatalogText;
 
-        return callLocalAiApiAsync(systemPrompt, userPrompt)
+        return callLocalAiApiAsync(systemPrompt, userPrompt,150)
                 .orTimeout(aiCountrySuggestTimeoutMs + AI_TIMEOUT_BUFFER_MS, TimeUnit.MILLISECONDS)
                 .exceptionally(e -> {
                     log.debug("Local AI timeout/error for org '{}': {}", orgName, e.getMessage());
@@ -2827,7 +3329,7 @@ public class ExternalOrganizationController {
     // inferMetadataBatch — lotes de AI_BATCH_SIZE, AI_BATCH_CONCURRENCY paralelos
     // -------------------------------------------------------------------------
     private static final int AI_BATCH_SIZE        = 20;
-    private static final int AI_BATCH_CONCURRENCY = 5;
+    private static final int AI_BATCH_CONCURRENCY = 10;
 
     private Map<String, MetadataInferenceResult> inferMetadataBatch(
             List<ExternalOrganization> organizations,
@@ -2910,7 +3412,7 @@ public class ExternalOrganizationController {
 
         String body = null;
         try {
-            body = callLocalAiApiAsync(systemPrompt, userPrompt)
+            body = callLocalAiApiAsync(systemPrompt, userPrompt,100)
                     .get(aiCountrySuggestTimeoutMs + AI_TIMEOUT_BUFFER_MS, TimeUnit.MILLISECONDS);
         } catch (java.util.concurrent.TimeoutException e) {
             log.debug("Local AI timeout inferring type for org '{}'", orgName);
@@ -2944,7 +3446,7 @@ public class ExternalOrganizationController {
 
         String systemPrompt =
                 "You are a data quality assistant specialized in research organizations. "
-            + "Given an organization name, infer the most likely country, organization type, and funding profile (Publica, Privada, or Mixta). "
+            + "Given an organization name, infer the most likely country, organization type, and funding profile (Publica or Privada). "
                 + "Return strict JSON with exactly these keys: "
             + "suggestedCountry, countryConfidence, countryReason, suggestedType, typeConfidence, typeReason, suggestedFunding, fundingConfidence, fundingReason. "
                 + "Confidence values must be between 0 and 1. "
@@ -2955,7 +3457,7 @@ public class ExternalOrganizationController {
 
         String body = null;
         try {
-            body = callLocalAiApiAsync(systemPrompt, userPrompt)
+            body = callLocalAiApiAsync(systemPrompt, userPrompt,150)
                     .get(aiCountrySuggestTimeoutMs + AI_TIMEOUT_BUFFER_MS, TimeUnit.MILLISECONDS);
         } catch (java.util.concurrent.TimeoutException e) {
             log.debug("Local AI timeout inferring metadata for org '{}'", orgName);
@@ -3139,9 +3641,6 @@ public class ExternalOrganizationController {
         if (target.equals("privada") || target.equals("private") || target.equals("privado")) {
             return "Privada";
         }
-        if (target.equals("mixta") || target.equals("mixed") || target.equals("mixte") || target.equals("public private")) {
-            return "Mixta";
-        }
         return "";
     }
 
@@ -3312,6 +3811,34 @@ public class ExternalOrganizationController {
         );
     }
 
+    private Sort buildSort(String sortBy, String sortDirection) {
+        Sort.Direction dir = "desc".equalsIgnoreCase(sortDirection) ? Sort.Direction.DESC : Sort.Direction.ASC;
+        if (sortBy == null || sortBy.isBlank()) {
+            return buildNameSort();
+        }
+        switch (sortBy.toLowerCase()) {
+            case "name":
+            case "nom":
+                return Sort.by(dir, "name.ca_ES", "name.es_ES", "name.en_GB");
+            case "type":
+            case "tipus":
+                return Sort.by(dir, "type.term.ca_ES", "type.term.es_ES", "type.term.en_GB");
+            case "funding":
+            case "financiacio":
+            case "financiacion":
+                return Sort.by(dir, "keywordGroups.classifications.term.ca_ES", "keywordGroups.classifications.term.es_ES", "keywordGroups.classifications.term.en_GB");
+            case "country":
+            case "pais":
+                return Sort.by(dir, "address.country.term.ca_ES", "address.country.term.es_ES", "address.country.term.en_GB");
+            case "workflow":
+                return Sort.by(dir, "workflow.step");
+            case "uuid":
+                return Sort.by(dir, "uuid");
+            default:
+                return buildNameSort();
+        }
+    }
+
     /**
      * Mejora #3: un orOperator entre los tres idiomas — si falta el país en
      * CUALQUIERA de ellos, la organización aparece en el listado "sin país".
@@ -3356,6 +3883,19 @@ public class ExternalOrganizationController {
             Criteria.where("type.term.en_GB").regex("^(unknown|desconegut)$", "i")
         );
         return new Criteria().orOperator(noCa, noEs, noEn);
+    }
+
+    private Criteria missingFundingCriteria() {
+        return new Criteria().orOperator(
+            Criteria.where("keywordGroups").exists(false),
+            Criteria.where("keywordGroups").is(null),
+            Criteria.where("keywordGroups").size(0),
+            Criteria.where("keywordGroups").not().elemMatch(
+                Criteria.where("logicalName").is("/uab/externalorganisations/caracter")
+                    .and("classifications").exists(true).not().size(0)
+                    .and("classifications.uri").exists(true).ne("").ne("/uab/externalorganisations/caracter/unknown")
+            )
+        );
     }
 
     /**
@@ -3424,5 +3964,899 @@ public class ExternalOrganizationController {
             .stream()
             .filter(n -> !n.startsWith("system."))
             .collect(Collectors.toList());
+    }
+
+    // =========================================================================
+    // Auto-apply Country suggest & apply feature
+    // =========================================================================
+
+    private void startAutoApplyRun(String env, double confidence) {
+        synchronized(autoApplyLock) {
+            autoApplyRunning = true;
+            autoApplyTotal = 0;
+            autoApplyProcessed = 0;
+            autoApplyApplied = 0;
+            autoApplyConfidenceThreshold = confidence;
+            autoApplyLogs.clear();
+        }
+        
+        try {
+            java.io.File file = new java.io.File(autoApplyLogFilePath);
+            java.io.File parent = file.getParentFile();
+            if (parent != null && !parent.exists()) {
+                parent.mkdirs();
+            }
+            java.nio.file.Files.writeString(
+                file.toPath(), 
+                "=== INICI DE PROCES AUTO-APLICAR PAIS (" + (env == null ? "DEFAULT" : env.toUpperCase()) + ", Confiança >= " + Math.round(confidence * 100) + "%) === " + java.time.LocalDateTime.now() + System.lineSeparator(), 
+                java.nio.file.StandardOpenOption.CREATE, 
+                java.nio.file.StandardOpenOption.TRUNCATE_EXISTING
+            );
+        } catch (Exception e) {
+            System.err.println("Error initializing auto-apply log file: " + e.getMessage());
+        }
+    }
+
+    private synchronized void writeLogToFile(String line) {
+        try {
+            java.io.File file = new java.io.File(autoApplyLogFilePath);
+            java.io.File parent = file.getParentFile();
+            if (parent != null && !parent.exists()) {
+                parent.mkdirs();
+            }
+            java.nio.file.Files.writeString(
+                file.toPath(), 
+                line + System.lineSeparator(), 
+                java.nio.file.StandardOpenOption.CREATE, 
+                java.nio.file.StandardOpenOption.APPEND
+            );
+        } catch (Exception e) {
+            System.err.println("Error writing to auto-apply log file: " + e.getMessage());
+        }
+    }
+
+    private void logMessage(String message) {
+        String formatted = "[" + java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss")) + "] " + message;
+        autoApplyLogs.add(formatted);
+        writeLogToFile(formatted);
+    }
+
+    private void executeAutoApplyCountry(String env, double confidenceThreshold) {
+        asyncExecutor.submit(() -> {
+            try {
+                Query query = new Query(missingCountryCriteria());
+                query.fields().include("uuid").include("name");
+                List<ExternalOrganization> orgs = mongoTemplate.find(query, ExternalOrganization.class);
+                
+                synchronized(autoApplyLock) {
+                    autoApplyTotal = orgs.size();
+                }
+                
+                logMessage("S'han trobat " + autoApplyTotal + " organitzacions sense pais. Processant en paral·lel (Confiança >= " + Math.round(confidenceThreshold * 100) + "%)...");
+                
+                List<CountryAggregate> countryCatalog = getCachedCountryCatalog();
+                
+                // Concurrencia de 16 peticiones paralelas (óptimo para la LS40)
+                int concurrencyLimit = 16;
+                java.util.concurrent.Semaphore sem = new java.util.concurrent.Semaphore(concurrencyLimit);
+                
+                List<CompletableFuture<Void>> futures = new java.util.ArrayList<>();
+                
+                for (ExternalOrganization shortOrg : orgs) {
+                    String uuid = shortOrg.getUuid();
+                    String name = extractOrgName(shortOrg);
+                    
+                    synchronized(autoApplyLock) {
+                        if (!autoApplyRunning) {
+                            break;
+                        }
+                    }
+                    
+                    sem.acquire(); // Adquirir antes de enviar la tarea al pool, bloqueando el bucle de envío si no hay hueco
+                    
+                    synchronized(autoApplyLock) {
+                        if (!autoApplyRunning) {
+                            sem.release();
+                            break;
+                        }
+                    }
+                    
+                    CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
+                        try {
+                            synchronized(autoApplyLock) {
+                                if (!autoApplyRunning) {
+                                    return;
+                                }
+                            }
+                            
+                            ExternalOrganization org = mongoTemplate.findOne(new Query(Criteria.where("uuid").is(uuid)), ExternalOrganization.class);
+                            if (org == null) {
+                                logMessage("[ERROR] Organitzacio no trobada: " + name + " (UUID: " + uuid + ")");
+                                return;
+                            }
+                            
+                            // 1. Coincidencia IA (solo prompt de país)
+                            InferenceResult countryResult = inferCountryWithLocalAi(name, countryCatalog);
+
+                            // 2. SearxNG si la IA tampoco encuentra nada
+                            if (countryResult == null || countryResult.countryLabel.isBlank()) {
+                                countryResult = inferCountryWithSearxng(name, countryCatalog);
+                            }
+                            
+                            if (countryResult == null || countryResult.countryLabel.isBlank()) {
+                                logMessage("[OMES] " + name + " (UUID: " + uuid + ") - Sense suggeriment de pais.");
+                                return;
+                            }
+                            
+                            String suggestedCountry = countryResult.countryLabel;
+                            double confidence = countryResult.confidence;
+                            
+                            if (confidence >= confidenceThreshold) {
+                                String suggestedCountryUri = resolveCountryUriByLabel(suggestedCountry);
+                                ExternalOrganization.UriTerm updatedCountry = resolveCountryUriTermFromPayload(
+                                    suggestedCountryUri,
+                                    suggestedCountry,
+                                    org.getAddress() == null ? null : org.getAddress().getCountry()
+                                );
+                                if (updatedCountry == null) {
+                                    logMessage("[ERROR] No s'ha pogut resoldre el pais per a: " + name + " (Pais suggerit: " + suggestedCountry + ")");
+                                } else {
+                                    Map<String, Object> egretaSync = syncExternalOrganizationCountryToEgreta(org, updatedCountry, env);
+                                    boolean egretaUpdated = Boolean.TRUE.equals(egretaSync.get("updated"));
+                                    if (!egretaUpdated) {
+                                        logMessage("[ERROR] " + name + " - Error de sincronitzacio amb Egreta: " + egretaSync.get("reason"));
+                                    } else {
+                                        if (org.getAddress() == null) {
+                                            org.setAddress(new ExternalOrganization.Address());
+                                        }
+                                        org.getAddress().setCountry(updatedCountry);
+                                        repository.save(org);
+                                        
+                                        synchronized(autoApplyLock) {
+                                            autoApplyApplied++;
+                                        }
+                                        logMessage("[APLICAT] " + name + " -> " + suggestedCountry + " (Confiança: " + Math.round(confidence * 100) + "%)");
+                                    }
+                                }
+                            } else {
+                                logMessage("[OMES] " + name + " - Suggeriment: " + suggestedCountry + " (Confiança: " + Math.round(confidence * 100) + "% - baixa).");
+                            }
+                        } catch (Exception e) {
+                            logMessage("[ERROR] " + name + " - " + e.getMessage());
+                        } finally {
+                            sem.release();
+                            synchronized(autoApplyLock) {
+                                autoApplyProcessed++;
+                            }
+                        }
+                    }, aiExecutor);
+                    
+                    futures.add(future);
+                }
+                
+                CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+                
+                logMessage("Proces finalitzat. Total processades: " + autoApplyProcessed + ", Aplicades: " + autoApplyApplied);
+                invalidateMetadataCatalogCaches();
+            } catch (Exception e) {
+                logMessage("[FATAL ERROR] " + e.getMessage());
+            } finally {
+                synchronized(autoApplyLock) {
+                    autoApplyRunning = false;
+                }
+            }
+        });
+    }
+
+    @PostMapping("/stats/auto-apply-country/start")
+    public Map<String, Object> startAutoApplyCountry(
+            @RequestParam(defaultValue = "test") String env,
+            @RequestParam(defaultValue = "0.90") double confidence) {
+        synchronized(autoApplyLock) {
+            if (autoApplyRunning) {
+                return Map.of("started", false, "reason", "already-running");
+            }
+            startAutoApplyRun(env, confidence);
+            executeAutoApplyCountry(env, confidence);
+            return Map.of("started", true);
+        }
+    }
+
+    @PostMapping("/stats/auto-apply-country/stop")
+    public Map<String, Object> stopAutoApplyCountry() {
+        synchronized(autoApplyLock) {
+            if (!autoApplyRunning) {
+                return Map.of("stopped", false, "reason", "not-running");
+            }
+            autoApplyRunning = false;
+            logMessage("Petició d'aturar el procés rebuda.");
+            return Map.of("stopped", true);
+        }
+    }
+
+    @GetMapping("/stats/auto-apply-country/status")
+    public Map<String, Object> getAutoApplyCountryStatus() {
+        synchronized(autoApplyLock) {
+            Map<String, Object> status = new java.util.LinkedHashMap<>();
+            status.put("running", autoApplyRunning);
+            status.put("total", autoApplyTotal);
+            status.put("processed", autoApplyProcessed);
+            status.put("applied", autoApplyApplied);
+            status.put("confidenceThreshold", autoApplyConfidenceThreshold);
+            status.put("logs", String.join("\n", autoApplyLogs));
+            return status;
+        }
+    }
+
+    @GetMapping("/stats/auto-apply-country/download-log")
+    public org.springframework.http.ResponseEntity<org.springframework.core.io.Resource> downloadAutoApplyLog() {
+        try {
+            java.io.File file = new java.io.File(autoApplyLogFilePath);
+            if (!file.exists()) {
+                return org.springframework.http.ResponseEntity.notFound().build();
+            }
+            org.springframework.core.io.Resource resource = new org.springframework.core.io.UrlResource(file.toURI());
+            return org.springframework.http.ResponseEntity.ok()
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"auto-apply-country.log\"")
+                .contentType(org.springframework.http.MediaType.TEXT_PLAIN)
+                .body(resource);
+        } catch (Exception e) {
+            return org.springframework.http.ResponseEntity.internalServerError().build();
+        }
+    }
+
+    private void startAutoApplyTypeRun(String env, double confidence) {
+        synchronized(autoApplyTypeLock) {
+            autoApplyTypeRunning = true;
+            autoApplyTypeTotal = 0;
+            autoApplyTypeProcessed = 0;
+            autoApplyTypeApplied = 0;
+            autoApplyTypeConfidenceThreshold = confidence;
+            autoApplyTypeLogs.clear();
+        }
+        
+        try {
+            java.io.File file = new java.io.File(autoApplyTypeLogFilePath);
+            java.io.File parent = file.getParentFile();
+            if (parent != null && !parent.exists()) {
+                parent.mkdirs();
+            }
+            java.nio.file.Files.writeString(
+                file.toPath(), 
+                "=== INICI DE PROCES AUTO-APLICAR TIPUS (" + (env == null ? "DEFAULT" : env.toUpperCase()) + ", Confiança >= " + Math.round(confidence * 100) + "%) === " + java.time.LocalDateTime.now() + System.lineSeparator(), 
+                java.nio.file.StandardOpenOption.CREATE, 
+                java.nio.file.StandardOpenOption.TRUNCATE_EXISTING
+            );
+        } catch (Exception e) {
+            System.err.println("Error initializing auto-apply type log file: " + e.getMessage());
+        }
+    }
+
+    private synchronized void writeTypeLogToFile(String line) {
+        try {
+            java.io.File file = new java.io.File(autoApplyTypeLogFilePath);
+            java.io.File parent = file.getParentFile();
+            if (parent != null && !parent.exists()) {
+                parent.mkdirs();
+            }
+            java.nio.file.Files.writeString(
+                file.toPath(), 
+                line + System.lineSeparator(), 
+                java.nio.file.StandardOpenOption.CREATE, 
+                java.nio.file.StandardOpenOption.APPEND
+            );
+        } catch (Exception e) {
+            System.err.println("Error writing to auto-apply type log file: " + e.getMessage());
+        }
+    }
+
+    private void logTypeMessage(String message) {
+        String formatted = "[" + java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss")) + "] " + message;
+        autoApplyTypeLogs.add(formatted);
+        writeTypeLogToFile(formatted);
+    }
+
+    private void executeAutoApplyType(String env, double confidenceThreshold) {
+        asyncExecutor.submit(() -> {
+            try {
+                Query query = new Query(missingTypeCriteria());
+                query.fields().include("uuid").include("name");
+                List<ExternalOrganization> orgs = mongoTemplate.find(query, ExternalOrganization.class);
+                
+                synchronized(autoApplyTypeLock) {
+                    autoApplyTypeTotal = orgs.size();
+                }
+                
+                logTypeMessage("S'han trobat " + autoApplyTypeTotal + " organitzacions sense tipus. Processant en paral·lel (Confiança >= " + Math.round(confidenceThreshold * 100) + "%)...");
+                
+                List<TypeAggregate> typeCatalog = getCachedTypeCatalog();
+                
+                int concurrencyLimit = 16;
+                java.util.concurrent.Semaphore sem = new java.util.concurrent.Semaphore(concurrencyLimit);
+                
+                List<CompletableFuture<Void>> futures = new java.util.ArrayList<>();
+                
+                for (ExternalOrganization shortOrg : orgs) {
+                    String uuid = shortOrg.getUuid();
+                    String name = extractOrgName(shortOrg);
+                    
+                    synchronized(autoApplyTypeLock) {
+                        if (!autoApplyTypeRunning) {
+                            break;
+                        }
+                    }
+                    
+                    sem.acquire();
+                    
+                    synchronized(autoApplyTypeLock) {
+                        if (!autoApplyTypeRunning) {
+                            sem.release();
+                            break;
+                        }
+                    }
+                    
+                    CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
+                        try {
+                            synchronized(autoApplyTypeLock) {
+                                if (!autoApplyTypeRunning) {
+                                    return;
+                                }
+                            }
+                            
+                            ExternalOrganization org = mongoTemplate.findOne(new Query(Criteria.where("uuid").is(uuid)), ExternalOrganization.class);
+                            if (org == null) {
+                                logTypeMessage("[ERROR] Organitzacio no trobada: " + name + " (UUID: " + uuid + ")");
+                                return;
+                            }
+                            
+                            TypeInferenceResult typeResult = inferTypeWithLocalAi(name, typeCatalog);
+                            if (typeResult == null || typeResult.typeLabel.isBlank()) {
+                                typeResult = inferTypeFromName(name, typeCatalog);
+                            }
+                            
+                            if (typeResult == null || typeResult.typeLabel.isBlank()) {
+                                logTypeMessage("[OMES] " + name + " (UUID: " + uuid + ") - Sense suggeriment de tipus.");
+                                return;
+                            }
+                            
+                            String suggestedType = typeResult.typeLabel;
+                            double confidence = typeResult.confidence;
+                            
+                            if (confidence >= confidenceThreshold) {
+                                ExternalOrganization.UriTerm updatedType = resolveTypeUriTermFromPayload(null, suggestedType, org.getType());
+                                if (updatedType == null) {
+                                    logTypeMessage("[ERROR] No s'ha pogut resoldre el tipus per a: " + name + " (Tipus suggerit: " + suggestedType + ")");
+                                } else {
+                                    Map<String, Object> egretaSync = syncExternalOrganizationTypeToEgreta(org, updatedType, env);
+                                    boolean egretaUpdated = Boolean.TRUE.equals(egretaSync.get("updated"));
+                                    if (!egretaUpdated) {
+                                        logTypeMessage("[ERROR] " + name + " - Error de sincronitzacio amb Egreta: " + egretaSync.get("reason"));
+                                    } else {
+                                        org.setType(updatedType);
+                                        repository.save(org);
+                                        
+                                        synchronized(autoApplyTypeLock) {
+                                            autoApplyTypeApplied++;
+                                        }
+                                        logTypeMessage("[APLICAT] " + name + " -> " + suggestedType + " (Confiança: " + Math.round(confidence * 100) + "%)");
+                                    }
+                                }
+                            } else {
+                                logTypeMessage("[OMES] " + name + " - Suggeriment: " + suggestedType + " (Confiança: " + Math.round(confidence * 100) + "% - baixa).");
+                            }
+                        } catch (Exception e) {
+                            logTypeMessage("[ERROR] " + name + " - " + e.getMessage());
+                        } finally {
+                            sem.release();
+                            synchronized(autoApplyTypeLock) {
+                                autoApplyTypeProcessed++;
+                            }
+                        }
+                    }, aiExecutor);
+                    
+                    futures.add(future);
+                }
+                
+                CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+                
+                logTypeMessage("Proces finalitzat. Total processades: " + autoApplyTypeProcessed + ", Aplicades: " + autoApplyTypeApplied);
+                invalidateMetadataCatalogCaches();
+            } catch (Exception e) {
+                logTypeMessage("[FATAL ERROR] " + e.getMessage());
+            } finally {
+                synchronized(autoApplyTypeLock) {
+                    autoApplyTypeRunning = false;
+                }
+            }
+        });
+    }
+
+    @PostMapping("/stats/auto-apply-type/start")
+    public Map<String, Object> startAutoApplyType(
+            @RequestParam(defaultValue = "test") String env,
+            @RequestParam(defaultValue = "0.90") double confidence) {
+        synchronized(autoApplyTypeLock) {
+            if (autoApplyTypeRunning) {
+                return Map.of("started", false, "reason", "already-running");
+            }
+            startAutoApplyTypeRun(env, confidence);
+            executeAutoApplyType(env, confidence);
+            return Map.of("started", true);
+        }
+    }
+
+    @PostMapping("/stats/auto-apply-type/stop")
+    public Map<String, Object> stopAutoApplyType() {
+        synchronized(autoApplyTypeLock) {
+            if (!autoApplyTypeRunning) {
+                return Map.of("stopped", false, "reason", "not-running");
+            }
+            autoApplyTypeRunning = false;
+            logTypeMessage("Petició d'aturar el procés rebuda.");
+            return Map.of("stopped", true);
+        }
+    }
+
+    @GetMapping("/stats/auto-apply-type/status")
+    public Map<String, Object> getAutoApplyTypeStatus() {
+        synchronized(autoApplyTypeLock) {
+            Map<String, Object> status = new java.util.LinkedHashMap<>();
+            status.put("running", autoApplyTypeRunning);
+            status.put("total", autoApplyTypeTotal);
+            status.put("processed", autoApplyTypeProcessed);
+            status.put("applied", autoApplyTypeApplied);
+            status.put("confidenceThreshold", autoApplyTypeConfidenceThreshold);
+            status.put("logs", String.join("\n", autoApplyTypeLogs));
+            return status;
+        }
+    }
+
+    @GetMapping("/stats/auto-apply-type/download-log")
+    public org.springframework.http.ResponseEntity<org.springframework.core.io.Resource> downloadAutoApplyTypeLog() {
+        try {
+            java.io.File file = new java.io.File(autoApplyTypeLogFilePath);
+            if (!file.exists()) {
+                return org.springframework.http.ResponseEntity.notFound().build();
+            }
+            org.springframework.core.io.Resource resource = new org.springframework.core.io.UrlResource(file.toURI());
+            return org.springframework.http.ResponseEntity.ok()
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"auto-apply-type.log\"")
+                .contentType(org.springframework.http.MediaType.TEXT_PLAIN)
+                .body(resource);
+        } catch (Exception e) {
+            return org.springframework.http.ResponseEntity.internalServerError().build();
+        }
+    }
+
+    private void startAutoApplyFundingRun(String env, double confidence) {
+        synchronized(autoApplyFundingLock) {
+            autoApplyFundingRunning = true;
+            autoApplyFundingTotal = 0;
+            autoApplyFundingProcessed = 0;
+            autoApplyFundingApplied = 0;
+            autoApplyFundingConfidenceThreshold = confidence;
+            autoApplyFundingLogs.clear();
+        }
+        
+        try {
+            java.io.File file = new java.io.File(autoApplyFundingLogFilePath);
+            java.io.File parent = file.getParentFile();
+            if (parent != null && !parent.exists()) {
+                parent.mkdirs();
+            }
+            java.nio.file.Files.writeString(
+                file.toPath(), 
+                "=== INICI DE PROCES AUTO-APLICAR FINANÇAMENT (" + (env == null ? "DEFAULT" : env.toUpperCase()) + ", Confiança >= " + Math.round(confidence * 100) + "%) === " + java.time.LocalDateTime.now() + System.lineSeparator(), 
+                java.nio.file.StandardOpenOption.CREATE, 
+                java.nio.file.StandardOpenOption.TRUNCATE_EXISTING
+            );
+        } catch (Exception e) {
+            System.err.println("Error initializing auto-apply funding log file: " + e.getMessage());
+        }
+    }
+
+    private synchronized void writeFundingLogToFile(String line) {
+        try {
+            java.io.File file = new java.io.File(autoApplyFundingLogFilePath);
+            java.io.File parent = file.getParentFile();
+            if (parent != null && !parent.exists()) {
+                parent.mkdirs();
+            }
+            java.nio.file.Files.writeString(
+                file.toPath(), 
+                line + System.lineSeparator(), 
+                java.nio.file.StandardOpenOption.CREATE, 
+                java.nio.file.StandardOpenOption.APPEND
+            );
+        } catch (Exception e) {
+            System.err.println("Error writing to auto-apply funding log file: " + e.getMessage());
+        }
+    }
+
+    private void logFundingMessage(String message) {
+        String formatted = "[" + java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss")) + "] " + message;
+        autoApplyFundingLogs.add(formatted);
+        writeFundingLogToFile(formatted);
+    }
+
+    private void executeAutoApplyFunding(String env, double confidenceThreshold) {
+        asyncExecutor.submit(() -> {
+            try {
+                Query query = new Query(missingFundingCriteria());
+                query.fields().include("uuid").include("name");
+                List<ExternalOrganization> orgs = mongoTemplate.find(query, ExternalOrganization.class);
+                
+                synchronized(autoApplyFundingLock) {
+                    autoApplyFundingTotal = orgs.size();
+                }
+                
+                logFundingMessage("S'han trobat " + autoApplyFundingTotal + " organitzacions sense finançament. Processant en paral·lel (Confiança >= " + Math.round(confidenceThreshold * 100) + "%)...");
+                
+                List<CountryAggregate> countryCatalog = getCachedCountryCatalog();
+                List<TypeAggregate> typeCatalog = getCachedTypeCatalog();
+                
+                int concurrencyLimit = 16;
+                java.util.concurrent.Semaphore sem = new java.util.concurrent.Semaphore(concurrencyLimit);
+                
+                List<CompletableFuture<Void>> futures = new java.util.ArrayList<>();
+                
+                for (ExternalOrganization shortOrg : orgs) {
+                    String uuid = shortOrg.getUuid();
+                    String name = extractOrgName(shortOrg);
+                    
+                    synchronized(autoApplyFundingLock) {
+                        if (!autoApplyFundingRunning) {
+                            break;
+                        }
+                    }
+                    
+                    sem.acquire();
+                    
+                    synchronized(autoApplyFundingLock) {
+                        if (!autoApplyFundingRunning) {
+                            sem.release();
+                            break;
+                        }
+                    }
+                    
+                    CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
+                        try {
+                            synchronized(autoApplyFundingLock) {
+                                if (!autoApplyFundingRunning) {
+                                    return;
+                                }
+                            }
+                            
+                            ExternalOrganization org = mongoTemplate.findOne(new Query(Criteria.where("uuid").is(uuid)), ExternalOrganization.class);
+                            if (org == null) {
+                                logFundingMessage("[ERROR] Organitzacio no trobada: " + name + " (UUID: " + uuid + ")");
+                                return;
+                            }
+                            
+                            FundingInferenceResult fundingResult = inferFundingFromName(name);
+                            if (fundingResult == null || fundingResult.fundingLabel.isBlank()) {
+                                MetadataInferenceResult aiResult = inferMetadataWithLocalAi(name, countryCatalog, typeCatalog);
+                                if (aiResult != null && aiResult.funding() != null) {
+                                    fundingResult = aiResult.funding();
+                                }
+                            }
+                            
+                            if (fundingResult == null || fundingResult.fundingLabel.isBlank()) {
+                                logFundingMessage("[OMES] " + name + " (UUID: " + uuid + ") - Sense suggeriment de finançament.");
+                                return;
+                            }
+                            
+                            String suggestedFunding = fundingResult.fundingLabel;
+                            double confidence = fundingResult.confidence;
+                            
+                            if (confidence >= confidenceThreshold) {
+                                String normalizedFunding = resolveModelFundingLabel(suggestedFunding);
+                                if (normalizedFunding.isBlank()) {
+                                    logFundingMessage("[ERROR] No s'ha pogut resoldre el finançament per a: " + name + " (Finançament suggerit: " + suggestedFunding + ")");
+                                } else {
+                                    Map<String, Object> egretaSync = syncExternalOrganizationFundingToEgreta(org, normalizedFunding, env);
+                                    boolean egretaUpdated = Boolean.TRUE.equals(egretaSync.get("updated"));
+                                    if (!egretaUpdated) {
+                                        logFundingMessage("[ERROR] " + name + " - Error de sincronitzacio amb Egreta: " + egretaSync.get("reason"));
+                                    } else {
+                                        applyFundingToKeywordGroups(org, normalizedFunding);
+                                        repository.save(org);
+                                        
+                                        synchronized(autoApplyFundingLock) {
+                                            autoApplyFundingApplied++;
+                                        }
+                                        logFundingMessage("[APLICAT] " + name + " -> " + suggestedFunding + " (Confiança: " + Math.round(confidence * 100) + "%)");
+                                    }
+                                }
+                            } else {
+                                logFundingMessage("[OMES] " + name + " - Suggeriment: " + suggestedFunding + " (Confiança: " + Math.round(confidence * 100) + "% - baixa).");
+                            }
+                        } catch (Exception e) {
+                            logFundingMessage("[ERROR] " + name + " - " + e.getMessage());
+                        } finally {
+                            sem.release();
+                            synchronized(autoApplyFundingLock) {
+                                autoApplyFundingProcessed++;
+                            }
+                        }
+                    }, aiExecutor);
+                    
+                    futures.add(future);
+                }
+                
+                CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+                
+                logFundingMessage("Proces finalitzat. Total processades: " + autoApplyFundingProcessed + ", Aplicades: " + autoApplyFundingApplied);
+            } catch (Exception e) {
+                logFundingMessage("[FATAL ERROR] " + e.getMessage());
+            } finally {
+                synchronized(autoApplyFundingLock) {
+                    autoApplyFundingRunning = false;
+                }
+            }
+        });
+    }
+
+    @PostMapping("/stats/auto-apply-funding/start")
+    public Map<String, Object> startAutoApplyFunding(
+            @RequestParam(defaultValue = "test") String env,
+            @RequestParam(defaultValue = "0.90") double confidence) {
+        synchronized(autoApplyFundingLock) {
+            if (autoApplyFundingRunning) {
+                return Map.of("started", false, "reason", "already-running");
+            }
+            startAutoApplyFundingRun(env, confidence);
+            executeAutoApplyFunding(env, confidence);
+            return Map.of("started", true);
+        }
+    }
+
+    @PostMapping("/stats/auto-apply-funding/stop")
+    public Map<String, Object> stopAutoApplyFunding() {
+        synchronized(autoApplyFundingLock) {
+            if (!autoApplyFundingRunning) {
+                return Map.of("stopped", false, "reason", "not-running");
+            }
+            autoApplyFundingRunning = false;
+            logFundingMessage("Petició d'aturar el procés rebuda.");
+            return Map.of("stopped", true);
+        }
+    }
+
+    @GetMapping("/stats/auto-apply-funding/status")
+    public Map<String, Object> getAutoApplyFundingStatus() {
+        synchronized(autoApplyFundingLock) {
+            Map<String, Object> status = new java.util.LinkedHashMap<>();
+            status.put("running", autoApplyFundingRunning);
+            status.put("total", autoApplyFundingTotal);
+            status.put("processed", autoApplyFundingProcessed);
+            status.put("applied", autoApplyFundingApplied);
+            status.put("confidenceThreshold", autoApplyFundingConfidenceThreshold);
+            status.put("logs", String.join("\n", autoApplyFundingLogs));
+            return status;
+        }
+    }
+
+    @GetMapping("/stats/auto-apply-funding/download-log")
+    public org.springframework.http.ResponseEntity<org.springframework.core.io.Resource> downloadAutoApplyFundingLog() {
+        try {
+            java.io.File file = new java.io.File(autoApplyFundingLogFilePath);
+            if (!file.exists()) {
+                return org.springframework.http.ResponseEntity.notFound().build();
+            }
+            org.springframework.core.io.Resource resource = new org.springframework.core.io.UrlResource(file.toURI());
+            return org.springframework.http.ResponseEntity.ok()
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"auto-apply-funding.log\"")
+                .contentType(org.springframework.http.MediaType.TEXT_PLAIN)
+                .body(resource);
+        } catch (Exception e) {
+            return org.springframework.http.ResponseEntity.internalServerError().build();
+        }
+    }
+
+    @PostMapping("/stats/auto-validate/start")
+    public Map<String, Object> startAutoValidate(
+            @RequestParam(defaultValue = "test") String env) {
+        synchronized(autoValidateLock) {
+            if (autoValidateRunning) {
+                return Map.of("started", false, "reason", "already-running");
+            }
+            startAutoValidateRun(env);
+            executeAutoValidate(env);
+            return Map.of("started", true);
+        }
+    }
+
+    @PostMapping("/stats/auto-validate/stop")
+    public Map<String, Object> stopAutoValidate() {
+        synchronized(autoValidateLock) {
+            if (!autoValidateRunning) {
+                return Map.of("stopped", false, "reason", "not-running");
+            }
+            autoValidateRunning = false;
+            logValidateMessage("Petició d'aturar el procés rebuda.");
+            return Map.of("stopped", true);
+        }
+    }
+
+    @GetMapping("/stats/auto-validate/status")
+    public Map<String, Object> getAutoValidateStatus() {
+        synchronized(autoValidateLock) {
+            Map<String, Object> status = new java.util.LinkedHashMap<>();
+            status.put("running", autoValidateRunning);
+            status.put("total", autoValidateTotal);
+            status.put("processed", autoValidateProcessed);
+            status.put("applied", autoValidateApplied);
+            status.put("logs", String.join("\n", autoValidateLogs));
+            return status;
+        }
+    }
+
+    @GetMapping("/stats/auto-validate/download-log")
+    public org.springframework.http.ResponseEntity<org.springframework.core.io.Resource> downloadAutoValidateLog() {
+        try {
+            java.io.File file = new java.io.File(autoValidateLogFilePath);
+            if (!file.exists()) {
+                return org.springframework.http.ResponseEntity.notFound().build();
+            }
+            org.springframework.core.io.Resource resource = new org.springframework.core.io.UrlResource(file.toURI());
+            return org.springframework.http.ResponseEntity.ok()
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"auto-validate.log\"")
+                .contentType(org.springframework.http.MediaType.TEXT_PLAIN)
+                .body(resource);
+        } catch (Exception e) {
+            return org.springframework.http.ResponseEntity.internalServerError().build();
+        }
+    }
+
+    private void startAutoValidateRun(String env) {
+        synchronized(autoValidateLock) {
+            autoValidateRunning = true;
+            autoValidateTotal = 0;
+            autoValidateProcessed = 0;
+            autoValidateApplied = 0;
+            autoValidateLogs.clear();
+        }
+        
+        try {
+            java.io.File file = new java.io.File(autoValidateLogFilePath);
+            java.io.File parent = file.getParentFile();
+            if (parent != null && !parent.exists()) {
+                parent.mkdirs();
+            }
+            java.nio.file.Files.writeString(
+                file.toPath(), 
+                "=== INICI DE PROCÉS VALIDACIÓ AUTOMÀTICA (" + (env == null ? "DEFAULT" : env.toUpperCase()) + ") === " + java.time.LocalDateTime.now() + System.lineSeparator(), 
+                java.nio.file.StandardOpenOption.CREATE, 
+                java.nio.file.StandardOpenOption.TRUNCATE_EXISTING
+            );
+        } catch (Exception e) {
+            System.err.println("Error initializing auto-validate log file: " + e.getMessage());
+        }
+    }
+
+    private synchronized void writeValidateLogToFile(String line) {
+        try {
+            java.io.File file = new java.io.File(autoValidateLogFilePath);
+            java.nio.file.Files.writeString(
+                file.toPath(), 
+                line + System.lineSeparator(), 
+                java.nio.file.StandardOpenOption.CREATE, 
+                java.nio.file.StandardOpenOption.APPEND
+            );
+        } catch (Exception e) {
+            System.err.println("Error writing to auto-validate log file: " + e.getMessage());
+        }
+    }
+
+    private void logValidateMessage(String message) {
+        String formatted = "[" + java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss")) + "] " + message;
+        autoValidateLogs.add(formatted);
+        writeValidateLogToFile(formatted);
+    }
+
+    private void executeAutoValidate(String env) {
+        asyncExecutor.submit(() -> {
+            try {
+                Criteria notApproved = new Criteria().orOperator(
+                    Criteria.where("workflow.step").nin("approved", "validated", "Approved", "Validated")
+                );
+                Criteria hasType = new Criteria().norOperator(missingTypeCriteria());
+                Criteria hasCountry = new Criteria().norOperator(missingCountryCriteria());
+                Criteria hasFunding = new Criteria().norOperator(missingFundingCriteria());
+
+                Query query = new Query(new Criteria().andOperator(notApproved, hasType, hasCountry, hasFunding));
+                query.fields().include("uuid").include("name").include("workflow");
+                
+                List<ExternalOrganization> orgs = mongoTemplate.find(query, ExternalOrganization.class);
+                
+                synchronized(autoValidateLock) {
+                    autoValidateTotal = orgs.size();
+                }
+                
+                logValidateMessage("S'han trobat " + autoValidateTotal + " organitzacions per validar automàticament.");
+                
+                int concurrencyLimit = 16;
+                java.util.concurrent.Semaphore sem = new java.util.concurrent.Semaphore(concurrencyLimit);
+                
+                List<CompletableFuture<Void>> futures = new java.util.ArrayList<>();
+                
+                for (ExternalOrganization shortOrg : orgs) {
+                    String uuid = shortOrg.getUuid();
+                    String name = getOrgDisplayName(shortOrg);
+                    
+                    synchronized(autoValidateLock) {
+                        if (!autoValidateRunning) {
+                            break;
+                        }
+                    }
+                    
+                    sem.acquire();
+                    
+                    synchronized(autoValidateLock) {
+                        if (!autoValidateRunning) {
+                            sem.release();
+                            break;
+                        }
+                    }
+                    
+                    CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
+                        try {
+                            synchronized(autoValidateLock) {
+                                if (!autoValidateRunning) {
+                                    return;
+                                }
+                            }
+                            
+                            ExternalOrganization org = mongoTemplate.findOne(new Query(Criteria.where("uuid").is(uuid)), ExternalOrganization.class);
+                            if (org == null) {
+                                logValidateMessage("[ERROR] Organització no trobada: " + name + " (UUID: " + uuid + ")");
+                                return;
+                            }
+                            
+                            ExternalOrganization.WorkflowStatus updatedWorkflow = org.getWorkflow();
+                            if (updatedWorkflow == null) {
+                                updatedWorkflow = new ExternalOrganization.WorkflowStatus();
+                            }
+                            updatedWorkflow.setStep("approved");
+                            
+                            Map<String, Object> egretaSync = syncExternalOrganizationWorkflowToEgreta(org, updatedWorkflow, env);
+                            boolean egretaUpdated = Boolean.TRUE.equals(egretaSync.get("updated"));
+                            if (!egretaUpdated) {
+                                logValidateMessage("[ERROR] " + name + " - Error de sincronització amb Egreta: " + egretaSync.get("reason"));
+                            } else {
+                                org.setWorkflow(updatedWorkflow);
+                                repository.save(org);
+                                
+                                synchronized(autoValidateLock) {
+                                    autoValidateApplied++;
+                                }
+                                logValidateMessage("[VALIDAT] " + name + " (UUID: " + uuid + ")");
+                            }
+                        } catch (Exception e) {
+                            logValidateMessage("[ERROR] " + name + " - " + e.getMessage());
+                        } finally {
+                            sem.release();
+                            synchronized(autoValidateLock) {
+                                autoValidateProcessed++;
+                            }
+                        }
+                    }, asyncExecutor);
+                    
+                    futures.add(future);
+                }
+                
+                CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+                
+                logValidateMessage("Procés de validació automàtica finalitzat. Total processades: " + autoValidateProcessed + ", Validada/es: " + autoValidateApplied);
+                invalidateMetadataCatalogCaches();
+            } catch (Exception e) {
+                logValidateMessage("[FATAL ERROR] " + e.getMessage());
+            } finally {
+                synchronized(autoValidateLock) {
+                    autoValidateRunning = false;
+                }
+            }
+        });
     }
 }
