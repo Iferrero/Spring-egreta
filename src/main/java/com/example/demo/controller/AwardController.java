@@ -483,12 +483,20 @@ public class AwardController {
         if (!personUuids.isEmpty())
             orConditions.add(new Document("awardHolders.person.uuid", new Document("$in", new ArrayList<>(personUuids))));
 
-        Document matchFilter = new Document("workflow.step", "validated");
-        if (!orConditions.isEmpty())
-            matchFilter.append("$or", orConditions);
-        else
+        Document matchFilter = new Document();
+        matchFilter.append("$or", Arrays.asList(
+            new Document("type.term.ca_ES", "Conveni extern a la UAB").append("workflow.step", "approved"),
+            new Document("type.term.ca_ES", new Document("$ne", "Conveni extern a la UAB")).append("workflow.step", "validated")
+        ));
+        if (!orConditions.isEmpty()) {
+            matchFilter = new Document("$and", Arrays.asList(
+                matchFilter,
+                new Document("$or", orConditions)
+            ));
+        } else {
             // no orgs and no persons → return empty
             return Map.of("content", List.of(), "totalElements", 0, "totalPages", 0, "page", page);
+        }
 
         long total = mongoTemplate.getCollection("Awards").countDocuments(matchFilter);
         List<Document> items = mongoTemplate.getCollection("Awards")

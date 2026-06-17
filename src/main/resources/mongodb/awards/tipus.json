@@ -3,7 +3,16 @@
   "pipeline": [
     {
       "$match": {
-        "workflow.step": "validated"
+        "$or": [
+          {
+            "type.term.ca_ES": "Conveni extern a la UAB",
+            "workflow.step": "approved"
+          },
+          {
+            "type.term.ca_ES": { "$ne": "Conveni extern a la UAB" },
+            "workflow.step": "validated"
+          }
+        ]
       }
     },
     {

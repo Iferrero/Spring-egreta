@@ -3258,12 +3258,19 @@ public class ExternalOrganizationController {
         }
 
         String systemPrompt =
-                "You are a data quality assistant specialized in research organizations. "
-                + "Given an organization name, infer the most likely country. "
-                + "Return strict JSON with exactly these keys: suggestedCountry, confidence, reason. "
-                + "confidence must be between 0 and 1. "
-                + "If uncertain, return suggestedCountry as empty string and confidence as 0. "
-                + "Never include explanation or markdown outside the JSON object.";
+        "You are a data quality assistant specialized in research organizations. "
+        + "Given an organization name, infer the most likely country. "
+        + "Return strict JSON with exactly these keys: \"suggestedCountry\", \"confidence\", \"reason\". "
+        + "confidence must be a number between 0 and 1. "
+        + "If uncertain, return \"suggestedCountry\" as an empty string and confidence as 0. "
+        + "CRITICAL: Output ONLY the raw JSON object. Do NOT wrap the response in markdown blocks like ```json ... ```. "
+        + "Your response must start with '{' and end with '}'.\n\n"
+        + "Example Output:\n"
+        + "{\n"
+        + "  \"suggestedCountry\": \"Spain\",\n"
+        + "  \"confidence\": 0.95,\n"
+        + "  \"reason\": \"The organization is located in Barcelona or associated with UAB.\"\n"
+        + "}";
 
         String userPrompt = "Organization: '" + orgName + "'";
 

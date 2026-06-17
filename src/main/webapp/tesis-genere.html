@@ -1,0 +1,942 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Evolució de tesis per gènere - Portal de Recerca UAB</title>
+    <script src="config.js"></script>
+    <script src="uab-brand.js" defer></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="uab-theme.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <!-- noUiSlider CSS & JS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.7.1/nouislider.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.7.1/nouislider.min.js"></script>
+    <!-- ECharts CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+    <!-- Tabulator CSS & JS -->
+    <link href="https://unpkg.com/tabulator-tables@6.3.0/dist/css/tabulator.min.css" rel="stylesheet">
+    <script src="https://unpkg.com/tabulator-tables@6.3.0/dist/js/tabulator.min.js"></script>
+    <!-- SheetJS for Excel Export -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+    <style>
+        .chart-container {
+            position: relative;
+            width: 100%;
+            height: 360px;
+        }
+        .kpi-card {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .kpi-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.03);
+        }
+        /* Custom Tabulator overrides to match premium theme */
+        .tabulator {
+            border: none !important;
+            font-size: 0.875rem;
+            background-color: transparent !important;
+        }
+        .tabulator .tabulator-header {
+            border-bottom: 2px solid var(--uab-columna) !important;
+            font-weight: 700;
+        }
+        .tabulator .tabulator-header .tabulator-col {
+            background-color: #ffffff !important;
+            border-right: none !important;
+        }
+        .tabulator .tabulator-row {
+            border-bottom: 1px solid rgba(0,0,0,0.05) !important;
+            background-color: #ffffff !important;
+        }
+        .tabulator .tabulator-row:hover {
+            background-color: var(--uab-boira) !important;
+        }
+        .tabulator-row.tabulator-selectable:hover {
+            background-color: var(--uab-boira) !important;
+        }
+    </style>
+</head>
+<body class="bg-[#f1f2f4] min-h-screen">
+
+    <div class="mx-auto px-6 py-8 max-w-7xl">
+        <header hidden class="mb-8">
+            <h1 class="text-2xl font-bold text-slate-800">Direcció de tesis per gènere</h1>
+            <p class="text-sm text-slate-500 mt-1">Evolució temporal i codirecció de tesis doctorals dirigides per dones investigadores</p>
+        </header>
+
+        <!-- Filtros -->
+        <section class="bg-white border border-slate-200 rounded-2xl shadow-sm p-5 mb-6">
+            <div class="grid grid-cols-1 md:grid-cols-12 gap-5 items-end">
+                <!-- Select de Departamento -->
+                <div class="md:col-span-6">
+                    <label for="selectDepartamento" class="block text-xs font-bold text-slate-500 uppercase mb-1.5">Departament / Institut</label>
+                    <select id="selectDepartamento" class="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm bg-white cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all">
+                        <option value="all">Tots els departaments i instituts</option>
+                        <optgroup label="Departaments" id="opt_departaments"></optgroup>
+                        <optgroup label="Instituts de Recerca" id="opt_institutos"></optgroup>
+                    </select>
+                </div>
+
+                <!-- Slider de años -->
+                <div class="md:col-span-6">
+                    <div class="flex items-center justify-between mb-1.5">
+                        <label class="block text-xs font-bold text-slate-500 uppercase">Rang d'anys de lectura</label>
+                        <span id="valorRango" class="text-xs font-bold text-emerald-600"></span>
+                    </div>
+                    <div id="sliderAnios" class="my-3"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Spinner de Carga -->
+        <div id="loader" class="flex flex-col items-center justify-center py-24 gap-4">
+            <div class="w-12 h-12 border-4 border-emerald-100 border-t-emerald-600 rounded-full animate-spin"></div>
+            <p class="text-slate-500 font-medium">Carregant dades i analitzant la distribució de gènere...</p>
+        </div>
+
+        <!-- Contenido de Estadísticas -->
+        <div id="contenido" class="hidden">
+            <!-- KPIs Grid -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-4 mb-8">
+                <!-- KPI 1: Total Tesis -->
+                <div class="kpi-card bg-white border border-slate-200 rounded-2xl shadow-sm p-5 flex items-center gap-4">
+                    <div class="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600 shrink-0">
+                        <i class="fa-solid fa-graduation-cap text-xl"></i>
+                    </div>
+                    <div>
+                        <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Tesis</p>
+                        <p id="kpiTotal" class="text-2xl font-black text-slate-800">0</p>
+                    </div>
+                </div>
+
+                <!-- KPI 2: Dirigides per Dones -->
+                <div class="kpi-card bg-white border border-slate-200 rounded-2xl shadow-sm p-5 flex items-center gap-4">
+                    <div class="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-[#008037] shrink-0">
+                        <i class="fa-solid fa-venus text-xl"></i>
+                    </div>
+                    <div>
+                        <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Dirigides per Dones</p>
+                        <p id="kpiDirigides" class="text-2xl font-black text-slate-800">0% <span class="text-xs font-semibold text-slate-400">(0)</span></p>
+                    </div>
+                </div>
+
+                <!-- KPI 3: Codirigides per Dones -->
+                <div class="kpi-card bg-white border border-slate-200 rounded-2xl shadow-sm p-5 flex items-center gap-4">
+                    <div class="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-[#00cc58] shrink-0">
+                        <i class="fa-solid fa-people-arrows text-xl"></i>
+                    </div>
+                    <div>
+                        <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Codirigides per Dones</p>
+                        <p id="kpiCodirigides" class="text-2xl font-black text-slate-800">0% <span class="text-xs font-semibold text-slate-400">(0)</span></p>
+                    </div>
+                </div>
+
+                <!-- KPI 4: Dirigides només per Homes -->
+                <div class="kpi-card bg-white border border-slate-200 rounded-2xl shadow-sm p-5 flex items-center gap-4">
+                    <div class="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-600 shrink-0">
+                        <i class="fa-solid fa-mars text-xl"></i>
+                    </div>
+                    <div>
+                        <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Dirigides per Homes</p>
+                        <p id="kpiHomes" class="text-2xl font-black text-slate-800">0% <span class="text-xs font-semibold text-slate-400">(0)</span></p>
+                    </div>
+                </div>
+
+                <!-- KPI 7: No informat / Altres -->
+                <div class="kpi-card bg-white border border-slate-200 rounded-2xl shadow-sm p-5 flex items-center gap-4">
+                    <div class="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400 shrink-0">
+                        <i class="fa-solid fa-question text-xl"></i>
+                    </div>
+                    <div>
+                        <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">No informat / Altres</p>
+                        <p id="kpiDesconegut" class="text-2xl font-black text-slate-800">0% <span class="text-xs font-semibold text-slate-400">(0)</span></p>
+                    </div>
+                </div>
+
+                <!-- KPI 5: Autors/es amb Beca -->
+                <div class="kpi-card bg-white border border-slate-200 rounded-2xl shadow-sm p-5 flex items-center gap-4">
+                    <div class="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600 shrink-0">
+                        <i class="fa-solid fa-award text-xl"></i>
+                    </div>
+                    <div>
+                        <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Autors amb Beca direcció dones</p>
+                        <p id="kpiBecas" class="text-2xl font-black text-slate-800">0% <span class="text-xs font-semibold text-slate-400">(0)</span></p>
+                    </div>
+                </div>
+
+                <!-- KPI 6: Autors amb Beca (Només Homes) -->
+                <div class="kpi-card bg-white border border-slate-200 rounded-2xl shadow-sm p-5 flex items-center gap-4">
+                    <div class="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-500 shrink-0">
+                        <i class="fa-solid fa-award text-xl"></i>
+                    </div>
+                    <div>
+                        <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Autors amb Beca direcció homes</p>
+                        <p id="kpiBecasHomes" class="text-2xl font-black text-slate-800">0% <span class="text-xs font-semibold text-slate-400">(0)</span></p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Gráficos Fila 1 -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+                <!-- Gráfico de Evolución Total vs Dones -->
+                <div class="lg:col-span-2 bg-white border border-slate-200 rounded-2xl shadow-sm p-6 relative">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-base font-bold text-slate-800">Evolució anual de tesis doctorals</h2>
+                        <i class="fa-solid fa-chart-line text-slate-300"></i>
+                    </div>
+                    <div id="chartEvolucion" class="chart-container"></div>
+                </div>
+
+                <!-- Gráfico de Torta Distribución -->
+                <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-6 relative">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-base font-bold text-slate-800">Distribució de direcció de tesis</h2>
+                        <i class="fa-solid fa-chart-pie text-slate-300"></i>
+                    </div>
+                    <div id="chartGenero" class="chart-container"></div>
+                </div>
+            </div>
+
+            <!-- Gráficos Fila 2 -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                <!-- Gráfico Porcentaje de participación femenina por año -->
+                <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-6 relative">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-base font-bold text-slate-800">Percentatge anual de tesis dirigides/codirigides per dones (%)</h2>
+                        <i class="fa-solid fa-chart-bar text-slate-300"></i>
+                    </div>
+                    <div id="chartGenEvolucion" class="chart-container"></div>
+                </div>
+
+                <!-- Gráfico Evolución por Tipos de Becas -->
+                <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-6 relative">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-base font-bold text-slate-800">Evolució de tesis per tipus de beca de l'autor/a</h2>
+                        <i class="fa-solid fa-chart-line text-slate-300"></i>
+                    </div>
+                    <div id="chartBecas" class="chart-container"></div>
+                </div>
+            </div>
+
+            <!-- Tablas y Detalle -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Tabla Tesis dirigidas por mujeres -->
+                <div class="lg:col-span-2 bg-white border border-slate-200 rounded-2xl shadow-sm p-6">
+                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-6">
+                        <div>
+                            <h2 class="text-lg font-bold text-slate-800">Llistat de tesis dirigides/codirigides per dones</h2>
+                            <p class="text-xs text-slate-400 mt-0.5">Mostrant tesis doctorals amb participació femenina en la direcció</p>
+                        </div>
+                        <div class="flex flex-row items-center gap-3 w-full sm:w-auto">
+                            <!-- Botó Exportar Excel Tesis -->
+                            <button id="btnDescargarExcelTesis" type="button" class="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl hover:bg-emerald-100 transition-all active:scale-95" title="Descarregar Excel">
+                                <i class="fa-solid fa-file-excel"></i>
+                                <span>Excel</span>
+                            </button>
+                            <div class="relative w-full sm:w-64">
+                                <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                                    <i class="fa-solid fa-magnifying-glass text-xs"></i>
+                                </span>
+                                <input type="text" id="cercarTesis" placeholder="Cerca per títol, autor..." class="w-full pl-9 pr-4 py-2 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all">
+                            </div>
+                        </div>
+                    </div>
+                    <div id="tablaTesis" class="w-full"></div>
+                </div>
+
+                <!-- Tabla Investigadoras más activas -->
+                <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-6">
+                    <div class="flex flex-row justify-between items-start gap-2 mb-6">
+                        <div class="flex flex-col">
+                            <h2 class="text-lg font-bold text-slate-800">Directores més actives</h2>
+                            <p class="text-xs text-slate-400 mt-0.5">Rànquing d'investigadores per nombre de tesis</p>
+                        </div>
+                        <!-- Botó Exportar Excel Rànquing -->
+                        <button id="btnDescargarExcelDirectores" type="button" class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl hover:bg-emerald-100 transition-all active:scale-95" title="Descarregar Excel">
+                            <i class="fa-solid fa-file-excel"></i>
+                            <span>Excel</span>
+                        </button>
+                    </div>
+                    <div id="tablaDirectores" class="w-full"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Mensaje de Error -->
+        <div id="errorMsg" class="hidden bg-rose-50 border border-rose-100 rounded-2xl p-6 text-center text-rose-600 font-medium">
+            <i class="fa-solid fa-triangle-exclamation text-2xl mb-2 block"></i>
+            <span>S'ha produït un error al carregar els gràfics de tesis. Torna-ho a provar en uns minuts.</span>
+        </div>
+    </div>
+
+    <script>
+        let chartEvolucion = null;
+        let chartGenero = null;
+        let chartGenEvolucion = null;
+        let chartBecas = null;
+        let slider = null;
+        let rawThesisData = null;
+        let tablaTesis = null;
+        let tablaDirectores = null;
+
+        // Inicializar noUiSlider
+        function initSlider(minYear, maxYear) {
+            if (slider) {
+                slider.noUiSlider.destroy();
+            }
+
+            const startDefault = Math.max(minYear, maxYear - 10);
+            const endDefault = maxYear;
+
+            slider = document.getElementById('sliderAnios');
+            noUiSlider.create(slider, {
+                start: [startDefault, endDefault],
+                connect: true,
+                step: 1,
+                range: {
+                    'min': minYear,
+                    'max': maxYear
+                },
+                format: {
+                    to: v => Math.round(v),
+                    from: v => Number(v)
+                }
+            });
+
+            const valorRango = document.getElementById('valorRango');
+            slider.noUiSlider.on('update', (vals) => {
+                valorRango.textContent = `${vals[0]} — ${vals[1]}`;
+            });
+
+            slider.noUiSlider.on('change', () => {
+                applyFiltersAndRender();
+            });
+        }
+
+        // Cargar departamentos e institutos del backend
+        async function loadDepartamentos() {
+            const optDepts = document.getElementById('opt_departaments');
+            const optInstituts = document.getElementById('opt_institutos');
+            try {
+                const [resDept, resInst] = await Promise.all([
+                    fetch(apiUrl('/persons/departamentos')),
+                    fetch(apiUrl('/persons/institutos'))
+                ]);
+
+                const depts = resDept.ok ? await resDept.json() : [];
+                const insts = resInst.ok ? await resInst.json() : [];
+
+                if (optDepts) optDepts.innerHTML = '';
+                if (optInstituts) optInstituts.innerHTML = '';
+
+                depts.forEach(d => {
+                    const opt = document.createElement('option');
+                    opt.value = d.uuid;
+                    opt.textContent = d.nombre;
+                    optDepts.appendChild(opt);
+                });
+
+                insts.forEach(i => {
+                    const opt = document.createElement('option');
+                    opt.value = i.uuid;
+                    opt.textContent = i.nombre;
+                    optInstituts.appendChild(opt);
+                });
+            } catch (err) {
+                console.error("Error carregant departaments i instituts:", err);
+            }
+        }
+
+        // Inicializar los gráficos
+        function initCharts() {
+            chartEvolucion = echarts.init(document.getElementById('chartEvolucion'));
+            chartGenero = echarts.init(document.getElementById('chartGenero'));
+            chartGenEvolucion = echarts.init(document.getElementById('chartGenEvolucion'));
+            chartBecas = echarts.init(document.getElementById('chartBecas'));
+
+            window.addEventListener('resize', () => {
+                chartEvolucion && chartEvolucion.resize();
+                chartGenero && chartGenero.resize();
+                chartGenEvolucion && chartGenEvolucion.resize();
+                chartBecas && chartBecas.resize();
+            });
+        }
+
+        // Renderizar Gráfico de Evolución Temporal (Líneas / Área)
+        function renderChartEvolucion(evolutionData) {
+            const years = evolutionData.map(d => d.year);
+            const totals = evolutionData.map(d => d.total);
+            const directedFemales = evolutionData.map(d => d.directedFemale || 0);
+            const codirectedFemales = evolutionData.map(d => d.codirectedFemale || 0);
+            const males = evolutionData.map(d => d.maleOnly || 0);
+
+            const option = {
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: { type: 'shadow' }
+                },
+                legend: {
+                    bottom: '0%',
+                    left: 'center',
+                    textStyle: { color: '#475569', fontWeight: 600 }
+                },
+                grid: {
+                    left: '4%',
+                    right: '4%',
+                    bottom: '15%',
+                    top: '8%',
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'category',
+                    boundaryGap: false,
+                    data: years,
+                    axisLine: { lineStyle: { color: '#a9b1bc' } },
+                    axisLabel: { color: '#596473' }
+                },
+                yAxis: {
+                    type: 'value',
+                    axisLine: { lineStyle: { color: '#a9b1bc' } },
+                    axisLabel: { color: '#596473' },
+                    splitLine: { lineStyle: { color: '#e4e7eb' } }
+                },
+                series: [
+                    {
+                        name: 'Total Tesis',
+                        type: 'line',
+                        smooth: true,
+                        showSymbol: false,
+                        lineStyle: { width: 1.5, color: '#cbd5e1' }, // Thin neutral line in background
+                        data: totals
+                    },
+                    {
+                        name: 'Dirigides per Dones',
+                        type: 'line',
+                        smooth: true,
+                        showSymbol: true,
+                        symbol: 'circle',
+                        symbolSize: 8, // Larger markers for emphasis
+                        lineStyle: { width: 4, color: '#008037' }, // Thick solid green line
+                        itemStyle: { color: '#008037', borderWidth: 2, borderColor: '#fff' },
+                        areaStyle: {
+                            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                { offset: 0, color: 'rgba(0,128,55,0.15)' }, // Fill gradient underneath
+                                { offset: 1, color: 'rgba(0,128,55,0.01)' }
+                            ])
+                        },
+                        data: directedFemales
+                    },
+                    {
+                        name: 'Codirigides per Dones',
+                        type: 'line',
+                        smooth: true,
+                        showSymbol: true,
+                        symbol: 'triangle',
+                        symbolSize: 8,
+                        lineStyle: { width: 3, color: '#00cc58', type: 'dashed' }, // Thick dashed green line
+                        itemStyle: { color: '#00cc58', borderWidth: 2, borderColor: '#fff' },
+                        areaStyle: {
+                            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                { offset: 0, color: 'rgba(0,204,88,0.1)' },
+                                { offset: 1, color: 'rgba(0,204,88,0.01)' }
+                            ])
+                        },
+                        data: codirectedFemales
+                    },
+                    {
+                        name: 'Només Homes',
+                        type: 'line',
+                        smooth: true,
+                        showSymbol: false,
+                        lineStyle: { width: 1.5, color: '#94a3b8', type: 'dotted' }, // Thin dotted line in background
+                        data: males
+                    }
+                ]
+            };
+
+            chartEvolucion.setOption(option, true);
+        }
+
+        // Renderizar Gráfico de Torta de Distribución General
+        function renderChartGenero(directedFemaleTotal, codirectedFemaleTotal, maleOnlyTotal, unknownTotal) {
+            const option = {
+                tooltip: {
+                    trigger: 'item',
+                    formatter: '{b}: <strong>{c}</strong> ({d}%)'
+                },
+                legend: {
+                    orient: 'horizontal',
+                    bottom: '0%',
+                    left: 'center',
+                    textStyle: { color: '#475569', fontWeight: 600 }
+                },
+                series: [
+                    {
+                        name: 'Gènere Direcció',
+                        type: 'pie',
+                        radius: ['45%', '70%'],
+                        center: ['50%', '42%'],
+                        avoidLabelOverlap: true,
+                        itemStyle: {
+                            borderRadius: 8,
+                            borderColor: '#fff',
+                            borderWidth: 2
+                        },
+                        label: {
+                            show: false,
+                            position: 'center'
+                        },
+                        emphasis: {
+                            label: {
+                                show: true,
+                                fontSize: '14',
+                                fontWeight: 'bold',
+                                formatter: '{b}\n{d}%'
+                            }
+                        },
+                        labelLine: {
+                            show: false
+                        },
+                        data: [
+                            { value: directedFemaleTotal, name: 'Dirigides per Dones', itemStyle: { color: '#008037' } },
+                            { value: codirectedFemaleTotal, name: 'Codirigides per Dones', itemStyle: { color: '#00cc58' } },
+                            { value: maleOnlyTotal, name: 'Només Homes', itemStyle: { color: '#596473' } },
+                            { value: unknownTotal, name: 'Altres / Desconegut', itemStyle: { color: '#a9b1bc' } }
+                        ]
+                    }
+                ]
+            };
+
+            chartGenero.setOption(option, true);
+        }
+
+        // Renderizar Gráfico de Barras del Percentatge de Tesis de Dones por año
+        function renderChartGenEvolucion(evolutionData) {
+            const years = evolutionData.map(d => d.year);
+            const directedPcts = evolutionData.map(d => {
+                if (!d.total) return 0;
+                return Math.round((d.directedFemale / d.total) * 1000) / 10;
+            });
+            const codirectedPcts = evolutionData.map(d => {
+                if (!d.total) return 0;
+                return Math.round((d.codirectedFemale / d.total) * 1000) / 10;
+            });
+
+            const option = {
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: { type: 'shadow' },
+                    formatter: function(params) {
+                        let res = params[0].name + '<br/>';
+                        let totalPct = 0;
+                        params.forEach(p => {
+                            res += p.marker + ' ' + p.seriesName + ': <strong>' + p.value + '%</strong><br/>';
+                            totalPct += p.value;
+                        });
+                        res += 'Total participació: <strong>' + Math.round(totalPct * 10) / 10 + '%</strong>';
+                        return res;
+                    }
+                },
+                legend: {
+                    bottom: '0%',
+                    left: 'center',
+                    textStyle: { color: '#475569', fontWeight: 600 }
+                },
+                grid: {
+                    left: '4%',
+                    right: '4%',
+                    bottom: '15%',
+                    top: '10%',
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'category',
+                    data: years,
+                    axisLine: { lineStyle: { color: '#a9b1bc' } },
+                    axisLabel: { color: '#596473' }
+                },
+                yAxis: {
+                    type: 'value',
+                    max: 100,
+                    axisLine: { lineStyle: { color: '#a9b1bc' } },
+                    axisLabel: { 
+                        color: '#596473',
+                        formatter: '{value}%'
+                    },
+                    splitLine: { lineStyle: { color: '#e4e7eb' } }
+                },
+                series: [
+                    {
+                        name: 'Dirigides per Dones',
+                        type: 'bar',
+                        stack: 'total',
+                        barWidth: '45%',
+                        itemStyle: {
+                            color: '#008037'
+                        },
+                        label: {
+                            show: true,
+                            position: 'inside',
+                            formatter: function(p) {
+                                return p.value > 3 ? p.value + '%' : '';
+                            },
+                            fontSize: 10,
+                            fontWeight: 'bold',
+                            color: '#ffffff'
+                        },
+                        data: directedPcts
+                    },
+                    {
+                        name: 'Codirigides per Dones',
+                        type: 'bar',
+                        stack: 'total',
+                        barWidth: '45%',
+                        itemStyle: {
+                            color: '#00cc58',
+                            borderRadius: [4, 4, 0, 0]
+                        },
+                        label: {
+                            show: true,
+                            position: 'inside',
+                            formatter: function(p) {
+                                return p.value > 3 ? p.value + '%' : '';
+                            },
+                            fontSize: 10,
+                            fontWeight: 'bold',
+                            color: '#ffffff'
+                        },
+                        data: codirectedPcts
+                    }
+                ]
+            };
+
+            chartGenEvolucion.setOption(option, true);
+        }
+
+        // Renderizar Gráfico de Evolución de Becas
+        function renderChartBecas(filteredTheses, startYear, endYear) {
+            const years = [];
+            for (let y = startYear; y <= endYear; y++) {
+                years.push(y);
+            }
+            
+            const scCountsByYear = {};
+            const scCountsTotal = {};
+            years.forEach(y => {
+                scCountsByYear[y] = {};
+            });
+
+            filteredTheses.forEach(t => {
+                const year = t.any;
+                const code = t.becaCodi;
+                if (year >= startYear && year <= endYear && code && code !== "") {
+                    scCountsByYear[year][code] = (scCountsByYear[year][code] || 0) + 1;
+                    scCountsTotal[code] = (scCountsTotal[code] || 0) + 1;
+                }
+            });
+
+            const scList = Object.keys(scCountsTotal).filter(code => scCountsTotal[code] > 0).sort();
+
+            const seriesList = scList.map(code => {
+                return {
+                    name: code,
+                    type: 'line',
+                    smooth: true,
+                    showSymbol: true,
+                    symbol: 'circle',
+                    symbolSize: 6,
+                    lineStyle: { width: 2 },
+                    data: years.map(y => scCountsByYear[y][code] || 0)
+                };
+            });
+
+            const option = {
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: { type: 'shadow' }
+                },
+                legend: {
+                    bottom: '0%',
+                    left: 'center',
+                    textStyle: { color: '#475569', fontWeight: 600 }
+                },
+                grid: {
+                    left: '4%',
+                    right: '4%',
+                    bottom: '15%',
+                    top: '10%',
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'category',
+                    boundaryGap: false,
+                    data: years,
+                    axisLine: { lineStyle: { color: '#a9b1bc' } },
+                    axisLabel: { color: '#596473' }
+                },
+                yAxis: {
+                    type: 'value',
+                    axisLine: { lineStyle: { color: '#a9b1bc' } },
+                    axisLabel: { color: '#596473' },
+                    splitLine: { lineStyle: { color: '#e4e7eb' } }
+                },
+                series: seriesList
+            };
+
+            chartBecas.setOption(option, true);
+        }
+
+        // Inicializar las tablas de Tabulator
+        function initTables() {
+            tablaTesis = new Tabulator('#tablaTesis', {
+                layout: 'fitColumns',
+                pagination: 'local',
+                paginationSize: 10,
+                langs: {
+                    "default": {
+                        "pagination": {
+                            "first": "Primer",
+                            "first_title": "Primera pàgina",
+                            "last": "Últim",
+                            "last_title": "Última pàgina",
+                            "prev": "Anterior",
+                            "prev_title": "Pàgina anterior",
+                            "next": "Següent",
+                            "next_title": "Pàgina següent"
+                        }
+                    }
+                },
+                columns: [
+                    { title: "Any", field: "any", width: 70, headerSort: true },
+                    { title: "Títol de la Tesis", field: "titol", minWidth: 200, headerSort: true },
+                    { title: "Autor/a", field: "autor", width: 130, headerSort: true },
+                    { 
+                        title: "Tipus", 
+                        field: "tipusDireccio", 
+                        width: 105, 
+                        headerSort: true,
+                        formatter: function(cell) {
+                            const val = cell.getValue();
+                            if (val === "Dirigida") {
+                                return `<span class="inline-flex items-center rounded-md bg-emerald-100 px-2.5 py-0.5 text-xs font-bold text-emerald-800 ring-1 ring-inset ring-emerald-600/20">Dirigida</span>`;
+                            } else if (val === "Codirigida") {
+                                return `<span class="inline-flex items-center rounded-md bg-teal-50 px-2.5 py-0.5 text-xs font-semibold text-teal-800 ring-1 ring-inset ring-teal-600/20">Codirigida</span>`;
+                            }
+                            return `<span class="text-slate-400">-</span>`;
+                        }
+                    },
+                    { 
+                        title: "Beca", 
+                        field: "becaCodi", 
+                        width: 100, 
+                        headerSort: true,
+                        formatter: function(cell) {
+                            const codi = cell.getValue();
+                            const titol = cell.getData().becaTitol;
+                            return codi 
+                                ? `<span class="inline-flex items-center rounded-md bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-900 ring-1 ring-inset ring-amber-600/15" title="${titol}"><i class="fa-solid fa-award mr-1 shrink-0"></i>${codi}</span>` 
+                                : `<span class="text-slate-300">-</span>`;
+                        }
+                    },
+                    { 
+                        title: "Directores (Dones)", 
+                        field: "directores", 
+                        minWidth: 150,
+                        formatter: function(cell) {
+                            const val = cell.getValue();
+                            if (!val || !val.length) return "-";
+                            return val.map(name => `<span class="inline-flex items-center rounded-md bg-slate-50 px-2 py-0.5 text-xs font-semibold text-slate-700 ring-1 ring-inset ring-slate-600/10">${name}</span>`).join(" ");
+                        }
+                    },
+                    { title: "Departament / Unitat", field: "departament", minWidth: 150, headerSort: true }
+                ]
+            });
+
+            tablaDirectores = new Tabulator('#tablaDirectores', {
+                layout: 'fitColumns',
+                pagination: 'local',
+                paginationSize: 10,
+                columns: [
+                    { title: "Nom Directora", field: "nom", minWidth: 140, headerSort: true },
+                    { title: "Tesis", field: "tesisCount", width: 80, headerSort: true, hozAlign: "center", headerHozAlign: "center" },
+                    { title: "Departament", field: "departament", minWidth: 130, headerSort: true }
+                ]
+            });
+
+            // Configurar buscador
+            document.getElementById('cercarTesis').addEventListener('input', (e) => {
+                const term = e.target.value;
+                tablaTesis.setFilter([
+                    [
+                        { field: "titol", type: "like", value: term },
+                        { field: "autor", type: "like", value: term },
+                        { field: "departament", type: "like", value: term },
+                        { field: "tipusDireccio", type: "like", value: term },
+                        { field: "becaTitol", type: "like", value: term }
+                    ]
+                ]);
+            });
+        }
+
+        // Filtrar y refrescar los datos y KPIs en el frontend
+        function applyFiltersAndRender() {
+            if (!rawThesisData || !slider) return;
+
+            const [startYear, endYear] = slider.noUiSlider.get();
+
+            // Filtrar evolución temporal
+            const filteredEvolution = rawThesisData.evolution.filter(d => d.year >= startYear && d.year <= endYear);
+            const filteredTheses = rawThesisData.femaleTheses.filter(t => t.any >= startYear && t.any <= endYear);
+
+            // Calcular KPIs
+            let totalTesis = 0;
+            let directedFemaleTesis = 0;
+            let codirectedFemaleTesis = 0;
+            let maleOnlyTesis = 0;
+            let unknownTesis = 0;
+            let femaleWithScholarshipTesis = 0;
+            let maleOnlyWithScholarshipTesis = 0;
+
+            filteredEvolution.forEach(d => {
+                totalTesis += d.total || 0;
+                directedFemaleTesis += d.directedFemale || 0;
+                codirectedFemaleTesis += d.codirectedFemale || 0;
+                maleOnlyTesis += d.maleOnly || 0;
+                unknownTesis += d.unknown || 0;
+                femaleWithScholarshipTesis += (d.directedFemaleWithScholarship || 0) + (d.codirectedFemaleWithScholarship || 0);
+                maleOnlyWithScholarshipTesis += d.maleOnlyWithScholarship || 0;
+            });
+
+            // Actualizar textos KPI
+            document.getElementById('kpiTotal').textContent = totalTesis;
+            
+            const pctDirigides = totalTesis > 0 ? Math.round((directedFemaleTesis / totalTesis) * 1000) / 10 : 0;
+            const pctCodirigides = totalTesis > 0 ? Math.round((codirectedFemaleTesis / totalTesis) * 1000) / 10 : 0;
+            const pctHomes = totalTesis > 0 ? Math.round((maleOnlyTesis / totalTesis) * 1000) / 10 : 0;
+            const pctDesconegut = totalTesis > 0 ? Math.round((unknownTesis / totalTesis) * 1000) / 10 : 0;
+            const femaleTesisTotal = directedFemaleTesis + codirectedFemaleTesis;
+            const pctBecas = femaleTesisTotal > 0 ? Math.round((femaleWithScholarshipTesis / femaleTesisTotal) * 1000) / 10 : 0;
+            const pctBecasHomes = maleOnlyTesis > 0 ? Math.round((maleOnlyWithScholarshipTesis / maleOnlyTesis) * 1000) / 10 : 0;
+
+            document.getElementById('kpiDirigides').innerHTML = `${pctDirigides}% <span class="text-xs font-semibold text-slate-400">(${directedFemaleTesis})</span>`;
+            document.getElementById('kpiCodirigides').innerHTML = `${pctCodirigides}% <span class="text-xs font-semibold text-slate-400">(${codirectedFemaleTesis})</span>`;
+            document.getElementById('kpiHomes').innerHTML = `${pctHomes}% <span class="text-xs font-semibold text-slate-400">(${maleOnlyTesis})</span>`;
+            document.getElementById('kpiDesconegut').innerHTML = `${pctDesconegut}% <span class="text-xs font-semibold text-slate-400">(${unknownTesis})</span>`;
+            document.getElementById('kpiBecas').innerHTML = `${pctBecas}% <span class="text-xs font-semibold text-slate-400">(${femaleWithScholarshipTesis})</span>`;
+            document.getElementById('kpiBecasHomes').innerHTML = `${pctBecasHomes}% <span class="text-xs font-semibold text-slate-400">(${maleOnlyWithScholarshipTesis})</span>`;
+
+            // Refrescar gráficos
+            renderChartEvolucion(filteredEvolution);
+            renderChartGenero(directedFemaleTesis, codirectedFemaleTesis, maleOnlyTesis, unknownTesis);
+            renderChartGenEvolucion(filteredEvolution);
+            renderChartBecas(filteredTheses, startYear, endYear);
+
+            // Filtrar y poblar tablas
+            tablaTesis.setData(filteredTheses);
+
+            // Calcular directores más activas en base a la selección actual
+            const directorCounts = {};
+            filteredTheses.forEach(t => {
+                (t.directores || []).forEach(dName => {
+                    if (!directorCounts[dName]) {
+                        directorCounts[dName] = { nom: dName, tesisCount: 0, departaments: new Set() };
+                    }
+                    directorCounts[dName].tesisCount++;
+                    if (t.departament) {
+                        directorCounts[dName].departaments.add(t.departament);
+                    }
+                });
+            });
+
+            const filteredDirectors = Object.values(directorCounts).map(d => ({
+                nom: d.nom,
+                tesisCount: d.tesisCount,
+                departament: Array.from(d.departaments).join(', ')
+            })).sort((a, b) => b.tesisCount - a.tesisCount);
+
+            tablaDirectores.setData(filteredDirectors);
+        }
+
+        // Cargar datos principales del backend
+        async function loadData() {
+            const orgUuid = document.getElementById('selectDepartamento').value;
+            const loader = document.getElementById('loader');
+            const contenido = document.getElementById('contenido');
+            const errorMsg = document.getElementById('errorMsg');
+
+            loader.classList.remove('hidden');
+            contenido.classList.add('hidden');
+            errorMsg.classList.add('hidden');
+
+            try {
+                const response = await fetch(apiUrl(`/student-theses/stats/gender-evolution?orgUuid=${encodeURIComponent(orgUuid)}`));
+                if (!response.ok) throw new Error("Error obtenint dades del backend");
+
+                rawThesisData = await response.json();
+
+                // Detectar rango de años mínimo y máximo
+                let minYear = 2010;
+                let maxYear = new Date().getFullYear();
+
+                if (rawThesisData.evolution && rawThesisData.evolution.length > 0) {
+                    const years = rawThesisData.evolution.map(d => d.year);
+                    minYear = Math.min(...years);
+                    maxYear = Math.max(...years);
+                }
+
+                // Inicializar slider de años con los límites reales
+                initSlider(minYear, 2026);
+
+                // Dibujar
+                applyFiltersAndRender();
+
+                loader.classList.add('hidden');
+                contenido.classList.remove('hidden');
+
+                // Redimensionar gráficos para asegurar que tomen el tamaño correcto del contenedor
+                setTimeout(() => {
+                    chartEvolucion && chartEvolucion.resize();
+                    chartGenero && chartGenero.resize();
+                    chartGenEvolucion && chartGenEvolucion.resize();
+                    chartBecas && chartBecas.resize();
+                }, 50);
+
+            } catch (err) {
+                console.error(err);
+                loader.classList.add('hidden');
+                errorMsg.classList.remove('hidden');
+            }
+        }
+
+        // Inicialización de la página
+        document.addEventListener('DOMContentLoaded', async () => {
+            initCharts();
+            initTables();
+            
+            // Cargar selector de departamentos y datos de tesis
+            await loadDepartamentos();
+            await loadData();
+
+            // Configurar listener para cambio de departamento
+            document.getElementById('selectDepartamento').addEventListener('change', () => {
+                loadData();
+            });
+
+            // Configurar botons de descarrega d'Excel
+            document.getElementById('btnDescargarExcelTesis').addEventListener('click', () => {
+                if (tablaTesis) {
+                    tablaTesis.download('xlsx', 'tesis-dirigides-dones.xlsx', { sheetName: "Tesis" });
+                }
+            });
+
+            document.getElementById('btnDescargarExcelDirectores').addEventListener('click', () => {
+                if (tablaDirectores) {
+                    tablaDirectores.download('xlsx', 'directores-actives.xlsx', { sheetName: "Ranking" });
+                }
+            });
+        });
+    </script>
+</body>
+</html>

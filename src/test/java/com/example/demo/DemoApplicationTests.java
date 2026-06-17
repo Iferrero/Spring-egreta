@@ -21,8 +21,32 @@ class DemoApplicationTests {
     @Autowired
     private AwardController awardController;
 
+    @Autowired
+    private MongoTemplate mongoTemplate;
+
     @Test
     void contextLoads() {
+    }
+
+    @Test
+    void testInspectAwardHolders() {
+        System.out.println("=== INSPECTING AWARD HOLDERS ===");
+        try {
+            List<Document> docs = mongoTemplate.find(
+                new org.springframework.data.mongodb.core.query.Query(
+                    org.springframework.data.mongodb.core.query.Criteria.where("awardHolders").exists(true)
+                ).limit(5), 
+                Document.class, 
+                "Awards"
+            );
+            for (Document doc : docs) {
+                System.out.println("----------------------------------------");
+                System.out.println("Award title: " + doc.get("title"));
+                System.out.println("AwardHolders: " + doc.get("awardHolders"));
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     @Test

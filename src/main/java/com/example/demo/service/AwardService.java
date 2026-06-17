@@ -215,7 +215,7 @@ public class AwardService {
         return combined;
     }
 
-    private List<Document> getExcelPrestacioLlistaRows(String orgUuid, Integer desde, Integer hasta) {
+    public List<Document> getExcelPrestacioLlistaRows(String orgUuid, Integer desde, Integer hasta) {
         Map<Integer, Map<String, Double>> byYear = excelCache.get(orgUuid);
         if (byYear == null || byYear.isEmpty()) return List.of();
         Map<Integer, Map<String, String>> tipusByYear = excelTipusCache.getOrDefault(orgUuid, Map.of());
@@ -244,6 +244,10 @@ public class AwardService {
             });
         });
         return result;
+    }
+
+    public Map<String, Map<Integer, Map<String, Double>>> getExcelCache() {
+        return excelCache;
     }
 
     public List<Document> getIpsInstitut(String collaboratorUuid,

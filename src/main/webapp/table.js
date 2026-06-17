@@ -69,7 +69,7 @@ function cargarPivot(data) {
 
     const normalized = data.map(d => ({
         categoria: normalizarCategoria(d.categoria),
-        tipo: d.tipo || "(Sense tipus)",
+        tipo: d.type_term || d.tipo || "(Sense tipus)",
         anio: Number(d.anio || 0),
         ajuts: Number(d.ajuts || 0),
         import: Number(d.import || 0)

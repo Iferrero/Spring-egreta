@@ -4043,7 +4043,6 @@ public class PersonaController {
 
                         addProjectLine(awardPara, awardIdx + ".- " + awTitle, true);
                         if (!ip.isBlank()) addProjectLabelValueLine(awardPara, lbIp, ip);
-                        if (!personRole.isBlank()) addProjectLabelValueLine(awardPara, lbRol, personRole);
                         if (!funderName.isBlank()) addProjectLabelValueLine(awardPara, lbFunder, funderName);
                         if (importTotal > 0) addProjectLabelValueLine(awardPara, lbTotal, formatImport(importTotal));
                         if (importUAB > 0) addProjectLabelValueLine(awardPara, lbUAB, formatImport(importUAB));
@@ -4190,9 +4189,6 @@ public class PersonaController {
                     addProjectLine(awardPara, awardIdx + ".- " + awTitle, true);
                     if (!ip.isBlank()) {
                         addProjectLabelValueLine(awardPara, lbIp, ip);
-                    }
-                    if (!personRole.isBlank()) {
-                        addProjectLabelValueLine(awardPara, lbRol, personRole);
                     }
                     if (!funderName.isBlank()) {
                         addProjectLabelValueLine(awardPara, lbFunder, funderName);

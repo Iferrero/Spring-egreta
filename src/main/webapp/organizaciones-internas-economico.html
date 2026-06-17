@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dades econòmiques d'entitats vinculades</title>
+    <script src="config.js"></script>
+    <script src="uab-brand.js" defer></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="uab-theme.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .drawer {
+            transition: transform 0.3s ease-in-out;
+        }
+        .drawer-open {
+            transform: translateX(0);
+        }
+        .drawer-closed {
+            transform: translateX(100%);
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.7.1/nouislider.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.7.1/nouislider.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.13.2/themes/base/jquery-ui.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/pivottable/2.23.0/pivot.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.13.2/jquery-ui.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pivottable/2.23.0/pivot.min.js"></script>
+</head>
+<body class="bg-slate-50 min-h-screen font-sans">
+
+<div class="mx-auto py-10 px-6 max-w-7xl">
+
+    <!-- Header -->
+    <header class="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 mb-8">
+        <div>
+            <h1 class="text-2xl font-extrabold text-slate-800 tracking-tight">
+                Dades econòmiques de les <span class="text-indigo-600">entitats i departaments</span>
+            </h1>
+            <p class="text-slate-500 text-sm mt-1">
+                Resum econòmic dels ajuts i convenis gestionats per departaments, instituts i centres de l'Esfera UAB.
+            </p>
+        </div>
+        <div class="flex gap-3">
+            <a href="organizaciones-internas-arbol.html" class="px-4 py-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-sm text-slate-600 shadow-sm flex items-center gap-2 transition-colors">
+                <i class="fa-solid fa-sitemap"></i> Vista Arbre
+            </a>
+            <a href="index.html" class="px-4 py-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-sm text-slate-600 shadow-sm flex items-center gap-2 transition-colors">
+                <i class="fa-solid fa-house"></i> Tornar a l'inici
+            </a>
+        </div>
+    </header>
+    <!-- Filters and Toolbar -->
+    <section class="bg-white border border-slate-200 rounded-2xl shadow-sm p-4 mb-6">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-3 items-end">
+
+            <!-- Departament / Institut -->
+            <div class="lg:col-span-3">
+                <label for="orgSelect" class="block text-xs font-bold text-slate-500 uppercase mb-1">Departament / Institut</label>
+                <select id="orgSelect" class="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm bg-white">
+                    <option value="">Totes les entitats</option>
+                    <optgroup label="Departaments" id="opt_departaments"></optgroup>
+                    <optgroup label="Instituts propis" id="opt_institutos"></optgroup>
+                </select>
+            </div>
+
+            <!-- Esfera -->
+            <div class="lg:col-span-2">
+                <label for="selectEsfera" class="block text-xs font-bold text-slate-500 uppercase mb-1">Àmbit</label>
+                <select id="selectEsfera" class="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm bg-white">
+                    <option value="">Totes les entitats</option>
+                    <option value="esfera">Esfera UAB</option>
+                    <option value="interna">UAB Intern</option>
+                </select>
+            </div>
+
+            <!-- Cercador text -->
+            <div class="lg:col-span-3 relative">
+                <label for="inputBuscar" class="block text-xs font-bold text-slate-500 uppercase mb-1">Cercar</label>
+                <i class="fa-solid fa-magnifying-glass absolute left-3 bottom-2.5 text-slate-400"></i>
+                <input id="inputBuscar" type="text" placeholder="Nom o tipus..."
+                       class="w-full pl-9 pr-4 py-2 border border-slate-300 rounded-xl outline-none focus:ring-2 focus:ring-indigo-400 text-sm bg-white">
+            </div>
+
+            <!-- Slider d'anys -->
+            <div class="lg:col-span-3">
+                <div class="flex items-center justify-between mb-1">
+                    <label class="block text-xs font-bold text-slate-500 uppercase">Rang d'anys</label>
+                    <span id="valorRango" class="text-xs font-bold text-indigo-600">2021 — 2025</span>
+                </div>
+                <div id="sliderAnios" class="mt-1"></div>
+            </div>
+
+            <!-- Reset + Loading -->
+            <div class="lg:col-span-1 flex flex-col gap-2 items-stretch">
+                <label class="block text-xs font-bold text-slate-500 uppercase opacity-0">·</label>
+                <button id="btnReset" class="w-full px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-sm font-semibold transition-colors flex items-center gap-1 justify-center">
+                    <i class="fa-solid fa-rotate-left"></i>
+                </button>
+            </div>
+        </div>
+        <div id="loadingBadge" class="hidden items-center gap-2 text-xs text-slate-400 italic mt-3">
+            <i class="fa-solid fa-rotate fa-spin"></i> Carregant dades...
+        </div>
+    </section>
+
+    <!-- KPI Summary Cards -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+        <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
+            <div class="w-12 h-12 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600 shrink-0">
+                <i class="fa-solid fa-circle-dollar-to-slot text-xl"></i>
+            </div>
+            <div>
+                <p class="text-xs font-bold text-slate-400 uppercase">Part UAB Total</p>
+                <p id="kpiTotalUab" class="text-xl font-extrabold text-slate-800 mt-1">Calculating...</p>
+            </div>
+        </div>
+
+        <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
+            <div class="w-12 h-12 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600 shrink-0">
+                <i class="fa-solid fa-building-columns text-xl"></i>
+            </div>
+            <div>
+                <p class="text-xs font-bold text-slate-400 uppercase">Entitats actives</p>
+                <p id="kpiTotalOrgs" class="text-xl font-extrabold text-slate-800 mt-1">Calculating...</p>
+            </div>
+        </div>
+
+        <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
+            <div class="w-12 h-12 rounded-xl bg-purple-50 flex items-center justify-center text-purple-600 shrink-0">
+                <i class="fa-solid fa-circle-nodes text-xl"></i>
+            </div>
+            <div>
+                <p class="text-xs font-bold text-slate-400 uppercase">Entitats de l'Esfera</p>
+                <p id="kpiTotalEsfera" class="text-xl font-extrabold text-slate-800 mt-1">Calculating...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Taula d'Ingressos per any (Pivot) -->
+    <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-6 mb-6">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-sm font-bold text-slate-700 uppercase flex items-center gap-2">
+                <i class="fa-solid fa-table text-indigo-500"></i>
+                <span id="ingressosTableTitle">Ingressos per any (Part UAB)</span>
+            </h3>
+        </div>
+        <div id="ingressosPivotLoading" class="py-8 text-center text-slate-400 italic text-sm">
+            <i class="fa-solid fa-rotate fa-spin mr-2"></i>Carregant taula d'ingressos...
+        </div>
+        <div id="ingressosPivotContainer" class="overflow-x-auto"></div>
+    </div>
+
+    <!-- Evolution Charts -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+            <h3 class="text-sm font-bold text-slate-700 uppercase mb-4 flex items-center gap-2">
+                <i class="fa-solid fa-chart-line text-indigo-600"></i>
+                <span id="chartUabTitle">Evolució Econòmica (Part UAB) — UAB Intern</span>
+            </h3>
+            <div id="chartUab" style="width: 100%; height: 300px;"></div>
+        </div>
+        <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+            <h3 class="text-sm font-bold text-slate-700 uppercase mb-4 flex items-center gap-2">
+                <i class="fa-solid fa-chart-line text-emerald-600"></i>
+                <span id="chartEsferaTitle">Evolució Econòmica (Part UAB) — Esfera UAB</span>
+            </h3>
+            <div id="chartEsfera" style="width: 100%; height: 300px;"></div>
+        </div>
+    </div>
+
+
+    <!-- Table Container -->
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                <tr class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider border-b border-slate-200">
+                    <th class="px-6 py-4 font-bold">Nom</th>
+                    <th class="px-6 py-4 font-bold">Tipus</th>
+                    <th class="px-6 py-4 font-bold">Esfera UAB</th>
+                    <th class="px-6 py-4 font-bold text-right">Ajuts</th>
+                    <th class="px-6 py-4 font-bold text-right">Part UAB (€)</th>
+                </tr>
+                </thead>
+                <tbody id="tabla-body" class="divide-y divide-slate-100 text-sm">
+                    <tr>
+                        <td colspan="5" class="px-6 py-12 text-center text-slate-400 italic">
+                            <i class="fa-solid fa-rotate fa-spin mr-2"></i>Carregant dades econòmiques...
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+
+<!-- Drawer / Details Panel -->
+<div id="drawerBackdrop" class="hidden fixed inset-0 z-40 bg-slate-900/40 backdrop-blur-sm transition-opacity opacity-0"></div>
+<div id="drawer" class="fixed right-0 top-0 bottom-0 z-50 w-full max-w-2xl bg-white shadow-2xl drawer drawer-closed flex flex-col">
+    <!-- Header -->
+    <div class="px-6 py-5 border-b border-slate-200 flex justify-between items-center bg-indigo-50/50">
+        <div>
+            <h3 id="drawerOrgName" class="text-lg font-bold text-slate-800 leading-tight">Nom de l'entitat</h3>
+            <p id="drawerOrgType" class="text-xs text-indigo-600 mt-1 uppercase font-semibold">Tipus d'entitat</p>
+        </div>
+        <button id="btnDrawerClose" class="w-8 h-8 rounded-full bg-white hover:bg-slate-100 flex items-center justify-center text-slate-500 border border-slate-200 transition-colors shadow-sm">
+            <i class="fa-solid fa-xmark"></i>
+        </button>
+    </div>
+
+    <!-- Stats summary in drawer -->
+    <div class="px-6 py-4 bg-slate-50 border-b border-slate-200 grid grid-cols-2 gap-4 text-center">
+        <div>
+            <span class="block text-[10px] font-bold text-slate-400 uppercase">Projectes</span>
+            <span id="drawerCount" class="text-base font-extrabold text-slate-800">0</span>
+        </div>
+        <div>
+            <span class="block text-[10px] font-bold text-slate-400 uppercase font-semibold">Part UAB total</span>
+            <span id="drawerUab" class="text-base font-extrabold text-emerald-600">0,00 €</span>
+        </div>
+    </div>
+
+    <!-- Content / Projects list -->
+    <div class="flex-1 overflow-y-auto p-6">
+        <h4 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4">Llista detallada de projectes i ajuts</h4>
+        <div id="drawerProjectsContainer" class="space-y-4">
+            <!-- Loading -->
+            <div class="text-center text-slate-400 py-12 italic">
+                <i class="fa-solid fa-rotate fa-spin mr-2"></i>Carregant projectes...
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let allOrgs = [];
+    let activeOrgs = [];
+
+    // Format currency helper
+    function fmtCurrency(val) {
+        return new Intl.NumberFormat('ca-ES', { style: 'currency', currency: 'EUR' }).format(val || 0);
+    }
+
+    // Format number helper
+    function fmtNum(val) {
+        return new Intl.NumberFormat('ca-ES').format(val || 0);
+    }
+
+    function badgeType(isEsfera) {
+        if (isEsfera) {
+            return `<span class="px-2 py-1 rounded-full text-[10px] font-bold uppercase bg-emerald-100 text-emerald-700">
+                <i class="fa-solid fa-circle-check mr-1"></i>Esfera UAB
+            </span>`;
+        } else {
+            return `<span class="px-2 py-1 rounded-full text-[10px] font-bold uppercase bg-slate-100 text-slate-500">
+                UAB Intern
+            </span>`;
+        }
+    }
+
+    function renderTable(list) {
+        const tbody = document.getElementById('tabla-body');
+        if (list.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="5" class="px-6 py-12 text-center text-slate-400 italic">
+                <i class="fa-solid fa-circle-exclamation mr-2"></i>No s'han trobat entitats amb els filtres seleccionats.
+            </td></tr>`;
+            return;
+        }
+
+        tbody.innerHTML = list.map(org => {
+            const hasEconomicData = org.totalCount > 0;
+            const rowClass = hasEconomicData ? 'hover:bg-indigo-50/20 cursor-pointer font-medium' : 'opacity-65 hover:bg-slate-50/50';
+            const clickAttr = hasEconomicData ? `onclick="openDetails('${org.uuid}')"` : '';
+            const uabPartTotal = org.managedUabPart + org.coManagedUabPart;
+
+            return `
+            <tr class="transition-colors ${rowClass}" ${clickAttr}>
+                <td class="px-6 py-4 font-semibold text-slate-800 leading-tight">
+                    ${org.name}
+                    ${hasEconomicData ? '<i class="fa-solid fa-arrow-up-right-from-square text-xs text-indigo-400 ml-1.5 opacity-0 group-hover:opacity-100 transition-opacity"></i>' : ''}
+                </td>
+                <td class="px-6 py-4 text-slate-500 text-xs">${org.type}</td>
+                <td class="px-6 py-4">${badgeType(org.isEsfera)}</td>
+                <td class="px-6 py-4 text-right font-medium text-slate-600">${fmtNum(org.totalCount)}</td>
+                <td class="px-6 py-4 text-right font-bold text-indigo-700">${fmtCurrency(uabPartTotal)}</td>
+            </tr>`;
+        }).join('');
+    }
+
+    function calculateKPIs(list) {
+        let totalUab = 0;
+        let activeCount = 0;
+        let esferaCount = 0;
+
+        list.forEach(org => {
+            totalUab += org.managedUabPart + org.coManagedUabPart;
+            if (org.totalCount > 0) activeCount++;
+            if (org.isEsfera) esferaCount++;
+        });
+
+        document.getElementById('kpiTotalUab').textContent = fmtCurrency(totalUab);
+        document.getElementById('kpiTotalOrgs').textContent = fmtNum(activeCount);
+        document.getElementById('kpiTotalEsfera').textContent = fmtNum(esferaCount);
+    }
+
+    let uabChart = null;
+    let esferaChart = null;
+
+    async function initCharts(startYear, endYear, orgUuid) {
+        const uabDom = document.getElementById('chartUab');
+        const esferaDom = document.getElementById('chartEsfera');
+        const uabTitle = document.getElementById('chartUabTitle');
+        const esferaTitle = document.getElementById('chartEsferaTitle');
+
+        // Only initialize once; reuse instances on subsequent calls
+        if (!uabChart) {
+            uabChart = echarts.init(uabDom);
+            esferaChart = echarts.init(esferaDom);
+            window.addEventListener('resize', () => {
+                uabChart.resize();
+                esferaChart.resize();
+            });
+        }
+
+        try {
+            let url = '/organizations/stats/economic/evolution';
+            const params = [];
+            if (startYear) params.push(`startYear=${startYear}`);
+            if (endYear) params.push(`endYear=${endYear}`);
+            if (orgUuid) params.push(`orgUuid=${encodeURIComponent(orgUuid)}`);
+            if (params.length > 0) url += '?' + params.join('&');
+
+            const res = await apiFetch(url);
+            if (!res.ok) throw new Error('Error loading evolution data');
+            const data = await res.json();
+
+            if (orgUuid) {
+                // Single org mode
+                const orgName = document.getElementById('orgSelect').selectedOptions[0]?.text || 'Entitat seleccionada';
+                if (uabTitle) uabTitle.textContent = `Evolució (Part UAB) — ${orgName}`;
+                if (esferaTitle) esferaTitle.textContent = 'Evolució (Part UAB) — Esfera UAB';
+                drawChart(uabChart, orgName, data.uab || [], '#6366f1');
+                loadAndRenderPivot(startYear, endYear, orgUuid);
+                esferaChart.clear();
+                esferaChart.setOption({
+                    graphic: [{ type: 'text', left: 'center', top: 'middle',
+                        style: { text: 'Selecciona \'Totes les entitats\' per veure l\'Esfera UAB', fill: '#94a3b8', fontSize: 13 } }]
+                });
+            } else {
+                if (uabTitle) uabTitle.textContent = 'Evolució Econòmica (Part UAB) — UAB Intern';
+                if (esferaTitle) esferaTitle.textContent = 'Evolució Econòmica (Part UAB) — Esfera UAB';
+                drawChart(uabChart, 'UAB Intern', data.uab || [], '#6366f1');
+                drawChart(esferaChart, 'Esfera UAB', data.esfera || [], '#10b981');
+                loadAndRenderPivot(startYear, endYear, null);
+            }
+        } catch (e) {
+            console.error(e);
+        }
+    }
+
+    function greenColorScaleGenerator(values) {
+        const numericValues = values.map(v => Number(v)).filter(v => Number.isFinite(v));
+        if (!numericValues.length) return () => 'hsl(142, 45%, 95%)';
+        const min = Math.min(...numericValues);
+        const max = Math.max(...numericValues);
+        return function (x) {
+            const value = Number(x);
+            if (!Number.isFinite(value) || max === min) return 'hsl(142, 45%, 92%)';
+            const ratio = (value - min) / (max - min);
+            const lightness = 94 - (ratio * 48);
+            return `hsl(142, 55%, ${lightness}%)`;
+        };
+    }
+
+    function normalizarCategoria(value) {
+        if (value == null) return "Sense categoria";
+
+        if (typeof value === "string") {
+            const clean = value.trim();
+            return clean || "Sense categoria";
+        }
+
+        if (Array.isArray(value)) {
+            for (const item of value) {
+                const resolved = normalizarCategoria(item);
+                if (resolved !== "Sense categoria") return resolved;
+            }
+            return "Sense categoria";
+        }
+
+        if (typeof value === "object") {
+            const term = value.term;
+            if (term && typeof term === "object") {
+                if (typeof term.ca_ES === "string" && term.ca_ES.trim()) return term.ca_ES.trim();
+                if (typeof term.en_GB === "string" && term.en_GB.trim()) return term.en_GB.trim();
+            }
+
+            if (typeof value.ca_ES === "string" && value.ca_ES.trim()) return value.ca_ES.trim();
+            if (typeof value.en_GB === "string" && value.en_GB.trim()) return value.en_GB.trim();
+
+            const asText = String(value).trim();
+            return asText && asText !== "[object Object]" ? asText : "Sense categoria";
+        }
+
+        const asText = String(value).trim();
+        return asText || "Sense categoria";
+    }
+
+    async function loadAndRenderPivot(startYear, endYear, orgUuid) {
+        const loading = document.getElementById('ingressosPivotLoading');
+        const container = document.getElementById('ingressosPivotContainer');
+        const titleEl = document.getElementById('ingressosTableTitle');
+
+        if (loading) loading.style.display = '';
+        if (container) container.innerHTML = '';
+
+        const orgName = orgUuid
+            ? (document.getElementById('orgSelect').selectedOptions[0]?.text || 'Entitat seleccionada')
+            : null;
+        if (titleEl) titleEl.textContent = orgUuid
+            ? `Ingressos per any — ${orgName}`
+            : 'Ingressos per any (Part UAB)';
+
+        try {
+            let url = '/awards/stats/powertable';
+            const params = [];
+            if (startYear) params.push(`desde=${startYear}`);
+            if (endYear) params.push(`hasta=${endYear}`);
+            if (orgUuid) params.push(`collaboratorUuid=${encodeURIComponent(orgUuid)}`);
+            if (params.length) url += '?' + params.join('&');
+
+            const res = await apiFetch(url);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = await res.json();
+
+            if (!data || data.length === 0) {
+                if (container) container.innerHTML = `<p class="py-8 text-center text-slate-400 italic text-sm">Sense dades per al període seleccionat</p>`;
+                if (loading) loading.style.display = 'none';
+                return;
+            }
+
+            const renderers = $.pivotUtilities.renderers;
+            const sum = $.pivotUtilities.aggregatorTemplates.sum;
+            const numberFormat = $.pivotUtilities.numberFormat;
+            const monedaEs = numberFormat({
+                digitsAfterDecimal: 2,
+                thousandsSep: '.',
+                decimalSep: ',',
+                scaler: 1,
+                suffix: ' €'
+            });
+
+            const normalized = data.map(d => ({
+                categoria: normalizarCategoria(d.categoria),
+                tipo: d.type_term || d.tipo || "(Sense tipus)",
+                anio: String(Number(d.anio || 0)),
+                import: Number(d.import || 0)
+            }));
+
+            if (loading) loading.style.display = 'none';
+
+            $(container).pivot(normalized, {
+                rows: ['tipo'],
+                cols: ['anio'],
+                vals: ['import'],
+                renderer: renderers['Heatmap'],
+                aggregator: sum(monedaEs)(['import']),
+                rendererOptions: {
+                    heatmap: {
+                        colorScaleGenerator: greenColorScaleGenerator
+                    }
+                }
+            });
+        } catch(e) {
+            console.error('Error carregant pivot ingressos', e);
+            if (container) container.innerHTML = `<p class="py-8 text-center text-rose-400 italic text-sm"><i class="fa-solid fa-triangle-exclamation mr-2"></i>Error carregant dades</p>`;
+            if (loading) loading.style.display = 'none';
+        }
+    }
+
+    function drawChart(chartInstance, title, list, color) {
+        const years = list.map(item => item.year);
+        const amounts = list.map(item => item.amount);
+
+        const option = {
+            tooltip: {
+                trigger: 'axis',
+                formatter: function (params) {
+                    const param = params[0];
+                    return `<strong>${param.name}</strong><br/>Part UAB: ${fmtCurrency(param.value)}`;
+                }
+            },
+            grid: {
+                top: '10%',
+                left: '3%',
+                right: '4%',
+                bottom: '3%',
+                containLabel: true
+            },
+            xAxis: {
+                type: 'category',
+                boundaryGap: false,
+                data: years,
+                axisLabel: {
+                    color: '#64748b',
+                    fontSize: 11
+                },
+                axisLine: {
+                    lineStyle: {
+                        color: '#cbd5e1'
+                    }
+                }
+            },
+            yAxis: {
+                type: 'value',
+                axisLabel: {
+                    color: '#64748b',
+                    fontSize: 11,
+                    formatter: function (val) {
+                        if (val >= 1e6) return (val / 1e6).toFixed(1) + 'M €';
+                        if (val >= 1e3) return (val / 1e3).toFixed(0) + 'k €';
+                        return val + ' €';
+                    }
+                },
+                splitLine: {
+                    lineStyle: {
+                        color: '#f1f5f9'
+                    }
+                }
+            },
+            series: [
+                {
+                    name: title,
+                    type: 'line',
+                    smooth: true,
+                    symbol: 'circle',
+                    symbolSize: 6,
+                    showSymbol: true,
+                    data: amounts,
+                    itemStyle: {
+                        color: color
+                    },
+                    lineStyle: {
+                        width: 3,
+                        color: color
+                    },
+                    areaStyle: {
+                        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                            { offset: 0, color: color + '33' },
+                            { offset: 1, color: color + '00' }
+                        ])
+                    }
+                }
+            ]
+        };
+
+        chartInstance.setOption(option);
+    }
+
+    function applyFilters() {
+        const search = document.getElementById('inputBuscar').value.toLowerCase().trim();
+        const esfera = document.getElementById('selectEsfera').value;
+        const orgVal = document.getElementById('orgSelect').value; // "dept:uuid" or "inst:uuid" or ""
+        const selectedUuid = orgVal ? orgVal.split(':')[1] : null;
+
+        activeOrgs = allOrgs.filter(org => {
+            if (org.totalCount === 0 && (org.managedUabPart + org.coManagedUabPart) === 0) return false;
+            if (selectedUuid && org.uuid !== selectedUuid) return false;
+            const matchesSearch = !search || org.name.toLowerCase().includes(search) || org.type.toLowerCase().includes(search);
+            const matchesEsfera = !esfera || (esfera === 'esfera' && org.isEsfera) || (esfera === 'interna' && !org.isEsfera);
+            return matchesSearch && matchesEsfera;
+        });
+
+        renderTable(activeOrgs);
+    }
+
+    async function loadOrgSelect() {
+        const optDepts = document.getElementById('opt_departaments');
+        const optInsts = document.getElementById('opt_institutos');
+        try {
+            const [resDept, resInst] = await Promise.all([
+                apiFetch('/persons/departamentos'),
+                apiFetch('/persons/institutos')
+            ]);
+            const depts = resDept.ok ? await resDept.json() : [];
+            const insts = resInst.ok ? await resInst.json() : [];
+
+            depts.sort((a, b) => (a.nombre || '').localeCompare(b.nombre || '', 'ca')).forEach(d => {
+                const opt = document.createElement('option');
+                opt.value = `dept:${d.uuid}`;
+                opt.textContent = d.nombre;
+                optDepts.appendChild(opt);
+            });
+            insts.sort((a, b) => (a.nombre || '').localeCompare(b.nombre || '', 'ca')).forEach(i => {
+                const opt = document.createElement('option');
+                opt.value = `inst:${i.uuid}`;
+                opt.textContent = i.nombre;
+                optInsts.appendChild(opt);
+            });
+        } catch (e) {
+            console.warn('No s\'han pogut carregar les organitzacions', e);
+        }
+    }
+
+    // Details Drawer Logic
+    async function openDetails(uuid) {
+        const org = allOrgs.find(o => o.uuid === uuid);
+        if (!org) return;
+
+        // Set names in drawer
+        document.getElementById('drawerOrgName').textContent = org.name;
+        document.getElementById('drawerOrgType').textContent = org.type;
+        document.getElementById('drawerCount').textContent = org.totalCount;
+        document.getElementById('drawerUab').textContent = fmtCurrency(org.managedUabPart + org.coManagedUabPart);
+
+        // Open drawer
+        const drawer = document.getElementById('drawer');
+        const backdrop = document.getElementById('drawerBackdrop');
+        drawer.classList.remove('drawer-closed');
+        drawer.classList.add('drawer-open');
+        backdrop.classList.remove('hidden');
+        setTimeout(() => backdrop.classList.add('opacity-100'), 10);
+
+        // Fetch details from backend
+        const container = document.getElementById('drawerProjectsContainer');
+        container.innerHTML = `
+            <div class="text-center text-slate-400 py-12 italic">
+                <i class="fa-solid fa-rotate fa-spin mr-2"></i>Carregant llista de projectes...
+            </div>`;
+
+        try {
+            const res = await apiFetch(`/organizations/stats/economic/details?orgUuid=${uuid}`);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = await res.json();
+            
+            if (data.length === 0) {
+                container.innerHTML = `<div class="text-center text-slate-400 py-8 italic">No hi ha projectes associats</div>`;
+                return;
+            }
+
+            container.innerHTML = data.map(project => {
+                let dateStr = '—';
+                if (project.date && project.date !== '—') {
+                    const parsedDate = new Date(project.date);
+                    if (!isNaN(parsedDate.getTime())) {
+                        const day = String(parsedDate.getDate()).padStart(2, '0');
+                        const month = String(parsedDate.getMonth() + 1).padStart(2, '0');
+                        const year = parsedDate.getFullYear();
+                        dateStr = `${day}/${month}/${year}`;
+                    } else {
+                        dateStr = project.date;
+                    }
+                }
+                const roleBadge = project.role === 'Gestor principal'
+                    ? '<span class="px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 text-[10px] font-bold">Principal</span>'
+                    : '<span class="px-2 py-0.5 rounded bg-slate-100 text-slate-600 text-[10px] font-semibold">Co-gestor</span>';
+
+                return `
+                <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm hover:border-indigo-300 transition-colors">
+                    <div class="flex justify-between items-start gap-3">
+                        <h5 class="text-sm font-bold text-slate-800 leading-snug flex-1">${project.title}</h5>
+                        <div class="shrink-0 flex flex-col items-end gap-1">
+                            ${roleBadge}
+                            <span class="text-[10px] text-slate-400">${dateStr}</span>
+                        </div>
+                    </div>
+                    <div class="mt-4 pt-3 border-t border-slate-100 flex justify-between text-xs">
+                        <div>
+                            <span class="text-slate-400">Part UAB:</span>
+                            <span class="font-bold text-emerald-600 ml-1">${fmtCurrency(project.uabPart)}</span>
+                        </div>
+                    </div>
+                </div>`;
+            }).join('');
+        } catch (err) {
+            container.innerHTML = `
+                <div class="text-center text-rose-500 py-8">
+                    <i class="fa-solid fa-triangle-exclamation mr-2"></i>Error carregant detalls: ${err.message}
+                </div>`;
+        }
+    }
+
+    function closeDetails() {
+        const drawer = document.getElementById('drawer');
+        const backdrop = document.getElementById('drawerBackdrop');
+        drawer.classList.remove('drawer-open');
+        drawer.classList.add('drawer-closed');
+        backdrop.classList.remove('opacity-100');
+        setTimeout(() => backdrop.classList.add('hidden'), 300);
+    }
+
+    let slider = null;
+    let debounceTimer = null;
+
+    function initSlider() {
+        const sliderEl = document.getElementById('sliderAnios');
+        const minYear = 2015;
+        const maxYear = new Date().getFullYear();
+        
+        noUiSlider.create(sliderEl, {
+            start: [2021, 2025],
+            connect: true,
+            step: 1,
+            range: { 'min': minYear, 'max': maxYear },
+            format: {
+                to: v => Math.round(v),
+                from: v => Number(v)
+            }
+        });
+
+        slider = sliderEl;
+        const valorRango = document.getElementById('valorRango');
+        
+        slider.noUiSlider.on('update', (vals) => {
+            valorRango.textContent = `${vals[0]} — ${vals[1]}`;
+        });
+
+        slider.noUiSlider.on('change', () => {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => {
+                loadData();
+            }, 300);
+        });
+    }
+
+    async function loadData() {
+        const loading = document.getElementById('loadingBadge');
+        loading.classList.remove('hidden');
+        loading.classList.add('flex');
+
+        let startYear = null;
+        let endYear = null;
+        if (slider) {
+            const range = slider.noUiSlider.get();
+            startYear = range[0];
+            endYear = range[1];
+        }
+
+        try {
+            let url = '/organizations/stats/economic';
+            if (startYear && endYear) {
+                url += `?startYear=${startYear}&endYear=${endYear}`;
+            }
+            const res = await apiFetch(url);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            allOrgs = await res.json();
+            
+            calculateKPIs(allOrgs);
+            applyFilters();
+
+            // Load charts with same year range and selected org
+            const orgVal = document.getElementById('orgSelect').value;
+            const selectedUuid = orgVal ? orgVal.split(':')[1] : null;
+            await initCharts(startYear, endYear, selectedUuid);
+        } catch (e) {
+            document.getElementById('tabla-body').innerHTML = `
+            <tr>
+                <td colspan="8" class="px-6 py-12 text-center text-rose-500">
+                    <i class="fa-solid fa-circle-exclamation mr-2"></i>
+                    Error carregant les dades econòmiques: ${e.message}
+                </td>
+            </tr>`;
+        } finally {
+            loading.classList.add('hidden');
+            loading.classList.remove('flex');
+        }
+    }
+
+    // ---- Duplicate openDetails / closeDetails removed ----
+
+    // Event Listeners
+    document.getElementById('inputBuscar').addEventListener('input', applyFilters);
+    document.getElementById('selectEsfera').addEventListener('change', applyFilters);
+    document.getElementById('orgSelect').addEventListener('change', () => {
+        applyFilters();
+        // Also update charts filtered by this org
+        const orgVal = document.getElementById('orgSelect').value;
+        const selectedUuid = orgVal ? orgVal.split(':')[1] : null;
+        let startYear = null, endYear = null;
+        if (slider) {
+            const range = slider.noUiSlider.get();
+            startYear = range[0]; endYear = range[1];
+        }
+        initCharts(startYear, endYear, selectedUuid);
+    });
+    document.getElementById('btnReset').addEventListener('click', () => {
+        document.getElementById('inputBuscar').value = '';
+        document.getElementById('selectEsfera').value = '';
+        document.getElementById('orgSelect').value = '';
+        if (slider) {
+            slider.noUiSlider.set([2021, 2025]);
+        }
+        loadData();
+    });
+
+    document.getElementById('btnDrawerClose').addEventListener('click', closeDetails);
+    document.getElementById('drawerBackdrop').addEventListener('click', closeDetails);
+
+    // Initial load
+    initSlider();
+    loadOrgSelect();
+    loadData();
+</script>
+</body>
+</html>
