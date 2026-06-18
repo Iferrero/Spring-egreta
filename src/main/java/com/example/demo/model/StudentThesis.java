@@ -54,6 +54,17 @@ public class StudentThesis {
 
     private Map<String, Object> customDefinedFields;
 
+    @org.springframework.data.annotation.Transient
+    private String becaTitol;
+
+    @org.springframework.data.annotation.Transient
+    private String becaCodi;
+
+    public String getBecaTitol() { return becaTitol; }
+    public void setBecaTitol(String becaTitol) { this.becaTitol = becaTitol; }
+    public String getBecaCodi() { return becaCodi; }
+    public void setBecaCodi(String becaCodi) { this.becaCodi = becaCodi; }
+
     // -------------------------------------------------------------------------
     // Convenience helpers
     // -------------------------------------------------------------------------

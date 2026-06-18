@@ -1,0 +1,1045 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edició de Tipologies | Egreta</title>
+    <meta name="description" content="Eina per a l'actualització massiva de tipologies (type i natureTypes) d'Awards, Applications i Fundings a Egreta/Pure.">
+    <script src="config.js"></script>
+    <script src="uab-brand.js" defer></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="uab-theme.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        /* ── Wizard steps ── */
+        .step-card {
+            background: #fff;
+            border: 1px solid var(--uab-columna);
+            border-radius: 1.25rem;
+            padding: 1.5rem 2rem;
+            margin-bottom: 1.25rem;
+            transition: box-shadow 0.2s;
+        }
+        .step-card.active   { box-shadow: 0 0 0 2px var(--uab-campus); }
+        .step-card.disabled { opacity: 0.45; pointer-events: none; }
+
+        .step-header {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 1.25rem;
+        }
+        .step-number {
+            width: 2rem; height: 2rem;
+            border-radius: 50%;
+            background: var(--uab-campus);
+            color: #fff;
+            font-weight: 800;
+            font-size: 0.85rem;
+            display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0;
+        }
+        .step-title {
+            font-weight: 700;
+            font-size: 1rem;
+            color: var(--uab-pissarra);
+        }
+        .step-subtitle {
+            font-size: 0.8rem;
+            color: var(--uab-tauro);
+            margin-top: 0.1rem;
+        }
+
+        /* ── Toggle test/prod ── */
+        .env-toggle { display: flex; gap: 0; }
+        .env-toggle button {
+            padding: 0.45rem 1.2rem;
+            font-size: 0.8rem;
+            font-weight: 700;
+            border: 1.5px solid var(--uab-columna);
+            background: var(--uab-boira);
+            color: var(--uab-tauro);
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .env-toggle button:first-child { border-radius: 0.6rem 0 0 0.6rem; border-right: none; }
+        .env-toggle button:last-child  { border-radius: 0 0.6rem 0.6rem 0; }
+        .env-toggle button.active-test {
+            background: #fef9c3; color: #92400e;
+            border-color: #fbbf24;
+        }
+        .env-toggle button.active-prod {
+            background: #dcfce7; color: #166534;
+            border-color: var(--uab-campus);
+        }
+
+        /* ── Selector estilitzat ── */
+        select.uab-select, input.uab-input {
+            border: 1.5px solid var(--uab-columna);
+            border-radius: 0.6rem;
+            padding: 0.45rem 0.85rem;
+            font-size: 0.85rem;
+            background: #fff;
+            color: var(--uab-pissarra);
+            outline: none;
+            transition: border-color 0.15s;
+            width: 100%;
+        }
+        select.uab-select:focus, input.uab-input:focus {
+            border-color: var(--uab-campus);
+        }
+
+        /* ── Paste area ── */
+        #paste-area {
+            width: 100%;
+            min-height: 140px;
+            border: 1.5px dashed var(--uab-columna);
+            border-radius: 0.75rem;
+            padding: 0.75rem 1rem;
+            font-family: monospace;
+            font-size: 0.78rem;
+            resize: vertical;
+            outline: none;
+            transition: border-color 0.15s;
+            color: var(--uab-pissarra);
+        }
+        #paste-area:focus { border-color: var(--uab-campus); border-style: solid; }
+        #paste-area.has-data { border-style: solid; border-color: var(--uab-campus); }
+
+        /* ── Preset tipus d'edició ── */
+        .preset-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 0.75rem;
+        }
+        .preset-card {
+            border: 1.5px solid var(--uab-columna);
+            border-radius: 0.75rem;
+            padding: 0.85rem 1rem;
+            cursor: pointer;
+            transition: all 0.15s;
+            background: var(--uab-boira);
+        }
+        .preset-card:hover  { border-color: var(--uab-campus); background: #f0faf4; }
+        .preset-card.active { border-color: var(--uab-campus); background: #f0faf4;
+                              box-shadow: 0 0 0 2px rgba(0,128,55,0.18); }
+        .preset-card .preset-name { font-weight: 700; font-size: 0.85rem; color: var(--uab-pissarra); }
+        .preset-card .preset-desc { font-size: 0.75rem; color: var(--uab-tauro); margin-top: 0.2rem; }
+        .preset-card .preset-code {
+            font-family: monospace; font-size: 0.72rem;
+            color: var(--uab-cala); margin-top: 0.35rem;
+        }
+
+        /* ── Preview table ── */
+        .data-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+        .data-table th {
+            background: var(--uab-boira);
+            padding: 0.55rem 0.9rem;
+            text-align: left;
+            font-size: 0.72rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--uab-tauro);
+            border-bottom: 1.5px solid var(--uab-columna);
+        }
+        .data-table td {
+            padding: 0.5rem 0.9rem;
+            border-bottom: 1px solid var(--uab-boira);
+            color: var(--uab-pissarra);
+            vertical-align: middle;
+        }
+        .data-table tr:hover td { background: #f7fdf9; }
+        .data-table td.mono { font-family: monospace; font-size: 0.75rem; color: var(--uab-tauro); }
+
+        /* ── Status badges ── */
+        .badge {
+            display: inline-block;
+            padding: 0.2rem 0.65rem;
+            border-radius: 999px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+        .badge-ok      { background: #dcfce7; color: #166534; }
+        .badge-error   { background: #fee2e2; color: #991b1b; }
+        .badge-skip    { background: #f1f5f9; color: #475569; }
+        .badge-dryrun  { background: #dbeafe; color: #1e40af; }
+        .badge-notfound{ background: #fff7ed; color: #9a3412; }
+        .badge-pending { background: #f5f5f5; color: #555; }
+
+        /* ── Log area ── */
+        #log-area {
+            background: #0f172a;
+            color: #94a3b8;
+            border-radius: 0.75rem;
+            padding: 1rem 1.25rem;
+            font-family: monospace;
+            font-size: 0.78rem;
+            min-height: 80px;
+            max-height: 240px;
+            overflow-y: auto;
+            line-height: 1.7;
+        }
+        .log-ok    { color: #86efac; }
+        .log-error { color: #fca5a5; }
+        .log-skip  { color: #94a3b8; }
+        .log-info  { color: #7dd3fc; }
+        .log-warn  { color: #fde68a; }
+
+        /* ── Buttons ── */
+        .btn-primary {
+            background: var(--uab-campus);
+            color: #fff;
+            border: none;
+            border-radius: 0.65rem;
+            padding: 0.55rem 1.4rem;
+            font-weight: 700;
+            font-size: 0.88rem;
+            cursor: pointer;
+            transition: background 0.15s, transform 0.1s;
+        }
+        .btn-primary:hover    { background: var(--uab-collserola); }
+        .btn-primary:active   { transform: scale(0.97); }
+        .btn-primary:disabled { background: var(--uab-columna); cursor: not-allowed; }
+        .btn-secondary {
+            background: var(--uab-boira);
+            color: var(--uab-pissarra);
+            border: 1.5px solid var(--uab-columna);
+            border-radius: 0.65rem;
+            padding: 0.5rem 1.2rem;
+            font-weight: 600;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .btn-secondary:hover { background: var(--uab-jade); border-color: var(--uab-campus); }
+        .btn-danger {
+            background: #fee2e2; color: #991b1b;
+            border: 1.5px solid #fca5a5;
+            border-radius: 0.65rem;
+            padding: 0.5rem 1.2rem;
+            font-weight: 700;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .btn-danger:hover { background: #fecaca; }
+
+        /* ── Update toggle switch ── */
+        .toggle-switch { position: relative; width: 42px; height: 24px; flex-shrink: 0; }
+        .toggle-switch input { opacity: 0; width: 0; height: 0; }
+        .toggle-slider {
+            position: absolute; inset: 0;
+            background: var(--uab-columna);
+            border-radius: 999px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .toggle-slider::before {
+            content: '';
+            position: absolute;
+            width: 18px; height: 18px;
+            left: 3px; top: 3px;
+            background: #fff;
+            border-radius: 50%;
+            transition: transform 0.2s;
+            box-shadow: 0 1px 3px rgba(0,0,0,.2);
+        }
+        .toggle-switch input:checked + .toggle-slider { background: var(--uab-campus); }
+        .toggle-switch input:checked + .toggle-slider::before { transform: translateX(18px); }
+
+        /* ── Col selector ── */
+        .col-pill {
+            display: inline-flex; align-items: center; gap: 0.4rem;
+            border: 1.5px solid var(--uab-columna);
+            border-radius: 0.5rem;
+            padding: 0.35rem 0.75rem;
+            font-size: 0.8rem;
+            cursor: pointer;
+            background: var(--uab-boira);
+            transition: all 0.15s;
+        }
+        .col-pill.selected-uuid  { background: #fef9c3; border-color: #fbbf24; color: #92400e; }
+        .col-pill.selected-valor { background: #dbeafe; border-color: #60a5fa; color: #1e40af; }
+        .col-pill:hover { border-color: var(--uab-campus); }
+
+        /* ── Progress bar ── */
+        #progress-bar-wrap { height: 6px; background: var(--uab-boira); border-radius: 99px; overflow: hidden; margin: 0.75rem 0; }
+        #progress-bar { height: 100%; width: 0%; background: var(--uab-campus); border-radius: 99px; transition: width 0.3s; }
+
+        /* ── Custom fields ── */
+        #custom-fields { display: none; }
+        #custom-fields.visible { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen">
+
+<!-- ─── Brandbar UAB ────────────────────────────────────────── -->
+<!-- injectada per uab-brand.js -->
+
+<div class="mx-auto py-8 px-6 max-w-5xl">
+
+    <header class="mb-8">
+        <div class="flex items-center gap-3 mb-1">
+            <a href="index.html" class="text-sm font-semibold text-slate-500 hover:text-green-700 transition-colors">
+                <i class="fa-solid fa-arrow-left mr-1"></i> Inici
+            </a>
+        </div>
+        <h1 class="text-2xl font-black text-slate-800">
+            Edició de <span class="text-green-700">Tipologies</span>
+        </h1>
+        <p class="text-sm text-slate-500 mt-1">
+            Actualització massiva de <code class="bg-slate-100 px-1 rounded text-xs">type</code> i
+            <code class="bg-slate-100 px-1 rounded text-xs">natureTypes</code> d'Awards, Applications i Fundings.
+        </p>
+    </header>
+
+    <!-- ══════════════════════════════════════════════════════════
+         STEP 1 · CONFIGURACIÓ
+    ══════════════════════════════════════════════════════════ -->
+    <div class="step-card active" id="step1">
+        <div class="step-header">
+            <div class="step-number">1</div>
+            <div>
+                <div class="step-title">Configuració</div>
+                <div class="step-subtitle">Entorn, col·lecció i mode d'actualització</div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+
+            <!-- Entorn -->
+            <div>
+                <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+                    <i class="fa-solid fa-server mr-1"></i> Entorn
+                </label>
+                <div class="env-toggle" id="env-toggle">
+                    <button id="btn-test" class="active-test" onclick="setEntorn('test')">
+                        <i class="fa-solid fa-flask mr-1"></i> Test
+                    </button>
+                    <button id="btn-prod" onclick="setEntorn('prod')">
+                        <i class="fa-solid fa-circle-check mr-1"></i> Producció
+                    </button>
+                </div>
+                <p id="env-url" class="text-xs text-slate-400 mt-2 font-mono">egretat.uab.cat</p>
+            </div>
+
+            <!-- Col·lecció -->
+            <div>
+                <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2" for="select-coleccio">
+                    <i class="fa-solid fa-database mr-1"></i> Col·lecció
+                </label>
+                <select id="select-coleccio" class="uab-select">
+                    <option value="awards">awards</option>
+                    <option value="applications">applications</option>
+                    <option value="funding-opportunities">funding-opportunities</option>
+                    <option value="external-organizations">external-organizations</option>
+                    <option value="persons">persons</option>
+                    <option value="external-persons">external-persons</option>
+                    <option value="research-outputs">research-outputs</option>
+                    <option value="student-theses">student-theses</option>
+                </select>
+            </div>
+
+            <!-- Mode actualització -->
+            <div>
+                <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+                    <i class="fa-solid fa-pen-to-square mr-1"></i> Mode
+                </label>
+                <label class="flex items-center gap-3 cursor-pointer mt-1">
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="update-toggle">
+                        <span class="toggle-slider"></span>
+                    </label>
+                    <div>
+                        <span id="update-label" class="text-sm font-bold text-slate-600">Dry Run</span>
+                        <p id="update-desc" class="text-xs text-slate-400 mt-0.5">Previsualitza sense modificar</p>
+                    </div>
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════
+         STEP 2 · TIPUS D'EDICIÓ
+    ══════════════════════════════════════════════════════════ -->
+    <div class="step-card" id="step2">
+        <div class="step-header">
+            <div class="step-number">2</div>
+            <div>
+                <div class="step-title">Tipus d'edició</div>
+                <div class="step-subtitle">Quin camp s'actualitza i com</div>
+            </div>
+        </div>
+
+        <!-- Presets -->
+        <div class="preset-grid mb-5" id="preset-grid">
+            <div class="preset-card active" data-preset="nature" onclick="selectPreset(this)">
+                <div class="preset-name"><i class="fa-solid fa-leaf mr-1 text-green-600"></i> Nature</div>
+                <div class="preset-desc">Actualitza la naturalesa del registre</div>
+                <div class="preset-code">natureTypes[].uri = valor</div>
+            </div>
+            <div class="preset-card" data-preset="type" onclick="selectPreset(this)">
+                <div class="preset-name"><i class="fa-solid fa-tag mr-1 text-blue-500"></i> Tipus</div>
+                <div class="preset-desc">Actualitza la tipologia del registre</div>
+                <div class="preset-code">type.uri = valor</div>
+            </div>
+            <div class="preset-card" data-preset="workflow" onclick="selectPreset(this)">
+                <div class="preset-name"><i class="fa-solid fa-diagram-project mr-1 text-purple-500"></i> Workflow</div>
+                <div class="preset-desc">Canvia l'estat del workflow</div>
+                <div class="preset-code">workflow.step = valor</div>
+            </div>
+            <div class="preset-card" data-preset="custom" onclick="selectPreset(this)">
+                <div class="preset-name"><i class="fa-solid fa-sliders mr-1 text-orange-400"></i> Personalitzat</div>
+                <div class="preset-desc">Configura manualment els paràmetres</div>
+                <div class="preset-code">clave, dictType, dictName…</div>
+            </div>
+        </div>
+
+        <!-- Camps personalitzats (visibles quan preset=custom) -->
+        <div id="custom-fields">
+            <div>
+                <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Camp (clave)</label>
+                <input id="input-clave" class="uab-input" placeholder="p.ex. uri, step, rejectedDate" value="uri">
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Tipus contenidor (dictType)</label>
+                <select id="input-dicttype" class="uab-select">
+                    <option value="">Simple (camp directe)</option>
+                    <option value="dict">dict (objecte annidat)</option>
+                    <option value="list" selected>list (llista d'objectes)</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Nom contenidor (dictName)</label>
+                <input id="input-dictname" class="uab-input" placeholder="p.ex. natureTypes, supervisors" value="natureTypes">
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Valor a cercar (dictValue, opcional)</label>
+                <input id="input-dictvalue" class="uab-input" placeholder="Deixa buit per actualitzar el primer element">
+            </div>
+        </div>
+
+        <!-- Resum actiu -->
+        <div class="mt-4 flex items-center gap-2 bg-green-50 border border-green-200 rounded-lg px-4 py-2.5 text-sm">
+            <i class="fa-solid fa-circle-info text-green-600"></i>
+            <span id="edit-summary" class="text-green-800 font-medium"></span>
+        </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════
+         STEP 3 · DADES
+    ══════════════════════════════════════════════════════════ -->
+    <div class="step-card" id="step3">
+        <div class="step-header">
+            <div class="step-number">3</div>
+            <div>
+                <div class="step-title">Dades</div>
+                <div class="step-subtitle">Enganxa les dades de l'Excel (TSV) o escriu-les manualment</div>
+            </div>
+        </div>
+
+        <div class="mb-3 flex items-center gap-3">
+            <div class="text-xs text-slate-400 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 flex-1">
+                <i class="fa-solid fa-info-circle mr-1 text-blue-400"></i>
+                Copia les cel·les de l'Excel i enganxa-les aquí, o puja directament un fitxer Excel (.xlsx / .xls).
+            </div>
+            <button class="btn-secondary text-xs" onclick="loadExample()">
+                <i class="fa-solid fa-vial mr-1"></i> Exemple
+            </button>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+            <div class="md:col-span-2">
+                <textarea id="paste-area"
+                    placeholder="Enganxa aquí les files de l'Excel (separades per tabuladors)…&#10;&#10;Exemple:&#10;uuid&#9;uri&#10;3a4b5c6d-...&#9;/dk/atira/pure/upm/nature/gac_doc&#10;7e8f9a0b-...&#9;/dk/atira/pure/award/awardtypes/award/other_grants/award"></textarea>
+            </div>
+            <div class="flex flex-col justify-stretch">
+                <div id="dropzone" class="border-2 border-dashed border-slate-300 hover:border-green-600 rounded-xl p-4 flex flex-col items-center justify-center text-center cursor-pointer transition-colors bg-white h-full min-h-[140px]">
+                    <i class="fa-solid fa-file-excel text-3xl text-green-600 mb-2"></i>
+                    <span class="text-xs font-bold text-slate-600">Puja o arrossega un fitxer Excel</span>
+                    <span class="text-[10px] text-slate-400 mt-1">S'accepta .xlsx, .xls</span>
+                    <input type="file" id="file-upload" accept=".xlsx,.xls" class="hidden">
+                    <div id="upload-status" class="text-xs text-green-700 font-semibold mt-2 hidden"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-3 mt-3">
+            <button class="btn-primary" id="btn-parse" onclick="parseData()">
+                <i class="fa-solid fa-table mr-2"></i>Analitzar dades
+            </button>
+            <span id="parse-count" class="text-sm text-slate-500"></span>
+        </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════
+         STEP 4 · MAPATGE DE COLUMNES
+    ══════════════════════════════════════════════════════════ -->
+    <div class="step-card disabled" id="step4">
+        <div class="step-header">
+            <div class="step-number">4</div>
+            <div>
+                <div class="step-title">Mapatge de columnes</div>
+                <div class="step-subtitle">Selecciona quina columna és l'UUID i quina és el valor a actualitzar</div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-6 mb-5">
+            <div>
+                <label class="block text-xs font-bold mb-2" style="color:#92400e">
+                    <i class="fa-solid fa-key mr-1"></i> Columna UUID
+                </label>
+                <div id="uuid-col-pills" class="flex flex-wrap gap-2"></div>
+            </div>
+            <div>
+                <label class="block text-xs font-bold mb-2" style="color:#1e40af">
+                    <i class="fa-solid fa-arrow-right-to-bracket mr-1"></i> Columna Valor
+                </label>
+                <div id="valor-col-pills" class="flex flex-wrap gap-2"></div>
+            </div>
+        </div>
+
+        <!-- Mini preview -->
+        <div class="overflow-x-auto rounded-xl border border-slate-200">
+            <table class="data-table" id="preview-table">
+                <thead><tr id="preview-head"></tr></thead>
+                <tbody id="preview-body"></tbody>
+            </table>
+        </div>
+        <p id="preview-count" class="text-xs text-slate-400 mt-2"></p>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════
+         STEP 5 · EXECUCIÓ
+    ══════════════════════════════════════════════════════════ -->
+    <div class="step-card disabled" id="step5">
+        <div class="step-header">
+            <div class="step-number">5</div>
+            <div>
+                <div class="step-title" id="step5-title">Execució</div>
+                <div class="step-subtitle" id="step5-subtitle">Processa el lot i mostra els resultats</div>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-3 mb-4 flex-wrap">
+            <button class="btn-primary" id="btn-execute" onclick="executeBatch()">
+                <i class="fa-solid fa-play mr-2"></i><span id="btn-execute-label">Executar Dry Run</span>
+            </button>
+            <button class="btn-secondary" id="btn-reset" onclick="resetAll()">
+                <i class="fa-solid fa-rotate-left mr-1"></i> Reiniciar
+            </button>
+            <div id="counter-badges" class="flex gap-2 ml-auto flex-wrap"></div>
+        </div>
+
+        <!-- Progress -->
+        <div id="progress-bar-wrap" style="display:none">
+            <div id="progress-bar"></div>
+        </div>
+
+        <!-- Log -->
+        <div id="log-area" class="mb-4"><span class="log-info">Esperant execució…</span></div>
+
+        <!-- Results table -->
+        <div class="overflow-x-auto rounded-xl border border-slate-200" id="results-wrap" style="display:none">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>UUID</th>
+                        <th>Valor</th>
+                        <th>PureId</th>
+                        <th>Estat</th>
+                        <th>Missatge</th>
+                    </tr>
+                </thead>
+                <tbody id="results-body"></tbody>
+            </table>
+        </div>
+        <!-- Export -->
+        <div class="mt-3 flex gap-2" id="export-bar" style="display:none">
+            <button class="btn-secondary text-xs" onclick="exportCSV()">
+                <i class="fa-solid fa-file-csv mr-1"></i> Exportar CSV
+            </button>
+        </div>
+    </div>
+
+</div><!-- /max-w-5xl -->
+
+
+<!-- ══════════════════════════════════════════════════════════
+     JAVASCRIPT
+══════════════════════════════════════════════════════════ -->
+<script>
+/* ── Estat global ─────────────────────────────────────────── */
+let entorn       = 'test';
+let coleccio     = 'awards';
+let updateEnabled = false;
+let parsedRows   = [];     // [{col0, col1, ...}]
+let headers      = [];     // noms de les columnes detectades
+let uuidCol      = null;   // índex columna UUID
+let valorCol     = null;   // índex columna Valor
+let resultats    = [];     // resultats del batch
+
+// Presets d'edició
+const PRESETS = {
+    nature:   { clave: 'uri', dictType: 'list',  dictName: 'natureTypes', dictValue: '' },
+    type:     { clave: 'uri', dictType: 'dict',  dictName: 'type',        dictValue: '' },
+    workflow: { clave: 'step', dictType: 'dict', dictName: 'workflow',     dictValue: '' },
+    custom:   null
+};
+let activePreset = 'nature';
+
+/* ── Inicialització ───────────────────────────────────────── */
+document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('select-coleccio').addEventListener('change', e => {
+        coleccio = e.target.value;
+    });
+    document.getElementById('update-toggle').addEventListener('change', e => {
+        updateEnabled = e.target.checked;
+        document.getElementById('update-label').textContent = updateEnabled ? 'Actualitzar a Egreta' : 'Dry Run';
+        document.getElementById('update-desc').textContent  = updateEnabled
+            ? '⚠️ Es faran PUTs reals a l\'API'
+            : 'Previsualitza sense modificar';
+        document.getElementById('btn-execute-label').textContent = updateEnabled
+            ? 'Executar (PUT real)' : 'Executar Dry Run';
+        if (updateEnabled) {
+            document.getElementById('update-label').classList.add('text-red-600');
+        } else {
+            document.getElementById('update-label').classList.remove('text-red-600');
+        }
+    });
+    updateEditSummary();
+
+    // Setup dropzone and file upload listeners
+    const dropzone = document.getElementById('dropzone');
+    const fileInput = document.getElementById('file-upload');
+
+    dropzone.addEventListener('click', () => fileInput.click());
+
+    dropzone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropzone.classList.add('border-green-600', 'bg-green-50');
+    });
+
+    dropzone.addEventListener('dragleave', () => {
+        dropzone.classList.remove('border-green-600', 'bg-green-50');
+    });
+
+    dropzone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropzone.classList.remove('border-green-600', 'bg-green-50');
+        if (e.dataTransfer.files.length) {
+            fileInput.files = e.dataTransfer.files;
+            handleExcelUpload(e.dataTransfer.files[0]);
+        }
+    });
+
+    fileInput.addEventListener('change', () => {
+        if (fileInput.files.length) {
+            handleExcelUpload(fileInput.files[0]);
+        }
+    });
+});
+
+/* ── Entorn ───────────────────────────────────────────────── */
+function setEntorn(e) {
+    entorn = e;
+    document.getElementById('btn-test').className = e === 'test' ? 'active-test' : '';
+    document.getElementById('btn-prod').className = e === 'prod' ? 'active-prod' : '';
+    document.getElementById('env-url').textContent =
+        e === 'test' ? 'egretat.uab.cat' : 'egreta.uab.cat';
+}
+
+/* ── Presets ──────────────────────────────────────────────── */
+function selectPreset(card) {
+    document.querySelectorAll('.preset-card').forEach(c => c.classList.remove('active'));
+    card.classList.add('active');
+    activePreset = card.dataset.preset;
+
+    const cf = document.getElementById('custom-fields');
+    if (activePreset === 'custom') {
+        cf.classList.add('visible');
+    } else {
+        cf.classList.remove('visible');
+    }
+    updateEditSummary();
+}
+
+function getEditParams() {
+    if (activePreset !== 'custom') return { ...PRESETS[activePreset] };
+    return {
+        clave:     document.getElementById('input-clave').value.trim(),
+        dictType:  document.getElementById('input-dicttype').value,
+        dictName:  document.getElementById('input-dictname').value.trim(),
+        dictValue: document.getElementById('input-dictvalue').value.trim()
+    };
+}
+
+function updateEditSummary() {
+    const p = getEditParams();
+    let txt = '';
+    if (!p) { txt = 'Configura els paràmetres d\'edició'; }
+    else if (!p.dictType) { txt = `Camp simple: <code>${p.clave} = valor</code>`; }
+    else if (p.dictType === 'dict') { txt = `Objecte annidat: <code>${p.dictName}.${p.clave} = valor</code>`; }
+    else if (p.dictType === 'list') { txt = `Llista: <code>${p.dictName}[].${p.clave} = valor</code>`; }
+    document.getElementById('edit-summary').innerHTML = txt;
+}
+document.querySelectorAll('#custom-fields input, #custom-fields select').forEach(el => {
+    el.addEventListener('input', updateEditSummary);
+});
+
+/* ── Càrrega i parseig d'Excel ────────────────────────────── */
+async function handleExcelUpload(file) {
+    if (!file) return;
+    const statusEl = document.getElementById('upload-status');
+    statusEl.textContent = `Processant ${file.name}...`;
+    statusEl.classList.remove('hidden', 'text-red-600');
+    statusEl.classList.add('text-green-700');
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+        const resp = await fetch(apiUrl('/egreta-editor/parse-excel'), {
+            method: 'POST',
+            body: formData
+        });
+
+        if (!resp.ok) {
+            const errJson = await resp.json().catch(() => ({}));
+            throw new Error(errJson.error || 'Error en processar el fitxer');
+        }
+
+        const rows = await resp.json();
+        if (!rows || rows.length === 0) {
+            throw new Error("L'Excel no conté dades o files.");
+        }
+
+        // Convert List<List<String>> to TSV
+        const tsv = rows.map(r => r.join('\t')).join('\n');
+        document.getElementById('paste-area').value = tsv;
+        document.getElementById('paste-area').classList.add('has-data');
+
+        statusEl.textContent = `✓ ${file.name} carregat (${rows.length} files)`;
+        parseData();
+    } catch (err) {
+        statusEl.textContent = `Error: ${err.message}`;
+        statusEl.classList.remove('text-green-700');
+        statusEl.classList.add('text-red-600');
+        alert("Error en la càrrega de l'Excel: " + err.message);
+    }
+}
+
+/* ── Parse de dades ───────────────────────────────────────── */
+function parseData() {
+    const raw = document.getElementById('paste-area').value.trim();
+    if (!raw) { alert('Enganxa les dades primer.'); return; }
+
+    const lines = raw.split(/\r?\n/).filter(l => l.trim());
+    if (lines.length === 0) { alert('No s\'han trobat files.'); return; }
+
+    // Detecta separador
+    const sep = lines[0].includes('\t') ? '\t' : ',';
+    const allRows = lines.map(l => l.split(sep).map(c => c.trim()));
+    const maxCols = Math.max(...allRows.map(r => r.length));
+
+    // Primera fila: capçalera si tots els valors semblen text (no uuid)
+    const firstRow = allRows[0];
+    const looksLikeUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-/i;
+    const hasHeader = !firstRow.some(v => looksLikeUUID.test(v));
+
+    if (hasHeader) {
+        headers  = firstRow;
+        parsedRows = allRows.slice(1).map(r => {
+            const obj = {};
+            headers.forEach((h, i) => obj[i] = r[i] || '');
+            return obj;
+        });
+    } else {
+        headers = Array.from({ length: maxCols }, (_, i) => `Col ${i + 1}`);
+        parsedRows = allRows.map(r => {
+            const obj = {};
+            headers.forEach((_, i) => obj[i] = r[i] || '');
+            return obj;
+        });
+    }
+
+    parsedRows = parsedRows.filter(r => Object.values(r).some(v => v));
+
+    document.getElementById('paste-area').classList.add('has-data');
+    document.getElementById('parse-count').textContent =
+        `${parsedRows.length} fila${parsedRows.length !== 1 ? 'es' : ''} detectade${parsedRows.length !== 1 ? 's' : ''}`;
+
+    buildColumnPickers();
+    buildPreviewTable();
+
+    document.getElementById('step4').classList.remove('disabled');
+    document.getElementById('step4').scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+    // Auto-selecció intel·ligent de columnes
+    autoSelectColumns();
+}
+
+function autoSelectColumns() {
+    const looksLikeUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-/i;
+    const looksLikeUri  = /^\/dk\//i;
+
+    headers.forEach((h, i) => {
+        const sampleVals = parsedRows.slice(0, 5).map(r => r[i] || '');
+        const headerLower = h.toLowerCase();
+
+        if (!uuidCol && (headerLower.includes('uuid') || sampleVals.some(v => looksLikeUUID.test(v)))) {
+            selectUuidCol(i);
+        } else if (!valorCol && (headerLower.includes('uri') || headerLower.includes('valor') ||
+                sampleVals.some(v => looksLikeUri.test(v)))) {
+            selectValorCol(i);
+        }
+    });
+}
+
+/* ── Column pickers ───────────────────────────────────────── */
+function buildColumnPickers() {
+    ['uuid-col-pills', 'valor-col-pills'].forEach(id => {
+        const container = document.getElementById(id);
+        container.innerHTML = headers.map((h, i) => `
+            <button class="col-pill" id="${id}-${i}" onclick="${id === 'uuid-col-pills' ? 'selectUuidCol' : 'selectValorCol'}(${i})">
+                ${escHtml(h)}
+            </button>
+        `).join('');
+    });
+}
+
+function selectUuidCol(i) {
+    uuidCol = i;
+    document.querySelectorAll('#uuid-col-pills .col-pill').forEach((el, idx) => {
+        el.classList.toggle('selected-uuid', idx === i);
+    });
+    refreshPreviewHighlight();
+    checkStep4Ready();
+}
+
+function selectValorCol(i) {
+    valorCol = i;
+    document.querySelectorAll('#valor-col-pills .col-pill').forEach((el, idx) => {
+        el.classList.toggle('selected-valor', idx === i);
+    });
+    refreshPreviewHighlight();
+    checkStep4Ready();
+}
+
+function checkStep4Ready() {
+    if (uuidCol !== null && valorCol !== null) {
+        document.getElementById('step5').classList.remove('disabled');
+    }
+}
+
+/* ── Preview table ────────────────────────────────────────── */
+function buildPreviewTable() {
+    const thead = document.getElementById('preview-head');
+    thead.innerHTML = headers.map((h, i) =>
+        `<th id="th-col-${i}">${escHtml(h)}</th>`).join('');
+
+    const tbody = document.getElementById('preview-body');
+    const MAX = 10;
+    const shown = parsedRows.slice(0, MAX);
+    tbody.innerHTML = shown.map(row => `
+        <tr>${headers.map((_, i) => `<td id="td-${i}" class="mono">${escHtml(row[i] || '')}</td>`).join('')}</tr>
+    `).join('');
+
+    document.getElementById('preview-count').textContent =
+        parsedRows.length > MAX
+            ? `Mostrant ${MAX} de ${parsedRows.length} files.`
+            : `${parsedRows.length} files.`;
+}
+
+function refreshPreviewHighlight() {
+    headers.forEach((_, i) => {
+        const th = document.getElementById(`th-col-${i}`);
+        if (!th) return;
+        th.style.background  = i === uuidCol  ? '#fef9c3'
+                             : i === valorCol ? '#dbeafe' : '';
+        th.style.color = i === uuidCol ? '#92400e' : i === valorCol ? '#1e40af' : '';
+    });
+}
+
+/* ── Exemple ──────────────────────────────────────────────── */
+function loadExample() {
+    document.getElementById('paste-area').value =
+        `UUID\turi\n` +
+        `3a4b5c6d-1234-5678-abcd-ef0123456789\t/dk/atira/pure/upm/nature/gac_doc\n` +
+        `7e8f9a0b-2345-6789-bcde-f01234567890\t/dk/atira/pure/upm/nature/bec_doc\n` +
+        `1c2d3e4f-3456-789a-cdef-012345678901\t/dk/atira/pure/award/awardtypes/award/other_grants/award`;
+    document.getElementById('paste-area').classList.add('has-data');
+}
+
+/* ── Execució del lot ─────────────────────────────────────── */
+async function executeBatch() {
+    if (uuidCol === null || valorCol === null) {
+        alert('Selecciona primer les columnes UUID i Valor.');
+        return;
+    }
+
+    const files = parsedRows.map(row => ({
+        uuid:  (row[uuidCol]  || '').trim().toLowerCase(),
+        valor: (row[valorCol] || '').trim().toLowerCase()
+    })).filter(f => f.uuid && f.uuid !== 'null');
+
+    if (files.length === 0) { alert('No hi ha files vàlides per processar.'); return; }
+
+    const params = getEditParams();
+    const payload = {
+        entorn,
+        coleccio,
+        updateEnabled,
+        clave:     params.clave,
+        dictType:  params.dictType  || null,
+        dictName:  params.dictName  || null,
+        dictValue: params.dictValue || null,
+        files
+    };
+
+    // Reset UI
+    resultats = [];
+    document.getElementById('results-wrap').style.display = 'none';
+    document.getElementById('export-bar').style.display   = 'none';
+    document.getElementById('results-body').innerHTML = '';
+    document.getElementById('counter-badges').innerHTML = '';
+    document.getElementById('progress-bar-wrap').style.display = 'flex';
+    document.getElementById('progress-bar').style.width = '0%';
+    document.getElementById('btn-execute').disabled = true;
+    setLog(`<span class="log-info">Iniciant processament de ${files.length} files…</span>`);
+
+    try {
+        const resp = await fetch(apiUrl('/egreta-editor/process'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        if (!resp.ok) {
+            appendLog(`<span class="log-error">Error HTTP ${resp.status}: ${await resp.text()}</span>`);
+            return;
+        }
+
+        resultats = await resp.json();
+        renderResults(resultats, files.length);
+
+    } catch (err) {
+        appendLog(`<span class="log-error">Error de connexió: ${err.message}</span>`);
+    } finally {
+        document.getElementById('progress-bar').style.width = '100%';
+        document.getElementById('btn-execute').disabled = false;
+    }
+}
+
+function renderResults(data, total) {
+    const tbody = document.getElementById('results-body');
+    const counts = { OK: 0, ERROR: 0, SKIP: 0, DRY_RUN: 0, NOT_FOUND: 0 };
+
+    tbody.innerHTML = data.map((r, i) => {
+        const st = (r.status || 'SKIP').toUpperCase().replace('_', '');
+        const statusKey = r.status?.toUpperCase() || 'SKIP';
+        counts[statusKey] = (counts[statusKey] || 0) + 1;
+
+        const progress = Math.round(((i + 1) / total) * 100);
+        document.getElementById('progress-bar').style.width = progress + '%';
+
+        const badgeClass = {
+            'OK': 'badge-ok', 'ERROR': 'badge-error', 'SKIP': 'badge-skip',
+            'DRY_RUN': 'badge-dryrun', 'NOT_FOUND': 'badge-notfound'
+        }[statusKey] || 'badge-skip';
+
+        // Log
+        const logClass = { OK: 'log-ok', ERROR: 'log-error', SKIP: 'log-skip', DRY_RUN: 'log-info', NOT_FOUND: 'log-warn' }[statusKey] || 'log-skip';
+        appendLog(`<span class="${logClass}">[${String(i+1).padStart(3,' ')}] ${statusKey.padEnd(9)} ${r.uuid || '—'} → ${r.message || ''}</span>`);
+
+        const preview = r.preview ? `<br><span class="text-xs font-mono text-blue-600">${JSON.stringify(r.preview)}</span>` : '';
+        return `
+            <tr>
+                <td class="mono">${i + 1}</td>
+                <td class="mono text-xs">${escHtml(r.uuid || '—')}</td>
+                <td class="mono text-xs" style="max-width:200px;overflow:hidden;text-overflow:ellipsis" title="${escHtml(r.valor||'')}">
+                    ${escHtml(r.valor || '—')}
+                </td>
+                <td class="mono">${escHtml(String(r.pureId || '—'))}</td>
+                <td><span class="badge ${badgeClass}">${statusKey}</span></td>
+                <td class="text-xs text-slate-600">${escHtml(r.message || '')}${preview}</td>
+            </tr>`;
+    }).join('');
+
+    // Counter badges
+    const labels = { OK: '✓ OK', ERROR: '✗ Error', SKIP: '↷ Skip', DRY_RUN: '◎ Dry Run', NOT_FOUND: '? No trobat' };
+    const badgeMap = { OK: 'badge-ok', ERROR: 'badge-error', SKIP: 'badge-skip', DRY_RUN: 'badge-dryrun', NOT_FOUND: 'badge-notfound' };
+    document.getElementById('counter-badges').innerHTML = Object.entries(counts)
+        .filter(([, n]) => n > 0)
+        .map(([k, n]) => `<span class="badge ${badgeMap[k]}">${labels[k] || k}: ${n}</span>`)
+        .join('');
+
+    document.getElementById('results-wrap').style.display = '';
+    document.getElementById('export-bar').style.display   = '';
+
+    const totalOk = counts.OK || 0;
+    const totalErr = counts.ERROR || 0;
+    appendLog(`<span class="log-info">─────── Processament finalitzat: ${totalOk} OK · ${totalErr} errors · ${data.length} total ───────</span>`);
+}
+
+/* ── Log helpers ──────────────────────────────────────────── */
+function setLog(html) {
+    const el = document.getElementById('log-area');
+    el.innerHTML = html;
+    el.scrollTop = el.scrollHeight;
+}
+function appendLog(html) {
+    const el = document.getElementById('log-area');
+    el.innerHTML += '\n' + html;
+    el.scrollTop = el.scrollHeight;
+}
+
+/* ── Export CSV ───────────────────────────────────────────── */
+function exportCSV() {
+    if (!resultats.length) return;
+    const head = 'uuid,valor,pureId,status,message\n';
+    const rows = resultats.map(r =>
+        [r.uuid, r.valor, r.pureId, r.status, r.message]
+        .map(v => `"${String(v || '').replace(/"/g, '""')}"`)
+        .join(',')
+    ).join('\n');
+    const blob = new Blob(['\uFEFF' + head + rows], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url;
+    a.download = `edicio-tipologies-${new Date().toISOString().slice(0,10)}.csv`;
+    a.click(); URL.revokeObjectURL(url);
+}
+
+/* ── Reset ────────────────────────────────────────────────── */
+function resetAll() {
+    if (!confirm('Vols reiniciar? Es perdran les dades carregades.')) return;
+    parsedRows = []; headers = []; uuidCol = null; valorCol = null; resultats = [];
+    document.getElementById('paste-area').value = '';
+    document.getElementById('paste-area').classList.remove('has-data');
+    document.getElementById('parse-count').textContent = '';
+    document.getElementById('step4').classList.add('disabled');
+    document.getElementById('step5').classList.add('disabled');
+    document.getElementById('results-wrap').style.display = 'none';
+    document.getElementById('export-bar').style.display = 'none';
+    document.getElementById('progress-bar-wrap').style.display = 'none';
+    document.getElementById('file-upload').value = '';
+    const uploadStatus = document.getElementById('upload-status');
+    uploadStatus.textContent = '';
+    uploadStatus.classList.add('hidden');
+    setLog('<span class="log-info">Esperant execució…</span>');
+}
+
+/* ── Utils ────────────────────────────────────────────────── */
+function escHtml(str) {
+    return String(str)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+</script>
+
+</body>
+</html>

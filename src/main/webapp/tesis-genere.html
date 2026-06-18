@@ -60,7 +60,7 @@
 </head>
 <body class="bg-[#f1f2f4] min-h-screen">
 
-    <div class="mx-auto px-6 py-8 max-w-7xl">
+    <div class="mx-auto px-6 py-8 w-[85%] max-w-none">
         <header hidden class="mb-8">
             <h1 class="text-2xl font-bold text-slate-800">Direcció de tesis per gènere</h1>
             <p class="text-sm text-slate-500 mt-1">Evolució temporal i codirecció de tesis doctorals dirigides per dones investigadores</p>
@@ -99,7 +99,7 @@
         <!-- Contenido de Estadísticas -->
         <div id="contenido" class="hidden">
             <!-- KPIs Grid -->
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-4 mb-8">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-4 mb-8">
                 <!-- KPI 1: Total Tesis -->
                 <div class="kpi-card bg-white border border-slate-200 rounded-2xl shadow-sm p-5 flex items-center gap-4">
                     <div class="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600 shrink-0">
@@ -111,35 +111,35 @@
                     </div>
                 </div>
 
-                <!-- KPI 2: Dirigides per Dones -->
+                <!-- KPI 2: Només Dones -->
                 <div class="kpi-card bg-white border border-slate-200 rounded-2xl shadow-sm p-5 flex items-center gap-4">
                     <div class="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-[#008037] shrink-0">
                         <i class="fa-solid fa-venus text-xl"></i>
                     </div>
                     <div>
-                        <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Dirigides per Dones</p>
+                        <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Només Dones</p>
                         <p id="kpiDirigides" class="text-2xl font-black text-slate-800">0% <span class="text-xs font-semibold text-slate-400">(0)</span></p>
                     </div>
                 </div>
-
-                <!-- KPI 3: Codirigides per Dones -->
+ 
+                <!-- KPI 3: Direccions Mixtes -->
                 <div class="kpi-card bg-white border border-slate-200 rounded-2xl shadow-sm p-5 flex items-center gap-4">
                     <div class="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-[#00cc58] shrink-0">
                         <i class="fa-solid fa-people-arrows text-xl"></i>
                     </div>
                     <div>
-                        <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Codirigides per Dones</p>
+                        <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Direccions Mixtes</p>
                         <p id="kpiCodirigides" class="text-2xl font-black text-slate-800">0% <span class="text-xs font-semibold text-slate-400">(0)</span></p>
                     </div>
                 </div>
 
-                <!-- KPI 4: Dirigides només per Homes -->
+                <!-- KPI 4: Només Homes -->
                 <div class="kpi-card bg-white border border-slate-200 rounded-2xl shadow-sm p-5 flex items-center gap-4">
                     <div class="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-600 shrink-0">
                         <i class="fa-solid fa-mars text-xl"></i>
                     </div>
                     <div>
-                        <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Dirigides per Homes</p>
+                        <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Només Homes</p>
                         <p id="kpiHomes" class="text-2xl font-black text-slate-800">0% <span class="text-xs font-semibold text-slate-400">(0)</span></p>
                     </div>
                 </div>
@@ -155,24 +155,35 @@
                     </div>
                 </div>
 
-                <!-- KPI 5: Autors/es amb Beca -->
+                <!-- KPI 5: Autors amb Beca (Només Dones) -->
                 <div class="kpi-card bg-white border border-slate-200 rounded-2xl shadow-sm p-5 flex items-center gap-4">
                     <div class="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600 shrink-0">
                         <i class="fa-solid fa-award text-xl"></i>
                     </div>
                     <div>
-                        <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Autors amb Beca direcció dones</p>
-                        <p id="kpiBecas" class="text-2xl font-black text-slate-800">0% <span class="text-xs font-semibold text-slate-400">(0)</span></p>
+                        <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Autors amb Beca (Direccions només Dones)</p>
+                        <p id="kpiBecasDones" class="text-2xl font-black text-slate-800">0% <span class="text-xs font-semibold text-slate-400">(0)</span></p>
                     </div>
                 </div>
 
-                <!-- KPI 6: Autors amb Beca (Només Homes) -->
+                <!-- KPI 6: Autors amb Beca (Direccions Mixtes) -->
+                <div class="kpi-card bg-white border border-slate-200 rounded-2xl shadow-sm p-5 flex items-center gap-4">
+                    <div class="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600 shrink-0">
+                        <i class="fa-solid fa-award text-xl"></i>
+                    </div>
+                    <div>
+                        <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Autors amb Beca (Direccions Mixtes)</p>
+                        <p id="kpiBecasMixtes" class="text-2xl font-black text-slate-800">0% <span class="text-xs font-semibold text-slate-400">(0)</span></p>
+                    </div>
+                </div>
+
+                <!-- KPI 8: Autors amb Beca (Només Homes) -->
                 <div class="kpi-card bg-white border border-slate-200 rounded-2xl shadow-sm p-5 flex items-center gap-4">
                     <div class="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-500 shrink-0">
                         <i class="fa-solid fa-award text-xl"></i>
                     </div>
                     <div>
-                        <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Autors amb Beca direcció homes</p>
+                        <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Autors amb Beca (Direccions només Homes)</p>
                         <p id="kpiBecasHomes" class="text-2xl font-black text-slate-800">0% <span class="text-xs font-semibold text-slate-400">(0)</span></p>
                     </div>
                 </div>
@@ -204,7 +215,7 @@
                 <!-- Gráfico Porcentaje de participación femenina por año -->
                 <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-6 relative">
                     <div class="flex justify-between items-center mb-4">
-                        <h2 class="text-base font-bold text-slate-800">Percentatge anual de tesis dirigides/codirigides per dones (%)</h2>
+                        <h2 class="text-base font-bold text-slate-800">Percentatge anual de tesis amb participació femenina (%)</h2>
                         <i class="fa-solid fa-chart-bar text-slate-300"></i>
                     </div>
                     <div id="chartGenEvolucion" class="chart-container"></div>
@@ -221,13 +232,13 @@
             </div>
 
             <!-- Tablas y Detalle -->
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
                 <!-- Tabla Tesis dirigidas por mujeres -->
                 <div class="lg:col-span-2 bg-white border border-slate-200 rounded-2xl shadow-sm p-6">
                     <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-6">
                         <div>
-                            <h2 class="text-lg font-bold text-slate-800">Llistat de tesis dirigides/codirigides per dones</h2>
-                            <p class="text-xs text-slate-400 mt-0.5">Mostrant tesis doctorals amb participació femenina en la direcció</p>
+                            <h2 class="text-lg font-bold text-slate-800">Llistat de tesis amb participació femenina</h2>
+                            <p class="text-xs text-slate-400 mt-0.5">Mostrant tesis doctorals amb participació femenina en la direcció (Només Dones o Mixta)</p>
                         </div>
                         <div class="flex flex-row items-center gap-3 w-full sm:w-auto">
                             <!-- Botó Exportar Excel Tesis -->
@@ -262,6 +273,32 @@
                     <div id="tablaDirectores" class="w-full"></div>
                 </div>
             </div>
+
+            <!-- Tabla Tesis dirigidas por hombres -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+                <div class="lg:col-span-2 bg-white border border-slate-200 rounded-2xl shadow-sm p-6">
+                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-6">
+                        <div>
+                            <h2 class="text-lg font-bold text-slate-800">Llistat de tesis dirigides per només homes</h2>
+                            <p class="text-xs text-slate-400 mt-0.5">Mostrant tesis doctorals amb participació exclusivament masculina en la direcció</p>
+                        </div>
+                        <div class="flex flex-row items-center gap-3 w-full sm:w-auto">
+                            <!-- Botó Exportar Excel Tesis Homes -->
+                            <button id="btnDescargarExcelTesisHomes" type="button" class="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl hover:bg-emerald-100 transition-all active:scale-95" title="Descarregar Excel">
+                                <i class="fa-solid fa-file-excel"></i>
+                                <span>Excel</span>
+                            </button>
+                            <div class="relative w-full sm:w-64">
+                                <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                                    <i class="fa-solid fa-magnifying-glass text-xs"></i>
+                                </span>
+                                <input type="text" id="cercarTesisHomes" placeholder="Cerca per títol, autor..." class="w-full pl-9 pr-4 py-2 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all">
+                            </div>
+                        </div>
+                    </div>
+                    <div id="tablaTesisHomes" class="w-full"></div>
+                </div>
+            </div>
         </div>
 
         <!-- Mensaje de Error -->
@@ -279,6 +316,7 @@
         let slider = null;
         let rawThesisData = null;
         let tablaTesis = null;
+        let tablaTesisHomes = null;
         let tablaDirectores = null;
 
         // Inicializar noUiSlider
@@ -412,7 +450,7 @@
                         data: totals
                     },
                     {
-                        name: 'Dirigides per Dones',
+                        name: 'Només Dones',
                         type: 'line',
                         smooth: true,
                         showSymbol: true,
@@ -429,7 +467,7 @@
                         data: directedFemales
                     },
                     {
-                        name: 'Codirigides per Dones',
+                        name: 'Direccions Mixtes',
                         type: 'line',
                         smooth: true,
                         showSymbol: true,
@@ -500,8 +538,8 @@
                             show: false
                         },
                         data: [
-                            { value: directedFemaleTotal, name: 'Dirigides per Dones', itemStyle: { color: '#008037' } },
-                            { value: codirectedFemaleTotal, name: 'Codirigides per Dones', itemStyle: { color: '#00cc58' } },
+                            { value: directedFemaleTotal, name: 'Només Dones', itemStyle: { color: '#008037' } },
+                            { value: codirectedFemaleTotal, name: 'Direccions Mixtes', itemStyle: { color: '#00cc58' } },
                             { value: maleOnlyTotal, name: 'Només Homes', itemStyle: { color: '#596473' } },
                             { value: unknownTotal, name: 'Altres / Desconegut', itemStyle: { color: '#a9b1bc' } }
                         ]
@@ -569,7 +607,7 @@
                 },
                 series: [
                     {
-                        name: 'Dirigides per Dones',
+                        name: 'Només Dones',
                         type: 'bar',
                         stack: 'total',
                         barWidth: '45%',
@@ -589,7 +627,7 @@
                         data: directedPcts
                     },
                     {
-                        name: 'Codirigides per Dones',
+                        name: 'Direccions Mixtes',
                         type: 'bar',
                         stack: 'total',
                         barWidth: '45%',
@@ -630,25 +668,25 @@
 
             filteredTheses.forEach(t => {
                 const year = t.any;
-                const code = t.becaCodi;
-                if (year >= startYear && year <= endYear && code && code !== "") {
-                    scCountsByYear[year][code] = (scCountsByYear[year][code] || 0) + 1;
-                    scCountsTotal[code] = (scCountsTotal[code] || 0) + 1;
+                const titol = t.becaTitol;
+                if (year >= startYear && year <= endYear && titol && titol !== "") {
+                    scCountsByYear[year][titol] = (scCountsByYear[year][titol] || 0) + 1;
+                    scCountsTotal[titol] = (scCountsTotal[titol] || 0) + 1;
                 }
             });
 
-            const scList = Object.keys(scCountsTotal).filter(code => scCountsTotal[code] > 0).sort();
+            const scList = Object.keys(scCountsTotal).filter(titol => scCountsTotal[titol] > 0).sort();
 
-            const seriesList = scList.map(code => {
+            const seriesList = scList.map(titol => {
                 return {
-                    name: code,
+                    name: titol,
                     type: 'line',
                     smooth: true,
                     showSymbol: true,
                     symbol: 'circle',
                     symbolSize: 6,
                     lineStyle: { width: 2 },
-                    data: years.map(y => scCountsByYear[y][code] || 0)
+                    data: years.map(y => scCountsByYear[y][titol] || 0)
                 };
             });
 
@@ -658,6 +696,7 @@
                     axisPointer: { type: 'shadow' }
                 },
                 legend: {
+                    type: 'scroll',
                     bottom: '0%',
                     left: 'center',
                     textStyle: { color: '#475569', fontWeight: 600 }
@@ -715,33 +754,91 @@
                     { 
                         title: "Tipus", 
                         field: "tipusDireccio", 
-                        width: 105, 
+                        width: 115, 
                         headerSort: true,
                         formatter: function(cell) {
                             const val = cell.getValue();
-                            if (val === "Dirigida") {
-                                return `<span class="inline-flex items-center rounded-md bg-emerald-100 px-2.5 py-0.5 text-xs font-bold text-emerald-800 ring-1 ring-inset ring-emerald-600/20">Dirigida</span>`;
-                            } else if (val === "Codirigida") {
-                                return `<span class="inline-flex items-center rounded-md bg-teal-50 px-2.5 py-0.5 text-xs font-semibold text-teal-800 ring-1 ring-inset ring-teal-600/20">Codirigida</span>`;
+                            if (val === "Només Dones" || val === "Dirigida") {
+                                return `<span class="inline-flex items-center rounded-md bg-emerald-100 px-2.5 py-0.5 text-xs font-bold text-emerald-800 ring-1 ring-inset ring-emerald-600/20">Només Dones</span>`;
+                            } else if (val === "Mixta" || val === "Codirigida") {
+                                return `<span class="inline-flex items-center rounded-md bg-teal-50 px-2.5 py-0.5 text-xs font-semibold text-teal-800 ring-1 ring-inset ring-teal-600/20">Mixta</span>`;
                             }
                             return `<span class="text-slate-400">-</span>`;
                         }
                     },
                     { 
                         title: "Beca", 
-                        field: "becaCodi", 
-                        width: 100, 
+                        field: "becaTitol", 
+                        minWidth: 180, 
                         headerSort: true,
                         formatter: function(cell) {
-                            const codi = cell.getValue();
-                            const titol = cell.getData().becaTitol;
-                            return codi 
-                                ? `<span class="inline-flex items-center rounded-md bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-900 ring-1 ring-inset ring-amber-600/15" title="${titol}"><i class="fa-solid fa-award mr-1 shrink-0"></i>${codi}</span>` 
+                            const titol = cell.getValue();
+                            const codi = cell.getData().becaCodi;
+                            return titol 
+                                ? `<span class="inline-flex items-center rounded-md bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-900 ring-1 ring-inset ring-amber-600/15" title="${codi}"><i class="fa-solid fa-award mr-1 shrink-0"></i>${titol}</span>` 
                                 : `<span class="text-slate-300">-</span>`;
                         }
                     },
                     { 
-                        title: "Directores (Dones)", 
+                        title: "Directors/es", 
+                        field: "directores", 
+                        minWidth: 150,
+                        formatter: function(cell) {
+                            const val = cell.getValue();
+                            if (!val || !val.length) return "-";
+                            return val.map(name => `<span class="inline-flex items-center rounded-md bg-slate-50 px-2 py-0.5 text-xs font-semibold text-slate-700 ring-1 ring-inset ring-slate-600/10">${name}</span>`).join(" ");
+                        }
+                    },
+                    { title: "Departament / Unitat", field: "departament", minWidth: 150, headerSort: true }
+                ]
+            });
+
+            tablaTesisHomes = new Tabulator('#tablaTesisHomes', {
+                layout: 'fitColumns',
+                pagination: 'local',
+                paginationSize: 10,
+                langs: {
+                    "default": {
+                        "pagination": {
+                            "first": "Primer",
+                            "first_title": "Primera pàgina",
+                            "last": "Últim",
+                            "last_title": "Última pàgina",
+                            "prev": "Anterior",
+                            "prev_title": "Pàgina anterior",
+                            "next": "Següent",
+                            "next_title": "Pàgina següent"
+                        }
+                    }
+                },
+                columns: [
+                    { title: "Any", field: "any", width: 70, headerSort: true },
+                    { title: "Títol de la Tesis", field: "titol", minWidth: 200, headerSort: true },
+                    { title: "Autor/a", field: "autor", width: 130, headerSort: true },
+                    { 
+                        title: "Tipus", 
+                        field: "tipusDireccio", 
+                        width: 115, 
+                        headerSort: true,
+                        formatter: function(cell) {
+                            return `<span class="inline-flex items-center rounded-md bg-blue-100 px-2.5 py-0.5 text-xs font-bold text-blue-800 ring-1 ring-inset ring-blue-600/20">Només Homes</span>`;
+                        }
+                    },
+                    { 
+                        title: "Beca", 
+                        field: "becaTitol", 
+                        minWidth: 180, 
+                        headerSort: true,
+                        formatter: function(cell) {
+                            const titol = cell.getValue();
+                            const codi = cell.getData().becaCodi;
+                            return titol 
+                                ? `<span class="inline-flex items-center rounded-md bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-900 ring-1 ring-inset ring-amber-600/15" title="${codi}"><i class="fa-solid fa-award mr-1 shrink-0"></i>${titol}</span>` 
+                                : `<span class="text-slate-300">-</span>`;
+                        }
+                    },
+                    { 
+                        title: "Directors", 
                         field: "directores", 
                         minWidth: 150,
                         formatter: function(cell) {
@@ -765,7 +862,7 @@
                 ]
             });
 
-            // Configurar buscador
+            // Configurar buscadors
             document.getElementById('cercarTesis').addEventListener('input', (e) => {
                 const term = e.target.value;
                 tablaTesis.setFilter([
@@ -774,6 +871,18 @@
                         { field: "autor", type: "like", value: term },
                         { field: "departament", type: "like", value: term },
                         { field: "tipusDireccio", type: "like", value: term },
+                        { field: "becaTitol", type: "like", value: term }
+                    ]
+                ]);
+            });
+
+            document.getElementById('cercarTesisHomes').addEventListener('input', (e) => {
+                const term = e.target.value;
+                tablaTesisHomes.setFilter([
+                    [
+                        { field: "titol", type: "like", value: term },
+                        { field: "autor", type: "like", value: term },
+                        { field: "departament", type: "like", value: term },
                         { field: "becaTitol", type: "like", value: term }
                     ]
                 ]);
@@ -789,6 +898,7 @@
             // Filtrar evolución temporal
             const filteredEvolution = rawThesisData.evolution.filter(d => d.year >= startYear && d.year <= endYear);
             const filteredTheses = rawThesisData.femaleTheses.filter(t => t.any >= startYear && t.any <= endYear);
+            const filteredThesesHomes = (rawThesisData.maleOnlyTheses || []).filter(t => t.any >= startYear && t.any <= endYear);
 
             // Calcular KPIs
             let totalTesis = 0;
@@ -796,7 +906,8 @@
             let codirectedFemaleTesis = 0;
             let maleOnlyTesis = 0;
             let unknownTesis = 0;
-            let femaleWithScholarshipTesis = 0;
+            let directedFemaleWithScholarshipTesis = 0;
+            let codirectedFemaleWithScholarshipTesis = 0;
             let maleOnlyWithScholarshipTesis = 0;
 
             filteredEvolution.forEach(d => {
@@ -805,7 +916,8 @@
                 codirectedFemaleTesis += d.codirectedFemale || 0;
                 maleOnlyTesis += d.maleOnly || 0;
                 unknownTesis += d.unknown || 0;
-                femaleWithScholarshipTesis += (d.directedFemaleWithScholarship || 0) + (d.codirectedFemaleWithScholarship || 0);
+                directedFemaleWithScholarshipTesis += d.directedFemaleWithScholarship || 0;
+                codirectedFemaleWithScholarshipTesis += d.codirectedFemaleWithScholarship || 0;
                 maleOnlyWithScholarshipTesis += d.maleOnlyWithScholarship || 0;
             });
 
@@ -816,15 +928,16 @@
             const pctCodirigides = totalTesis > 0 ? Math.round((codirectedFemaleTesis / totalTesis) * 1000) / 10 : 0;
             const pctHomes = totalTesis > 0 ? Math.round((maleOnlyTesis / totalTesis) * 1000) / 10 : 0;
             const pctDesconegut = totalTesis > 0 ? Math.round((unknownTesis / totalTesis) * 1000) / 10 : 0;
-            const femaleTesisTotal = directedFemaleTesis + codirectedFemaleTesis;
-            const pctBecas = femaleTesisTotal > 0 ? Math.round((femaleWithScholarshipTesis / femaleTesisTotal) * 1000) / 10 : 0;
+            const pctBecasDones = directedFemaleTesis > 0 ? Math.round((directedFemaleWithScholarshipTesis / directedFemaleTesis) * 1000) / 10 : 0;
+            const pctBecasMixtes = codirectedFemaleTesis > 0 ? Math.round((codirectedFemaleWithScholarshipTesis / codirectedFemaleTesis) * 1000) / 10 : 0;
             const pctBecasHomes = maleOnlyTesis > 0 ? Math.round((maleOnlyWithScholarshipTesis / maleOnlyTesis) * 1000) / 10 : 0;
 
             document.getElementById('kpiDirigides').innerHTML = `${pctDirigides}% <span class="text-xs font-semibold text-slate-400">(${directedFemaleTesis})</span>`;
             document.getElementById('kpiCodirigides').innerHTML = `${pctCodirigides}% <span class="text-xs font-semibold text-slate-400">(${codirectedFemaleTesis})</span>`;
             document.getElementById('kpiHomes').innerHTML = `${pctHomes}% <span class="text-xs font-semibold text-slate-400">(${maleOnlyTesis})</span>`;
             document.getElementById('kpiDesconegut').innerHTML = `${pctDesconegut}% <span class="text-xs font-semibold text-slate-400">(${unknownTesis})</span>`;
-            document.getElementById('kpiBecas').innerHTML = `${pctBecas}% <span class="text-xs font-semibold text-slate-400">(${femaleWithScholarshipTesis})</span>`;
+            document.getElementById('kpiBecasDones').innerHTML = `${pctBecasDones}% <span class="text-xs font-semibold text-slate-400">(${directedFemaleWithScholarshipTesis})</span>`;
+            document.getElementById('kpiBecasMixtes').innerHTML = `${pctBecasMixtes}% <span class="text-xs font-semibold text-slate-400">(${codirectedFemaleWithScholarshipTesis})</span>`;
             document.getElementById('kpiBecasHomes').innerHTML = `${pctBecasHomes}% <span class="text-xs font-semibold text-slate-400">(${maleOnlyWithScholarshipTesis})</span>`;
 
             // Refrescar gráficos
@@ -835,6 +948,7 @@
 
             // Filtrar y poblar tablas
             tablaTesis.setData(filteredTheses);
+            tablaTesisHomes.setData(filteredThesesHomes);
 
             // Calcular directores más activas en base a la selección actual
             const directorCounts = {};
@@ -927,7 +1041,13 @@
             // Configurar botons de descarrega d'Excel
             document.getElementById('btnDescargarExcelTesis').addEventListener('click', () => {
                 if (tablaTesis) {
-                    tablaTesis.download('xlsx', 'tesis-dirigides-dones.xlsx', { sheetName: "Tesis" });
+                    tablaTesis.download('xlsx', 'tesis-amb-participacio-femenina.xlsx', { sheetName: "Tesis" });
+                }
+            });
+
+            document.getElementById('btnDescargarExcelTesisHomes').addEventListener('click', () => {
+                if (tablaTesisHomes) {
+                    tablaTesisHomes.download('xlsx', 'tesis-només-homes.xlsx', { sheetName: "Tesis Homes" });
                 }
             });
 
