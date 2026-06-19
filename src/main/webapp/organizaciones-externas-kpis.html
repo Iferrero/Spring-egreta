@@ -434,7 +434,13 @@
 
         function isUnknownTypeLabel(typeLabel) {
             const normalized = normalizeText(typeLabel);
-            return normalized === 'desconegut' || normalized === 'unknown';
+            return normalized === 'desconegut' || normalized === 'unknown'
+                || normalized === '' || normalized === 'desconocido'
+                || normalized.includes('desconegut') || normalized.includes('unknown');
+        }
+
+        function getSuggestionSpinner() {
+            return '<span class="text-slate-400 text-xs italic flex items-center gap-1.5"><i class="fa-solid fa-circle-notch fa-spin text-indigo-500"></i> Analitzant...</span>';
         }
 
         function getOrgSuggestionKey(org) {
@@ -550,7 +556,7 @@
                     if (!res.ok) throw new Error('HTTP ' + res.status);
                     const data = await res.json();
 
-                    const key = 'uuid:' + String(org.uuid || '').trim();
+                    const key = getOrgSuggestionKey(org);
                     const bundle = {
                         country: {
                             country: String(data.suggestedCountry || '').trim(),
@@ -575,8 +581,8 @@
                     countrySuggestionCache.set(key, bundle.country);
                     typeSuggestionCache.set(key, bundle.type);
                     fundingSuggestionCache.set(key, bundle.funding);
-                } catch (_) {
-                    // Fallback silencioso
+                } catch (err) {
+                    console.error('Error preloading suggestions for org:', org, err);
                 } finally {
                     if (loadId === currentLoadId) {
                         // Quitar este UUID de fetching y actualizar de inmediato el DOM para este registro
@@ -598,6 +604,12 @@
 
             // Esperar a que todas las llamadas concurrentes finalicen
             await Promise.allSettled(fetchPromises);
+
+            // Render final completo para garantizar que todos los datos cacheados se muestran,
+            // incluso si algún update individual de DOM no encontró la fila a tiempo.
+            if (loadId === currentLoadId) {
+                renderTable(targets);
+            }
         }
 
         async function preloadCountrySuggestions(rows, loadId) {
@@ -849,7 +861,7 @@
             const isFetching = uuidsBeingFetched.has(org.uuid);
 
             if (isFetching && !cachedTypeSuggestion.type) {
-                return '<span class="text-slate-400 text-xs italic flex items-center gap-1.5"><i class="fa-solid fa-circle-notch fa-spin text-indigo-500"></i> Analitzant...</span>';
+                return getSuggestionSpinner();
             }
 
             const htmlSuggestedTypeRaw = cachedTypeSuggestion.type;
@@ -871,13 +883,15 @@
             const isFetching = uuidsBeingFetched.has(org.uuid);
 
             if (isFetching && !cachedCountrySuggestion.country) {
-                return '<span class="text-slate-400 text-xs italic flex items-center gap-1.5"><i class="fa-solid fa-circle-notch fa-spin text-indigo-500"></i> Analitzant...</span>';
+                return getSuggestionSpinner();
             }
 
             const suggestedCountryRaw = cachedCountrySuggestion.country;
             const suggestedCountryUri = String(cachedCountrySuggestion.uri || '').trim();
             const suggestedCountryChip = buildConfidenceChip(suggestedCountryRaw, cachedCountrySuggestion.confidence, cachedCountrySuggestion.reason, 'pais');
-            const applyCountryBtn = buildApplySuggestionButton('country', org.uuid, suggestedCountryRaw, suggestedCountryUri);
+            const applyCountryBtn = suggestedCountryRaw
+                ? buildApplySuggestionButton('country', org.uuid, suggestedCountryRaw, suggestedCountryUri)
+                : '';
             return suggestedCountryChip + (applyCountryBtn ? '<div class="mt-2">' + applyCountryBtn + '</div>' : '');
         }
 
@@ -890,7 +904,7 @@
             const isFetching = uuidsBeingFetched.has(org.uuid);
 
             if (isFetching && !cachedFundingSuggestion.funding) {
-                return '<span class="text-slate-400 text-xs italic flex items-center gap-1.5"><i class="fa-solid fa-circle-notch fa-spin text-indigo-500"></i> Analitzant...</span>';
+                return getSuggestionSpinner();
             }
 
             const fundingChip = buildConfidenceChip(cachedFundingSuggestion.funding, cachedFundingSuggestion.confidence, cachedFundingSuggestion.reason, 'financiacion');

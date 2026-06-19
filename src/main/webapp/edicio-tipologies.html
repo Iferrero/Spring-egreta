@@ -270,8 +270,7 @@
         #progress-bar { height: 100%; width: 0%; background: var(--uab-campus); border-radius: 99px; transition: width 0.3s; }
 
         /* ── Custom fields ── */
-        #custom-fields { display: none; }
-        #custom-fields.visible { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+        #custom-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
     </style>
 </head>
 <body class="bg-slate-50 min-h-screen">
@@ -374,31 +373,7 @@
             </div>
         </div>
 
-        <!-- Presets -->
-        <div class="preset-grid mb-5" id="preset-grid">
-            <div class="preset-card active" data-preset="nature" onclick="selectPreset(this)">
-                <div class="preset-name"><i class="fa-solid fa-leaf mr-1 text-green-600"></i> Nature</div>
-                <div class="preset-desc">Actualitza la naturalesa del registre</div>
-                <div class="preset-code">natureTypes[].uri = valor</div>
-            </div>
-            <div class="preset-card" data-preset="type" onclick="selectPreset(this)">
-                <div class="preset-name"><i class="fa-solid fa-tag mr-1 text-blue-500"></i> Tipus</div>
-                <div class="preset-desc">Actualitza la tipologia del registre</div>
-                <div class="preset-code">type.uri = valor</div>
-            </div>
-            <div class="preset-card" data-preset="workflow" onclick="selectPreset(this)">
-                <div class="preset-name"><i class="fa-solid fa-diagram-project mr-1 text-purple-500"></i> Workflow</div>
-                <div class="preset-desc">Canvia l'estat del workflow</div>
-                <div class="preset-code">workflow.step = valor</div>
-            </div>
-            <div class="preset-card" data-preset="custom" onclick="selectPreset(this)">
-                <div class="preset-name"><i class="fa-solid fa-sliders mr-1 text-orange-400"></i> Personalitzat</div>
-                <div class="preset-desc">Configura manualment els paràmetres</div>
-                <div class="preset-code">clave, dictType, dictName…</div>
-            </div>
-        </div>
-
-        <!-- Camps personalitzats (visibles quan preset=custom) -->
+        <!-- Camps personalitzats -->
         <div id="custom-fields">
             <div>
                 <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Camp (clave)</label>
@@ -420,6 +395,97 @@
                 <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Valor a cercar (dictValue, opcional)</label>
                 <input id="input-dictvalue" class="uab-input" placeholder="Deixa buit per actualitzar el primer element">
             </div>
+        </div>
+
+        <!-- Explorador d'estructura JSON -->
+        <div id="json-structure-explorer" class="mt-5 border-t border-slate-200 pt-4">
+            
+            <div class="flex items-center justify-between gap-3 mb-2">
+                <h3 class="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                    <i class="fa-solid fa-sitemap mr-1 text-orange-400"></i> Explorador i Documentació de Camps
+                </h3>
+            </div>
+            
+            <!-- Tabs: Schema Docs vs Sample Document -->
+            <div class="flex border-b border-slate-200 mb-4">
+                <button id="tab-btn-schema" class="py-2 px-4 text-xs font-bold text-green-700 border-b-2 border-green-700 focus:outline-none flex items-center gap-1.5" onclick="switchExplorerTab('schema')">
+                    <i class="fa-solid fa-book"></i> Documentació Oficial (Pure OpenAPI)
+                </button>
+                <button id="tab-btn-sample" class="py-2 px-4 text-xs font-bold text-slate-500 hover:text-green-700 focus:outline-none flex items-center gap-1.5" onclick="switchExplorerTab('sample')">
+                    <i class="fa-solid fa-file-code"></i> Document real de mostra (JSON)
+                </button>
+            </div>
+            
+            <!-- Tab Panel 1: Official Schema Docs -->
+            <div id="panel-explorer-schema" class="block">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-3 bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+                    <div class="text-[11px] text-slate-500">
+                        Cerca i selecciona directament qualsevol camp descrit a l'OpenAPI oficial de Pure.
+                    </div>
+                    <div class="relative w-72">
+                        <span class="absolute inset-y-0 left-0 flex items-center pl-2.5 text-slate-400 pointer-events-none">
+                            <i class="fa-solid fa-magnifying-glass text-xs"></i>
+                        </span>
+                        <input id="schema-search-input" class="uab-input text-xs pl-8 py-1.5" placeholder="Filtra per camp o descripció..." oninput="filterSchemaPaths()">
+                    </div>
+                </div>
+
+                <div id="schema-loading" class="text-xs text-slate-500 my-4 flex items-center gap-2">
+                    <i class="fa-solid fa-spinner fa-spin text-orange-400"></i> Carregant documentació oficial...
+                </div>
+
+                <div id="schema-error" class="hidden text-xs text-red-600 my-4 p-2 bg-red-50 border border-red-200 rounded-lg"></div>
+
+                <div id="schema-results" class="hidden overflow-x-auto rounded-lg border border-slate-200 max-h-80">
+                    <table class="data-table w-full">
+                        <thead>
+                            <tr>
+                                <th>Ruta / Camp</th>
+                                <th>Tipus</th>
+                                <th>Descripció oficial de Pure</th>
+                                <th>Estat</th>
+                            </tr>
+                        </thead>
+                        <tbody id="schema-table-body">
+                            <!-- Populated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Tab Panel 2: Sample JSON -->
+            <div id="panel-explorer-sample" class="hidden">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-3 bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+                    <div>
+                        <p class="text-[11px] text-slate-500">Obté un document real de mostra per inspeccionar-ne el JSON i configurar els camps personalitzats.</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <input id="explorer-uuid" class="uab-input text-xs w-64" placeholder="UUID del document de mostra">
+                        <button class="btn-secondary text-xs py-1.5 px-3 flex items-center gap-1.5" onclick="fetchSampleJson()">
+                            <i class="fa-solid fa-download"></i> Carregar
+                        </button>
+                    </div>
+                </div>
+                
+                <div id="explorer-loading" class="hidden text-xs text-slate-500 mb-2">
+                    <i class="fa-solid fa-spinner fa-spin mr-1 text-orange-400"></i> Carregant dades d'Egreta/Pure...
+                </div>
+                
+                <div id="explorer-error" class="hidden text-xs text-red-600 mb-2 p-2 bg-red-50 border border-red-200 rounded-lg"></div>
+                
+                <div id="explorer-results" class="hidden grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+                    <div>
+                        <span class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Camps editables detectats (Clica per aplicar)</span>
+                        <div id="explorer-tree" class="bg-white border border-slate-200 rounded-lg p-2 overflow-y-auto max-h-72 text-xs font-mono">
+                        </div>
+                    </div>
+                    <div>
+                        <span class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">JSON del document</span>
+                        <pre id="explorer-json" class="bg-slate-900 text-slate-100 p-3 rounded-lg overflow-auto max-h-72 text-[10px] font-mono leading-normal"></pre>
+                    </div>
+                </div>
+            </div>
+
         </div>
 
         <!-- Resum actiu -->
@@ -583,19 +649,16 @@ let uuidCol      = null;   // índex columna UUID
 let valorCol     = null;   // índex columna Valor
 let resultats    = [];     // resultats del batch
 
-// Presets d'edició
-const PRESETS = {
-    nature:   { clave: 'uri', dictType: 'list',  dictName: 'natureTypes', dictValue: '' },
-    type:     { clave: 'uri', dictType: 'dict',  dictName: 'type',        dictValue: '' },
-    workflow: { clave: 'step', dictType: 'dict', dictName: 'workflow',     dictValue: '' },
-    custom:   null
-};
-let activePreset = 'nature';
+let activePreset = 'custom';
 
 /* ── Inicialització ───────────────────────────────────────── */
 document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('select-coleccio').addEventListener('change', e => {
         coleccio = e.target.value;
+        clearCustomFields();
+        clearExplorerResults();
+        autoFillExplorerUuid();
+        fetchPureSchema();
     });
     document.getElementById('update-toggle').addEventListener('change', e => {
         updateEnabled = e.target.checked;
@@ -612,6 +675,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
     updateEditSummary();
+
+    // Carregar documentació OpenAPI inicial pel valor per defecte ('awards')
+    fetchPureSchema();
 
     // Setup dropzone and file upload listeners
     const dropzone = document.getElementById('dropzone');
@@ -651,25 +717,464 @@ function setEntorn(e) {
     document.getElementById('btn-prod').className = e === 'prod' ? 'active-prod' : '';
     document.getElementById('env-url').textContent =
         e === 'test' ? 'egretat.uab.cat' : 'egreta.uab.cat';
+    fetchPureSchema();
 }
 
-/* ── Presets ──────────────────────────────────────────────── */
-function selectPreset(card) {
-    document.querySelectorAll('.preset-card').forEach(c => c.classList.remove('active'));
-    card.classList.add('active');
-    activePreset = card.dataset.preset;
+let activeExplorerTab = 'schema';
+let cachedSchemaPaths = [];
 
-    const cf = document.getElementById('custom-fields');
-    if (activePreset === 'custom') {
-        cf.classList.add('visible');
+function switchExplorerTab(tabName) {
+    activeExplorerTab = tabName;
+    const schemaBtn = document.getElementById('tab-btn-schema');
+    const sampleBtn = document.getElementById('tab-btn-sample');
+    
+    const activeClass = 'py-2 px-4 text-xs font-bold text-green-700 border-b-2 border-green-700 focus:outline-none flex items-center gap-1.5';
+    const inactiveClass = 'py-2 px-4 text-xs font-bold text-slate-500 hover:text-green-700 focus:outline-none flex items-center gap-1.5';
+    
+    if (tabName === 'schema') {
+        schemaBtn.className = activeClass;
+        sampleBtn.className = inactiveClass;
+        document.getElementById('panel-explorer-schema').style.display = 'block';
+        document.getElementById('panel-explorer-sample').style.display = 'none';
     } else {
-        cf.classList.remove('visible');
+        schemaBtn.className = inactiveClass;
+        sampleBtn.className = activeClass;
+        document.getElementById('panel-explorer-schema').style.display = 'none';
+        document.getElementById('panel-explorer-sample').style.display = 'block';
     }
+}
+
+async function fetchPureSchema() {
+    const loadingEl = document.getElementById('schema-loading');
+    const errorEl   = document.getElementById('schema-error');
+    const resultsEl = document.getElementById('schema-results');
+    const tableBody = document.getElementById('schema-table-body');
+    const searchInput = document.getElementById('schema-search-input');
+
+    loadingEl.classList.remove('hidden');
+    errorEl.classList.add('hidden');
+    resultsEl.classList.add('hidden');
+    tableBody.innerHTML = '';
+    searchInput.value = '';
+
+    try {
+        const url = apiUrl(`/egreta-editor/pure-schema?entorn=${entorn}&coleccio=${coleccio}`);
+        const resp = await fetch(url);
+        if (!resp.ok) {
+            const errText = await resp.text();
+            throw new Error(`Error HTTP ${resp.status}: ${errText}`);
+        }
+        const data = await resp.json();
+        if (data.error) {
+            throw new Error(data.error);
+        }
+
+        const schemaName = data.schemaName;
+        const schema = data.schema;
+        const allSchemas = data.allSchemas;
+
+        cachedSchemaPaths = extractPathsFromSchema(schemaName, allSchemas);
+
+        if (cachedSchemaPaths.length === 0) {
+            tableBody.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-slate-400 italic">No s\'han trobat camps editables a la documentació.</td></tr>';
+        } else {
+            renderSchemaPaths(cachedSchemaPaths);
+        }
+
+        resultsEl.classList.remove('hidden');
+    } catch (err) {
+        errorEl.textContent = `Error en carregar la documentació: ${err.message}`;
+        errorEl.classList.remove('hidden');
+    } finally {
+        loadingEl.classList.add('hidden');
+    }
+}
+
+function renderSchemaPaths(paths) {
+    const tableBody = document.getElementById('schema-table-body');
+    tableBody.innerHTML = paths.map((p, idx) => {
+        const badge = p.readOnly 
+            ? '<span class="badge badge-skip text-[9px] py-0.5 px-1.5">Llegir-Només</span>'
+            : '<span class="badge badge-ok text-[9px] py-0.5 px-1.5">Editable</span>';
+            
+        const clickAttr = p.readOnly ? '' : `onclick="applySchemaPath(${idx})"`;
+        const cursorClass = p.readOnly ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:bg-slate-50';
+        
+        return `
+            <tr class="${cursorClass}" ${clickAttr}>
+                <td class="font-bold text-green-700 py-2 text-xs">${escHtml(p.path)}</td>
+                <td class="mono text-[10px] text-slate-500 py-2">${escHtml(p.type)}</td>
+                <td class="text-xs text-slate-600 py-2 leading-relaxed max-w-md">${escHtml(p.description || 'Sense descripció.')}</td>
+                <td class="py-2">${badge}</td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function filterSchemaPaths() {
+    const q = document.getElementById('schema-search-input').value.toLowerCase().trim();
+    if (!q) {
+        renderSchemaPaths(cachedSchemaPaths);
+        return;
+    }
+    const filtered = cachedSchemaPaths.filter(p => 
+        p.path.toLowerCase().includes(q) || 
+        (p.description && p.description.toLowerCase().includes(q))
+    );
+    renderSchemaPaths(filtered);
+}
+
+function extractPathsFromSchema(schemaName, schemas, parentPath = '', parentType = '', isList = false) {
+    const schema = schemas[schemaName];
+    if (!schema) return [];
+    
+    let paths = [];
+    if (schema.properties) {
+        paths = paths.concat(extractPathsFromProperties(schema.properties, schemas, parentPath, parentType, isList));
+    }
+    
+    if (schema.allOf && Array.isArray(schema.allOf)) {
+        for (const item of schema.allOf) {
+            if (item['$ref']) {
+                const subSchemaName = item['$ref'].split('/').pop();
+                paths = paths.concat(extractPathsFromSchema(subSchemaName, schemas, parentPath, parentType, isList));
+            } else if (item.properties) {
+                paths = paths.concat(extractPathsFromProperties(item.properties, schemas, parentPath, parentType, isList));
+            }
+        }
+    }
+    
+    return paths;
+}
+
+function extractPathsFromProperties(properties, schemas, parentPath = '', parentType = '', isList = false) {
+    let paths = [];
+    for (const propName in properties) {
+        const prop = properties[propName];
+        
+        let currentPath = parentPath;
+        let dictType = parentType;
+        let dictName = parentPath;
+        let clave = propName;
+        
+        if (isList) {
+            currentPath = parentPath ? `${parentPath}[].${propName}` : `${propName}[]`;
+            dictType = 'list';
+            dictName = parentPath;
+            clave = propName;
+        } else if (parentType === 'dict') {
+            currentPath = parentPath ? `${parentPath}.${propName}` : propName;
+            dictType = 'dict';
+            dictName = parentPath;
+            clave = propName;
+        } else {
+            currentPath = parentPath ? `${parentPath}.${propName}` : propName;
+            dictType = parentPath ? 'dict' : '';
+            dictName = parentPath || '';
+            clave = parentPath ? propName : propName;
+        }
+        
+        const isReadOnly = prop.readOnly === true || 
+            ['pureId', 'uuid', 'createdBy', 'createdDate', 'modifiedBy', 'modifiedDate', 'portalUrl'].includes(currentPath);
+        
+        let ref = prop['$ref'];
+        let type = prop.type;
+        
+        if (type === 'array') {
+            const items = prop.items || {};
+            const itemsRef = items['$ref'];
+            if (itemsRef) {
+                const subSchemaName = itemsRef.split('/').pop();
+                paths = paths.concat(extractPathsFromSchema(subSchemaName, schemas, currentPath, 'list', true));
+            } else {
+                paths.push({
+                    path: currentPath + '[]',
+                    dictType: 'list',
+                    dictName: currentPath,
+                    clave: '',
+                    type: 'array',
+                    description: prop.description || '',
+                    readOnly: isReadOnly
+                });
+            }
+        } else if (ref) {
+            const subSchemaName = ref.split('/').pop();
+            paths = paths.concat(extractPathsFromSchema(subSchemaName, schemas, currentPath, 'dict', false));
+        } else if (type === 'object') {
+            if (prop.properties) {
+                paths = paths.concat(extractPathsFromProperties(prop.properties, schemas, currentPath, 'dict', false));
+            } else {
+                paths.push({
+                    path: currentPath,
+                    dictType: dictType,
+                    dictName: dictName,
+                    clave: clave,
+                    type: 'object',
+                    description: prop.description || '',
+                    readOnly: isReadOnly
+                });
+            }
+        } else {
+            paths.push({
+                path: currentPath,
+                dictType: dictType,
+                dictName: dictName,
+                clave: clave,
+                type: type || 'string',
+                description: prop.description || '',
+                readOnly: isReadOnly
+            });
+        }
+    }
+    return paths;
+}
+
+function applySchemaPath(idx) {
+    const q = document.getElementById('schema-search-input').value.toLowerCase().trim();
+    let pathsList = cachedSchemaPaths;
+    if (q) {
+        pathsList = cachedSchemaPaths.filter(p => 
+            p.path.toLowerCase().includes(q) || 
+            (p.description && p.description.toLowerCase().includes(q))
+        );
+    }
+    
+    if (!pathsList[idx]) return;
+    const p = pathsList[idx];
+    if (p.readOnly) return;
+
+    document.getElementById('input-clave').value = p.clave;
+    document.getElementById('input-dicttype').value = p.dictType;
+    document.getElementById('input-dictname').value = p.dictName || '';
+    document.getElementById('input-dictvalue').value = '';
+
+    updateEditSummary();
+    
+    const fieldsToFlash = ['input-clave', 'input-dicttype', 'input-dictname', 'input-dictvalue'];
+    fieldsToFlash.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.style.borderColor = 'var(--uab-campus)';
+            el.style.backgroundColor = '#f0faf4';
+            setTimeout(() => {
+                el.style.borderColor = '';
+                el.style.backgroundColor = '';
+            }, 1000);
+        }
+    });
+}
+
+function clearCustomFields() {
+    document.getElementById('input-clave').value = '';
+    document.getElementById('input-dicttype').value = '';
+    document.getElementById('input-dictname').value = '';
+    document.getElementById('input-dictvalue').value = '';
     updateEditSummary();
 }
 
+function clearExplorerResults() {
+    const explorerUuidInput = document.getElementById('explorer-uuid');
+    if (explorerUuidInput) explorerUuidInput.value = '';
+    
+    const resultsEl = document.getElementById('explorer-results');
+    if (resultsEl) resultsEl.classList.add('hidden');
+    
+    const jsonEl = document.getElementById('explorer-json');
+    if (jsonEl) jsonEl.textContent = '';
+    
+    const treeEl = document.getElementById('explorer-tree');
+    if (treeEl) treeEl.innerHTML = '';
+    
+    const errorEl = document.getElementById('explorer-error');
+    if (errorEl) errorEl.classList.add('hidden');
+    
+    window.explorerPaths = [];
+}
+
+function autoFillExplorerUuid() {
+    const explorerUuidInput = document.getElementById('explorer-uuid');
+    if (explorerUuidInput && !explorerUuidInput.value.trim() && parsedRows.length > 0) {
+        const looksLikeUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-/i;
+        for (const row of parsedRows) {
+            for (const colIdx in row) {
+                const val = (row[colIdx] || '').trim();
+                if (looksLikeUUID.test(val)) {
+                    explorerUuidInput.value = val;
+                    return;
+                }
+            }
+        }
+    }
+}
+
+function generatePaths(obj, parentKey = '', parentType = '') {
+    let paths = [];
+    if (obj === null || typeof obj !== 'object') {
+        return paths;
+    }
+
+    if (Array.isArray(obj)) {
+        if (obj.length > 0) {
+            const first = obj[0];
+            if (typeof first === 'object' && first !== null) {
+                for (const key in first) {
+                    const val = first[key];
+                    if (typeof val === 'object' && val !== null && !Array.isArray(val)) {
+                        for (const subKey in val) {
+                            paths.push({
+                                path: `${parentKey}[].${key}.${subKey}`,
+                                dictType: 'list',
+                                dictName: parentKey,
+                                clave: `${key}.${subKey}`,
+                                sampleValue: String(val[subKey] !== null ? val[subKey] : 'null')
+                            });
+                        }
+                    } else if (!Array.isArray(val)) {
+                        paths.push({
+                            path: `${parentKey}[].${key}`,
+                            dictType: 'list',
+                            dictName: parentKey,
+                            clave: key,
+                            sampleValue: String(val !== null ? val : 'null')
+                        });
+                    }
+                }
+            } else {
+                paths.push({
+                    path: `${parentKey}[]`,
+                    dictType: 'list',
+                    dictName: parentKey,
+                    clave: '',
+                    sampleValue: String(first)
+                });
+            }
+        }
+    } else {
+        for (const key in obj) {
+            const val = obj[key];
+            const currentPath = parentKey ? `${parentKey}.${key}` : key;
+            if (val === null) {
+                paths.push({
+                    path: currentPath,
+                    dictType: parentKey ? 'dict' : '',
+                    dictName: parentKey || null,
+                    clave: parentKey ? key : currentPath,
+                    sampleValue: 'null'
+                });
+            } else if (Array.isArray(val)) {
+                paths = paths.concat(generatePaths(val, currentPath, 'list'));
+            } else if (typeof val === 'object') {
+                paths = paths.concat(generatePaths(val, currentPath, 'dict'));
+            } else {
+                paths.push({
+                    path: currentPath,
+                    dictType: parentKey ? 'dict' : '',
+                    dictName: parentKey || null,
+                    clave: parentKey ? key : currentPath,
+                    sampleValue: String(val)
+                });
+            }
+        }
+    }
+    return paths;
+}
+
+async function fetchSampleJson() {
+    const uuidInput = document.getElementById('explorer-uuid');
+    const uuid = uuidInput ? uuidInput.value.trim() : '';
+    if (!uuid) {
+        alert('Si us plau, introdueix un UUID de mostra o carrega dades primer.');
+        return;
+    }
+
+    const loadingEl = document.getElementById('explorer-loading');
+    const errorEl   = document.getElementById('explorer-error');
+    const resultsEl = document.getElementById('explorer-results');
+    const jsonEl    = document.getElementById('explorer-json');
+    const treeEl    = document.getElementById('explorer-tree');
+
+    loadingEl.classList.remove('hidden');
+    errorEl.classList.add('hidden');
+    resultsEl.classList.add('hidden');
+
+    try {
+        const url = apiUrl(`/egreta-editor/fetch?entorn=${entorn}&coleccio=${coleccio}&uuid=${uuid}`);
+        const resp = await fetch(url);
+        if (!resp.ok) {
+            const errText = await resp.text();
+            throw new Error(`Error HTTP ${resp.status}: ${errText}`);
+        }
+        const data = await resp.json();
+        if (data.error) {
+            throw new Error(data.error);
+        }
+
+        jsonEl.textContent = JSON.stringify(data, null, 2);
+
+        const paths = generatePaths(data);
+        if (paths.length === 0) {
+            treeEl.innerHTML = '<span class="text-slate-400 italic">No s\'han trobat camps editables.</span>';
+        } else {
+            treeEl.innerHTML = `
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="border-b border-slate-200">
+                            <th class="pb-1 text-[10px] font-bold text-slate-400 uppercase">Ruta / Camp</th>
+                            <th class="pb-1 text-[10px] font-bold text-slate-400 uppercase">Valor de mostra</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${paths.map((p, idx) => `
+                            <tr class="hover:bg-slate-50 cursor-pointer" onclick="applyExplorerPath(${idx})">
+                                <td class="py-1.5 font-bold text-green-700 hover:underline">
+                                    ${escHtml(p.path)}
+                                </td>
+                                <td class="py-1.5 text-slate-500 overflow-hidden text-ellipsis max-w-[150px] whitespace-nowrap" title="${escHtml(p.sampleValue)}">
+                                    ${escHtml(p.sampleValue)}
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+            window.explorerPaths = paths;
+        }
+
+        resultsEl.classList.remove('hidden');
+    } catch (err) {
+        errorEl.textContent = `Error: ${err.message}`;
+        errorEl.classList.remove('hidden');
+    } finally {
+        loadingEl.classList.add('hidden');
+    }
+}
+
+function applyExplorerPath(idx) {
+    if (!window.explorerPaths || !window.explorerPaths[idx]) return;
+    const p = window.explorerPaths[idx];
+
+    document.getElementById('input-clave').value = p.clave;
+    document.getElementById('input-dicttype').value = p.dictType;
+    document.getElementById('input-dictname').value = p.dictName || '';
+    document.getElementById('input-dictvalue').value = '';
+
+    updateEditSummary();
+    
+    const fieldsToFlash = ['input-clave', 'input-dicttype', 'input-dictname', 'input-dictvalue'];
+    fieldsToFlash.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.style.borderColor = 'var(--uab-campus)';
+            el.style.backgroundColor = '#f0faf4';
+            setTimeout(() => {
+                el.style.borderColor = '';
+                el.style.backgroundColor = '';
+            }, 1000);
+        }
+    });
+}
+
 function getEditParams() {
-    if (activePreset !== 'custom') return { ...PRESETS[activePreset] };
     return {
         clave:     document.getElementById('input-clave').value.trim(),
         dictType:  document.getElementById('input-dicttype').value,
@@ -798,6 +1303,9 @@ function autoSelectColumns() {
             selectValorCol(i);
         }
     });
+
+    // Auto-preomplir l'UUID de l'explorador si tenim un lot parsejat
+    autoFillExplorerUuid();
 }
 
 /* ── Column pickers ───────────────────────────────────────── */
@@ -1030,6 +1538,11 @@ function resetAll() {
     const uploadStatus = document.getElementById('upload-status');
     uploadStatus.textContent = '';
     uploadStatus.classList.add('hidden');
+    
+    // Netejar camps personalitzats i explorador
+    clearCustomFields();
+    clearExplorerResults();
+    
     setLog('<span class="log-info">Esperant execució…</span>');
 }
 

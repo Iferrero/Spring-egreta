@@ -703,55 +703,38 @@ public class ExternalOrganizationController {
         List<CountryAggregate> countryCatalog = getCachedCountryCatalog();
         List<TypeAggregate>    typeCatalog    = getCachedTypeCatalog();
 
-        /*
-        InferenceResult     countryResult = inferCountryFromName(orgName, countryCatalog);
-        TypeInferenceResult typeResult    = inferTypeFromName(orgName, typeCatalog);
-        FundingInferenceResult fundingResult = inferFundingFromName(orgName);
+        MetadataInferenceResult aiResult = inferMetadataWithLocalAi(orgName, countryCatalog, typeCatalog);
 
-        if (countryResult.countryLabel.isBlank()) {
-            InferenceResult websearchCountry = inferCountryWithWebSearch(orgName, countryCatalog);
-            if (websearchCountry != null && !websearchCountry.countryLabel.isBlank()) {
-                countryResult = websearchCountry;
+        InferenceResult countryResult = null;
+        TypeInferenceResult typeResult = null;
+        FundingInferenceResult fundingResult = null;
+
+        if (aiResult != null) {
+            countryResult = aiResult.country();
+            typeResult = aiResult.type();
+            fundingResult = aiResult.funding();
+        }
+
+        // Fallbacks for country
+        if (countryResult == null || countryResult.countryLabel.isBlank()) {
+            countryResult = inferCountryWithWebSearch(orgName, countryCatalog);
+            if (countryResult == null || countryResult.countryLabel.isBlank()) {
+                countryResult = inferCountryFromName(orgName, countryCatalog);
             }
         }
 
-        if (typeResult.typeLabel.isBlank()) {
-            TypeInferenceResult aiType = inferTypeWithLocalAi(orgName, typeCatalog);
-            if (aiType != null && !aiType.typeLabel.isBlank()) {
-                typeResult = aiType;
+        // Fallbacks for type
+        if (typeResult == null || typeResult.typeLabel.isBlank()) {
+            typeResult = inferTypeWithLocalAi(orgName, typeCatalog);
+            if (typeResult == null || typeResult.typeLabel.isBlank()) {
+                typeResult = inferTypeFromName(orgName, typeCatalog);
             }
         }
 
-        if (countryResult.countryLabel.isBlank() || typeResult.typeLabel.isBlank() || fundingResult.fundingLabel.isBlank()) {
-            MetadataInferenceResult aiResult = inferMetadataWithLocalAi(orgName, countryCatalog, typeCatalog);
-            if (aiResult != null) {
-                if (countryResult.countryLabel.isBlank()
-                        && aiResult.country() != null && !aiResult.country().countryLabel.isBlank()) {
-                    countryResult = aiResult.country();
-                }
-                if (typeResult.typeLabel.isBlank()
-                        && aiResult.type() != null && !aiResult.type().typeLabel.isBlank()) {
-                    typeResult = aiResult.type();
-                }
-                if (fundingResult.fundingLabel.isBlank()
-                        && aiResult.funding() != null && !aiResult.funding().fundingLabel.isBlank()) {
-                    fundingResult = aiResult.funding();
-                }
-            }
-        }*/
-
-        
-            MetadataInferenceResult aiResult = inferMetadataWithLocalAi(orgName, countryCatalog, typeCatalog);
-            InferenceResult countryResult = aiResult.country();
-                
-                   TypeInferenceResult typeResult = aiResult.type();
-                
-                   FundingInferenceResult fundingResult = aiResult.funding();
-            if (aiResult != null) {
-               
-                   
-                
-            }
+        // Fallbacks for funding
+        if (fundingResult == null || fundingResult.fundingLabel.isBlank()) {
+            fundingResult = inferFundingFromName(orgName);
+        }
         
 
         String suggestedCountryUri = resolveCountryUriByLabel(countryResult.countryLabel);
@@ -1093,7 +1076,7 @@ public class ExternalOrganizationController {
                 HttpRequest.Builder getBuilder = HttpRequest.newBuilder()
                     .uri(URI.create(getUrl))
                     .timeout(Duration.ofMillis(Math.max(1000, egretaExternalOrgTimeoutMs)))
-                    .header("Accept", "application/json")
+                    .header("Accept", "application/json; charset=utf-8")
                     .GET();
                 appendEgretaAuth(getBuilder);
 
@@ -3272,12 +3255,13 @@ public class ExternalOrganizationController {
             payload.put("model", aiCountrySuggestModel == null || aiCountrySuggestModel.isBlank()
                 ? "local-model" : aiCountrySuggestModel);
             payload.put("temperature", 0);
+            payload.put("reasoning_effort", "low"); 
             payload.put("messages", List.of(
                 Map.of("role", "system", "content", systemPrompt),
                 Map.of("role", "user",   "content", userPrompt)
             ));
             payload.put("response_format", Map.of("type", "json_object"));
-            //payload.put("max_tokens", maxTokens);
+            payload.put("max_tokens", 800);
 
             HttpRequest.Builder builder = HttpRequest.newBuilder()
                 .uri(URI.create(aiCountrySuggestUrl))
@@ -3319,10 +3303,9 @@ public class ExternalOrganizationController {
        String systemPrompt =
         "You are a data quality assistant specialized in research organizations. "
         + "Given an organization name, first evaluate your internal confidence in inferring its country. "
-        + "CRITICAL RULE: If your internal confidence is less than 0.75, you MUST use the web-search tool to research the organization and improve your confidence before generating the final answer. "
-        + "Return strict JSON with exactly these keys: \"suggestedCountry\", \"confidence\", \"reason\". "
+        + "CRITICAL RULE: you MUST use the web-search tool to research the organization and improve your confidence before generating the final answer. "
+         + "Return strict JSON with exactly these keys: \"suggestedCountry\", \"confidence\", \"reason\". "
         + "confidence must be a number between 0 and 1. "
-        + "If uncertain even after a web search, return \"suggestedCountry\" as an empty string and confidence as 0. "
         + "CRITICAL: Output ONLY the raw JSON object. Do NOT wrap the response in markdown blocks like ```json ... ```. "
         + "Your response must start with '{' and end with '}'.\n\n"
         + "Example Output:\n"
@@ -3370,17 +3353,16 @@ public class ExternalOrganizationController {
                 .collect(Collectors.joining(", "));
 
         String systemPrompt =
-                "You are a data quality assistant specialized in research organizations. "
-                + "Given an organization name, first evaluate your internal confidence for its country, organization type, and funding profile (Publica or Privada). "
-                + "CRITICAL RULE: If your internal confidence for ANY of these three fields is less than 0.75, you MUST use the web-search tool to research the organization and improve your confidence before generating the final answer. "
-                + "Return strict JSON with exactly these keys: "
-                + "\"suggestedCountry\", \"countryConfidence\", \"countryReason\", "
-                + "\"suggestedType\", \"typeConfidence\", \"typeReason\", "
-                + "\"suggestedFunding\", \"fundingConfidence\", \"fundingReason\". "
-                + "Confidence values must be numbers between 0 and 1. "
-                + "If uncertain about a specific property even after a web search, return its suggested field as an empty string and its confidence as 0. "
-                + "CRITICAL: Output ONLY the raw JSON object. Do NOT wrap the response in markdown blocks like ```json ... ```. "
-                + "Your final response must start with '{' and end with '}'.";
+        "You are a data quality assistant for research organization metadata. "
+        + "Based solely on your training knowledge, infer the country, organization type, and funding profile. "
+         + "CRITICAL RULE: you MUST use the web-search tool to research the organization and improve your confidence before generating the final answer. "
+        + "Return ONLY a raw JSON object with exactly these keys: "
+        + "\"suggestedCountry\", \"countryConfidence\", \"countryReason\", "
+        + "\"suggestedType\", \"typeConfidence\", \"typeReason\", "
+        + "\"suggestedFunding\", \"fundingConfidence\", \"fundingReason\". "
+        + "Confidence values must be numbers between 0 and 1. "
+        + "If uncertain, return empty string and confidence 0. "
+        + "No markdown. Start with '{' and end with '}'.";
 
         String userPrompt = "Organization: '" + orgName + "'. Candidate types: " + typeCatalogText;
 
@@ -3474,10 +3456,9 @@ public class ExternalOrganizationController {
         String systemPrompt =
                 "You are a data quality assistant specialized in research organizations. "
                 + "Given an organization name, first evaluate your internal confidence in inferring its organization type. "
-                + "CRITICAL RULE: If your internal confidence is less than 0.75, you MUST use the web-search tool to research the organization and improve your confidence before generating the final answer. "
+               + "CRITICAL RULE: you MUST use the web-search tool to research the organization and improve your confidence before generating the final answer. "
                 + "Return strict JSON with exactly these keys: \"suggestedType\", \"confidence\", \"reason\". "
                 + "confidence must be a number between 0 and 1. "
-                + "If uncertain even after a web search, return \"suggestedType\" as an empty string and confidence as 0. "
                 + "CRITICAL: Output ONLY the raw JSON object. Do NOT wrap the response in markdown blocks like ```json ... ```. "
                 + "Your final response must start with '{' and end with '}'.";
 
@@ -3520,13 +3501,13 @@ public class ExternalOrganizationController {
         String systemPrompt =
                 "You are a data quality assistant specialized in research organizations. "
                 + "Given an organization name, first evaluate your internal confidence for its country, organization type, and funding profile (Publica or Privada). "
-                + "CRITICAL RULE: If your internal confidence for ANY of these three fields is less than 0.75, you MUST use the web-search tool to research the organization and improve your confidence before generating the final answer. "
+                
                 + "Return strict JSON with exactly these keys: "
                 + "\"suggestedCountry\", \"countryConfidence\", \"countryReason\", "
                 + "\"suggestedType\", \"typeConfidence\", \"typeReason\", "
                 + "\"suggestedFunding\", \"fundingConfidence\", \"fundingReason\". "
                 + "Confidence values must be numbers between 0 and 1. "
-                + "If uncertain about a specific property even after a web search, return its suggested field as an empty string and its confidence as 0. "
+                
                 + "CRITICAL: Output ONLY the raw JSON object. Do NOT wrap the response in markdown blocks like ```json ... ```. "
                 + "Your final response must start with '{' and end with '}'.";
 

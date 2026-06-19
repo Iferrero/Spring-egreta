@@ -30,6 +30,13 @@ public class EgretaEditorController {
 
     private final RestTemplate restTemplate = new RestTemplate();
 
+    // Cache to hold Pure's openapi.json in memory (TTL: 1 hour)
+    private Map<String, Object> cachedOpenApiTest = null;
+    private Map<String, Object> cachedOpenApiProd = null;
+    private long lastCacheTest = 0;
+    private long lastCacheProd = 0;
+    private static final long CACHE_TTL_MS = 3600000; // 1 hour
+
     // ─────────────────────────────────────────────────────────────────────────
     // Helpers
     // ─────────────────────────────────────────────────────────────────────────
@@ -72,6 +79,86 @@ public class EgretaEditorController {
             return ResponseEntity.status(500)
                     .body(Map.of("error", e.getMessage()));
         }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // GET /api/egreta-editor/pure-schema?entorn=&coleccio=
+    // ─────────────────────────────────────────────────────────────────────────
+
+    @GetMapping("/pure-schema")
+    @SuppressWarnings("unchecked")
+    public ResponseEntity<?> getPureSchema(
+            @RequestParam String entorn,
+            @RequestParam String coleccio) {
+        try {
+            Map<String, Object> openApi = getCachedOpenApi(entorn);
+            Map<String, Object> components = (Map<String, Object>) openApi.get("components");
+            if (components == null) {
+                return ResponseEntity.status(500).body(Map.of("error", "No components found in OpenAPI"));
+            }
+            Map<String, Object> schemas = (Map<String, Object>) components.get("schemas");
+            if (schemas == null) {
+                return ResponseEntity.status(500).body(Map.of("error", "No schemas found in OpenAPI"));
+            }
+
+            String schemaName = getPureSchemaName(coleccio);
+            if (schemaName == null || !schemas.containsKey(schemaName)) {
+                return ResponseEntity.badRequest().body(Map.of("error", "No schema found for collection: " + coleccio));
+            }
+
+            Map<String, Object> response = new LinkedHashMap<>();
+            response.put("schemaName", schemaName);
+            response.put("schema", schemas.get(schemaName));
+            response.put("allSchemas", schemas);
+
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            return ResponseEntity.status(500)
+                    .body(Map.of("error", "Error fetching Pure schema: " + e.getMessage()));
+        }
+    }
+
+    private String getPureSchemaName(String coleccio) {
+        switch (coleccio.toLowerCase()) {
+            case "awards": return "Award";
+            case "applications": return "Application";
+            case "funding-opportunities": return "FundingOpportunity";
+            case "external-organizations": return "ExternalOrganization";
+            case "persons": return "Person";
+            case "external-persons": return "ExternalPerson";
+            case "research-outputs": return "ResearchOutput";
+            case "student-theses": return "StudentThesis";
+            default: return null;
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private synchronized Map<String, Object> getCachedOpenApi(String entorn) throws Exception {
+        boolean isTest = "test".equalsIgnoreCase(entorn);
+        Map<String, Object> cached = isTest ? cachedOpenApiTest : cachedOpenApiProd;
+        long lastCache = isTest ? lastCacheTest : lastCacheProd;
+
+        if (cached != null && (System.currentTimeMillis() - lastCache) < CACHE_TTL_MS) {
+            return cached;
+        }
+
+        String url = baseUrl(entorn) + "openapi.json";
+        ResponseEntity<Map> resp = restTemplate.exchange(
+                url, HttpMethod.GET, new HttpEntity<>(buildHeaders()), Map.class);
+
+        if (!resp.getStatusCode().is2xxSuccessful() || resp.getBody() == null) {
+            throw new RuntimeException("HTTP error " + resp.getStatusCode());
+        }
+
+        Map<String, Object> body = resp.getBody();
+        if (isTest) {
+            cachedOpenApiTest = body;
+            lastCacheTest = System.currentTimeMillis();
+        } else {
+            cachedOpenApiProd = body;
+            lastCacheProd = System.currentTimeMillis();
+        }
+        return body;
     }
 
     // ─────────────────────────────────────────────────────────────────────────
