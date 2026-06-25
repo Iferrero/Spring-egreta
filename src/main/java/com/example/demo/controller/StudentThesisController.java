@@ -7,12 +7,22 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.client.RestTemplate;
 
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
@@ -35,6 +45,8 @@ public class StudentThesisController {
 
     private final StudentThesisRepository repository;
     private final MongoTemplate mongoTemplate;
+    private com.optimaize.langdetect.LanguageDetector languageDetector;
+    private com.optimaize.langdetect.text.TextObjectFactory textObjectFactory;
 
     @Autowired
     public StudentThesisController(StudentThesisRepository repository, MongoTemplate mongoTemplate) {
@@ -645,6 +657,7 @@ public class StudentThesisController {
 
         Document projectStage = new Document("$project",
                 new Document("uuid", "$uuid")
+                        .append("pureId", "$pureId")
                         .append("titulo", "$title.value")
                         .append("anio", "$awardDate.year")
                         .append("autores", 1));
@@ -659,29 +672,34 @@ public class StudentThesisController {
         pipeline.add(new Document("$group", new Document("_id", new Document()
                 .append("autor", "$autores.nombre")
                 .append("autorUuid", "$autores.uuid")
+                .append("anio", "$anio")
                 .append("uuid", "$uuid"))
-                .append("titulo", new Document("$first", "$titulo"))
-                .append("anio", new Document("$first", "$anio"))));
+                .append("pureId", new Document("$first", "$pureId"))
+                .append("titulo", new Document("$first", "$titulo"))));
 
         pipeline.add(new Document("$group", new Document("_id", new Document()
                 .append("autor", "$_id.autor")
-                .append("autorUuid", "$_id.autorUuid"))
+                .append("autorUuid", "$_id.autorUuid")
+                .append("anio", "$_id.anio"))
                 .append("totalTesis", new Document("$sum", 1))
                 .append("tesis", new Document("$addToSet", new Document()
                         .append("uuid", "$_id.uuid")
+                        .append("pureId", "$pureId")
                         .append("titulo", "$titulo")
-                        .append("anio", "$anio")))));
+                        .append("anio", "$_id.anio")))));
 
         pipeline.add(new Document("$match", new Document("totalTesis", new Document("$gte", min))));
 
         pipeline.add(new Document("$project", new Document("_id", 0)
                 .append("autor", "$_id.autor")
                 .append("autorUuid", "$_id.autorUuid")
+                .append("anio", "$_id.anio")
                 .append("totalTesis", 1)
                 .append("tesis", 1)));
 
         pipeline.add(new Document("$sort", new Document("totalTesis", -1)
-                .append("autor", 1)));
+                .append("autor", 1)
+                .append("anio", -1)));
 
         if (max > 0) {
             pipeline.add(new Document("$limit", max));
@@ -691,6 +709,1447 @@ public class StudentThesisController {
                 .getCollection("StudentTheses")
                 .aggregate(pipeline)
                 .into(new ArrayList<>());
+    }
+
+    @GetMapping("/stats/corrections")
+    public Map<String, Object> getThesisCorrections() {
+        Map<String, Object> result = new LinkedHashMap<>();
+        
+        Query query = new Query();
+        query.addCriteria(Criteria.where("workflow.step").is("approved"));
+        
+        Criteria typeCriteria = new Criteria().orOperator(
+            Criteria.where("type.term.es_ES").regex("tesis doctoral", "i"),
+            Criteria.where("type.term.ca_ES").regex("tesi doctoral", "i"),
+            Criteria.where("type.term.en_GB").regex("doctoral thesis|phd thesis", "i")
+        );
+        query.addCriteria(typeCriteria);
+
+        query.fields()
+             .include("uuid")
+             .include("pureId")
+             .include("title")
+             .include("contributors")
+             .include("supervisors")
+             .include("awardDate")
+             .include("abstract")
+             .include("links")
+             .include("language");
+
+        List<StudentThesis> allTheses = mongoTemplate.find(query, StudentThesis.class);
+
+        int multipleDddCount = 0;
+        int uppercaseTitleCount = 0;
+        int noDddCount = 0;
+        int missingAbstractCount = 0;
+        int undefinedLanguageCount = 0;
+
+        List<Map<String, Object>> thesesNeedingCorrection = new ArrayList<>();
+
+        java.time.LocalDate today = java.time.LocalDate.now();
+
+        for (StudentThesis t : allTheses) {
+            if (t.getAwardDate() == null || t.getAwardDate().getYear() == null) {
+                continue;
+            }
+            Integer year = t.getAwardDate().getYear();
+            Integer month = t.getAwardDate().getMonth();
+            Integer day = t.getAwardDate().getDay();
+            
+            int m = month != null ? month : 12;
+            int d = day != null ? day : 28;
+            if (m < 1) m = 1;
+            if (m > 12) m = 12;
+            
+            int maxDays;
+            try {
+                maxDays = java.time.YearMonth.of(year, m).lengthOfMonth();
+            } catch (Exception e) {
+                maxDays = 28;
+            }
+            if (d < 1) d = 1;
+            if (d > maxDays) d = maxDays;
+
+            try {
+                java.time.LocalDate awardLocalDate = java.time.LocalDate.of(year, m, d);
+                if (!awardLocalDate.isBefore(today)) {
+                    continue;
+                }
+            } catch (Exception e) {
+                if (year >= today.getYear()) {
+                    continue;
+                }
+            }
+
+            boolean hasMultipleDdd = false;
+            boolean isUppercase = false;
+            boolean hasNoDdd = false;
+            boolean hasMissingAbstract = false;
+
+            int dddLinksCount = 0;
+            if (t.getLinks() != null) {
+                for (StudentThesis.Link link : t.getLinks()) {
+                    if (isDddLink(link)) {
+                        dddLinksCount++;
+                    }
+                }
+            }
+
+            if (dddLinksCount >= 2) {
+                hasMultipleDdd = true;
+                multipleDddCount++;
+            } else if (dddLinksCount == 0) {
+                hasNoDdd = true;
+                noDddCount++;
+            }
+
+            String title = t.getFullTitle();
+            if (isTitleUppercase(title)) {
+                isUppercase = true;
+                uppercaseTitleCount++;
+            }
+
+            if (!t.hasAbstract()) {
+                hasMissingAbstract = true;
+                missingAbstractCount++;
+            }
+
+            boolean hasUndefinedLanguage = false;
+            if (t.getLanguage() == null || t.getLanguage().getUri() == null || t.getLanguage().getUri().isBlank() || t.getLanguage().getUri().endsWith("/und")) {
+                hasUndefinedLanguage = true;
+                undefinedLanguageCount++;
+            }
+
+            if (hasMultipleDdd || isUppercase || hasNoDdd || hasMissingAbstract || hasUndefinedLanguage) {
+                Map<String, Object> details = new LinkedHashMap<>();
+                details.put("uuid", t.getUuid());
+                details.put("pureId", t.getPureId());
+                details.put("titulo", title);
+                details.put("autor", t.getAuthorsNames());
+                details.put("director", t.getDirectorsNames());
+                details.put("anio", t.getYear());
+                
+                List<String> errors = new ArrayList<>();
+                if (hasMultipleDdd) errors.add("MULTIPLE_DDD");
+                if (isUppercase) errors.add("UPPERCASE_TITLE");
+                if (hasNoDdd) errors.add("NO_DDD");
+                if (hasMissingAbstract) errors.add("MISSING_ABSTRACT");
+                if (hasUndefinedLanguage) errors.add("UNDEFINED_LANGUAGE");
+                details.put("errors", errors);
+
+                List<String> allUrls = new ArrayList<>();
+                if (t.getLinks() != null) {
+                    for (StudentThesis.Link link : t.getLinks()) {
+                        if (link.getUrl() != null && isDddLink(link)) {
+                            allUrls.add(link.getUrl());
+                        }
+                    }
+                }
+                details.put("links", allUrls);
+                
+                thesesNeedingCorrection.add(details);
+            }
+        }
+
+        // Sort thesesNeedingCorrection by year descending (most recent first)
+        thesesNeedingCorrection.sort((a, b) -> {
+            Integer yA = (Integer) a.get("anio");
+            Integer yB = (Integer) b.get("anio");
+            if (yA == null && yB == null) return 0;
+            if (yA == null) return 1;
+            if (yB == null) return -1;
+            return yB.compareTo(yA);
+        });
+
+        Map<String, Integer> kpis = new LinkedHashMap<>();
+        kpis.put("multipleDdd", multipleDddCount);
+        kpis.put("uppercaseTitle", uppercaseTitleCount);
+        kpis.put("noDdd", noDddCount);
+        kpis.put("missingAbstract", missingAbstractCount);
+        kpis.put("undefinedLanguage", undefinedLanguageCount);
+
+        result.put("kpis", kpis);
+        result.put("theses", thesesNeedingCorrection);
+
+        return result;
+    }
+
+    @GetMapping("/languages")
+    public List<Map<String, Object>> getLanguages() {
+        Query query = new Query(Criteria.where("baseUri").is("/dk/atira/pure/core/languages"));
+        Document schemeDoc = mongoTemplate.findOne(query, Document.class, "Classificationschemes");
+        if (schemeDoc == null) {
+            return getDefaultFallbackLanguages();
+        }
+        
+        List<Document> contained = null;
+        try {
+            contained = (List<Document>) schemeDoc.get("containedClassifications");
+        } catch (Exception e) {
+            // ignore
+        }
+        if (contained == null || contained.isEmpty()) {
+            return getDefaultFallbackLanguages();
+        }
+        
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (Document c : contained) {
+            Boolean disabled = c.getBoolean("disabled");
+            if (disabled != null && disabled) {
+                continue;
+            }
+            String uri = c.getString("uri");
+            if (uri == null) continue;
+            // The language code is the last part of the URI, e.g., "es_ES" or "ar"
+            String code = uri.substring(uri.lastIndexOf('/') + 1);
+            
+            Map<String, Object> langMap = new LinkedHashMap<>();
+            langMap.put("code", code);
+            langMap.put("uri", uri);
+            
+            // Extract terms
+            Map<String, String> termMap = new LinkedHashMap<>();
+            Object termObj = c.get("term");
+            if (termObj instanceof Document) {
+                Document termDoc = (Document) termObj;
+                List<Document> textList = null;
+                try {
+                    textList = (List<Document>) termDoc.get("text");
+                } catch (Exception e) {
+                    // ignore
+                }
+                if (textList != null) {
+                    for (Document t : textList) {
+                        String locale = t.getString("locale");
+                        String value = t.getString("value");
+                        if (locale != null && value != null) {
+                            termMap.put(locale, value);
+                        }
+                    }
+                }
+            }
+            langMap.put("term", termMap);
+            
+            // Determine display name
+            String label = termMap.get("ca_ES");
+            if (label == null || label.isBlank()) {
+                label = termMap.get("es_ES");
+            }
+            if (label == null || label.isBlank()) {
+                label = termMap.get("en_GB");
+            }
+            if (label == null || label.isBlank()) {
+                label = code;
+            }
+            langMap.put("label", label);
+            
+            result.add(langMap);
+        }
+        
+        // Sort alphabetically by label
+        result.sort((a, b) -> ((String) a.get("label")).compareToIgnoreCase((String) b.get("label")));
+        return result;
+    }
+
+    private List<Map<String, Object>> getDefaultFallbackLanguages() {
+        List<Map<String, Object>> fallback = new ArrayList<>();
+        fallback.add(Map.of("code", "ca_ES", "uri", "/dk/atira/pure/core/languages/ca_ES", "label", "Català", "term", Map.of("ca_ES", "Català", "es_ES", "Catalán", "en_GB", "Catalan")));
+        fallback.add(Map.of("code", "es_ES", "uri", "/dk/atira/pure/core/languages/es_ES", "label", "Espanyol", "term", Map.of("ca_ES", "Espanyol", "es_ES", "Español", "en_GB", "Spanish")));
+        fallback.add(Map.of("code", "en_GB", "uri", "/dk/atira/pure/core/languages/en_GB", "label", "Anglès", "term", Map.of("ca_ES", "Anglès", "es_ES", "Inglés", "en_GB", "English")));
+        return fallback;
+    }
+
+    private synchronized com.optimaize.langdetect.LanguageDetector getLanguageDetector() {
+        if (this.languageDetector == null) {
+            try {
+                List<com.optimaize.langdetect.profiles.LanguageProfile> languageProfiles = 
+                    new com.optimaize.langdetect.profiles.LanguageProfileReader().readAllBuiltIn();
+                this.languageDetector = com.optimaize.langdetect.LanguageDetectorBuilder.create(
+                    com.optimaize.langdetect.ngram.NgramExtractors.standard())
+                        .withProfiles(languageProfiles)
+                        .build();
+                this.textObjectFactory = com.optimaize.langdetect.text.CommonTextObjectFactories.forDetectingShortCleanText();
+            } catch (Exception e) {
+                System.err.println("Failed to initialize language detector: " + e.getMessage());
+            }
+        }
+        return this.languageDetector;
+    }
+
+    @GetMapping("/detect-language")
+    public Map<String, Object> detectLanguage(@RequestParam String title) {
+        Map<String, Object> response = new LinkedHashMap<>();
+        if (title == null || title.isBlank()) {
+            response.put("language", "en_GB");
+            response.put("success", true);
+            return response;
+        }
+        
+        try {
+            com.optimaize.langdetect.LanguageDetector detector = getLanguageDetector();
+            if (detector != null && this.textObjectFactory != null) {
+                com.optimaize.langdetect.text.TextObject textObject = this.textObjectFactory.forText(title);
+                com.google.common.base.Optional<com.optimaize.langdetect.i18n.LdLocale> langResult = detector.detect(textObject);
+                if (langResult.isPresent()) {
+                    String detectedCode = langResult.get().getLanguage();
+                    String mappedCode = resolveLanguageCodeFromPure(detectedCode);
+                    response.put("language", mappedCode);
+                    response.put("rawCode", detectedCode);
+                    response.put("success", true);
+                    return response;
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("Error detecting language: " + e.getMessage());
+        }
+        
+        String fallback = fallbackDetectLanguage(title);
+        response.put("language", fallback);
+        response.put("fallback", true);
+        response.put("success", true);
+        return response;
+    }
+
+    private String resolveLanguageCodeFromPure(String detectedCode) {
+        if (detectedCode == null || detectedCode.isBlank()) return "en_GB";
+        
+        Query query = new Query(Criteria.where("baseUri").is("/dk/atira/pure/core/languages"));
+        Document schemeDoc = mongoTemplate.findOne(query, Document.class, "Classificationschemes");
+        if (schemeDoc != null) {
+            List<Document> contained = null;
+            try {
+                contained = (List<Document>) schemeDoc.get("containedClassifications");
+            } catch (Exception e) {}
+            if (contained != null) {
+                for (Document c : contained) {
+                    String uri = c.getString("uri");
+                    if (uri != null) {
+                        String code = uri.substring(uri.lastIndexOf('/') + 1);
+                        if (code.equalsIgnoreCase(detectedCode) || code.startsWith(detectedCode + "_")) {
+                            return code;
+                        }
+                    }
+                }
+            }
+        }
+        
+        if ("ca".equalsIgnoreCase(detectedCode)) return "ca_ES";
+        if ("es".equalsIgnoreCase(detectedCode)) return "es_ES";
+        if ("en".equalsIgnoreCase(detectedCode)) return "en_GB";
+        
+        return detectedCode;
+    }
+
+    private String fallbackDetectLanguage(String title) {
+        if (title == null || title.isBlank()) return "ca_ES";
+        
+        String clean = title.toLowerCase();
+        String[] words = clean.split("[\\s,.;:()?!\"'’`·\\-]+");
+        
+        double caScore = 0;
+        double esScore = 0;
+        double enScore = 0;
+        
+        if (clean.contains("ç") || clean.contains("à") || clean.contains("è") || clean.contains("ò") || clean.contains("l·l") 
+                || clean.matches(".*\\b(d'|l'|n'|s'|t')\\w+.*")) {
+            caScore += 3;
+        }
+        if (clean.contains("ñ") || clean.contains("¿") || clean.contains("¡")) {
+            esScore += 3;
+        }
+        
+        java.util.Set<String> caOnly = java.util.Set.of(
+            "i", "els", "les", "amb", "dels", "per", "fins", "pels", "sota", "als", "quelcom", 
+            "així", "també", "però", "aquesta", "aquest", "aquests", "aquestes", "seu", "seva", 
+            "seus", "seves", "nostre", "nostra", "vostre", "vostra"
+        );
+        java.util.Set<String> esOnly = java.util.Set.of(
+            "y", "los", "las", "con", "por", "para", "bajo", "como", "esta", "este", "estos", 
+            "estas", "su", "sus", "nuestro", "nuestra", "vuestro", "vuestra", "pero", "también"
+        );
+        java.util.Set<String> enOnly = java.util.Set.of(
+            "the", "and", "of", "in", "to", "for", "with", "on", "a", "an", "by", "at", 
+            "from", "about", "that", "which", "this", "is", "are", "it", "its", "their", 
+            "our", "your", "but", "also"
+        );
+        java.util.Set<String> sharedRomance = java.util.Set.of(
+            "de", "que", "la", "en", "del", "un", "una", "sobre", "social", "anàlisi", "analisis", 
+            "estudi", "estudio", "desenvolupament", "desarrollo", "investigació", "investigación"
+        );
+        
+        for (String w : words) {
+            if (caOnly.contains(w)) caScore += 2;
+            if (esOnly.contains(w)) esScore += 2;
+            if (enOnly.contains(w)) enScore += 2;
+            if (sharedRomance.contains(w)) {
+                caScore += 0.5;
+                esScore += 0.5;
+            }
+        }
+        
+        for (String w : words) {
+            if (w.endsWith("ment") && w.length() > 5) {
+                caScore += 1;
+                enScore += 1;
+            }
+            if (w.endsWith("miento") && w.length() > 6) esScore += 1;
+            if (w.endsWith("ción") || w.endsWith("sión")) esScore += 1;
+            if (w.endsWith("ció") || w.endsWith("sió")) caScore += 1;
+            if (w.endsWith("tion") || w.endsWith("sion")) enScore += 1;
+            if (w.endsWith("ing") && w.length() > 4) enScore += 1;
+            if (w.endsWith("ity") && w.length() > 4) enScore += 1;
+            if (w.endsWith("ly") && w.length() > 3) enScore += 1;
+            if (w.endsWith("tive") && w.length() > 4) enScore += 1;
+            if (w.endsWith("sive") && w.length() > 4) enScore += 1;
+            if (w.endsWith("nce") && w.length() > 4) enScore += 1;
+            if (w.endsWith("ical") && w.length() > 4) enScore += 1;
+        }
+        
+        if (caScore > esScore && caScore > enScore) return "ca_ES";
+        if (esScore > caScore && esScore > enScore) return "es_ES";
+        if (enScore > caScore && enScore > esScore) return "en_GB";
+        
+        if (caScore == esScore && caScore > 0) {
+            boolean hasCatalanAccents = clean.matches(".*[àèòíóúé].*");
+            boolean hasSpanishAccents = clean.matches(".*[áéíóú].*");
+            if (hasCatalanAccents && !hasSpanishAccents) return "ca_ES";
+            if (hasSpanishAccents && !hasCatalanAccents) return "es_ES";
+            
+            if (clean.contains(" estudi ") || clean.contains(" d'") || clean.contains(" l'")) return "ca_ES";
+            if (clean.contains(" estudio ")) return "es_ES";
+        }
+        
+        return "ca_ES";
+    }
+
+    @PostMapping("/{uuid}/language")
+    public Map<String, Object> updateLanguage(
+            @PathVariable String uuid,
+            @RequestBody Map<String, String> body) {
+        
+        String langCode = body.get("language"); // e.g. "ca_ES", "es_ES", "en_GB" or any code from ClassificationSchemes
+        String env = body.getOrDefault("env", "test"); // e.g. "test", "prod"
+        Map<String, Object> response = new LinkedHashMap<>();
+        
+        if (langCode == null || langCode.isBlank()) {
+            response.put("success", false);
+            response.put("message", "Idioma no vàlid");
+            return response;
+        }
+        
+        Query query = new Query(Criteria.where("uuid").is(uuid));
+        StudentThesis thesis = mongoTemplate.findOne(query, StudentThesis.class);
+        
+        if (thesis == null) {
+            response.put("success", false);
+            response.put("message", "Tesi no trobada");
+            return response;
+        }
+        
+        // Build UriTerm for language
+        StudentThesis.UriTerm language = new StudentThesis.UriTerm();
+        language.setUri("/dk/atira/pure/core/languages/" + langCode);
+        
+        // Let's resolve the term from Classificationschemes dynamically!
+        Map<String, String> term = new LinkedHashMap<>();
+        boolean resolved = false;
+        
+        Query langQuery = new Query(Criteria.where("baseUri").is("/dk/atira/pure/core/languages"));
+        Document schemeDoc = mongoTemplate.findOne(langQuery, Document.class, "Classificationschemes");
+        if (schemeDoc != null) {
+            List<Document> contained = null;
+            try {
+                contained = (List<Document>) schemeDoc.get("containedClassifications");
+            } catch (Exception e) {
+                // ignore
+            }
+            if (contained != null) {
+                for (Document c : contained) {
+                    String uri = c.getString("uri");
+                    if (uri != null && uri.endsWith("/" + langCode)) {
+                        Document termDoc = (Document) c.get("term");
+                        if (termDoc != null) {
+                            List<Document> textList = null;
+                            try {
+                                textList = (List<Document>) termDoc.get("text");
+                            } catch (Exception e) {
+                                // ignore
+                            }
+                            if (textList != null) {
+                                for (Document t : textList) {
+                                    String locale = t.getString("locale");
+                                    String value = t.getString("value");
+                                    if (locale != null && value != null) {
+                                        term.put(locale, value);
+                                    }
+                                }
+                                resolved = true;
+                            }
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+        
+        if (!resolved) {
+            // Fallback for standard ones
+            if ("ca_ES".equals(langCode)) {
+                term.put("ca_ES", "Català");
+                term.put("es_ES", "Catalán");
+                term.put("en_GB", "Catalan");
+            } else if ("es_ES".equals(langCode)) {
+                term.put("ca_ES", "Espanyol");
+                term.put("es_ES", "Español");
+                term.put("en_GB", "Spanish");
+            } else if ("en_GB".equals(langCode)) {
+                term.put("ca_ES", "Anglès");
+                term.put("es_ES", "Inglés");
+                term.put("en_GB", "English");
+            } else {
+                term.put("ca_ES", langCode);
+                term.put("es_ES", langCode);
+                term.put("en_GB", langCode);
+            }
+        }
+        language.setTerm(term);
+        
+        // Sync to Egreta/Pure API
+        boolean egretaSyncSuccess = syncStudentThesisLanguageToEgreta(uuid, language, env);
+        if (!egretaSyncSuccess) {
+            response.put("success", false);
+            response.put("message", "Error al sincronitzar amb l'API d'Egreta (" + ("prod".equalsIgnoreCase(env) ? "egreta.uab.cat" : "egretat.uab.cat") + ").");
+            return response;
+        }
+        
+        thesis.setLanguage(language);
+        mongoTemplate.save(thesis);
+        
+        response.put("success", true);
+        response.put("message", "Idioma actualitzat correctament a Egreta i a la base de dades local.");
+        return response;
+    }
+
+    private boolean syncStudentThesisLanguageToEgreta(String uuid, StudentThesis.UriTerm language, String targetEnv) {
+        try {
+            RestTemplate restTemplate = new RestTemplate();
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("Content-Type", "application/json;charset=utf-8");
+            headers.set("api-key", "9971c3cc-b3e0-48e3-9ff9-e990c795e92f");
+            headers.set("Accept", "application/json");
+
+            String baseUrl = "prod".equalsIgnoreCase(targetEnv) ? "https://egreta.uab.cat/ws/api/" : "https://egretat.uab.cat/ws/api/";
+            String url = baseUrl + "student-theses/" + uuid;
+
+            // 1. GET
+            ResponseEntity<Map> getResp = restTemplate.exchange(
+                    url, HttpMethod.GET, new HttpEntity<>(headers), Map.class);
+            
+            if (!getResp.getStatusCode().is2xxSuccessful() || getResp.getBody() == null) {
+                System.err.println("GET failed for Egreta student-thesis UUID: " + uuid + ", Status: " + getResp.getStatusCode());
+                return false;
+            }
+            
+            @SuppressWarnings("unchecked")
+            Map<String, Object> data = new LinkedHashMap<>(getResp.getBody());
+            
+            // 2. Modify language
+            Map<String, Object> langMap = new LinkedHashMap<>();
+            langMap.put("uri", language.getUri());
+            langMap.put("term", language.getTerm());
+            data.put("language", langMap);
+            
+            // 3. PUT
+            HttpEntity<Map<String, Object>> putEntity = new HttpEntity<>(data, headers);
+            ResponseEntity<Map> putResp = restTemplate.exchange(
+                    url, HttpMethod.PUT, putEntity, Map.class);
+            
+            return putResp.getStatusCode().is2xxSuccessful();
+        } catch (Exception e) {
+            System.err.println("Error syncing student-thesis language to Egreta: " + e.getMessage());
+            return false;
+        }
+    }
+
+    @PostMapping("/{uuid}/abstract")
+    public Map<String, Object> updateAbstract(
+            @PathVariable String uuid,
+            @RequestBody Map<String, Object> body) {
+        
+        @SuppressWarnings("unchecked")
+        Map<String, String> abstracts = (Map<String, String>) body.get("abstracts");
+        String env = (String) body.getOrDefault("env", "test");
+        Map<String, Object> response = new LinkedHashMap<>();
+        
+        if (abstracts == null || abstracts.isEmpty()) {
+            response.put("success", false);
+            response.put("message", "Abstract no vàlid");
+            return response;
+        }
+        
+        Query query = new Query(Criteria.where("uuid").is(uuid));
+        StudentThesis thesis = mongoTemplate.findOne(query, StudentThesis.class);
+        
+        if (thesis == null) {
+            response.put("success", false);
+            response.put("message", "Tesi no trobada");
+            return response;
+        }
+        
+        // Sync to Egreta/Pure API
+        boolean egretaSyncSuccess = syncStudentThesisAbstractToEgreta(uuid, abstracts, env);
+        if (!egretaSyncSuccess) {
+            response.put("success", false);
+            response.put("message", "Error al sincronitzar amb l'API d'Egreta (" + ("prod".equalsIgnoreCase(env) ? "egreta.uab.cat" : "egretat.uab.cat") + ").");
+            return response;
+        }
+        
+        thesis.setAbstractText(abstracts);
+        mongoTemplate.save(thesis);
+        
+        response.put("success", true);
+        response.put("message", "Abstract actualitzat correctament a Egreta i a la base de dades local.");
+        return response;
+    }
+
+    private boolean syncStudentThesisAbstractToEgreta(String uuid, Map<String, String> abstracts, String targetEnv) {
+        try {
+            RestTemplate restTemplate = new RestTemplate();
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("Content-Type", "application/json;charset=utf-8");
+            headers.set("api-key", "9971c3cc-b3e0-48e3-9ff9-e990c795e92f");
+            headers.set("Accept", "application/json");
+
+            String baseUrl = "prod".equalsIgnoreCase(targetEnv) ? "https://egreta.uab.cat/ws/api/" : "https://egretat.uab.cat/ws/api/";
+            String url = baseUrl + "student-theses/" + uuid;
+
+            // 1. GET
+            ResponseEntity<Map> getResp = restTemplate.exchange(
+                    url, HttpMethod.GET, new HttpEntity<>(headers), Map.class);
+            
+            if (!getResp.getStatusCode().is2xxSuccessful() || getResp.getBody() == null) {
+                System.err.println("GET failed for Egreta student-thesis UUID: " + uuid + ", Status: " + getResp.getStatusCode());
+                return false;
+            }
+            
+            @SuppressWarnings("unchecked")
+            Map<String, Object> data = new LinkedHashMap<>(getResp.getBody());
+            
+            // 2. Modify abstract
+            data.put("abstract", abstracts);
+            
+            // 3. PUT
+            HttpEntity<Map<String, Object>> putEntity = new HttpEntity<>(data, headers);
+            ResponseEntity<Map> putResp = restTemplate.exchange(
+                    url, HttpMethod.PUT, putEntity, Map.class);
+            
+            return putResp.getStatusCode().is2xxSuccessful();
+        } catch (Exception e) {
+            System.err.println("Error syncing student-thesis abstract to Egreta: " + e.getMessage());
+            return false;
+        }
+    }
+
+    @PostMapping("/{uuid}/title")
+    public Map<String, Object> updateTitle(
+            @PathVariable String uuid,
+            @RequestBody Map<String, String> body) {
+        
+        String newTitleVal = body.get("title");
+        String env = body.getOrDefault("env", "test");
+        Map<String, Object> response = new LinkedHashMap<>();
+        
+        if (newTitleVal == null || newTitleVal.isBlank()) {
+            response.put("success", false);
+            response.put("message", "Títol no vàlid");
+            return response;
+        }
+        
+        Query query = new Query(Criteria.where("uuid").is(uuid));
+        StudentThesis thesis = mongoTemplate.findOne(query, StudentThesis.class);
+        
+        if (thesis == null) {
+            response.put("success", false);
+            response.put("message", "Tesi no trobada");
+            return response;
+        }
+        
+        // Sync to Egreta/Pure API
+        boolean egretaSyncSuccess = syncStudentThesisTitleToEgreta(uuid, newTitleVal, env);
+        if (!egretaSyncSuccess) {
+            response.put("success", false);
+            response.put("message", "Error al sincronitzar amb l'API d'Egreta (" + ("prod".equalsIgnoreCase(env) ? "egreta.uab.cat" : "egretat.uab.cat") + ").");
+            return response;
+        }
+        
+        StudentThesis.Title t = thesis.getTitle();
+        if (t == null) {
+            t = new StudentThesis.Title();
+            thesis.setTitle(t);
+        }
+        t.setValue(newTitleVal);
+        mongoTemplate.save(thesis);
+        
+        response.put("success", true);
+        response.put("message", "Títol actualitzat correctament a Egreta i a la base de dades local.");
+        return response;
+    }
+
+    @PostMapping("/{uuid}/link")
+    public Map<String, Object> addLink(
+            @PathVariable String uuid,
+            @RequestBody Map<String, String> body) {
+        
+        String linkUrl = body.get("link");
+        String env = body.getOrDefault("env", "test");
+        Map<String, Object> response = new LinkedHashMap<>();
+        
+        if (linkUrl == null || linkUrl.isBlank()) {
+            response.put("success", false);
+            response.put("message", "Enllaç no vàlid");
+            return response;
+        }
+        
+        Query query = new Query(Criteria.where("uuid").is(uuid));
+        StudentThesis thesis = mongoTemplate.findOne(query, StudentThesis.class);
+        
+        if (thesis == null) {
+            response.put("success", false);
+            response.put("message", "Tesi no trobada");
+            return response;
+        }
+        
+        // Sync to Egreta/Pure API
+        boolean egretaSyncSuccess = syncStudentThesisLinkToEgreta(uuid, linkUrl, env);
+        if (!egretaSyncSuccess) {
+            response.put("success", false);
+            response.put("message", "Error al sincronitzar amb l'API d'Egreta (" + ("prod".equalsIgnoreCase(env) ? "egreta.uab.cat" : "egretat.uab.cat") + ").");
+            return response;
+        }
+        
+        // Retrieve updated data from Egreta/Pure API to sync generated pureId correctly
+        try {
+            RestTemplate restTemplate = new RestTemplate();
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("api-key", "9971c3cc-b3e0-48e3-9ff9-e990c795e92f");
+            headers.set("Accept", "application/json");
+            String baseUrl = "prod".equalsIgnoreCase(env) ? "https://egreta.uab.cat/ws/api/" : "https://egretat.uab.cat/ws/api/";
+            String url = baseUrl + "student-theses/" + uuid;
+            ResponseEntity<StudentThesis> getResp = restTemplate.exchange(
+                    url, HttpMethod.GET, new HttpEntity<>(headers), StudentThesis.class);
+            if (getResp.getStatusCode().is2xxSuccessful() && getResp.getBody() != null) {
+                StudentThesis updatedThesis = getResp.getBody();
+                thesis.setLinks(updatedThesis.getLinks());
+            } else {
+                // Fallback: manually construct link if GET failed for some reason
+                List<StudentThesis.Link> links = thesis.getLinks();
+                if (links == null) {
+                    links = new ArrayList<>();
+                    thesis.setLinks(links);
+                }
+                boolean exists = false;
+                for (StudentThesis.Link l : links) {
+                    if (l.getUrl() != null && l.getUrl().equalsIgnoreCase(linkUrl)) {
+                        exists = true;
+                        break;
+                    }
+                }
+                if (!exists) {
+                    StudentThesis.Link newLink = new StudentThesis.Link();
+                    newLink.setUrl(linkUrl);
+                    newLink.setAlias("DDD");
+                    StudentThesis.UriTerm linkType = new StudentThesis.UriTerm();
+                    linkType.setUri("/dk/atira/pure/links/studentthesis/ddd");
+                    Map<String, String> term = new LinkedHashMap<>();
+                    term.put("en_GB", "DDD");
+                    term.put("es_ES", "DDD");
+                    term.put("ca_ES", "DDD");
+                    linkType.setTerm(term);
+                    newLink.setLinkType(linkType);
+                    links.add(newLink);
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("Error fetching updated thesis from Egreta after link update: " + e.getMessage());
+            // Fallback: manually construct link
+            List<StudentThesis.Link> links = thesis.getLinks();
+            if (links == null) {
+                links = new ArrayList<>();
+                thesis.setLinks(links);
+            }
+            boolean exists = false;
+            for (StudentThesis.Link l : links) {
+                if (l.getUrl() != null && l.getUrl().equalsIgnoreCase(linkUrl)) {
+                    exists = true;
+                    break;
+                }
+            }
+            if (!exists) {
+                StudentThesis.Link newLink = new StudentThesis.Link();
+                newLink.setUrl(linkUrl);
+                newLink.setAlias("DDD");
+                StudentThesis.UriTerm linkType = new StudentThesis.UriTerm();
+                linkType.setUri("/dk/atira/pure/links/studentthesis/ddd");
+                Map<String, String> term = new LinkedHashMap<>();
+                term.put("en_GB", "DDD");
+                term.put("es_ES", "DDD");
+                term.put("ca_ES", "DDD");
+                linkType.setTerm(term);
+                newLink.setLinkType(linkType);
+                links.add(newLink);
+            }
+        }
+        
+        mongoTemplate.save(thesis);
+        
+        response.put("success", true);
+        response.put("message", "Enllaç afegit correctament a Egreta i a la base de dades local.");
+        
+        List<String> dddUrls = new ArrayList<>();
+        if (thesis.getLinks() != null) {
+            for (StudentThesis.Link l : thesis.getLinks()) {
+                if (l.getUrl() != null && isDddLink(l)) {
+                    dddUrls.add(l.getUrl());
+                }
+            }
+        }
+        response.put("links", dddUrls);
+        return response;
+    }
+
+    @PostMapping("/{uuid}/link/delete")
+    public Map<String, Object> deleteLink(
+            @PathVariable String uuid,
+            @RequestBody Map<String, String> body) {
+        
+        String linkUrl = body.get("link");
+        String env = body.getOrDefault("env", "test");
+        Map<String, Object> response = new LinkedHashMap<>();
+        
+        if (linkUrl == null || linkUrl.isBlank()) {
+            response.put("success", false);
+            response.put("message", "Enllaç no vàlid");
+            return response;
+        }
+        
+        Query query = new Query(Criteria.where("uuid").is(uuid));
+        StudentThesis thesis = mongoTemplate.findOne(query, StudentThesis.class);
+        
+        if (thesis == null) {
+            response.put("success", false);
+            response.put("message", "Tesi no trobada");
+            return response;
+        }
+        
+        // Sync delete to Egreta/Pure API
+        boolean egretaSyncSuccess = syncStudentThesisDeleteLinkToEgreta(uuid, linkUrl, env);
+        if (!egretaSyncSuccess) {
+            response.put("success", false);
+            response.put("message", "Error al sincronitzar amb l'API d'Egreta (" + ("prod".equalsIgnoreCase(env) ? "egreta.uab.cat" : "egretat.uab.cat") + ").");
+            return response;
+        }
+        
+        // Retrieve updated data from Egreta/Pure API to sync generated pureId correctly
+        try {
+            RestTemplate restTemplate = new RestTemplate();
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("api-key", "9971c3cc-b3e0-48e3-9ff9-e990c795e92f");
+            headers.set("Accept", "application/json");
+            String baseUrl = "prod".equalsIgnoreCase(env) ? "https://egreta.uab.cat/ws/api/" : "https://egretat.uab.cat/ws/api/";
+            String url = baseUrl + "student-theses/" + uuid;
+            ResponseEntity<StudentThesis> getResp = restTemplate.exchange(
+                    url, HttpMethod.GET, new HttpEntity<>(headers), StudentThesis.class);
+            if (getResp.getStatusCode().is2xxSuccessful() && getResp.getBody() != null) {
+                StudentThesis updatedThesis = getResp.getBody();
+                thesis.setLinks(updatedThesis.getLinks());
+            } else {
+                // Fallback: manually delete link if GET failed
+                List<StudentThesis.Link> links = thesis.getLinks();
+                if (links != null) {
+                    links.removeIf(l -> l.getUrl() != null && l.getUrl().equalsIgnoreCase(linkUrl));
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("Error fetching updated thesis from Egreta after link deletion: " + e.getMessage());
+            // Fallback: manually delete link
+            List<StudentThesis.Link> links = thesis.getLinks();
+            if (links != null) {
+                links.removeIf(l -> l.getUrl() != null && l.getUrl().equalsIgnoreCase(linkUrl));
+            }
+        }
+        
+        mongoTemplate.save(thesis);
+        
+        response.put("success", true);
+        response.put("message", "Enllaç eliminat correctament a Egreta i a la base de dades local.");
+        
+        List<String> dddUrls = new ArrayList<>();
+        if (thesis.getLinks() != null) {
+            for (StudentThesis.Link l : thesis.getLinks()) {
+                if (l.getUrl() != null && isDddLink(l)) {
+                    dddUrls.add(l.getUrl());
+                }
+            }
+        }
+        response.put("links", dddUrls);
+        return response;
+    }
+
+    private boolean syncStudentThesisTitleToEgreta(String uuid, String newTitle, String targetEnv) {
+        try {
+            RestTemplate restTemplate = new RestTemplate();
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("Content-Type", "application/json;charset=utf-8");
+            headers.set("api-key", "9971c3cc-b3e0-48e3-9ff9-e990c795e92f");
+            headers.set("Accept", "application/json");
+
+            String baseUrl = "prod".equalsIgnoreCase(targetEnv) ? "https://egreta.uab.cat/ws/api/" : "https://egretat.uab.cat/ws/api/";
+            String url = baseUrl + "student-theses/" + uuid;
+
+            // 1. GET
+            ResponseEntity<Map> getResp = restTemplate.exchange(
+                    url, HttpMethod.GET, new HttpEntity<>(headers), Map.class);
+            
+            if (!getResp.getStatusCode().is2xxSuccessful() || getResp.getBody() == null) {
+                System.err.println("GET failed for Egreta student-thesis UUID: " + uuid + ", Status: " + getResp.getStatusCode());
+                return false;
+            }
+            
+            @SuppressWarnings("unchecked")
+            Map<String, Object> data = new LinkedHashMap<>(getResp.getBody());
+            
+            // 2. Modify title
+            Map<String, Object> titleMap = new LinkedHashMap<>();
+            titleMap.put("value", newTitle);
+            data.put("title", titleMap);
+            
+            // 3. PUT
+            HttpEntity<Map<String, Object>> putEntity = new HttpEntity<>(data, headers);
+            ResponseEntity<Map> putResp = restTemplate.exchange(
+                    url, HttpMethod.PUT, putEntity, Map.class);
+            
+            return putResp.getStatusCode().is2xxSuccessful();
+        } catch (Exception e) {
+            System.err.println("Error syncing student-thesis title to Egreta: " + e.getMessage());
+            return false;
+        }
+    }
+
+    private boolean syncStudentThesisLinkToEgreta(String uuid, String linkUrl, String targetEnv) {
+        try {
+            RestTemplate restTemplate = new RestTemplate();
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("Content-Type", "application/json;charset=utf-8");
+            headers.set("api-key", "9971c3cc-b3e0-48e3-9ff9-e990c795e92f");
+            headers.set("Accept", "application/json");
+
+            String baseUrl = "prod".equalsIgnoreCase(targetEnv) ? "https://egreta.uab.cat/ws/api/" : "https://egretat.uab.cat/ws/api/";
+            String url = baseUrl + "student-theses/" + uuid;
+
+            // 1. GET
+            ResponseEntity<Map> getResp = restTemplate.exchange(
+                    url, HttpMethod.GET, new HttpEntity<>(headers), Map.class);
+            
+            if (!getResp.getStatusCode().is2xxSuccessful() || getResp.getBody() == null) {
+                System.err.println("GET failed for Egreta student-thesis UUID: " + uuid + ", Status: " + getResp.getStatusCode());
+                return false;
+            }
+            
+            @SuppressWarnings("unchecked")
+            Map<String, Object> data = new LinkedHashMap<>(getResp.getBody());
+            
+            // 2. Modify links list
+            List<Map<String, Object>> linksList = (List<Map<String, Object>>) data.get("links");
+            if (linksList == null) {
+                linksList = new ArrayList<>();
+            } else {
+                linksList = new ArrayList<>(linksList);
+            }
+            
+            boolean linkExists = false;
+            for (Map<String, Object> existingLink : linksList) {
+                String existingUrl = (String) existingLink.get("url");
+                if (existingUrl != null && existingUrl.trim().equalsIgnoreCase(linkUrl.trim())) {
+                    linkExists = true;
+                    break;
+                }
+            }
+            
+            if (!linkExists) {
+                Map<String, Object> newLinkMap = new LinkedHashMap<>();
+                newLinkMap.put("url", linkUrl);
+                newLinkMap.put("alias", "DDD");
+                
+                Map<String, Object> linkTypeMap = new LinkedHashMap<>();
+                linkTypeMap.put("uri", "/dk/atira/pure/links/studentthesis/ddd");
+                
+                Map<String, String> termMap = new LinkedHashMap<>();
+                termMap.put("en_GB", "DDD");
+                termMap.put("es_ES", "DDD");
+                termMap.put("ca_ES", "DDD");
+                linkTypeMap.put("term", termMap);
+                
+                newLinkMap.put("linkType", linkTypeMap);
+                linksList.add(newLinkMap);
+                
+                data.put("links", linksList);
+            }
+            
+            // 3. PUT
+            HttpEntity<Map<String, Object>> putEntity = new HttpEntity<>(data, headers);
+            ResponseEntity<Map> putResp = restTemplate.exchange(
+                    url, HttpMethod.PUT, putEntity, Map.class);
+            
+            return putResp.getStatusCode().is2xxSuccessful();
+        } catch (Exception e) {
+            System.err.println("Error syncing student-thesis link to Egreta: " + e.getMessage());
+            return false;
+        }
+    }
+
+    private boolean syncStudentThesisDeleteLinkToEgreta(String uuid, String linkUrl, String targetEnv) {
+        try {
+            RestTemplate restTemplate = new RestTemplate();
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("Content-Type", "application/json;charset=utf-8");
+            headers.set("api-key", "9971c3cc-b3e0-48e3-9ff9-e990c795e92f");
+            headers.set("Accept", "application/json");
+
+            String baseUrl = "prod".equalsIgnoreCase(targetEnv) ? "https://egreta.uab.cat/ws/api/" : "https://egretat.uab.cat/ws/api/";
+            String url = baseUrl + "student-theses/" + uuid;
+
+            // 1. GET
+            ResponseEntity<Map> getResp = restTemplate.exchange(
+                    url, HttpMethod.GET, new HttpEntity<>(headers), Map.class);
+            
+            if (!getResp.getStatusCode().is2xxSuccessful() || getResp.getBody() == null) {
+                System.err.println("GET failed for Egreta student-thesis UUID: " + uuid + ", Status: " + getResp.getStatusCode());
+                return false;
+            }
+            
+            @SuppressWarnings("unchecked")
+            Map<String, Object> data = new LinkedHashMap<>(getResp.getBody());
+            
+            // 2. Modify links list (remove match)
+            List<Map<String, Object>> linksList = (List<Map<String, Object>>) data.get("links");
+            if (linksList != null) {
+                linksList = new ArrayList<>(linksList);
+                linksList.removeIf(linkMap -> {
+                    String urlVal = (String) linkMap.get("url");
+                    return urlVal != null && urlVal.trim().equalsIgnoreCase(linkUrl.trim());
+                });
+                data.put("links", linksList);
+            }
+            
+            // 3. PUT
+            HttpEntity<Map<String, Object>> putEntity = new HttpEntity<>(data, headers);
+            ResponseEntity<Map> putResp = restTemplate.exchange(
+                    url, HttpMethod.PUT, putEntity, Map.class);
+            
+            return putResp.getStatusCode().is2xxSuccessful();
+        } catch (Exception e) {
+            System.err.println("Error syncing student-thesis delete link to Egreta: " + e.getMessage());
+            return false;
+        }
+    }
+
+
+
+    private boolean isDddLink(StudentThesis.Link link) {
+        if (link == null) return false;
+        if (link.getLinkType() != null && link.getLinkType().getUri() != null) {
+            String uri = link.getLinkType().getUri().toLowerCase();
+            if (uri.equals("/dk/atira/pure/links/studentthesis/ddd") || uri.endsWith("/ddd")) {
+                return true;
+            }
+        }
+        if (link.getUrl() != null && link.getUrl().toLowerCase().contains("ddd.uab.cat")) {
+            return true;
+        }
+        if (link.getLinkType() != null && link.getLinkType().getTerm() != null) {
+            for (String termVal : link.getLinkType().getTerm().values()) {
+                if (termVal != null && "ddd".equalsIgnoreCase(termVal.trim())) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private boolean isTitleUppercase(String str) {
+        if (str == null || str.isBlank()) return false;
+        boolean hasLetter = false;
+        for (int i = 0; i < str.length(); i++) {
+            char c = str.charAt(i);
+            if (Character.isLetter(c)) {
+                hasLetter = true;
+                if (Character.isLowerCase(c)) {
+                    return false;
+                }
+            }
+        }
+        return hasLetter;
+    }
+
+    @GetMapping("/suggest-ddd")
+    public Map<String, Object> suggestDddLink(@RequestParam String uuid) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        
+        StudentThesis thesis = mongoTemplate.findOne(new Query(Criteria.where("uuid").is(uuid)), StudentThesis.class);
+        if (thesis == null) {
+            result.put("success", false);
+            result.put("error", "Tesis no trobada");
+            return result;
+        }
+
+        String title = thesis.getFullTitle();
+        java.util.Set<String> seen = new java.util.HashSet<>();
+        List<String> suggestedLinks = new ArrayList<>();
+        String strategyUsed = "Cap";
+        String queryUsed = "";
+
+        // 1. Try Title search first
+        String titleQuery = getTitleQuery(title);
+        if (!titleQuery.isEmpty()) {
+            List<String> titleResults = performDddSearch(titleQuery, seen);
+            if (!titleResults.isEmpty()) {
+                suggestedLinks.addAll(titleResults);
+                strategyUsed = "Títol";
+                queryUsed = titleQuery;
+            }
+        }
+
+        // 2. Fallback to Author search
+        if (suggestedLinks.isEmpty()) {
+            String authorQuery = getAuthorQuery(thesis);
+            if (!authorQuery.isEmpty()) {
+                List<String> authorResults = performDddSearch(authorQuery, seen);
+                if (!authorResults.isEmpty()) {
+                    suggestedLinks.addAll(authorResults);
+                    strategyUsed = "Autor";
+                    queryUsed = authorQuery;
+                }
+            }
+        }
+
+        if (suggestedLinks.isEmpty()) {
+            result.put("success", false);
+            result.put("error", "No s'han trobat suggeriments al DDD");
+            return result;
+        }
+
+        result.put("success", true);
+        result.put("links", suggestedLinks);
+        result.put("strategy", strategyUsed);
+        result.put("query", queryUsed);
+
+        return result;
+    }
+
+    @GetMapping("/suggest-tdx")
+    public Map<String, Object> suggestTdxAbstract(@RequestParam String uuid) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        
+        StudentThesis thesis = mongoTemplate.findOne(new org.springframework.data.mongodb.core.query.Query(
+            org.springframework.data.mongodb.core.query.Criteria.where("uuid").is(uuid)
+        ), StudentThesis.class);
+        
+        if (thesis == null) {
+            result.put("success", false);
+            result.put("error", "Tesis no trobada");
+            return result;
+        }
+
+        // Find TDX handle in thesis links
+        String handle = null;
+        String handleUrl = null;
+        if (thesis.getLinks() != null) {
+            for (StudentThesis.Link link : thesis.getLinks()) {
+                String url = link.getUrl();
+                if (url != null && (url.toLowerCase().contains("tdx.cat") || url.toLowerCase().contains("handle"))) {
+                    String extracted = extractHandleFromUrl(url);
+                    if (extracted != null) {
+                        handle = extracted;
+                        handleUrl = url;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (handle == null) {
+            String authorLastName = "";
+            if (thesis.getContributors() != null && !thesis.getContributors().isEmpty()) {
+                StudentThesis.Contributor c = thesis.getContributors().get(0);
+                if (c.getName() != null && c.getName().getLastName() != null) {
+                    authorLastName = c.getName().getLastName();
+                }
+            }
+            authorLastName = authorLastName.trim();
+
+            String cleanTitle = thesis.getFullTitle();
+            if (cleanTitle != null) {
+                cleanTitle = cleanTitle.replace("\uFFFD", " ").trim();
+                cleanTitle = cleanTitle.replaceAll("[^a-zA-Z0-9áéíóúÁÉÍÓÚçÇñÑàèòÀÈÒïüÏÜ\\s]", " ");
+                String[] words = cleanTitle.split("\\s+");
+                List<String> firstWords = new ArrayList<>();
+                for (int i = 0; i < Math.min(words.length, 6); i++) {
+                    if (!words[i].isBlank()) {
+                        firstWords.add(words[i]);
+                    }
+                }
+                cleanTitle = String.join(" ", firstWords);
+            }
+
+            if (cleanTitle != null && !cleanTitle.isBlank()) {
+                handle = findHandleInTdx(cleanTitle, authorLastName);
+                if (handle == null) {
+                    handle = findHandleInTdx(cleanTitle, "");
+                }
+            }
+            
+            if (handle != null) {
+                handleUrl = "https://www.tdx.cat/handle/" + handle;
+            }
+        }
+
+        if (handle == null) {
+            result.put("success", false);
+            result.put("error", "No s'ha pogut trobar aquesta tesi a TDX (ni per enllaç de handle ni per cerca de títol i autor a la UAB).");
+            return result;
+        }
+
+        // Query TDX OAI-PMH using GetRecord and metadataPrefix=dim
+        try {
+            String oaiUrl = "https://www.tdx.cat/oai/request?verb=GetRecord&metadataPrefix=dim&identifier=oai:tdx.cat:" + handle;
+            String xml = fetchUrlHtml(oaiUrl);
+            if (xml == null || xml.isEmpty()) {
+                result.put("success", false);
+                result.put("error", "Error en connectar amb el servidor OAI de TDX.");
+                return result;
+            }
+
+            // Parse abstracts from DIM XML
+            Map<String, String> abstracts = extractAbstractsFromDimXml(xml);
+            if (abstracts.isEmpty()) {
+                result.put("success", false);
+                result.put("error", "No s'han trobat abstracts per a aquesta tesi al servidor OAI de TDX.");
+                return result;
+            }
+
+            result.put("success", true);
+            List<Map<String, Object>> resultsList = new ArrayList<>();
+            Map<String, Object> singleResult = new LinkedHashMap<>();
+            singleResult.put("handleUrl", handleUrl);
+            singleResult.put("abstracts", abstracts);
+            resultsList.add(singleResult);
+            result.put("results", resultsList);
+            return result;
+        } catch (Exception e) {
+            result.put("success", false);
+            result.put("error", "Error en processar la resposta de l'OAI: " + e.getMessage());
+            return result;
+        }
+    }
+
+    private String extractHandleFromUrl(String url) {
+        if (url == null) return null;
+        java.util.regex.Pattern p = java.util.regex.Pattern.compile("10803/\\d+");
+        java.util.regex.Matcher m = p.matcher(url);
+        if (m.find()) {
+            return m.group();
+        }
+        return null;
+    }
+
+    private String findHandleInTdx(String cleanTitle, String authorLastName) {
+        try {
+            String queryStr = "title:(" + cleanTitle + ")";
+            if (authorLastName != null && !authorLastName.isBlank()) {
+                queryStr += " AND " + authorLastName;
+            }
+            String encodedQuery = java.net.URLEncoder.encode(queryStr, "UTF-8");
+            String searchUrl = "https://www.tdx.cat/discover?query=" + encodedQuery + "&scope=10803/120";
+            
+            String html = fetchUrlHtml(searchUrl);
+            if (html == null || html.isEmpty()) {
+                return null;
+            }
+            
+            java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("10803/\\d+");
+            java.util.regex.Matcher matcher = pattern.matcher(html);
+            if (matcher.find()) {
+                return matcher.group();
+            }
+        } catch (Exception e) {
+            System.err.println("Error searching TDX: " + e.getMessage());
+        }
+        return null;
+    }
+
+    private Map<String, String> extractAbstractsFromDimXml(String xml) {
+        Map<String, String> abstracts = new LinkedHashMap<>();
+        
+        // Match: <dim:field element="description" qualifier="abstract" lang="cat">Abstract text</dim:field>
+        java.util.regex.Pattern fieldPattern = java.util.regex.Pattern.compile(
+            "<dim:field[^>]*>",
+            java.util.regex.Pattern.CASE_INSENSITIVE
+        );
+        java.util.regex.Matcher matcher = fieldPattern.matcher(xml);
+        
+        int startPos = 0;
+        while (matcher.find(startPos)) {
+            String tag = matcher.group();
+            int tagStart = matcher.start();
+            int tagEnd = matcher.end();
+            
+            // Check if element="description" and qualifier="abstract"
+            boolean isAbstract = tag.contains("element=\"description\"") && tag.contains("qualifier=\"abstract\"");
+            if (isAbstract) {
+                // Find closing tag </dim:field>
+                int closeTagStart = xml.indexOf("</dim:field>", tagEnd);
+                if (closeTagStart != -1) {
+                    String content = xml.substring(tagEnd, closeTagStart);
+                    
+                    // Extract lang attribute
+                    java.util.regex.Pattern langPattern = java.util.regex.Pattern.compile(
+                        "lang=\"([^\"]*)\"",
+                        java.util.regex.Pattern.CASE_INSENSITIVE
+                    );
+                    java.util.regex.Matcher langMatcher = langPattern.matcher(tag);
+                    String lang = "unknown";
+                    if (langMatcher.find()) {
+                        lang = langMatcher.group(1).toLowerCase();
+                    }
+                    
+                    content = org.springframework.web.util.HtmlUtils.htmlUnescape(content).trim();
+                    if (!content.isEmpty()) {
+                        String uniqueLang = lang;
+                        int suffix = 2;
+                        while (abstracts.containsKey(uniqueLang)) {
+                            uniqueLang = lang + "_" + suffix;
+                            suffix++;
+                        }
+                        abstracts.put(uniqueLang, content);
+                    }
+                    startPos = closeTagStart + 12;
+                    continue;
+                }
+            }
+            startPos = tagEnd;
+        }
+        return abstracts;
+    }
+
+    private String fetchUrlHtml(String targetUrl) {
+        try {
+            java.net.URL url = new java.net.URL(targetUrl);
+            java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("GET");
+            conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+            conn.setConnectTimeout(6000);
+            conn.setReadTimeout(6000);
+
+            int status = conn.getResponseCode();
+            if (status != 200) {
+                return null;
+            }
+
+            java.io.BufferedReader in = new java.io.BufferedReader(new java.io.InputStreamReader(conn.getInputStream(), "UTF-8"));
+            String inputLine;
+            StringBuilder content = new StringBuilder();
+            while ((inputLine = in.readLine()) != null) {
+                content.append(inputLine).append("\n");
+            }
+            in.close();
+            conn.disconnect();
+
+            return content.toString();
+        } catch (Exception e) {
+            System.err.println("Error fetching URL: " + targetUrl + " - " + e.getMessage());
+            return null;
+        }
+    }
+
+    private String getTitleQuery(String title) {
+        if (title == null || title.isBlank()) return "";
+        String clean = title.replaceAll("[^a-zA-Z0-9áéíóúÁÉÍÓÚçÇñÑàèòÀÈÒïüÏÜ]", " ").trim();
+        String[] words = clean.split("\\s+");
+        List<String> parts = new ArrayList<>();
+        int count = 0;
+        for (String w : words) {
+            if (w.length() >= 4) {
+                parts.add(w);
+                count++;
+                if (count >= 5) {
+                    break;
+                }
+            }
+        }
+        return String.join(" ", parts).trim();
+    }
+
+    private String getAuthorQuery(StudentThesis thesis) {
+        if (thesis.getContributors() == null || thesis.getContributors().isEmpty()) return "";
+        StudentThesis.Contributor c = thesis.getContributors().get(0);
+        if (c.getName() == null) return "";
+        String ln = c.getName().getLastName() != null ? c.getName().getLastName() : "";
+        String fn = c.getName().getFirstName() != null ? c.getName().getFirstName() : "";
+        
+        String cleanLn = ln.replaceAll("[^a-zA-Z0-9áéíóúÁÉÍÓÚçÇñÑàèòÀÈÒïüÏÜ]", " ").trim();
+        String cleanFn = fn.replaceAll("[^a-zA-Z0-9áéíóúÁÉÍÓÚçÇñÑàèòÀÈÒïüÏÜ]", " ").trim();
+        
+        return (cleanLn + " " + cleanFn).trim();
+    }
+
+    private List<String> performDddSearch(String searchQuery, java.util.Set<String> seen) {
+        List<String> links = new ArrayList<>();
+        try {
+            String encodedQuery = java.net.URLEncoder.encode(searchQuery, "UTF-8");
+            String dddUrl = "https://ddd.uab.cat/search?ln=ca&cc=tesis&p=" + encodedQuery 
+                + "&f=&action_search=Cerca&c=tesis&c=&sf=&so=d&rm=&rg=10&sc=1&of=hb";
+            
+            java.net.URL url = new java.net.URL(dddUrl);
+            java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("GET");
+            conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
+            conn.setConnectTimeout(6000);
+            conn.setReadTimeout(6000);
+
+            int status = conn.getResponseCode();
+            if (status != 200) {
+                return links;
+            }
+
+            java.io.BufferedReader in = new java.io.BufferedReader(new java.io.InputStreamReader(conn.getInputStream(), "UTF-8"));
+            String inputLine;
+            StringBuilder content = new StringBuilder();
+            while ((inputLine = in.readLine()) != null) {
+                content.append(inputLine).append("\n");
+            }
+            in.close();
+            conn.disconnect();
+
+            String html = content.toString();
+            
+            java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("/record/(\\d+)");
+            java.util.regex.Matcher matcher = pattern.matcher(html);
+            
+            int count = 0;
+            while (matcher.find()) {
+                String rid = matcher.group(1);
+                if (seen.add(rid)) {
+                    links.add("https://ddd.uab.cat/record/" + rid);
+                    count++;
+                    if (count >= 5) {
+                        break;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            // Ignore connection errors and fall through
+        }
+        return links;
     }
 
     /**

@@ -24,10 +24,16 @@
         const fileName = (pathname || '').split('/').pop() || '';
         if (!fileName || fileName === 'index.html') return 'index.html';
         if (fileName === 'index-orgaext.html') return 'index-orgaext.html';
+        if (fileName === 'index-tesis.html') return 'index-tesis.html';
 
         // For external organizations module pages, go back to module index.
         if (fileName.startsWith('organizaciones-externas')) {
             return 'index-orgaext.html';
+        }
+
+        // For thesis module pages, go back to thesis index.
+        if (fileName.startsWith('tesis')) {
+            return 'index-tesis.html';
         }
 
         return 'index.html';

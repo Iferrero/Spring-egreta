@@ -1,11 +1,12 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="ca">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tesis por autor</title>
+    <title>Tesis per autor | Portal de Recerca UAB</title>
     <script src="config.js"></script>
     <script src="uab-brand.js" defer></script>
+    <script src="egreta-modal.js" defer></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="uab-theme.css">
 </head>
@@ -13,34 +14,33 @@
     <div class="max-w-7xl mx-auto py-8 px-6">
         <header class="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-6">
             <div>
-                <h1 class="hidden text-3xl font-black text-slate-800">Tesis doctorales por <span class="text-indigo-600">mismo autor</span></h1>
-                <p class="hidden text-slate-500 text-sm mt-1">Una fila por autor con su UUID y listado de tesis.</p>
+                <h1 class="hidden text-3xl font-black text-slate-800">Tesis doctorals pel <span class="text-indigo-600">mateix autor (mateix any)</span></h1>
+                <p class="hidden text-slate-500 text-sm mt-1">Una fila per autor amb el seu UUID i llistat de tesis.</p>
             </div>
-            <a href="index.html" class="px-4 py-2 rounded-xl border border-slate-300 text-sm font-semibold text-slate-700 hover:bg-white">Volver a inicio</a>
         </header>
 
         <section class="bg-white border border-slate-200 rounded-2xl shadow-sm p-4 mb-5">
             <div class="mt-3">
-                <label for="filtroEstado" class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Filtro</label>
+                <label for="filtroEstado" class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Filtre</label>
                 <select id="filtroEstado" class="border border-slate-300 rounded-xl px-3 py-2 text-sm">
-                    <option value="todos">Todas</option>
-                    <option value="pendientes">Pendientes</option>
-                    <option value="arregladas">Arregladas</option>
+                    <option value="todos">Totes</option>
+                    <option value="pendientes">Pendents</option>
+                    <option value="arregladas">Arreglades</option>
                 </select>
             </div>
-            <div id="resumenEstado" class="mt-3 text-sm text-slate-600 font-semibold">Pendientes: 0 | Arregladas: 0</div>
+            <div id="resumenEstado" class="mt-3 text-sm text-slate-600 font-semibold">Pendents: 0 | Arreglades: 0</div>
         </section>
 
         <section class="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-            <div id="estado" class="p-4 text-sm text-slate-500">Cargando datos...</div>
+            <div id="estado" class="p-4 text-sm text-slate-500">Carregant dades...</div>
             <div class="overflow-x-auto">
                 <table class="w-full text-left">
                     <thead class="bg-slate-50 text-slate-500 text-xs uppercase tracking-widest border-y border-slate-100">
                         <tr>
                             <th class="px-5 py-3">Autor</th>
                             <th class="px-5 py-3">UUID autor</th>
-                            <th class="px-5 py-3">Listado de tesis</th>
-                            <th class="px-5 py-3 text-center">Arreglado</th>
+                            <th class="px-5 py-3">Llistat de tesis</th>
+                            <th class="px-5 py-3 text-center">Arreglat</th>
                         </tr>
                     </thead>
                     <tbody id="tabla" class="divide-y divide-slate-100"></tbody>
@@ -61,6 +61,16 @@
                 .replace(/'/g, '&#039;');
         }
 
+        function abrirEgreta(event, pureId) {
+            event.preventDefault();
+            const url = `https://egreta.uab.cat/admin/editor/dk/atira/pure/api/shared/model/studentthesis/editor/studentthesiseditor.xhtml?scheme=&type=&id=${pureId}`;
+            if (window.abrirEgretaModal) {
+                window.abrirEgretaModal(url);
+            } else {
+                window.open(url, '_blank');
+            }
+        }
+
         function getFiltroEstado() {
             return document.getElementById('filtroEstado')?.value || 'todos';
         }
@@ -77,14 +87,14 @@
             let arregladas = 0;
 
             lista.forEach(row => {
-                const rowKey = String(row.autorUuid || row.autor || '').trim();
+                const rowKey = `${String(row.autorUuid || row.autor || '').trim()}:${row.anio || ''}`;
                 if (localStorage.getItem(`tesisArreglada:${rowKey}`) === '1') {
                     arregladas += 1;
                 }
             });
 
             const pendientes = Math.max(0, lista.length - arregladas);
-            resumen.textContent = `Pendientes: ${pendientes} | Arregladas: ${arregladas}`;
+            resumen.textContent = `Pendents: ${pendientes} | Arreglades: ${arregladas}`;
         }
 
         function renderTabla(rows) {
@@ -92,7 +102,7 @@
 
             if (!rows || rows.length === 0) {
                 actualizarResumenEstado([]);
-                tabla.innerHTML = '<tr><td colspan="4" class="px-5 py-12 text-center text-slate-400 italic">No se encontraron coincidencias.</td></tr>';
+                tabla.innerHTML = '<tr><td colspan="4" class="px-5 py-12 text-center text-slate-400 italic">No s\'han trobat coincidències.</td></tr>';
                 return;
             }
 
@@ -100,19 +110,19 @@
 
             const filtro = getFiltroEstado();
             const rowsFiltradas = rows.filter(row => {
-                const rowKey = String(row.autorUuid || row.autor || '').trim();
+                const rowKey = `${String(row.autorUuid || row.autor || '').trim()}:${row.anio || ''}`;
                 const arreglado = localStorage.getItem(`tesisArreglada:${rowKey}`) === '1';
                 return visiblePorFiltro(arreglado, filtro);
             });
 
             if (rowsFiltradas.length === 0) {
-                tabla.innerHTML = '<tr><td colspan="4" class="px-5 py-12 text-center text-slate-400 italic">No hay resultados para este filtro.</td></tr>';
+                tabla.innerHTML = '<tr><td colspan="4" class="px-5 py-12 text-center text-slate-400 italic">No hi ha resultats per a aquest filtre.</td></tr>';
                 return;
             }
 
             tabla.innerHTML = rowsFiltradas.map(row => {
                 const tesis = Array.isArray(row.tesis) ? row.tesis : [];
-                const rowKey = String(row.autorUuid || row.autor || '').trim();
+                const rowKey = `${String(row.autorUuid || row.autor || '').trim()}:${row.anio || ''}`;
                 const arreglado = localStorage.getItem(`tesisArreglada:${rowKey}`) === '1';
                 const listado = [...tesis]
                     .sort((a, b) => {
@@ -123,12 +133,21 @@
 
                         return String(a.titulo || '').localeCompare(String(b.titulo || ''));
                     })
-                    .map(t => `<li><span class="font-medium text-slate-700">${escapeHtml(t.titulo || 'Sin título')}</span> <span class="text-slate-500">(${escapeHtml(t.anio || '-')})</span></li>`)
+                    .map(t => {
+                        const tTitle = t.titulo || 'Sense títol';
+                        const linkHtml = t.pureId 
+                            ? `<a href="#" onclick="abrirEgreta(event, '${t.pureId}')" class="text-indigo-700 hover:text-indigo-900 hover:underline font-semibold transition-colors" title="Obrir editor a Egreta">${escapeHtml(tTitle)}</a>`
+                            : escapeHtml(tTitle);
+                        return `<li><span class="font-medium text-slate-700">${linkHtml}</span> <span class="text-slate-500">(${escapeHtml(t.anio || '-')})</span></li>`;
+                    })
                     .join('');
 
                 return `
                     <tr class="align-top hover:bg-slate-50 ${arreglado ? 'bg-emerald-50/50' : ''}" data-row-key="${escapeHtml(rowKey)}">
-                        <td class="px-5 py-4 font-semibold text-slate-700">${escapeHtml(row.autor || '-')}</td>
+                        <td class="px-5 py-4 font-semibold text-slate-700">
+                            ${escapeHtml(row.autor || '-')}
+                            <span class="text-slate-400 font-normal ml-1">(${escapeHtml(row.anio || '-')})</span>
+                        </td>
                         <td class="px-5 py-4"><span class="font-mono text-xs text-slate-700">${escapeHtml(row.autorUuid || '-')}</span></td>
                         <td class="px-5 py-4 text-sm"><ul class="list-disc ml-4 space-y-1">${listado}</ul></td>
                         <td class="px-5 py-4 text-center">
@@ -137,7 +156,7 @@
                                 class="marcar-arreglada h-4 w-4 accent-emerald-600"
                                 data-key="${escapeHtml(rowKey)}"
                                 ${arreglado ? 'checked' : ''}
-                                title="Marcar como arreglado"
+                                title="Marcar com a arreglat"
                             />
                         </td>
                     </tr>
@@ -167,7 +186,7 @@
             const minCoincidencias = 2;
             const limit = 0;
 
-            estado.textContent = 'Cargando datos...';
+            estado.textContent = 'Carregant dades...';
             estado.className = 'p-4 text-sm text-indigo-600 font-semibold';
 
             try {
@@ -180,12 +199,12 @@
                 const data = await response.json();
                 currentRows = Array.isArray(data) ? data : [];
                 renderTabla(currentRows);
-                estado.textContent = `Resultados: ${data.length} autores`;
+                estado.textContent = `Resultats: ${data.length} autors`;
                 estado.className = 'p-4 text-sm text-emerald-600 font-semibold';
             } catch (error) {
                 currentRows = [];
                 renderTabla([]);
-                estado.textContent = `Error al cargar datos: ${error.message}`;
+                estado.textContent = `Error en carregar les dades: ${error.message}`;
                 estado.className = 'p-4 text-sm text-red-600 font-semibold';
             }
         }

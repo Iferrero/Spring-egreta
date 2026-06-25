@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tesis Doctorals | Portal de Recerca UAB</title>
+    <script src="config.js"></script>
+    <script src="uab-brand.js" defer></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="uab-theme.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .premium-card {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .premium-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 24px -4px rgba(0, 0, 0, 0.08), 0 4px 12px -2px rgba(0, 0, 0, 0.04);
+        }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen font-sans flex flex-col">
+
+    <!-- Elements read dynamically by uab-brand.js -->
+    <header class="hidden">
+        <h1 class="hidden">Tesis Doctorals</h1>
+        <p class="hidden">Índex d'eines, llistats i anàlisi de qualitat de tesis doctorals</p>
+    </header>
+
+    <main class="flex-grow mx-auto px-6 py-12 w-full max-w-5xl">
+        <div class="mb-10 text-center sm:text-left">
+            <h2 class="text-3xl font-black text-slate-800 tracking-tight">Panell de Control de Tesis</h2>
+            <p class="text-slate-500 mt-2 text-base">Accedeix a les diferents vistes de visualització, correcció de dades i evolució de tesis doctorals de la UAB.</p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+
+            <!-- Card 1: Cercador de Tesis -->
+            <a href="tesis.html" class="premium-card group bg-white border border-slate-200 rounded-3xl p-8 flex flex-col gap-6 hover:border-[#008037] transition-all">
+                <div class="flex items-start justify-between">
+                    <div class="w-14 h-14 rounded-2xl bg-emerald-50 flex items-center justify-center text-[#008037] group-hover:bg-[#d8f3e3] transition-colors shrink-0">
+                        <i class="fa-solid fa-magnifying-glass text-2xl"></i>
+                    </div>
+                    <span class="px-4 py-1.5 rounded-full text-xs font-bold bg-slate-100 text-slate-600 uppercase tracking-widest">Cercador</span>
+                </div>
+                <div class="flex-grow">
+                    <h3 class="text-xl font-bold text-slate-800 group-hover:text-[#008037] transition-colors">Llistat i Cerca de Tesis</h3>
+                    <p class="text-slate-500 mt-3 text-sm leading-relaxed">
+                        Cercador general de totes les tesis doctorals registrades. Permet aplicar filtres dinàmics per any de lectura, departament, paraules clau, gènere i estat dels enllaços externs.
+                    </p>
+                </div>
+                <div class="flex items-center gap-2 text-sm font-bold text-[#008037] mt-2">
+                    <span>Accedir al llistat</span>
+                    <i class="fa-solid fa-arrow-right group-hover:translate-x-1 transition-transform"></i>
+                </div>
+            </a>
+
+            <!-- Card 2: Correcció de Tesis -->
+            <a href="tesis-correcciones.html" class="premium-card group bg-white border border-slate-200 rounded-3xl p-8 flex flex-col gap-6 hover:border-[#008037] transition-all">
+                <div class="flex items-start justify-between">
+                    <div class="w-14 h-14 rounded-2xl bg-amber-50 flex items-center justify-center text-amber-600 group-hover:bg-amber-100 transition-colors shrink-0">
+                        <i class="fa-solid fa-screwdriver-wrench text-2xl"></i>
+                    </div>
+                    <span class="px-4 py-1.5 rounded-full text-xs font-bold bg-amber-50 text-amber-700 uppercase tracking-widest">Qualitat</span>
+                </div>
+                <div class="flex-grow">
+                    <h3 class="text-xl font-bold text-slate-800 group-hover:text-amber-600 transition-colors">Control de Qualitat i Correccions</h3>
+                    <p class="text-slate-500 mt-3 text-sm leading-relaxed">
+                        Panell avançat de diagnòstic per a la resolució d'errors freqüents de metadades. Permet corregir idiomes no definits (heurística i IA), normalitzar títols en majúscules, i gestionar enllaços de repositoris digitals (DDD i TDX).
+                    </p>
+                </div>
+                <div class="flex items-center gap-2 text-sm font-bold text-amber-600 mt-2">
+                    <span>Corregir metadades</span>
+                    <i class="fa-solid fa-arrow-right group-hover:translate-x-1 transition-transform"></i>
+                </div>
+            </a>
+
+            <!-- Card 3: Tesis Duplicades -->
+            <a href="tesis-duplicadas.html" class="premium-card group bg-white border border-slate-200 rounded-3xl p-8 flex flex-col gap-6 hover:border-[#008037] transition-all">
+                <div class="flex items-start justify-between">
+                    <div class="w-14 h-14 rounded-2xl bg-rose-50 flex items-center justify-center text-rose-600 group-hover:bg-rose-100 transition-colors shrink-0">
+                        <i class="fa-solid fa-clone text-2xl"></i>
+                    </div>
+                    <span class="px-4 py-1.5 rounded-full text-xs font-bold bg-rose-50 text-rose-700 uppercase tracking-widest">Duplicats</span>
+                </div>
+                <div class="flex-grow">
+                    <h3 class="text-xl font-bold text-slate-800 group-hover:text-rose-600 transition-colors">Tesis de Mateix Autor</h3>
+                    <p class="text-slate-500 mt-3 text-sm leading-relaxed">
+                        Mòdul específic per identificar i resoldre conflictes d'autors duplicats amb diferents registres de tesis doctorals a la base de dades.
+                    </p>
+                </div>
+                <div class="flex items-center gap-2 text-sm font-bold text-rose-600 mt-2">
+                    <span>Gestionar duplicats</span>
+                    <i class="fa-solid fa-arrow-right group-hover:translate-x-1 transition-transform"></i>
+                </div>
+            </a>
+
+            <!-- Card 4: Evolució per Gènere -->
+            <a href="tesis-genere.html" class="premium-card group bg-white border border-slate-200 rounded-3xl p-8 flex flex-col gap-6 hover:border-[#008037] transition-all">
+                <div class="flex items-start justify-between">
+                    <div class="w-14 h-14 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600 group-hover:bg-indigo-100 transition-colors shrink-0">
+                        <i class="fa-solid fa-chart-pie text-2xl"></i>
+                    </div>
+                    <span class="px-4 py-1.5 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 uppercase tracking-widest">Estadístiques</span>
+                </div>
+                <div class="flex-grow">
+                    <h3 class="text-xl font-bold text-slate-800 group-hover:text-indigo-600 transition-colors">Evolució per Gènere</h3>
+                    <p class="text-slate-500 mt-3 text-sm leading-relaxed">
+                        Dashboard estadístic integrat amb gràfics d'evolució històrica que permet analitzar la distribució de tesis doctorals defensades segons el gènere dels autors per departament i any.
+                    </p>
+                </div>
+                <div class="flex items-center gap-2 text-sm font-bold text-indigo-600 mt-2">
+                    <span>Veure anàlisi de gènere</span>
+                    <i class="fa-solid fa-arrow-right group-hover:translate-x-1 transition-transform"></i>
+                </div>
+            </a>
+
+        </div>
+    </main>
+
+    <!-- Footer matching premium theme -->
+    <footer class="bg-white border-t border-slate-200 py-6 mt-12">
+        <div class="max-w-5xl mx-auto px-6 flex flex-col sm:flex-row justify-between items-center gap-4 text-xs text-slate-400">
+            <div>Universitat Autònoma de Barcelona © 2026</div>
+            <div class="flex gap-4">
+                <a href="index.html" class="hover:underline text-slate-400">Inici del Portal</a>
+                <span>·</span>
+                <a href="rapidoc.html" class="hover:underline text-slate-400">API Documentation</a>
+            </div>
+        </div>
+    </footer>
+
+</body>
+</html>

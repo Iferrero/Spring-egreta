@@ -16,11 +16,11 @@ function formatearFecha(valor) {
 
 async function cargarDepartamentos() {
     const sel = document.getElementById('departamentoSelect');
-    sel.innerHTML = '<option value="">Cargando...</option>';
+    sel.innerHTML = '<option value="">Carregant...</option>';
     try {
         const res = await fetch('/api/persons/institutos');
         const data = await res.json();
-        sel.innerHTML = '<option value="">-- Selecciona un instituto --</option>';
+        sel.innerHTML = '<option value="">-- Selecciona un institut --</option>';
         data.forEach(d => {
             const opt = document.createElement('option');
             opt.value = d.uuid;
@@ -28,7 +28,7 @@ async function cargarDepartamentos() {
             sel.appendChild(opt);
         });
     } catch (e) {
-        sel.innerHTML = '<option value="">Error cargando</option>';
+        sel.innerHTML = '<option value="">Error en carregar</option>';
     }
 }
 
@@ -55,7 +55,7 @@ async function cargarReporte() {
     const sel = document.getElementById('departamentoSelect');
     const orgUuid = sel.value;
     if (!orgUuid) {
-        alert('Selecciona un instituto.');
+        alert('Selecciona un institut.');
         return;
     }
     const modo = document.getElementById('modoReporte').value || 'report';
@@ -75,7 +75,7 @@ async function cargarReporte() {
 
     const btn = document.getElementById('btnRefrescar');
     btn.disabled = true;
-    btn.textContent = 'Cargando...';
+    btn.textContent = 'Carregant...';
 
     try {
         const res = await fetch(url);
@@ -83,7 +83,7 @@ async function cargarReporte() {
         renderTabla(data);
     } catch (e) {
         console.error(e);
-        alert('Error cargando datos.');
+        alert('Error en carregar les dades.');
     } finally {
         btn.disabled = false;
         btn.textContent = 'Refrescar';
@@ -96,12 +96,12 @@ function renderTabla(rows) {
         tabla = new Tabulator(tableEl, {
             layout: 'fitColumns',
             height: '60vh',
-            placeholder: 'No hay datos para los filtros.',
+            placeholder: 'No hi ha dades per a aquests filtres.',
             columns: [
-                { title: 'Nombre', field: 'nombre', headerFilter: 'input' },
-                { title: 'Empleo', field: 'empleo', headerFilter: 'input' },
-                { title: 'Inicio', field: 'inicio_asociacion_IBB', formatter: (cell) => formatearFecha(cell.getValue()) },
-                { title: 'Fin', field: 'fin_asociacion_IBB', formatter: (cell) => formatearFecha(cell.getValue()) }
+                { title: 'Nom', field: 'nombre', headerFilter: 'input' },
+                { title: 'Ocupació', field: 'empleo', headerFilter: 'input' },
+                { title: 'Inici', field: 'inicio_asociacion_IBB', formatter: (cell) => formatearFecha(cell.getValue()) },
+                { title: 'Fi', field: 'fin_asociacion_IBB', formatter: (cell) => formatearFecha(cell.getValue()) }
             ]
         });
     }
@@ -110,7 +110,7 @@ function renderTabla(rows) {
 }
 
 function renderKpiAndPie(rows) {
-    // KPI: total personas
+    // KPI: total persones
     const total = (rows || []).length;
     const kpiEl = document.getElementById('kpiTotalValue');
     if (kpiEl) kpiEl.textContent = total.toString();
@@ -136,7 +136,7 @@ function renderKpiAndPie(rows) {
         legend: { orient: 'horizontal', bottom: 0 },
         series: [
             {
-                name: 'Empleo',
+                name: 'Ocupació',
                 type: 'pie',
                 radius: ['40%', '70%'],
                 avoidLabelOverlap: false,

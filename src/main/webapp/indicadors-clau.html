@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Indicadors Clau de Recerca | UAB</title>
+    <!-- Google Fonts: Inter & Outfit -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Apache ECharts -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <script src="config.js"></script>
+    <script src="uab-brand.js" defer></script>
+    <link rel="stylesheet" href="uab-theme.css">
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        h1, h2, h3, .font-display {
+            font-family: 'Outfit', sans-serif;
+        }
+        .premium-shadow {
+            box-shadow: 0 4px 20px -2px rgba(148, 163, 184, 0.12), 0 2px 8px -1px rgba(148, 163, 184, 0.08);
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+        }
+        .animate-fade-in {
+            animation: fadeIn 0.5s ease-out forwards;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen text-slate-800 flex flex-col">
+
+    <!-- Header -->
+    <header class="bg-white border-b border-slate-200 sticky top-0 z-50 premium-shadow">
+        <div class="mx-auto w-[90%] max-w-7xl h-16 flex items-center justify-between">
+            <div class="flex items-center gap-4">
+                <img src="https://www.uab.cat/Xcelerate/WAI/img/UAB-2linies-verd.svg" alt="UAB Logo" class="h-10">
+                <span class="h-6 w-px bg-slate-200"></span>
+                <span class="text-sm font-semibold text-slate-500">Portal de Recerca</span>
+            </div>
+            <a href="index.html" class="flex items-center gap-2 text-sm text-slate-600 hover:text-emerald-700 transition-colors font-medium">
+                <i class="fa-solid fa-house"></i>
+                <span>Inici</span>
+            </a>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-grow w-[90%] max-w-7xl mx-auto py-8 flex flex-col gap-8 animate-fade-in">
+        
+        <!-- Page Title & Navigation -->
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+                <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">Indicadors Clau de Recerca</h1>
+                <p class="text-slate-500 mt-1">Mètriques i objectius estratègics del Pla Estratègic de Recerca de la UAB.</p>
+            </div>
+            <div class="flex items-center gap-2">
+                <span class="text-xs text-slate-400 font-semibold uppercase tracking-wider bg-slate-100 px-3 py-1 rounded-full border border-slate-200">Visió General</span>
+            </div>
+        </div>
+
+        <!-- Filter Panel -->
+        <section class="glass-panel border border-slate-200 rounded-3xl p-6 premium-shadow flex flex-col md:flex-row gap-6 justify-between items-center">
+            <!-- Year Selector -->
+            <div class="flex flex-col gap-2 w-full md:w-auto">
+                <label class="text-xs font-bold text-slate-500 uppercase tracking-wider">Any de referència</label>
+                <div class="flex items-center bg-slate-100 p-1.5 rounded-2xl border border-slate-200/60 shadow-inner w-full md:w-auto">
+                    <button class="year-btn px-4 py-2 rounded-xl text-sm font-semibold transition-all hover:bg-white/60 active:scale-95" data-year="2021">2021</button>
+                    <button class="year-btn px-4 py-2 rounded-xl text-sm font-semibold transition-all hover:bg-white/60 active:scale-95" data-year="2022">2022</button>
+                    <button class="year-btn px-4 py-2 rounded-xl text-sm font-semibold transition-all hover:bg-white/60 active:scale-95" data-year="2023">2023</button>
+                    <button class="year-btn px-4 py-2 rounded-xl text-sm font-semibold transition-all hover:bg-white/60 active:scale-95 bg-white text-slate-900 shadow-sm border border-slate-200/40" data-year="2024">2024</button>
+                    <button class="year-btn px-4 py-2 rounded-xl text-sm font-semibold transition-all hover:bg-white/60 active:scale-95" data-year="2025">2025</button>
+                </div>
+            </div>
+
+            <!-- Department / Institute Selector -->
+            <div class="flex flex-col gap-2 w-full md:w-80">
+                <label for="selectDept" class="text-xs font-bold text-slate-500 uppercase tracking-wider">Departament / Institut de Recerca</label>
+                <div class="relative">
+                    <select id="selectDept" class="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3 pl-4 pr-10 text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 appearance-none shadow-sm cursor-pointer transition-all">
+                        <option value="all">Tot (Universitat Autònoma de Barcelona)</option>
+                    </select>
+                    <div class="absolute inset-y-0 right-0 flex items-center pr-4 pointer-events-none text-slate-400">
+                        <i class="fa-solid fa-chevron-down text-xs"></i>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- KPI Grid -->
+        <section class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <!-- Card 1: Funding -->
+            <div class="bg-gradient-to-br from-emerald-600 to-teal-700 rounded-3xl p-6 text-white premium-shadow flex flex-col justify-between h-44 group hover:-translate-y-1 hover:shadow-lg transition-all duration-300">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <span class="text-emerald-100 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
+                            <span>Finançament Competitiu</span>
+                            <span class="relative group inline-block">
+                                <i class="fa-solid fa-circle-info text-emerald-200 hover:text-white cursor-help transition-colors text-[10px]"></i>
+                                <span class="absolute bottom-full left-0 mb-2 w-64 p-3 bg-slate-950 text-white text-[11px] leading-relaxed rounded-xl shadow-xl opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-20 font-medium normal-case text-left">
+                                    <span class="block font-bold mb-1 border-b border-slate-800 pb-0.5 text-emerald-400">Càlcul de l'indicador</span>
+                                    Suma dels imports (en milions d'euros) concedits a ajuts i projectes de recerca competitius (nacionals i internacionals) obtinguts durant l'any.
+                                    <span class="absolute top-full left-4 border-4 border-transparent border-t-slate-950"></span>
+                                </span>
+                            </span>
+                        </span>
+                        <h2 class="text-3xl font-black mt-2 font-display" id="kpiFunding">--</h2>
+                    </div>
+                    <div class="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-lg text-emerald-200 group-hover:bg-white/20 transition-colors">
+                        <i class="fa-solid fa-euro-sign"></i>
+                    </div>
+                </div>
+                <p class="text-emerald-100/80 text-xs leading-relaxed">Fons obtinguts directament a través de projectes i convocatòries competitives.</p>
+            </div>
+
+            <!-- Card 2: SGR Doctors -->
+            <div class="bg-gradient-to-br from-indigo-600 to-violet-700 rounded-3xl p-6 text-white premium-shadow flex flex-col justify-between h-44 group hover:-translate-y-1 hover:shadow-lg transition-all duration-300">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <span class="text-indigo-100 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
+                            <span>Doctors en grups SGR</span>
+                            <span class="relative group inline-block">
+                                <i class="fa-solid fa-circle-info text-indigo-200 hover:text-white cursor-help transition-colors text-[10px]"></i>
+                                <span class="absolute bottom-full left-0 mb-2 w-64 p-3 bg-slate-950 text-white text-[11px] leading-relaxed rounded-xl shadow-xl opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-20 font-medium normal-case text-left">
+                                    <span class="block font-bold mb-1 border-b border-slate-800 pb-0.5 text-indigo-400">Càlcul de l'indicador</span>
+                                    Recompte de personal docent i investigador (PDI) actiu amb grau de doctor i dedicació a temps complet que està assignat a un grup de recerca de la convocatòria SGR actiu.
+                                    <span class="absolute top-full left-4 border-4 border-transparent border-t-slate-950"></span>
+                                </span>
+                            </span>
+                        </span>
+                        <h2 class="text-3xl font-black mt-2 font-display" id="kpiDoctors">--</h2>
+                    </div>
+                    <div class="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-lg text-indigo-200 group-hover:bg-white/20 transition-colors">
+                        <i class="fa-solid fa-users-viewfinder"></i>
+                    </div>
+                </div>
+                <p class="text-indigo-100/80 text-xs leading-relaxed">Personal docent i investigador (PDI) doctor de temps complet associat a grups de recerca certificats.</p>
+            </div>
+
+            <!-- Card 3: Publications -->
+            <div class="bg-gradient-to-br from-amber-500 to-orange-600 rounded-3xl p-6 text-white premium-shadow flex flex-col justify-between h-44 group hover:-translate-y-1 hover:shadow-lg transition-all duration-300">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <span class="text-amber-100 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
+                            <span>Publicacions en Q1 / Q2</span>
+                            <span class="relative group inline-block">
+                                <i class="fa-solid fa-circle-info text-amber-200 hover:text-white cursor-help transition-colors text-[10px]"></i>
+                                <span class="absolute bottom-full left-0 mb-2 w-64 p-3 bg-slate-950 text-white text-[11px] leading-relaxed rounded-xl shadow-xl opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-20 font-medium normal-case text-left">
+                                    <span class="block font-bold mb-1 border-b border-slate-800 pb-0.5 text-amber-400">Càlcul de l'indicador</span>
+                                    Nombre d'articles científics publicats en revistes indexades que se situen en els quartils Q1 o Q2 de les seves respectives disciplines a Scopus / Journal Citation Reports (JCR).
+                                    <span class="absolute top-full left-4 border-4 border-transparent border-t-slate-950"></span>
+                                </span>
+                            </span>
+                        </span>
+                        <h2 class="text-3xl font-black mt-2 font-display" id="kpiPublications">--</h2>
+                    </div>
+                    <div class="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-lg text-amber-200 group-hover:bg-white/20 transition-colors">
+                        <i class="fa-solid fa-file-invoice"></i>
+                    </div>
+                </div>
+                <p class="text-amber-100/80 text-xs leading-relaxed">Articles indexats publicats en revistes científiques situades als dos primers quartils de referència (Q1 i Q2).</p>
+            </div>
+        </section>
+
+        <!-- KPI Table & Trend Chart -->
+        <section class="grid grid-cols-1 lg:grid-cols-5 gap-8 items-start">
+            
+            <!-- Left Side: Interactive Table (3/5 width) -->
+            <div class="lg:col-span-3 bg-white border border-slate-200 rounded-3xl premium-shadow overflow-hidden flex flex-col">
+                <div class="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
+                    <h2 class="text-lg font-bold text-slate-800">Taula d'indicadors clau de recerca</h2>
+                    <span class="text-xs bg-emerald-50 text-emerald-800 font-bold px-2.5 py-1 rounded-md border border-emerald-200">Dades Actualitzades</span>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-50 text-slate-500 border-b border-slate-200 text-[10px] font-bold uppercase tracking-wider">
+                                <th class="px-6 py-4">Indicador</th>
+                                <th class="px-4 py-4 w-40">Unitat de mesura</th>
+                                <th class="px-6 py-4 w-24 text-right">Valor</th>
+                                <th class="px-6 py-4 w-28 text-center">Evolució</th>
+                            </tr>
+                        </thead>
+                        <tbody id="indicatorsBody" class="divide-y divide-slate-100 text-slate-700 text-sm">
+                            <!-- Injected dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Right Side: Trend Chart (2/5 width) -->
+            <div class="lg:col-span-2 bg-white border border-slate-200 rounded-3xl premium-shadow p-6 flex flex-col gap-6">
+                <div>
+                    <h2 class="text-lg font-bold text-slate-800">Evolució històrica</h2>
+                    <p class="text-xs text-slate-500 mt-1">Gràfica de la trajectòria del departament entre 2021 i 2025.</p>
+                </div>
+                
+                <!-- Chart Selector -->
+                <div class="relative w-full">
+                    <select id="selectChartMetric" class="w-full bg-slate-50 border border-slate-200 rounded-2xl py-2 px-4 text-xs font-semibold text-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer appearance-none">
+                        <option value="sgrDoctors">Doctors en grups SGR</option>
+                        <option value="europeanProjectsLead">Lideratge en projectes europeus</option>
+                        <option value="europeanProjectsPart">Participació en projectes europeus</option>
+                        <option value="competitiveFunding">Ingressos via competitiva</option>
+                        <option value="nonCompetitiveFunding">Ingressos via no competitiva / transferència</option>
+                        <option value="q1q2Publications">Publicacions en Q1 / Q2</option>
+                        <option value="incubatedCompanies">Empreses incubades</option>
+                        <option value="transferAgreements">Acords de transferència (patents)</option>
+                        <option value="tramsVius">Trams de recerca vius</option>
+                    </select>
+                    <div class="absolute inset-y-0 right-0 flex items-center pr-4 pointer-events-none text-slate-400">
+                        <i class="fa-solid fa-chevron-down text-[10px]"></i>
+                    </div>
+                </div>
+
+                <div class="w-full h-72 rounded-2xl border border-slate-100/80 bg-slate-50/50 p-2 relative">
+                    <div id="trendChart" class="w-full h-full"></div>
+                    <!-- Chart Loader Spinner -->
+                    <div id="chartLoader" class="absolute inset-0 bg-white/70 flex items-center justify-center hidden rounded-2xl">
+                        <div class="w-8 h-8 border-4 border-emerald-100 border-t-emerald-600 rounded-full animate-spin"></div>
+                    </div>
+                </div>
+            </div>
+
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-white border-t border-slate-200 py-6 mt-12">
+        <div class="mx-auto w-[90%] max-w-7xl flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-slate-400">
+            <p>&copy; 2026 Universitat Autònoma de Barcelona. Tots els drets reservats.</p>
+            <div class="flex gap-4">
+                <a href="#" class="hover:underline">Polítiques de Privacitat</a>
+                <a href="#" class="hover:underline">Avís Legal</a>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Script Block -->
+    <script>
+        let selectedYear = 2024;
+        let selectedDept = 'all';
+        let trendChart = null;
+        let historicalData = []; // Cache of 2021-2025 statistics
+
+        const indicatorsMetadata = [
+            {
+                key: 'sgrDoctors',
+                title: 'PDI doctor a temps complet que pertany a grups SGR',
+                desc: 'Docents doctors amb vinculació permanent o activa registrats com a integrants d\'un grup SGR.',
+                unit: 'Doctors a temps complet',
+                icon: 'fa-users-viewfinder',
+                color: 'indigo',
+                calculation: '<b>Origen:</b> Col·leccions <code>Organizations</code> i <code>Persons</code> de MongoDB.<br/><b>Camps i Valors:</b> Filtra organitzacions on <code>type.term.ca_ES</code> és "Grup de Recerca" o "Grup de Recerca UAB" i <code>lifecycle.endDate</code> és buit; després compta persones associades a aquestes organitzacions via <code>staffOrganizationAssociations.organization.uuid</code>.'
+            },
+            {
+                key: 'europeanProjectsLead',
+                title: 'Lideratge (L) en projectes europeus i grans projectes',
+                desc: 'Projectes europeus o de recerca internacionals en què la UAB és la institució coordinadora/líder.',
+                unit: 'Projectes',
+                icon: 'fa-crown',
+                color: 'sky',
+                calculation: '<b>Origen:</b> Col·lecció <code>Awards</code> de MongoDB.<br/><b>Camps i Valors:</b> Filtra projectes de la convocatòria <code>PROJ_PJE</code> (on el tipus de projecte és "Programa Marc Europeu") i on <code>esLider</code> és <code>true</code>; suma el camp <code>ajuts</code>.'
+            },
+            {
+                key: 'europeanProjectsPart',
+                title: 'Participació (P) en projectes europeus i grans projectes',
+                desc: 'Projectes europeus o de recerca internacionals en què la UAB és una entitat beneficiària/sòcia participant.',
+                unit: 'Projectes',
+                icon: 'fa-globe',
+                color: 'cyan',
+                calculation: '<b>Origen:</b> Col·lecció <code>Awards</code> de MongoDB.<br/><b>Camps i Valors:</b> Filtra projectes de la convocatòria <code>PROJ_PJE</code> (on el tipus de projecte és "Programa Marc Europeu") i on <code>esLider</code> és <code>false</code>; suma el camp <code>ajuts</code>.'
+            },
+            {
+                key: 'competitiveFunding',
+                title: 'Ingressos per via competitiva',
+                desc: 'Fons obtinguts de convocatòries de recerca del Plan Nacional, fons europeus, beques, etc.',
+                unit: 'Milions d\'euros',
+                icon: 'fa-sack-dollar',
+                color: 'emerald',
+                isCurrency: true,
+                calculation: '<b>Origen:</b> Col·lecció <code>Awards</code> de MongoDB.<br/><b>Camps i Valors:</b> Filtra registres on <code>categoria</code> comença per "Ajudes competitives"; calcula el sumatori del camp <code>import</code> en milions d\'euros.'
+            },
+            {
+                key: 'nonCompetitiveFunding',
+                title: 'Ingressos no competitius, recerca i transferència',
+                desc: 'Ingressos derivats de contractes art. 60 (LOU) / art. 83 (LOSU), convenis privats i prestació de serveis.',
+                unit: 'Milions d\'euros',
+                icon: 'fa-handshake',
+                color: 'teal',
+                isCurrency: true,
+                calculation: '<b>Origen:</b> Col·lecció <code>Awards</code> de MongoDB.<br/><b>Camps i Valors:</b> Filtra registres on <code>categoria</code> no comença per "Ajudes competitives"; calcula el sumatori del camp <code>import</code> en milions d\'euros.'
+            },
+            {
+                key: 'q1q2Publications',
+                title: 'Nombre de publicacions en els dos primers quartils dels índexs de referència',
+                desc: 'Articles científics publicats indexats a Scopus o WOS que ocupen els llocs Q1 i Q2 de la seva àrea.',
+                unit: 'Publicacions',
+                icon: 'fa-file-invoice',
+                color: 'amber',
+                calculation: '<b>Origen:</b> Col·lecció <code>Researchoutputs</code> de MongoDB.<br/><b>Camps i Valors:</b> Agrupació i recompte de publicacions amb quartil <code>Q1</code> o <code>Q2</code> de la revista corresponent a Scopus o JCR.'
+            },
+            {
+                key: 'incubatedCompanies',
+                title: 'Nombre d\'empreses incubades',
+                desc: 'Spin-offs i empreses emergents derivades de la recerca de la UAB sota tutela d\'incubadores.',
+                unit: 'Empreses',
+                icon: 'fa-rocket',
+                color: 'rose',
+                calculation: '<b>Origen:</b> Col·lecció <code>Organizations</code> de MongoDB.<br/><b>Camps i Valors:</b> Filtra organitzacions on <code>type.term.ca_ES</code> és "Empresa Esfera" i <code>lifecycle.endDate</code> és buit (actives).'
+            },
+            {
+                key: 'transferAgreements',
+                title: 'Acords de transferència de coneixement (patents i know-how)',
+                desc: 'Contractes de llicència de patents, programari lliure o secret industrial registrats.',
+                unit: 'Acords',
+                icon: 'fa-certificate',
+                color: 'blue',
+                calculation: '<b>Origen:</b> Col·lecció <code>Researchoutputs</code> de MongoDB.<br/><b>Camps i Valors:</b> Filtra registres de patents i acords on <code>type.term.ca_ES</code> conté la paraula "Patent" (regex insensitiva).'
+            },
+            {
+                key: 'tramsVius',
+                title: 'Trams de recerca vius',
+                desc: 'Nombre total de trams de recerca estatals o bàsics reconeguts actius del professorat.',
+                unit: 'Trams de recerca',
+                icon: 'fa-chart-simple',
+                color: 'purple',
+                calculation: '<b>Origen:</b> Full d\'Excel <code>Trams de recerca vius de la UAB (RC0019).xlsx</code> (pestanya <code>Trams de recerca vius de la UAB</code>).<br/><b>Camps i Valors:</b> Filtra files on Columna 0 (Data) és "Desembre [Any]" i Columna 1 (Tipus de tram) és "Estatals" o "Bàsics"; suma els valors de la Columna 7 (Nombre de professorat amb trams vius).'
+            }
+        ];
+
+        document.addEventListener('DOMContentLoaded', () => {
+            initYearButtons();
+            populateDepartmentSelect();
+            initChartSelector();
+
+            // Handle department select change
+            document.getElementById('selectDept').addEventListener('change', (e) => {
+                selectedDept = e.target.value;
+                updateAllData();
+            });
+        });
+
+        function initYearButtons() {
+            const btns = document.querySelectorAll('.year-btn');
+            btns.forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    btns.forEach(b => {
+                        b.classList.remove('bg-white', 'text-slate-900', 'shadow-sm', 'border', 'border-slate-200/40');
+                    });
+                    btn.classList.add('bg-white', 'text-slate-900', 'shadow-sm', 'border', 'border-slate-200/40');
+                    selectedYear = parseInt(btn.getAttribute('data-year'), 10);
+                    renderActiveData();
+                });
+            });
+        }
+
+        function initChartSelector() {
+            document.getElementById('selectChartMetric').addEventListener('change', () => {
+                renderChart();
+            });
+        }
+
+        function populateDepartmentSelect() {
+            Promise.all([
+                fetch('/api/persons/departamentos').then(r => r.json()),
+                fetch('/api/persons/institutos').then(r => r.json())
+            ]).then(([depts, insts]) => {
+                const select = document.getElementById('selectDept');
+                
+                // Clear and add placeholder
+                select.innerHTML = '<option value="all">Tot (Universitat Autònoma de Barcelona)</option>';
+                
+                // Add Departments
+                const sortedDepts = depts.sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
+                const optGroupDepts = document.createElement('optgroup');
+                optGroupDepts.label = 'Departaments';
+                sortedDepts.forEach(d => {
+                    const opt = document.createElement('option');
+                    opt.value = d.uuid;
+                    opt.textContent = d.nombre;
+                    optGroupDepts.appendChild(opt);
+                });
+                select.appendChild(optGroupDepts);
+                
+                // Add Institutes
+                const sortedInsts = insts.sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
+                const optGroupInsts = document.createElement('optgroup');
+                optGroupInsts.label = 'Instituts de Recerca';
+                sortedInsts.forEach(i => {
+                    const opt = document.createElement('option');
+                    opt.value = i.uuid;
+                    opt.textContent = i.nombre;
+                    optGroupInsts.appendChild(opt);
+                });
+                select.appendChild(optGroupInsts);
+                
+                updateAllData();
+            }).catch(err => {
+                console.error('Error populating department select:', err);
+                updateAllData();
+            });
+        }
+
+        function updateAllData() {
+            document.getElementById('chartLoader').classList.remove('hidden');
+            const years = [2021, 2022, 2023, 2024, 2025];
+            const promises = years.map(y => 
+                fetch(`/api/strategic-indicators/stats?year=${y}&dept=${selectedDept}`).then(r => r.json())
+            );
+
+            Promise.all(promises).then(allData => {
+                historicalData = allData;
+                document.getElementById('chartLoader').classList.add('hidden');
+                
+                renderActiveData();
+                renderChart();
+            }).catch(err => {
+                console.error('Error fetching historical stats:', err);
+                document.getElementById('chartLoader').classList.add('hidden');
+            });
+        }
+
+        function renderActiveData() {
+            // Find active year data
+            const activeData = historicalData.find(d => d.year === selectedYear) || {
+                sgrDoctors: 0,
+                europeanProjects: 0,
+                competitiveFunding: 0,
+                nonCompetitiveFunding: 0,
+                q1q2Publications: 0,
+                incubatedCompanies: 0,
+                transferAgreements: 0
+            };
+
+            // Update Top 3 KPI Cards
+            document.getElementById('kpiFunding').textContent = formatVal(activeData.competitiveFunding, true) + ' M€';
+            document.getElementById('kpiDoctors').textContent = formatVal(activeData.sgrDoctors);
+            document.getElementById('kpiPublications').textContent = formatVal(activeData.q1q2Publications);
+
+            // Populate Table
+            const tbody = document.getElementById('indicatorsBody');
+            tbody.innerHTML = '';
+
+            indicatorsMetadata.forEach(meta => {
+                const val = activeData[meta.key];
+                
+                // Calculate Trend
+                const prevYearData = historicalData.find(d => d.year === (selectedYear - 1));
+                let trendHtml = '';
+                if (prevYearData) {
+                    const prevVal = prevYearData[meta.key];
+                    const diff = val - prevVal;
+                    if (diff > 0) {
+                        trendHtml = `<span class="inline-flex items-center gap-1 text-xs text-emerald-600 font-bold"><i class="fa-solid fa-arrow-up text-[10px]"></i> +${formatVal(diff, meta.isCurrency)}</span>`;
+                    } else if (diff < 0) {
+                        trendHtml = `<span class="inline-flex items-center gap-1 text-xs text-rose-500 font-bold"><i class="fa-solid fa-arrow-down text-[10px]"></i> -${formatVal(Math.abs(diff), meta.isCurrency)}</span>`;
+                    } else {
+                        trendHtml = `<span class="inline-flex items-center gap-1 text-xs text-slate-400 font-semibold">= Estable</span>`;
+                    }
+                } else {
+                    trendHtml = `<span class="text-xs text-slate-400 italic">No disponible</span>`;
+                }
+
+                // Color themes mapping
+                const colorMap = {
+                    indigo: 'bg-indigo-50 text-indigo-600 border-indigo-100',
+                    sky: 'bg-sky-50 text-sky-600 border-sky-100',
+                    cyan: 'bg-cyan-50 text-cyan-600 border-cyan-100',
+                    emerald: 'bg-emerald-50 text-emerald-600 border-emerald-100',
+                    teal: 'bg-teal-50 text-teal-600 border-teal-100',
+                    amber: 'bg-amber-50 text-amber-600 border-amber-100',
+                    rose: 'bg-rose-50 text-rose-600 border-rose-100',
+                    blue: 'bg-blue-50 text-blue-600 border-blue-100',
+                    purple: 'bg-purple-50 text-purple-600 border-purple-100'
+                };
+
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-slate-50/50 transition-colors align-top';
+                tr.innerHTML = `
+                    <td class="px-6 py-4">
+                        <div class="flex items-start gap-4">
+                            <div class="w-10 h-10 rounded-2xl flex items-center justify-center border text-base flex-shrink-0 ${colorMap[meta.color] || 'bg-slate-50 text-slate-600'} shadow-sm">
+                                <i class="fa-solid ${meta.icon}"></i>
+                            </div>
+                            <div>
+                                <p class="font-bold text-slate-800 leading-snug">
+                                    <span>${meta.title}</span>&nbsp;<span class="relative group inline-block align-middle">
+                                        <i class="fa-solid fa-circle-info text-slate-400 hover:text-slate-600 cursor-help transition-colors text-[11px]"></i>
+                                        <span class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-slate-950 text-white text-[11px] leading-relaxed rounded-xl shadow-xl opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-20 font-medium normal-case text-left">
+                                            <span class="block font-bold mb-1 border-b border-slate-800 pb-0.5 text-emerald-400">Detalls Tècnics</span>
+                                            ${meta.calculation}
+                                            <span class="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-950"></span>
+                                        </span>
+                                    </span>
+                                </p>
+                                <p class="text-xs text-slate-400 mt-1 max-w-md font-medium leading-relaxed">${meta.desc}</p>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="px-4 py-5 font-semibold text-slate-500 text-xs">${meta.unit}</td>
+                    <td class="px-6 py-5 font-extrabold text-slate-900 text-right text-base font-display">
+                        ${formatVal(val, meta.isCurrency)}
+                    </td>
+                    <td class="px-6 py-5 text-center">
+                        ${trendHtml}
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function renderChart() {
+            const chartDom = document.getElementById('trendChart');
+            if (!chartDom) return;
+
+            if (!trendChart) {
+                trendChart = echarts.init(chartDom);
+            }
+
+            const metric = document.getElementById('selectChartMetric').value;
+            const meta = indicatorsMetadata.find(m => m.key === metric);
+            
+            const years = historicalData.map(d => d.year);
+            const values = historicalData.map(d => d.trendVal = d[metric]);
+
+            // Brand tailwind colors mapping
+            const colorPalettes = {
+                indigo: '#4f46e5',
+                sky: '#0284c7',
+                cyan: '#0891b2',
+                emerald: '#059669',
+                teal: '#0d9488',
+                amber: '#d97706',
+                rose: '#e11d48',
+                blue: '#2563eb',
+                purple: '#9333ea'
+            };
+            const activeColor = colorPalettes[meta.color] || '#059669';
+
+            const option = {
+                tooltip: {
+                    trigger: 'axis',
+                    formatter: function(params) {
+                        const p = params[0];
+                        let valStr = formatVal(p.value, meta.isCurrency);
+                        if (meta.isCurrency) valStr += ' M€';
+                        return `<div class="p-1 font-sans">
+                            <span class="block text-xs font-bold text-slate-400 uppercase">${p.name}</span>
+                            <span class="block text-base font-black text-slate-800 mt-0.5">${valStr}</span>
+                        </div>`;
+                    },
+                    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                    borderColor: '#e2e8f0',
+                    borderWidth: 1,
+                    shadowBlur: 10,
+                    shadowColor: 'rgba(148,163,184,0.1)'
+                },
+                grid: {
+                    top: '12%',
+                    left: '3%',
+                    right: '4%',
+                    bottom: '3%',
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'category',
+                    data: years,
+                    axisLine: { lineStyle: { color: '#e2e8f0' } },
+                    axisLabel: { color: '#64748b', fontSize: 11, fontWeight: 600 }
+                },
+                yAxis: {
+                    type: 'value',
+                    axisLabel: { 
+                        color: '#64748b', 
+                        fontSize: 10,
+                        formatter: function(v) {
+                            return meta.isCurrency ? v + 'M' : v;
+                        }
+                    },
+                    splitLine: { lineStyle: { color: '#f1f5f9' } }
+                },
+                series: [
+                    {
+                        data: values,
+                        type: 'line',
+                        smooth: true,
+                        symbolSize: 8,
+                        lineStyle: {
+                            width: 3.5,
+                            color: activeColor
+                        },
+                        itemStyle: {
+                            color: activeColor,
+                            borderWidth: 2,
+                            borderColor: '#ffffff'
+                        },
+                        areaStyle: {
+                            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                { offset: 0, color: activeColor + '30' },
+                                { offset: 1, color: activeColor + '00' }
+                            ])
+                        }
+                    }
+                ]
+            };
+
+            trendChart.setOption(option);
+            
+            // Handle resizing
+            window.addEventListener('resize', () => {
+                if (trendChart) trendChart.resize();
+            });
+        }
+
+        function formatVal(v, isCurrency = false) {
+            if (v === undefined || v === null) return '--';
+            if (isCurrency) {
+                return v.toLocaleString('ca-ES', { minimumFractionDigits: 1, maximumFractionDigits: 2 });
+            }
+            return v.toLocaleString('ca-ES');
+        }
+    </script>
+</body>
+</html>

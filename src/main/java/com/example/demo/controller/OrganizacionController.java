@@ -51,7 +51,7 @@ public class OrganizacionController {
         stats.put("cers", countActiveByType("Centres d'Estudis i de Recerca"));
         stats.put("institutsPropis", countActiveByType("Instituts Universitaris de Recerca Propis"));
         
-        stats.put("sgrs", countActiveByTypes(List.of("Grup de Recerca", "Grup de Recerca UAB")));
+        stats.put("sgrs", countSgrGroups());
         
         stats.put("esfera", countActiveByTypes(List.of(
             "Centres amb conveni de participació en l'esfera UAB",
@@ -75,6 +75,12 @@ public class OrganizacionController {
         Query query = new Query();
         query.addCriteria(Criteria.where("type.term.ca_ES").in(typeNames));
         query.addCriteria(Criteria.where("lifecycle.endDate").is(null));
+        return mongoTemplate.count(query, "Organizations");
+    }
+
+    private long countSgrGroups() {
+        Query query = new Query();
+        query.addCriteria(Criteria.where("identifiers.id").regex("^2021SGR"));
         return mongoTemplate.count(query, "Organizations");
     }
 

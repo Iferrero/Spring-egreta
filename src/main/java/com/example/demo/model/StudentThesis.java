@@ -1,8 +1,10 @@
 package com.example.demo.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
+import org.springframework.data.mongodb.core.mapping.Field;
 
 import java.util.List;
 import java.util.Map;
@@ -51,6 +53,10 @@ public class StudentThesis {
 
     private Map<String, String> translatedTitle;
     private Map<String, String> translatedSubTitle;
+
+    @Field("abstract")
+    @JsonProperty("abstract")
+    private Map<String, String> abstractText;
 
     private Map<String, Object> customDefinedFields;
 
@@ -173,6 +179,21 @@ public class StudentThesis {
     public void setTranslatedSubTitle(Map<String, String> translatedSubTitle) { this.translatedSubTitle = translatedSubTitle; }
     public Map<String, Object> getCustomDefinedFields() { return customDefinedFields; }
     public void setCustomDefinedFields(Map<String, Object> customDefinedFields) { this.customDefinedFields = customDefinedFields; }
+
+    public Map<String, String> getAbstractText() { return abstractText; }
+    public void setAbstractText(Map<String, String> abstractText) { this.abstractText = abstractText; }
+
+    public boolean hasAbstract() {
+        if (abstractText == null || abstractText.isEmpty()) {
+            return false;
+        }
+        for (String val : abstractText.values()) {
+            if (val != null && !val.strip().isEmpty()) {
+                return true;
+            }
+        }
+        return false;
+    }
 
     // -------------------------------------------------------------------------
     // Inner classes

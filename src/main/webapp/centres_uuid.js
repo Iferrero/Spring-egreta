@@ -751,7 +751,7 @@ function construirPublicacionsPivot(data) {
     });
 
     const columns = [
-        { title: 'Tipus', field: 'tipo', sorter: 'string', headerFilter: 'input', headerFilterPlaceholder: 'Buscar tipus...', widthGrow: 2 },
+        { title: 'Tipus', field: 'tipo', sorter: 'string', headerFilter: 'input', headerFilterPlaceholder: 'Cercar tipus...', widthGrow: 2 },
         ...anios.map(anio => ({
             title: String(anio),
             field: fieldByAnio.get(anio),
