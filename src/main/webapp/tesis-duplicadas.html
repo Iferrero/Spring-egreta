@@ -9,6 +9,7 @@
     <script src="egreta-modal.js" defer></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="uab-theme.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
 <body class="bg-slate-50 min-h-screen">
     <div class="max-w-7xl mx-auto py-8 px-6">
@@ -138,7 +139,39 @@
                         const linkHtml = t.pureId 
                             ? `<a href="#" onclick="abrirEgreta(event, '${t.pureId}')" class="text-indigo-700 hover:text-indigo-900 hover:underline font-semibold transition-colors" title="Obrir editor a Egreta">${escapeHtml(tTitle)}</a>`
                             : escapeHtml(tTitle);
-                        return `<li><span class="font-medium text-slate-700">${linkHtml}</span> <span class="text-slate-500">(${escapeHtml(t.anio || '-')})</span></li>`;
+
+                        const links = Array.isArray(t.links) ? t.links : [];
+                        let dddUrl = null;
+                        let tdxUrl = null;
+
+                        links.forEach(l => {
+                            if (!l) return;
+                            const url = l.url || '';
+                            const uri = (l.linkType && l.linkType.uri) || '';
+                            if (url.toLowerCase().includes('ddd.uab.cat') || uri.toLowerCase().includes('ddd')) {
+                                dddUrl = url;
+                            } else if (url.toLowerCase().includes('tdx.cat') || url.toLowerCase().includes('handle/10803/')) {
+                                tdxUrl = url;
+                            }
+                        });
+
+                        let dddHtml = '';
+                        if (dddUrl) {
+                            dddHtml = `
+                                <a href="${escapeHtml(dddUrl)}" target="_blank" class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 hover:bg-emerald-100 text-[10px] font-bold transition-all shadow-sm ml-2" title="Veure al Dipòsit Digital de Documents (DDD)">
+                                    <i class="fa-solid fa-up-right-from-square text-[8px]"></i> DDD
+                                </a>`;
+                        }
+
+                        let tdxHtml = '';
+                        if (tdxUrl) {
+                            tdxHtml = `
+                                <a href="${escapeHtml(tdxUrl)}" target="_blank" class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-violet-50 text-violet-700 hover:bg-violet-100 text-[10px] font-bold transition-all shadow-sm ml-2" title="Veure a Tesis Doctorals en Xarxa (TDX)">
+                                    <i class="fa-solid fa-up-right-from-square text-[8px]"></i> TDX
+                                </a>`;
+                        }
+
+                        return `<li><span class="font-medium text-slate-700">${linkHtml}</span> <span class="text-slate-500">(${escapeHtml(t.anio || '-')})</span>${dddHtml}${tdxHtml}</li>`;
                     })
                     .join('');
 

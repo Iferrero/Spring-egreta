@@ -1,0 +1,934 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Evolució d'Ingressos de Recerca | UAB</title>
+    <!-- Google Fonts: Inter & Outfit -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Apache ECharts -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    
+    <script src="config.js"></script>
+    <script src="ingressos-data.js"></script>
+    <script src="uab-brand.js" defer></script>
+    <link rel="stylesheet" href="uab-theme.css">
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        h1, h2, h3, .font-display {
+            font-family: 'Outfit', sans-serif;
+        }
+        .premium-shadow {
+            box-shadow: 0 4px 20px -2px rgba(148, 163, 184, 0.12), 0 2px 8px -1px rgba(148, 163, 184, 0.08);
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+        }
+        .animate-fade-in {
+            animation: fadeIn 0.5s ease-out forwards;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        /* Custom scrollbar for multi-select dropdown */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #f1f2f4;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #c9d1dc;
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #a9b1bc;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen text-slate-800 flex flex-col">
+
+    <!-- Header for uab-brand.js -->
+    <header class="hidden">
+        <h1>Ingressos de Recerca</h1>
+        <p>Evolució anual dels ingressos de recerca a 31 de desembre (2018-2025)</p>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-grow w-[90%] max-w-7xl mx-auto py-8 flex flex-col gap-8 animate-fade-in">
+        
+        <!-- Page Title & Navigation -->
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+                <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">Evolució d'Ingressos de Recerca</h1>
+                <p class="text-slate-500 mt-1">Dades històriques tancades a 31/12 de cada exercici per a diferents conceptes de recerca.</p>
+            </div>
+            <div class="flex items-center gap-2">
+                <a href="index.html" class="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-slate-600 hover:text-emerald-700 bg-white border border-slate-200 rounded-2xl transition-all shadow-sm active:scale-95">
+                    <i class="fa-solid fa-house"></i>
+                    <span>Tornar a l'Inici</span>
+                </a>
+            </div>
+        </div>
+
+        <!-- Filter Panel -->
+        <section class="glass-panel border border-slate-200 rounded-3xl p-6 premium-shadow flex flex-col lg:flex-row gap-6 justify-between items-stretch lg:items-end">
+            <!-- Concept Selector -->
+            <div class="flex flex-col gap-2 flex-grow">
+                <label class="text-xs font-bold text-slate-500 uppercase tracking-wider">Conceptes de Recerca (Selecció Múltiple)</label>
+                <div class="relative">
+                    <button
+                        id="conceptsDropdownBtn"
+                        type="button"
+                        class="w-full border border-slate-200 rounded-2xl px-4 py-3 text-sm bg-white text-left flex items-center justify-between font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all cursor-pointer shadow-sm"
+                    >
+                        <span id="conceptsDropdownLabel" class="truncate">Carregant conceptes...</span>
+                        <i class="fa fa-chevron-down ml-2 text-slate-400"></i>
+                    </button>
+                    
+                    <div
+                        id="conceptsDropdownMenu"
+                        class="absolute z-50 left-0 right-0 mt-2 bg-white border border-slate-200 rounded-2xl shadow-xl max-h-96 overflow-hidden hidden flex flex-col"
+                    >
+                        <!-- Dropdown Search -->
+                        <div class="p-3 border-b border-slate-100 bg-slate-50/50 sticky top-0 z-10 flex gap-2">
+                            <div class="relative flex-grow">
+                                <i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-slate-400 text-xs"></i>
+                                <input
+                                    id="conceptsSearchInput"
+                                    type="text"
+                                    placeholder="Cerca conceptes..."
+                                    class="w-full pl-8 pr-4 py-2 bg-white border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500 text-xs font-semibold text-slate-700 shadow-inner"
+                                >
+                            </div>
+                            <!-- Selection helper buttons -->
+                            <button id="btnDeselectAll" type="button" class="text-[10px] font-bold text-slate-500 hover:text-slate-800 bg-slate-200 hover:bg-slate-300 px-2 py-1 rounded-lg transition-colors border border-slate-300">Buida</button>
+                        </div>
+                        
+                        <!-- Grouped List -->
+                        <div id="conceptsDropdownList" class="overflow-y-auto max-h-64 flex-1 custom-scrollbar text-xs">
+                            <!-- Populated Dynamically -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Presets -->
+            <div class="flex flex-col gap-2 min-w-[280px]">
+                <label class="text-xs font-bold text-slate-500 uppercase tracking-wider">Presets Ràpids</label>
+                <div class="grid grid-cols-2 gap-2">
+                    <button id="presetTotals" type="button" class="px-3 py-2.5 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 border border-slate-200 hover:border-emerald-300 rounded-xl transition-all shadow-sm active:scale-95 text-center">
+                        <i class="fa-solid fa-calculator mr-1"></i> Totals Generals
+                    </button>
+                    <button id="presetPersonal" type="button" class="px-3 py-2.5 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 border border-slate-200 hover:border-emerald-300 rounded-xl transition-all shadow-sm active:scale-95 text-center">
+                        <i class="fa-solid fa-users mr-1"></i> Pers. Investigador
+                    </button>
+                    <button id="presetProjectes" type="button" class="px-3 py-2.5 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 border border-slate-200 hover:border-emerald-300 rounded-xl transition-all shadow-sm active:scale-95 text-center">
+                        <i class="fa-solid fa-diagram-project mr-1"></i> Projectes/Altres
+                    </button>
+                    <button id="presetTots" type="button" class="px-3 py-2.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 border border-transparent rounded-xl transition-all shadow-sm active:scale-95 text-center">
+                        <i class="fa-solid fa-check-double mr-1"></i> Selecciona Tot
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Selected Concept Chips -->
+        <div id="selectedChipsContainer" class="flex flex-wrap gap-2 -mt-4 empty:hidden">
+            <!-- Injected dynamically -->
+        </div>
+
+        <!-- KPI Grid -->
+        <section class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <!-- Card 1: Selected Total for latest year -->
+            <div class="bg-gradient-to-br from-emerald-600 to-teal-700 rounded-3xl p-6 text-white premium-shadow flex flex-col justify-between h-40 group hover:-translate-y-1 hover:shadow-lg transition-all duration-300">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <span class="text-emerald-100 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
+                            <span>Suma Seleccionada (2025)</span>
+                            <i class="fa-solid fa-circle-info text-emerald-200 hover:text-white cursor-help transition-colors text-[10px]" title="Suma dels ingressos a 31/12/2025 per als conceptes actualment seleccionats"></i>
+                        </span>
+                        <h2 class="text-3xl font-black mt-2 font-display" id="kpiSelectedTotal">0,00 €</h2>
+                    </div>
+                    <div class="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-lg text-emerald-200 group-hover:bg-white/20 transition-colors">
+                        <i class="fa-solid fa-euro-sign"></i>
+                    </div>
+                </div>
+                <p class="text-emerald-100/80 text-xs leading-relaxed">Imports agregats dels conceptes filtrats a data 31/12/2025.</p>
+            </div>
+
+            <!-- Card 2: Growth rate 2018 vs 2025 -->
+            <div class="bg-gradient-to-br from-indigo-600 to-violet-700 rounded-3xl p-6 text-white premium-shadow flex flex-col justify-between h-40 group hover:-translate-y-1 hover:shadow-lg transition-all duration-300">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <span class="text-indigo-100 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
+                            <span>Evolució Global (2018 vs 2025)</span>
+                            <i class="fa-solid fa-circle-info text-indigo-200 hover:text-white cursor-help transition-colors text-[10px]" title="Creixement percentual agregat entre l'any 2018 i 2025 dels conceptes seleccionats"></i>
+                        </span>
+                        <h2 class="text-3xl font-black mt-2 font-display" id="kpiGrowthRate">+0,0%</h2>
+                    </div>
+                    <div class="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-lg text-indigo-200 group-hover:bg-white/20 transition-colors">
+                        <i class="fa-solid fa-arrow-trend-up" id="kpiGrowthIcon"></i>
+                    </div>
+                </div>
+                <p class="text-indigo-100/80 text-xs leading-relaxed">Percentatge de variació en els ingressos de 2018 respecte a 2025.</p>
+            </div>
+
+            <!-- Card 3: Count of selected items -->
+            <div class="bg-gradient-to-br from-amber-500 to-orange-600 rounded-3xl p-6 text-white premium-shadow flex flex-col justify-between h-40 group hover:-translate-y-1 hover:shadow-lg transition-all duration-300">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <span class="text-amber-100 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
+                            <span>Conceptes Actius</span>
+                        </span>
+                        <h2 class="text-3xl font-black mt-2 font-display" id="kpiSelectedCount">0 / 0</h2>
+                    </div>
+                    <div class="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-lg text-amber-200 group-hover:bg-white/20 transition-colors">
+                        <i class="fa-solid fa-list-check"></i>
+                    </div>
+                </div>
+                <p class="text-amber-100/80 text-xs leading-relaxed">Nombre de conceptes individuals o agrupats visualitzats simultàniament.</p>
+            </div>
+        </section>
+
+        <!-- Chart Section -->
+        <section class="bg-white p-6 rounded-3xl premium-shadow border border-slate-200">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 border-b border-slate-100 pb-4">
+                <div>
+                    <h3 class="text-lg font-bold text-slate-800">Evolució Temporal de l'Ingrés</h3>
+                    <p class="text-xs text-slate-500 mt-1">Valors anuals en milions d'euros (€ M) a 31 de desembre per a cada concepte.</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button id="btnToggleChartType" type="button" class="text-xs font-semibold bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200 px-3 py-1.5 rounded-xl transition-all active:scale-95">
+                        <i class="fa-solid fa-chart-bar mr-1"></i> Canvia a Barres
+                    </button>
+                </div>
+            </div>
+            
+            <div id="chartRevenues" class="w-full h-96 min-h-[350px]"></div>
+        </section>
+
+        <!-- Data Table Section -->
+        <section class="bg-white rounded-3xl premium-shadow border border-slate-200 overflow-hidden flex flex-col">
+            <div class="px-6 py-5 border-b border-slate-100 flex flex-col md:flex-row justify-between items-stretch md:items-center gap-4 bg-slate-50/50">
+                <div>
+                    <h3 class="text-lg font-bold text-slate-800">Detall de les dades històriques</h3>
+                    <p class="text-xs text-slate-500 mt-1">Visualització tabular dels valors tancats a 31/12.</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button id="btnExportCSV" type="button" class="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-emerald-700 hover:text-white bg-emerald-50 hover:bg-emerald-600 border border-emerald-200 hover:border-transparent rounded-xl transition-all shadow-sm active:scale-95 cursor-pointer">
+                        <i class="fa-solid fa-file-csv text-sm"></i> Exporta a CSV
+                    </button>
+                </div>
+            </div>
+            
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse min-w-[900px] text-sm">
+                    <thead>
+                        <tr class="bg-slate-50 text-slate-500 border-b border-slate-200 text-xs font-bold uppercase tracking-wider">
+                            <th class="px-6 py-4">Concepte de Recerca</th>
+                            <th class="px-4 py-4 text-right">2018</th>
+                            <th class="px-4 py-4 text-right">2019</th>
+                            <th class="px-4 py-4 text-right">2020</th>
+                            <th class="px-4 py-4 text-right">2021</th>
+                            <th class="px-4 py-4 text-right">2022</th>
+                            <th class="px-4 py-4 text-right">2023</th>
+                            <th class="px-4 py-4 text-right">2024</th>
+                            <th class="px-4 py-4 text-right">2025</th>
+                            <th class="px-6 py-4 text-right">Var %</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody" class="divide-y divide-slate-100 text-slate-700">
+                        <!-- Injected dynamically -->
+                    </tbody>
+                    <tfoot class="border-t-2 border-slate-200 bg-slate-50 font-bold text-slate-800">
+                        <tr id="tableFootRow">
+                            <!-- Injected dynamically -->
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+            <div class="px-6 py-4 bg-slate-50/70 border-t border-slate-100 flex justify-between items-center text-xs text-slate-400 font-semibold">
+                <span id="footerItemCount">Mostrant 0 conceptes</span>
+                <span>Font: Ingressos Recerca.xlsx</span>
+            </div>
+        </section>
+    </main>
+
+    <!-- Page Logic -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // Verify data availability
+            if (typeof INGRESSOS_DATA === 'undefined') {
+                console.error("Dades d'ingressos no trobades.");
+                alert("Error en carregar les dades d'ingressos.");
+                return;
+            }
+
+            // Global State
+            let seleccionats = [];
+            let chartInstance = null;
+            let currentChartType = 'line'; // 'line' or 'bar'
+            let searchVal = '';
+
+            // Cache DOM Elements
+            const dropdownBtn = document.getElementById('conceptsDropdownBtn');
+            const dropdownMenu = document.getElementById('conceptsDropdownMenu');
+            const dropdownList = document.getElementById('conceptsDropdownList');
+            const dropdownLabel = document.getElementById('conceptsDropdownLabel');
+            const searchInput = document.getElementById('conceptsSearchInput');
+            const btnDeselectAll = document.getElementById('btnDeselectAll');
+            const chipsContainer = document.getElementById('selectedChipsContainer');
+            
+            const kpiSelectedTotal = document.getElementById('kpiSelectedTotal');
+            const kpiGrowthRate = document.getElementById('kpiGrowthRate');
+            const kpiGrowthIcon = document.getElementById('kpiGrowthIcon');
+            const kpiSelectedCount = document.getElementById('kpiSelectedCount');
+            
+            const btnToggleChartType = document.getElementById('btnToggleChartType');
+            const btnExportCSV = document.getElementById('btnExportCSV');
+            const tableBody = document.getElementById('tableBody');
+            const tableFootRow = document.getElementById('tableFootRow');
+            const footerItemCount = document.getElementById('footerItemCount');
+
+            // Quick Presets elements
+            const presetTotals = document.getElementById('presetTotals');
+            const presetPersonal = document.getElementById('presetPersonal');
+            const presetProjectes = document.getElementById('presetProjectes');
+            const presetTots = document.getElementById('presetTots');
+
+            // Initial selected concepts: load the 3 major categories
+            const initialConcepts = [
+                "PS Recerca (Cap. 3)  No competitiva",
+                "Personal Investigador",
+                "Projectes (Cap. 4, 7 i 9)"
+            ];
+            
+            seleccionats = INGRESSOS_DATA.filter(item => initialConcepts.includes(item.concept)).map(item => item.concept);
+
+            // Initialize Page Components
+            initDropdown();
+            initChart();
+            updateUI();
+
+            // Toggle Dropdown Visibility
+            dropdownBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const isHidden = dropdownMenu.classList.contains('hidden');
+                if (isHidden) {
+                    openDropdown();
+                } else {
+                    closeDropdown();
+                }
+            });
+
+            // Close dropdown when clicking outside
+            document.addEventListener('click', (e) => {
+                if (!dropdownMenu.contains(e.target) && e.target !== dropdownBtn) {
+                    closeDropdown();
+                }
+            });
+
+            // Handle dropdown search
+            searchInput.addEventListener('input', (e) => {
+                searchVal = e.target.value.toLowerCase().trim();
+                renderDropdownOptions();
+            });
+
+            // Reset Selection (Buida)
+            btnDeselectAll.addEventListener('click', () => {
+                seleccionats = [];
+                renderDropdownOptions();
+                updateUI();
+            });
+
+            // Toggle Chart Type (line <-> bar)
+            btnToggleChartType.addEventListener('click', () => {
+                currentChartType = currentChartType === 'line' ? 'bar' : 'line';
+                btnToggleChartType.innerHTML = currentChartType === 'line' 
+                    ? '<i class="fa-solid fa-chart-bar mr-1"></i> Canvia a Barres'
+                    : '<i class="fa-solid fa-chart-line mr-1"></i> Canvia a Línies';
+                renderChart();
+            });
+
+            // Preset Buttons handlers
+            presetTotals.addEventListener('click', () => {
+                // Pre-select group headers and total general
+                seleccionats = INGRESSOS_DATA
+                    .filter(item => item.isGroupHeader)
+                    .map(item => item.concept);
+                renderDropdownOptions();
+                updateUI();
+            });
+
+            presetPersonal.addEventListener('click', () => {
+                // Pre-select only Personal Investigador subconcepts
+                seleccionats = INGRESSOS_DATA
+                    .filter(item => item.category === 'Personal Investigador' && !item.isGroupHeader)
+                    .map(item => item.concept);
+                renderDropdownOptions();
+                updateUI();
+            });
+
+            presetProjectes.addEventListener('click', () => {
+                // Pre-select only Projectes subconcepts
+                seleccionats = INGRESSOS_DATA
+                    .filter(item => item.category === 'Projectes' && !item.isGroupHeader)
+                    .map(item => item.concept);
+                renderDropdownOptions();
+                updateUI();
+            });
+
+            presetTots.addEventListener('click', () => {
+                // Select all concepts
+                seleccionats = INGRESSOS_DATA.map(item => item.concept);
+                renderDropdownOptions();
+                updateUI();
+            });
+
+            // Export to CSV
+            btnExportCSV.addEventListener('click', () => {
+                exportSelectedToCSV();
+            });
+
+            // Dropdown helper functions
+            function openDropdown() {
+                dropdownMenu.classList.remove('hidden');
+                searchInput.focus();
+                searchVal = '';
+                searchInput.value = '';
+                renderDropdownOptions();
+            }
+
+            // Close the dropdown menu
+            function closeDropdown() {
+                dropdownMenu.classList.add('hidden');
+            }
+
+            function initDropdown() {
+                renderDropdownOptions();
+            }
+
+            function renderDropdownOptions() {
+                dropdownList.innerHTML = '';
+                
+                // Group INGRESSOS_DATA by Category for display
+                const groups = {
+                    'General / Totals de Categoria': [],
+                    'Detall de Personal Investigador': [],
+                    'Detall de Projectes': []
+                };
+
+                INGRESSOS_DATA.forEach(item => {
+                    const matchesSearch = item.concept.toLowerCase().includes(searchVal);
+                    if (!matchesSearch) return;
+
+                    if (item.isGroupHeader) {
+                        groups['General / Totals de Categoria'].push(item);
+                    } else if (item.category === 'Personal Investigador') {
+                        groups['Detall de Personal Investigador'].push(item);
+                    } else if (item.category === 'Projectes') {
+                        groups['Detall de Projectes'].push(item);
+                    }
+                });
+
+                let hasAnyItems = false;
+
+                Object.keys(groups).forEach(groupName => {
+                    const items = groups[groupName];
+                    if (items.length === 0) return;
+                    hasAnyItems = true;
+
+                    // Render group header
+                    const header = document.createElement('div');
+                    header.className = 'px-4 py-2 bg-slate-50 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-y border-slate-100 sticky top-0';
+                    header.textContent = groupName;
+                    dropdownList.appendChild(header);
+
+                    // Render items
+                    items.forEach(item => {
+                        const isChecked = seleccionats.includes(item.concept);
+                        const optionRow = document.createElement('div');
+                        optionRow.className = `px-4 py-2.5 flex items-center gap-3 hover:bg-slate-50 cursor-pointer transition-colors ${isChecked ? 'bg-emerald-50/40' : ''}`;
+                        
+                        const checkbox = document.createElement('input');
+                        checkbox.type = 'checkbox';
+                        checkbox.checked = isChecked;
+                        checkbox.className = 'w-4 h-4 text-emerald-600 border-slate-300 rounded focus:ring-emerald-500 cursor-pointer';
+                        
+                        const textSpan = document.createElement('span');
+                        textSpan.className = `text-xs leading-normal ${item.isGroupHeader ? 'font-bold text-slate-800' : 'text-slate-600 font-medium'}`;
+                        textSpan.textContent = item.concept;
+
+                        optionRow.appendChild(checkbox);
+                        optionRow.appendChild(textSpan);
+
+                        optionRow.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            toggleConcept(item.concept);
+                        });
+
+                        dropdownList.appendChild(optionRow);
+                    });
+                });
+
+                if (!hasAnyItems) {
+                    const noResults = document.createElement('div');
+                    noResults.className = 'px-4 py-6 text-center text-slate-400 italic';
+                    noResults.textContent = 'Cap concepte coincideix amb la cerca';
+                    dropdownList.appendChild(noResults);
+                }
+            }
+
+            function toggleConcept(concept) {
+                if (seleccionats.includes(concept)) {
+                    seleccionats = seleccionats.filter(c => c !== concept);
+                } else {
+                    seleccionats.push(concept);
+                }
+                renderDropdownOptions();
+                updateUI();
+            }
+
+            // Update UI State (Label, Chips, KPIs, Table, Chart)
+            function updateUI() {
+                // Update dropdown label text
+                if (seleccionats.length === 0) {
+                    dropdownLabel.textContent = "Cap concepte seleccionat";
+                } else if (seleccionats.length === INGRESSOS_DATA.length) {
+                    dropdownLabel.textContent = "Tots els conceptes seleccionats";
+                } else if (seleccionats.length === 1) {
+                    dropdownLabel.textContent = seleccionats[0];
+                } else {
+                    dropdownLabel.textContent = `${seleccionats.length} conceptes seleccionats`;
+                }
+
+                // Render selected chips below dropdown
+                renderChips();
+
+                // Compute KPIs
+                computeKPIs();
+
+                // Render Table
+                renderTable();
+
+                // Render Chart
+                renderChart();
+            }
+
+            function renderChips() {
+                chipsContainer.innerHTML = '';
+                seleccionats.forEach(concept => {
+                    const chip = document.createElement('div');
+                    chip.className = 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 px-3 py-1 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-sm';
+                    
+                    const textSpan = document.createElement('span');
+                    textSpan.textContent = concept;
+                    
+                    const removeBtn = document.createElement('button');
+                    removeBtn.type = 'button';
+                    removeBtn.className = 'text-emerald-500 hover:text-emerald-800 transition-colors focus:outline-none';
+                    removeBtn.innerHTML = '<i class="fa-solid fa-xmark text-[10px]"></i>';
+                    removeBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        toggleConcept(concept);
+                    });
+
+                    chip.appendChild(textSpan);
+                    chip.appendChild(removeBtn);
+                    chipsContainer.appendChild(chip);
+                });
+            }
+
+            function formatEuro(val) {
+                if (val === null || val === undefined) return '-';
+                return new Intl.NumberFormat('ca-ES', { style: 'currency', currency: 'EUR' }).format(val);
+            }
+
+            function computeKPIs() {
+                kpiSelectedCount.textContent = `${seleccionats.length} / ${INGRESSOS_DATA.length}`;
+
+                if (seleccionats.length === 0) {
+                    kpiSelectedTotal.textContent = '0,00 €';
+                    kpiGrowthRate.textContent = '+0,0%';
+                    kpiGrowthRate.className = 'text-3xl font-black mt-2 font-display text-white';
+                    kpiGrowthIcon.className = 'fa-solid fa-minus';
+                    return;
+                }
+
+                // Calculate selected sum for 2018 and 2025
+                let total2018 = 0;
+                let total2025 = 0;
+
+                INGRESSOS_DATA.forEach(item => {
+                    if (seleccionats.includes(item.concept)) {
+                        total2018 += item.values['2018'] || 0;
+                        total2025 += item.values['2025'] || 0;
+                    }
+                });
+
+                kpiSelectedTotal.textContent = formatEuro(total2025);
+
+                // Growth rate
+                let growth = 0;
+                if (total2018 > 0) {
+                    growth = ((total2025 - total2018) / total2018) * 100;
+                } else if (total2018 === 0 && total2025 > 0) {
+                    growth = 100;
+                }
+
+                const sign = growth >= 0 ? '+' : '';
+                kpiGrowthRate.textContent = `${sign}${growth.toFixed(1)}%`;
+                
+                if (growth >= 0) {
+                    kpiGrowthRate.className = 'text-3xl font-black mt-2 font-display text-white';
+                    kpiGrowthIcon.className = 'fa-solid fa-arrow-trend-up';
+                } else {
+                    kpiGrowthRate.className = 'text-3xl font-black mt-2 font-display text-amber-200';
+                    kpiGrowthIcon.className = 'fa-solid fa-arrow-trend-down';
+                }
+            }
+
+            function renderTable() {
+                tableBody.innerHTML = '';
+                footerItemCount.textContent = `Mostrant ${seleccionats.length} conceptes`;
+
+                if (seleccionats.length === 0) {
+                    tableBody.innerHTML = `
+                        <tr>
+                            <td colspan="10" class="px-6 py-12 text-center text-slate-400 italic">
+                                <i class="fa-solid fa-triangle-exclamation mr-2 text-amber-500 text-lg"></i>
+                                Cap concepte seleccionat. Fes servir el cercador o els presets ràpids per afegir-ne.
+                            </td>
+                        </tr>
+                    `;
+                    tableFootRow.innerHTML = '';
+                    return;
+                }
+
+                // Selected items details
+                const itemsToRender = INGRESSOS_DATA.filter(item => seleccionats.includes(item.concept));
+
+                // Totals for selected
+                const colTotals = {
+                    '2018': 0, '2019': 0, '2020': 0, '2021': 0, 
+                    '2022': 0, '2023': 0, '2024': 0, '2025': 0
+                };
+
+                itemsToRender.forEach(item => {
+                    const tr = document.createElement('tr');
+                    tr.className = `transition-colors hover:bg-slate-50/75 ${item.isGroupHeader ? 'bg-slate-50/30 font-semibold' : ''}`;
+                    
+                    // Concept name cell
+                    const conceptTd = document.createElement('td');
+                    conceptTd.className = `px-6 py-3.5 ${item.isGroupHeader ? 'font-bold text-slate-800' : 'text-slate-600 pl-10'}`;
+                    conceptTd.textContent = item.concept;
+                    tr.appendChild(conceptTd);
+
+                    // Year values cells
+                    const years = ['2018', '2019', '2020', '2021', '2022', '2023', '2024', '2025'];
+                    years.forEach(year => {
+                        const val = item.values[year] || 0;
+                        colTotals[year] += val;
+
+                        const valTd = document.createElement('td');
+                        valTd.className = 'px-4 py-3.5 text-right font-mono text-xs';
+                        valTd.textContent = formatEuro(val);
+                        tr.appendChild(valTd);
+                    });
+
+                    // Growth cell (2018 vs 2025)
+                    const v18 = item.values['2018'] || 0;
+                    const v25 = item.values['2025'] || 0;
+                    let varPct = 0;
+                    if (v18 > 0) {
+                        varPct = ((v25 - v18) / v18) * 100;
+                    }
+
+                    const growthTd = document.createElement('td');
+                    growthTd.className = `px-6 py-3.5 text-right font-bold text-xs ${varPct >= 0 ? 'text-emerald-700' : 'text-rose-600'}`;
+                    growthTd.textContent = v18 > 0 ? `${varPct >= 0 ? '+' : ''}${varPct.toFixed(1)}%` : '-';
+                    tr.appendChild(growthTd);
+
+                    tableBody.appendChild(tr);
+                });
+
+                // Inject footer total row
+                tableFootRow.innerHTML = '';
+                
+                const footLabel = document.createElement('td');
+                footLabel.className = 'px-6 py-4 text-left';
+                footLabel.textContent = 'TOTAL SELECCIONAT';
+                tableFootRow.appendChild(footLabel);
+
+                const years = ['2018', '2019', '2020', '2021', '2022', '2023', '2024', '2025'];
+                years.forEach(year => {
+                    const totalVal = colTotals[year];
+                    const footVal = document.createElement('td');
+                    footVal.className = 'px-4 py-4 text-right font-mono text-sm';
+                    footVal.textContent = formatEuro(totalVal);
+                    tableFootRow.appendChild(footVal);
+                });
+
+                const t18 = colTotals['2018'];
+                const t25 = colTotals['2025'];
+                let totalGrowth = 0;
+                if (t18 > 0) {
+                    totalGrowth = ((t25 - t18) / t18) * 100;
+                }
+                const footGrowth = document.createElement('td');
+                footGrowth.className = `px-6 py-4 text-right font-mono text-sm ${totalGrowth >= 0 ? 'text-emerald-800' : 'text-rose-700'}`;
+                footGrowth.textContent = t18 > 0 ? `${totalGrowth >= 0 ? '+' : ''}${totalGrowth.toFixed(1)}%` : '-';
+                tableFootRow.appendChild(footGrowth);
+            }
+
+            // Apache ECharts functions
+            function initChart() {
+                const chartDom = document.getElementById('chartRevenues');
+                chartInstance = echarts.init(chartDom);
+                
+                // Handle responsive resize
+                window.addEventListener('resize', () => {
+                    if (chartInstance) {
+                        chartInstance.resize();
+                    }
+                });
+            }
+
+            function renderChart() {
+                if (!chartInstance) return;
+
+                if (seleccionats.length === 0) {
+                    chartInstance.clear();
+                    chartInstance.showLoading({
+                        text: 'No hi ha cap concepte seleccionat',
+                        showSpinner: false,
+                        textColor: '#7e8a9a',
+                        maskColor: 'rgba(255, 255, 255, 0.8)'
+                    });
+                    return;
+                }
+
+                chartInstance.hideLoading();
+
+                const years = ['2018', '2019', '2020', '2021', '2022', '2023', '2024', '2025'];
+                const selectedItems = INGRESSOS_DATA.filter(item => seleccionats.includes(item.concept));
+
+                // Color Palette mapping
+                const colors = [
+                    '#008037', // UAB green
+                    '#004d5e', // UAB cala blue
+                    '#f88c12', // UAB ocas orange
+                    '#4f46e5', // indigo
+                    '#06b6d4', // cyan
+                    '#ec4899', // pink
+                    '#8b5cf6', // violet
+                    '#10b981', // emerald
+                    '#f59e0b', // amber
+                    '#ef4444', // red
+                    '#64748b'  // slate
+                ];
+
+                const series = selectedItems.map((item, idx) => {
+                    const dataPoints = years.map(yr => {
+                        const val = item.values[yr] || 0;
+                        return roundToDecimals(val / 1000000, 3); // Convert to millions
+                    });
+
+                    const color = colors[idx % colors.length];
+
+                    return {
+                        name: item.concept,
+                        type: currentChartType,
+                        data: dataPoints,
+                        smooth: currentChartType === 'line',
+                        symbolSize: 8,
+                        lineStyle: {
+                            width: 3.5
+                        },
+                        itemStyle: {
+                            color: color
+                        },
+                        areaStyle: (selectedItems.length === 1 && currentChartType === 'line') ? {
+                            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                { offset: 0, color: color + '44' },
+                                { offset: 1, color: color + '00' }
+                            ])
+                        } : null
+                    };
+                });
+
+                const option = {
+                    tooltip: {
+                        trigger: 'axis',
+                        backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                        borderWidth: 1,
+                        borderColor: '#e2e8f0',
+                        textStyle: {
+                            color: '#1e293b',
+                            fontSize: 12
+                        },
+                        formatter: function(params) {
+                            let result = `<div class="font-bold border-b border-slate-100 pb-1 mb-1 text-slate-800">Exercici tancat a 31/12/${params[0].name}</div>`;
+                            params.forEach(param => {
+                                const origVal = INGRESSOS_DATA.find(i => i.concept === param.seriesName).values[param.name];
+                                result += `
+                                    <div class="flex items-center justify-between gap-6 py-0.5">
+                                        <span class="flex items-center gap-1.5 text-slate-600 font-medium">
+                                            <span class="w-2.5 h-2.5 rounded-full inline-block" style="background-color: ${param.color}"></span>
+                                            ${param.seriesName}
+                                        </span>
+                                        <span class="font-mono font-bold text-slate-800">${formatEuro(origVal)}</span>
+                                    </div>
+                                `;
+                            });
+                            return result;
+                        }
+                    },
+                    legend: {
+                        data: selectedItems.map(item => item.concept),
+                        bottom: 0,
+                        type: 'scroll',
+                        textStyle: {
+                            fontSize: 11,
+                            color: '#475569'
+                        },
+                        icon: 'circle'
+                    },
+                    grid: {
+                        top: '8%',
+                        left: '2%',
+                        right: '4%',
+                        bottom: '12%',
+                        containLabel: true
+                    },
+                    xAxis: {
+                        type: 'category',
+                        boundaryGap: currentChartType === 'bar',
+                        data: years,
+                        axisLine: {
+                            lineStyle: {
+                                color: '#cbd5e1'
+                            }
+                        },
+                        axisLabel: {
+                            color: '#64748b',
+                            fontWeight: 'bold',
+                            margin: 12
+                        }
+                    },
+                    yAxis: {
+                        type: 'value',
+                        name: 'Reingressos (€ M)',
+                        nameTextStyle: {
+                            color: '#64748b',
+                            fontWeight: 'bold',
+                            padding: [0, 0, 8, 0]
+                        },
+                        axisLabel: {
+                            color: '#64748b',
+                            formatter: '{value} M'
+                        },
+                        splitLine: {
+                            lineStyle: {
+                                color: '#f1f5f9',
+                                type: 'dashed'
+                            }
+                        }
+                    },
+                    series: series
+                };
+
+                chartInstance.setOption(option, true);
+            }
+
+            function roundToDecimals(num, decimals) {
+                const t = Math.pow(10, decimals);
+                return Math.round((num + Number.EPSILON) * t) / t;
+            }
+
+            // Export to CSV Functionality
+            function exportSelectedToCSV() {
+                if (seleccionats.length === 0) {
+                    alert('No hi ha cap concepte seleccionat per exportar.');
+                    return;
+                }
+
+                const years = ['2018', '2019', '2020', '2021', '2022', '2023', '2024', '2025'];
+                const selectedItems = INGRESSOS_DATA.filter(item => seleccionats.includes(item.concept));
+
+                let csvContent = '\uFEFF'; // BOM for Excel UTF-8 representation
+                
+                // CSV Header
+                csvContent += '"Concepte de Recerca";' + years.map(yr => `"${yr}"`).join(';') + ';"Variacio (2018 vs 2025)"\r\n';
+
+                // CSV Rows
+                selectedItems.forEach(item => {
+                    const rowName = `"${item.concept.replace(/"/g, '""')}"`;
+                    const rowValues = years.map(yr => {
+                        const val = item.values[yr] || 0;
+                        return val.toString().replace('.', ','); // Catalan format decimal separator for Excel
+                    });
+                    
+                    const v18 = item.values['2018'] || 0;
+                    const v25 = item.values['2025'] || 0;
+                    let varPctStr = '-';
+                    if (v18 > 0) {
+                        const varPct = ((v25 - v18) / v18) * 100;
+                        varPctStr = `"${(varPct >= 0 ? '+' : '') + varPct.toFixed(2).replace('.', ',')}%"`;
+                    }
+
+                    csvContent += `${rowName};${rowValues.join(';')};${varPctStr}\r\n`;
+                });
+
+                // Calculate Totals Row
+                const colTotals = {
+                    '2018': 0, '2019': 0, '2020': 0, '2021': 0, 
+                    '2022': 0, '2023': 0, '2024': 0, '2025': 0
+                };
+                selectedItems.forEach(item => {
+                    years.forEach(yr => {
+                        colTotals[yr] += item.values[yr] || 0;
+                    });
+                });
+
+                const totalRowName = '"TOTAL SELECCIONAT"';
+                const totalRowValues = years.map(yr => colTotals[yr].toString().replace('.', ','));
+                const t18 = colTotals['2018'];
+                const t25 = colTotals['2025'];
+                let totalVarPctStr = '-';
+                if (t18 > 0) {
+                    const totalVarPct = ((t25 - t18) / t18) * 100;
+                    totalVarPctStr = `"${(totalVarPct >= 0 ? '+' : '') + totalVarPct.toFixed(2).replace('.', ',')}%"`;
+                }
+
+                csvContent += `${totalRowName};${totalRowValues.join(';')};${totalVarPctStr}\r\n`;
+
+                // Trigger file download
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement('a');
+                const url = URL.createObjectURL(blob);
+                
+                link.setAttribute('href', url);
+                link.setAttribute('download', 'Ingressos_Recerca_UAB_31Dec.csv');
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+        });
+    </script>
+</body>
+</html>

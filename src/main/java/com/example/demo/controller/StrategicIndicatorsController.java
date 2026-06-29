@@ -5,6 +5,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.data.mongodb.core.aggregation.Aggregation;
+import org.springframework.data.mongodb.core.aggregation.AggregationOperation;
 import org.springframework.web.bind.annotation.*;
 import com.example.demo.service.AwardService;
 import com.example.demo.service.ResearchOutputJournalLinkService;
@@ -51,6 +53,9 @@ public class StrategicIndicatorsController {
 
         // 3. Participació (P) en projectes europeus
         long europeanProjectsPart = getEuropeanProjectsPartCount(powerTableRows, year, dept);
+        if (europeanProjectsPart < europeanProjectsLead) {
+            europeanProjectsPart = europeanProjectsLead;
+        }
         response.put("europeanProjectsPart", europeanProjectsPart);
 
         // 3. Competitive Funding (in Millions)
@@ -94,69 +99,133 @@ public class StrategicIndicatorsController {
     }
 
     private long getSgrDoctorsCount(int year, String dept) {
-        List<String> sgrUuids = getSgrGroupUuids();
-        if (sgrUuids.isEmpty()) return 0;
+        String dateBoundary = year + "-01-01";
+        List<String> doctorUris = List.of(
+            "/dk/atira/pure/person/employmenttypes/agregat_contractat",
+            "/dk/atira/pure/person/employmenttypes/catedratics_contractat",
+            "/dk/atira/pure/person/employmenttypes/catedratics",
+            "/dk/atira/pure/person/employmenttypes/catedratics_escola",
+            "/dk/atira/pure/person/employmenttypes/direccio_investigacio",
+            "/dk/atira/pure/person/employmenttypes/investigador_ordinari",
+            "/dk/atira/pure/person/employmenttypes/professor_titular_universitat",
+            "/dk/atira/pure/person/employmenttypes/professor_titular_escola_universitat",
+            "/dk/atira/pure/person/employmenttypes/professor_titular_universitat_interi",
+            "/dk/atira/pure/person/employmenttypes/investigador_postdoctoral_projectes",
+            "/dk/atira/pure/person/employmenttypes/investigador_doctor_distingit",
+            "/dk/atira/pure/person/employmenttypes/investigador_postdoctoral_indefit",
+            "/dk/atira/pure/person/employmenttypes/investigador_beatriupinos",
+            "/dk/atira/pure/person/employmenttypes/investigador_juandelacierva",
+            "/dk/atira/pure/person/employmenttypes/agregat_interi",
+            "/dk/atira/pure/person/employmenttypes/investigador_beatrizgalindo",
+            "/dk/atira/pure/person/employmenttypes/catedratic_contractat_interi",
+            "/dk/atira/pure/person/employmenttypes/investigador_margaritasalas",
+            "/dk/atira/pure/person/employmenttypes/investigador_mariazambrano",
+            "/dk/atira/pure/person/employmenttypes/investigador_ramonycajal",
+            "/dk/atira/pure/person/employmenttypes/professor_lector_ajudant",
+            "/dk/atira/pure/person/employmenttypes/professor_lector_interi"
+        );
 
-        List<Document> elemMatches = new ArrayList<>();
+        List<Criteria> matchCriteriaList = new ArrayList<>();
 
-        // 1. SGR Association ElemMatch
-        Document sgrMatch = new Document("organization.uuid", new Document("$in", sgrUuids));
-        sgrMatch.put("$and", List.of(
-            new Document("$or", List.of(
-                new Document("period.startDate", new Document("$exists", false)),
-                new Document("period.startDate", null),
-                new Document("period.startDate", new Document("$lte", year + "-12-31"))
-            )),
-            new Document("$or", List.of(
-                new Document("period.endDate", new Document("$exists", false)),
-                new Document("period.endDate", null),
-                new Document("period.endDate", new Document("$gte", year + "-01-01"))
-            ))
-        ));
-        elemMatches.add(new Document("$elemMatch", sgrMatch));
+        // 1. Doctor active contract criteria
+        Criteria doctorContractCriteria = Criteria.where("employmentType.uri").in(doctorUris)
+            .orOperator(
+                Criteria.where("period.endDate").exists(false),
+                Criteria.where("period.endDate").is(null),
+                Criteria.where("period.endDate").gt(dateBoundary)
+            );
+        matchCriteriaList.add(Criteria.where("staffOrganizationAssociations").elemMatch(doctorContractCriteria));
 
-        // 2. Full-Time Dedication ElemMatch
-        Document ftMatch = new Document("keywordGroups.classifications.uri", new Document("$in", List.of(
-            "/uab/persons/staff/assigment_dedication/full",
-            "/uab/persons/staff/dedication/020"
-        )));
-        ftMatch.put("$and", List.of(
-            new Document("$or", List.of(
-                new Document("period.startDate", new Document("$exists", false)),
-                new Document("period.startDate", null),
-                new Document("period.startDate", new Document("$lte", year + "-12-31"))
-            )),
-            new Document("$or", List.of(
-                new Document("period.endDate", new Document("$exists", false)),
-                new Document("period.endDate", null),
-                new Document("period.endDate", new Document("$gte", year + "-01-01"))
-            ))
-        ));
-        elemMatches.add(new Document("$elemMatch", ftMatch));
-
-        // 3. Dept ElemMatch (if not "all")
-        if (!"all".equalsIgnoreCase(dept)) {
-            Document deptMatch = new Document("organization.uuid", dept);
-            deptMatch.put("$and", List.of(
-                new Document("$or", List.of(
-                    new Document("period.startDate", new Document("$exists", false)),
-                    new Document("period.startDate", null),
-                    new Document("period.startDate", new Document("$lte", year + "-12-31"))
-                )),
-                new Document("$or", List.of(
-                    new Document("period.endDate", new Document("$exists", false)),
-                    new Document("period.endDate", null),
-                    new Document("period.endDate", new Document("$gte", year + "-01-01"))
-                ))
-            ));
-            elemMatches.add(new Document("$elemMatch", deptMatch));
+        // 2. Department active contract criteria (if dept is specified)
+        if (dept != null && !"all".equalsIgnoreCase(dept)) {
+            Criteria deptContractCriteria = Criteria.where("organization.uuid").is(dept)
+                .orOperator(
+                    Criteria.where("period.endDate").exists(false),
+                    Criteria.where("period.endDate").is(null),
+                    Criteria.where("period.endDate").gt(dateBoundary)
+                );
+            matchCriteriaList.add(Criteria.where("staffOrganizationAssociations").elemMatch(deptContractCriteria));
         }
 
-        Query query = new Query();
-        query.addCriteria(Criteria.where("academicQualifications.qualification.uri").is("/dk/atira/pure/personeducation/qualification/DOC"));
-        query.addCriteria(Criteria.where("staffOrganizationAssociations").all(elemMatches));
+        AggregationOperation matchStage = Aggregation.match(new Criteria().andOperator(matchCriteriaList.toArray(new Criteria[0])));
 
-        return mongoTemplate.count(query, "Persons");
+        // 3. AddFields for active category and SGR orgs
+        Document addFieldsDoc = new Document("$addFields", new Document()
+            .append("categoriaActiva", new Document("$arrayElemAt", Arrays.asList(
+                new Document("$filter", new Document()
+                    .append("input", "$staffOrganizationAssociations")
+                    .append("as", "a")
+                    .append("cond", new Document("$and", Arrays.asList(
+                        new Document("$or", Arrays.asList(
+                            new Document("$not", new Document("$ifNull", Arrays.asList("$$a.period.endDate", false))),
+                            new Document("$gt", Arrays.asList("$$a.period.endDate", dateBoundary))
+                        )),
+                        new Document("$in", Arrays.asList("$$a.employmentType.uri", doctorUris))
+                    )))
+                ),
+                0
+            )))
+            .append("sgrOrgUuids", new Document("$map", new Document()
+                .append("input", new Document("$filter", new Document()
+                    .append("input", "$staffOrganizationAssociations")
+                    .append("as", "a")
+                    .append("cond", new Document("$and", Arrays.asList(
+                        new Document("$or", Arrays.asList(
+                            new Document("$not", new Document("$ifNull", Arrays.asList("$$a.period.endDate", false))),
+                            new Document("$gt", Arrays.asList("$$a.period.endDate", dateBoundary))
+                        )),
+                        new Document("$eq", Arrays.asList("$$a.employmentType.uri", "/dk/atira/pure/person/employmenttypes/adscripcio_recerca"))
+                    )))
+                ))
+                .append("as", "a")
+                .append("in", "$$a.organization.uuid")
+            ))
+        );
+        AggregationOperation addFieldsStage = context -> addFieldsDoc;
+
+        // 4. Lookup from Organizations
+        AggregationOperation lookupStage = Aggregation.lookup("Organizations", "sgrOrgUuids", "uuid", "sgrOrgs");
+
+        // 5. AddFields for SGR Org Filtering
+        Document addFields2Doc = new Document("$addFields", new Document("sgrOrgs",
+            new Document("$filter", new Document()
+                .append("input", "$sgrOrgs")
+                .append("as", "o")
+                .append("cond", new Document("$gt", Arrays.asList(
+                    new Document("$size", new Document("$filter", new Document()
+                        .append("input", new Document("$ifNull", Arrays.asList("$$o.identifiers", Collections.emptyList())))
+                        .append("as", "id")
+                        .append("cond", new Document("$regexMatch", new Document()
+                            .append("input", new Document("$ifNull", Arrays.asList("$$id.type.uri", "")))
+                            .append("regex", "sgr")
+                        ))
+                    )),
+                    0
+                )))
+            )
+        ));
+        AggregationOperation addFields2Stage = context -> addFields2Doc;
+
+        // 6. Match stage to filter out empty SGR Orgs
+        AggregationOperation match2Stage = Aggregation.match(Criteria.where("sgrOrgs").ne(Collections.emptyList()));
+
+        // 7. Count stage
+        AggregationOperation countStage = Aggregation.count().as("total");
+
+        List<Document> results = mongoTemplate.aggregate(
+            Aggregation.newAggregation(
+                matchStage,
+                addFieldsStage,
+                lookupStage,
+                addFields2Stage,
+                match2Stage,
+                countStage
+            ),
+            "Persons",
+            Document.class
+        ).getMappedResults();
+
+        return results.isEmpty() ? 0L : ((Number) results.get(0).get("total")).longValue();
     }
 
     private long getEuropeanProjectsLeadCount(List<Document> powerTableRows, int year, String dept) {
@@ -178,8 +247,7 @@ public class StrategicIndicatorsController {
         long count = 0;
         for (Document doc : powerTableRows) {
             String tipo = doc.getString("tipo");
-            Boolean esLider = doc.getBoolean("esLider");
-            if (tipo != null && "Programa Marc Europeu".equalsIgnoreCase(tipo) && !Boolean.TRUE.equals(esLider)) {
+            if (tipo != null && "Programa Marc Europeu".equalsIgnoreCase(tipo)) {
                 Number ajuts = doc.get("ajuts", Number.class);
                 if (ajuts != null) {
                     count += ajuts.longValue();
@@ -207,7 +275,7 @@ public class StrategicIndicatorsController {
         double total = 0;
         for (Document doc : powerTableRows) {
             String cat = doc.getString("categoria");
-            if (cat != null && !cat.startsWith("Ajudes competitives")) {
+            if (cat != null && (cat.startsWith("Prestaci") || cat.equals("Ajudes no competitives nacionals"))) {
                 Object amountObj = doc.get("import");
                 if (amountObj instanceof Number) {
                     total += ((Number) amountObj).doubleValue();

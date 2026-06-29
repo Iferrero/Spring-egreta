@@ -660,14 +660,15 @@ public class StudentThesisController {
                         .append("pureId", "$pureId")
                         .append("titulo", "$title.value")
                         .append("anio", "$awardDate.year")
-                        .append("autores", 1));
+                        .append("autores", 1)
+                        .append("links", "$links"));
         pipeline.add(projectStage);
 
         pipeline.add(new Document("$unwind", "$autores"));
 
         pipeline.add(new Document("$match", new Document("$expr", new Document("$gt", Arrays.asList(
                 new Document("$strLenCP", new Document("$trim", new Document("input", "$autores.nombre"))), 0
-        )))));
+            )))));
 
         pipeline.add(new Document("$group", new Document("_id", new Document()
                 .append("autor", "$autores.nombre")
@@ -675,7 +676,8 @@ public class StudentThesisController {
                 .append("anio", "$anio")
                 .append("uuid", "$uuid"))
                 .append("pureId", new Document("$first", "$pureId"))
-                .append("titulo", new Document("$first", "$titulo"))));
+                .append("titulo", new Document("$first", "$titulo"))
+                .append("links", new Document("$first", "$links"))));
 
         pipeline.add(new Document("$group", new Document("_id", new Document()
                 .append("autor", "$_id.autor")
@@ -686,7 +688,8 @@ public class StudentThesisController {
                         .append("uuid", "$_id.uuid")
                         .append("pureId", "$pureId")
                         .append("titulo", "$titulo")
-                        .append("anio", "$_id.anio")))));
+                        .append("anio", "$_id.anio")
+                        .append("links", "$links")))));
 
         pipeline.add(new Document("$match", new Document("totalTesis", new Document("$gte", min))));
 

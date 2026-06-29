@@ -1,0 +1,929 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Concessions per Programa | Ajuts</title>
+    <script src="config.js"></script>
+    <script src="uab-brand.js" defer></script>
+    <script src="egreta-modal.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="uab-theme.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body class="bg-slate-50 min-h-screen font-sans">
+
+<div class="mx-auto py-10 px-4 max-w-7xl">
+    <header class="hidden">
+        <h1>Concessions per Programa</h1>
+        <p>Evolució anual de concessions per programa de convocatòria (ajuts validats i convenis aprovats)</p>
+    </header>
+
+    <!-- KPI Summary Section -->
+    <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
+        <article class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 flex items-center justify-between transition-all hover:shadow-md">
+            <div>
+                <h2 class="text-xs uppercase tracking-widest font-black text-slate-400">Total Programes</h2>
+                <p id="kpi-programs" class="text-4xl font-black text-slate-800 mt-2">-</p>
+                <p class="text-xs text-slate-500 mt-1">Amb concessions</p>
+            </div>
+            <div class="w-10 h-10 bg-sky-50 text-sky-600 rounded-xl flex items-center justify-center text-lg font-black">
+                <i class="fa-solid fa-list-check"></i>
+            </div>
+        </article>
+
+        <article class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 flex items-center justify-between transition-all hover:shadow-md">
+            <div>
+                <h2 class="text-xs uppercase tracking-widest font-black text-slate-400">Total Concessions</h2>
+                <p id="kpi-concessions" class="text-4xl font-black text-indigo-600 mt-2">-</p>
+                <p class="text-xs text-slate-500 mt-1">Ajuts concedits</p>
+            </div>
+            <div class="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center text-lg font-black">
+                <i class="fa-solid fa-award"></i>
+            </div>
+        </article>
+
+        <article class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 flex items-center justify-between transition-all hover:shadow-md">
+            <div>
+                <h2 class="text-xs uppercase tracking-widest font-black text-slate-400">Lideratge UAB</h2>
+                <p id="kpi-leadership" class="text-4xl font-black text-emerald-600 mt-2">-</p>
+                <p id="kpi-leadership-desc" class="text-xs text-slate-500 mt-1">0% dels ajuts</p>
+            </div>
+            <div class="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center text-lg font-black">
+                <i class="fa-solid fa-crown"></i>
+            </div>
+        </article>
+
+        <article class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 flex items-center justify-between transition-all hover:shadow-md min-w-0">
+            <div class="min-w-0 flex-1">
+                <h2 class="text-xs uppercase tracking-widest font-black text-slate-400">Màxim Lideratge</h2>
+                <p id="kpi-top-leadership" class="text-sm font-black text-rose-600 mt-2 truncate" title="-">-</p>
+                <p id="kpi-top-leadership-desc" class="text-xs text-slate-500 mt-1">Sense dades</p>
+            </div>
+            <div class="w-10 h-10 bg-rose-50 text-rose-600 rounded-xl flex items-center justify-center text-lg font-black flex-shrink-0 ml-4">
+                <i class="fa-solid fa-trophy"></i>
+            </div>
+        </article>
+
+        <article class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 flex items-center justify-between transition-all hover:shadow-md">
+            <div>
+                <h2 class="text-xs uppercase tracking-widest font-black text-slate-400">Any Màxima Activitat</h2>
+                <p id="kpi-max-year" class="text-4xl font-black text-amber-600 mt-2">-</p>
+                <p id="kpi-max-year-desc" class="text-xs text-slate-500 mt-1">0 concessions</p>
+            </div>
+            <div class="w-10 h-10 bg-amber-50 text-amber-600 rounded-xl flex items-center justify-center text-lg font-black">
+                <i class="fa-solid fa-calendar-days"></i>
+            </div>
+        </article>
+    </section>
+    <!-- Filters Section -->
+    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 mb-8">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-end">
+            <!-- Buscar -->
+            <div class="lg:col-span-4 relative">
+                <label for="inputBuscar" class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Cerca de Programes</label>
+                <div class="relative">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-slate-400"></i>
+                    <input
+                        id="inputBuscar"
+                        type="text"
+                        placeholder="Cerca programa o ajut... (Prem Enter)"
+                        class="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+                    >
+                </div>
+            </div>
+
+            <!-- Tipus de Convocatòria (Selección Múltiple como en persona-resumen.html) -->
+            <div class="lg:col-span-3">
+                <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Tipus de Convocatòria</label>
+                <div class="relative">
+                    <button
+                        id="foppTypeDropdownBtn"
+                        type="button"
+                        class="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm bg-slate-50 text-left flex items-center justify-between font-semibold text-slate-600 outline-none focus:ring-2 focus:ring-indigo-500"
+                    >
+                        <span id="foppTypeDropdownLabel">Tots els tipus</span>
+                        <i class="fa fa-chevron-down ml-2 text-slate-400"></i>
+                    </button>
+                    <div
+                        id="foppTypeDropdownMenu"
+                        class="absolute z-10 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-56 overflow-hidden hidden flex flex-col"
+                    >
+                        <!-- Buscador interno de autocompletado -->
+                        <div class="p-2 border-b border-slate-100 bg-slate-50/50 sticky top-0 z-20">
+                            <div class="relative">
+                                <i class="fa-solid fa-magnifying-glass absolute left-2 top-2.5 text-slate-400 text-[10px]"></i>
+                                <input
+                                    id="foppTypeSearchInput"
+                                    type="text"
+                                    placeholder="Cerca tipus..."
+                                    class="w-full pl-6 pr-2 py-1 bg-white border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 text-xs font-semibold text-slate-600"
+                                >
+                            </div>
+                        </div>
+                        <!-- Lista de opciones scrollable -->
+                        <div id="foppTypeDropdownList" class="overflow-y-auto max-h-40 flex-1">
+                            <!-- Dinámico -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Rango de Años -->
+            <div class="lg:col-span-3 grid grid-cols-2 gap-4">
+                <div>
+                    <label for="selectMinYear" class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Any Inicial</label>
+                    <select
+                        id="selectMinYear"
+                        class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm font-semibold text-slate-600"
+                    >
+                        <!-- Dinámico -->
+                    </select>
+                </div>
+                <div>
+                    <label for="selectMaxYear" class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Any Final</label>
+                    <select
+                        id="selectMaxYear"
+                        class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm font-semibold text-slate-600"
+                    >
+                        <!-- Dinámico -->
+                    </select>
+                </div>
+            </div>
+
+            <!-- Ordenar -->
+            <div class="lg:col-span-2">
+                <label for="selectSort" class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Ordenació</label>
+                <select
+                    id="selectSort"
+                    class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm font-semibold text-slate-600"
+                >
+                    <option value="total_desc">Total Concessions (Descendent)</option>
+                    <option value="name_asc">Nom del programa (A-Z)</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Contenedor para los Chips de Convocatorias Seleccionadas -->
+        <div id="foppTypeChipsContainer" class="flex flex-wrap gap-2 mt-4 empty:mt-0"></div>
+    </div>
+    <!-- Charts Section -->
+    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 mb-8">
+        <div class="flex items-center justify-between mb-4 border-b border-slate-100 pb-4">
+            <div>
+                <h3 class="text-base font-black text-slate-800">Evolució de la Participació vs Lideratge UAB</h3>
+                <p class="text-xs text-slate-500 mt-1">Concessions totals i concessions liderades per la UAB per any</p>
+            </div>
+            <div class="flex items-center gap-2">
+                <span class="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500">
+                    <span class="w-3 h-3 rounded-full bg-indigo-500 inline-block"></span> Participació (Total)
+                </span>
+                <span class="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 ml-4">
+                    <span class="w-3 h-3 rounded-full bg-emerald-500 inline-block"></span> Lideratge UAB
+                </span>
+            </div>
+        </div>
+        
+        <!-- Criteris de Lideratge Callout -->
+        <div class="bg-slate-50/70 border border-slate-200/60 rounded-xl p-4 mb-6 text-xs text-slate-600 leading-relaxed flex items-start gap-3">
+            <i class="fa-solid fa-circle-info text-indigo-500 text-sm mt-0.5"></i>
+            <div>
+                <span class="font-bold text-slate-700 block mb-1">Criteri de Lideratge UAB:</span>
+                Es considera que la UAB té el lideratge d'una concessió si no hi ha col·laboradors externs registrats en el consorci, o bé si el col·laborador marcat com a líder (<code class="font-mono text-indigo-600 bg-indigo-50/50 px-1 rounded">leadCollaborator: true</code>) és un investigador o entitat interna de la UAB (<code class="font-mono text-emerald-600 bg-emerald-50/50 px-1 rounded">InternalCollaboratorAssociation</code>).
+            </div>
+        </div>
+
+        <div id="chartEvolution" class="w-full h-72"></div>
+    </div>
+
+
+
+    <!-- Data Table Section -->
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse min-w-[700px]">
+                <thead id="tabla-header">
+                    <!-- Dinámico -->
+                </thead>
+                <tbody id="tabla-body" class="divide-y divide-slate-100">
+                    <tr>
+                        <td class="px-6 py-12 text-center text-slate-400 italic">
+                            <i class="fa-solid fa-spinner fa-spin mr-2"></i> Carregant dades...
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="px-6 py-4 bg-slate-50/70 border-t border-slate-100 flex justify-between items-center text-xs text-slate-400 font-semibold">
+            <span id="info-footer">Mostrant 0 programes</span>
+            <span>Font: Kraken MongoDB</span>
+        </div>
+    </div>
+
+    <!-- Awards Details Table Section -->
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden mt-8">
+        <div class="px-6 py-5 border-b border-slate-100 flex flex-wrap items-center justify-between gap-4 bg-slate-50/50">
+            <div>
+                <h3 class="text-base font-black text-slate-800">Llista detallada d'Ajuts i Convenis</h3>
+                <p class="text-xs text-slate-500 mt-1">Concessions individuals filtrades</p>
+            </div>
+            <span id="awards-count-badge" class="px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 text-xs font-bold">
+                0 ajuts
+            </span>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse min-w-[900px]">
+                <thead>
+                    <tr class="bg-slate-50/70 border-b border-slate-100 text-slate-500 text-xs uppercase tracking-wider">
+                        <th class="px-6 py-4 font-black w-32">UUID</th>
+                        <th class="px-6 py-4 font-black">Títol de l'Ajut</th>
+                        <th class="px-6 py-4 font-black w-48">Tipus Convocatòria</th>
+                        <th class="px-6 py-4 font-black w-48">Programa</th>
+                        <th class="px-6 py-4 font-black text-right w-36">Import</th>
+                        <th class="px-6 py-4 text-center w-28 font-black">Líder UAB</th>
+                    </tr>
+                </thead>
+                <tbody id="awards-tabla-body" class="divide-y divide-slate-100 text-sm">
+                    <tr>
+                        <td colspan="6" class="px-6 py-12 text-center text-slate-400 italic">
+                            <i class="fa-solid fa-spinner fa-spin mr-2"></i> Carregant llista d'awards...
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="px-6 py-4 bg-slate-50/70 border-t border-slate-100 flex justify-between items-center text-xs text-slate-400 font-semibold">
+            <span id="awards-info-footer">Mostrant 0 ajuts</span>
+            <span>Font: Kraken MongoDB</span>
+        </div>
+    </div>
+</div>
+
+<script>
+    let rawData = [];
+    let rawAwards = [];
+    let allYears = [];
+    let foppTypes = [];
+    let foppTypesSeleccionats = [];
+    let evolutionChart = null;
+    let foppTypeSearchVal = '';
+
+    function normalitzarTextMultillengua(value, fallback) {
+        if (value == null) return fallback;
+        if (typeof value === 'string') {
+            const clean = value.trim();
+            return clean || fallback;
+        }
+        if (typeof value === 'object') {
+            if (Array.isArray(value.text)) {
+                const texts = value.text;
+                for (const locale of ['ca_ES', 'es_ES', 'en_GB']) {
+                    const found = texts.find(t => t.locale === locale);
+                    if (found && typeof found.value === 'string' && found.value.trim()) {
+                        return found.value.trim();
+                    }
+                }
+            }
+            if (typeof value.ca_ES === 'string' && value.ca_ES.trim()) return value.ca_ES.trim();
+            if (typeof value.es_ES === 'string' && value.es_ES.trim()) return value.es_ES.trim();
+            if (typeof value.en_GB === 'string' && value.en_GB.trim()) return value.en_GB.trim();
+            const first = Object.values(value).find((v) => typeof v === 'string' && v.trim());
+            return first ? first.trim() : fallback;
+        }
+        const asText = String(value).trim();
+        return asText || fallback;
+    }
+
+    function populateYearSelectors() {
+        const minSelect = document.getElementById('selectMinYear');
+        const maxSelect = document.getElementById('selectMaxYear');
+        
+        if (allYears.length === 0) return;
+        
+        const sortedYearsAsc = [...allYears].sort((a, b) => a - b);
+        const minDetected = sortedYearsAsc[0];
+        const maxDetected = sortedYearsAsc[sortedYearsAsc.length - 1];
+        
+        const optionsHtml = sortedYearsAsc.map(y => `<option value="${y}">${y}</option>`).join('');
+        minSelect.innerHTML = optionsHtml;
+        maxSelect.innerHTML = optionsHtml;
+        
+        // Default range: from 2015 to maxDetected (or minDetected if max < 2015)
+        const defaultMin = Math.max(2015, minDetected);
+        minSelect.value = defaultMin <= maxDetected ? defaultMin : minDetected;
+        maxSelect.value = maxDetected;
+    }
+
+    function populateFoppTypeSelector() {
+        const foppTypesSet = new Set();
+        
+        rawData.forEach(item => {
+            const typeStr = normalitzarTextMultillengua(item.fOppType, null);
+            if (typeStr) {
+                foppTypesSet.add(typeStr);
+            }
+        });
+        
+        foppTypes = Array.from(foppTypesSet).sort((a, b) => a.localeCompare(b));
+        renderOpcionsFoppType();
+    }
+
+    function renderOpcionsFoppType() {
+        const listContainer = document.getElementById('foppTypeDropdownList');
+        if (!listContainer) return;
+        listContainer.innerHTML = '';
+        
+        const filtered = foppTypes.filter(t => t.toLowerCase().includes(foppTypeSearchVal));
+        
+        if (filtered.length === 0) {
+            listContainer.innerHTML = '<div class="px-3 py-2 text-slate-500 text-xs italic">No s\'han trobat tipus</div>';
+            return;
+        }
+        
+        filtered.forEach(typeStr => {
+            const item = document.createElement('div');
+            const isSelected = foppTypesSeleccionats.includes(typeStr);
+            
+            item.className = 'px-3 py-2 hover:bg-slate-50 cursor-pointer text-sm flex items-center justify-between font-semibold text-slate-600';
+            item.innerHTML = `
+                <span>${typeStr}</span>
+                ${isSelected ? '<i class="fa-solid fa-check text-indigo-600"></i>' : ''}
+            `;
+            
+            item.addEventListener('click', (e) => {
+                e.stopPropagation();
+                toggleFoppType(typeStr);
+            });
+            listContainer.appendChild(item);
+        });
+    }
+
+    function toggleFoppType(typeStr) {
+        if (foppTypesSeleccionats.includes(typeStr)) {
+            foppTypesSeleccionats = foppTypesSeleccionats.filter(t => t !== typeStr);
+        } else {
+            foppTypesSeleccionats.push(typeStr);
+        }
+        renderOpcionsFoppType();
+        renderChipsFoppType();
+        processAndRender();
+    }
+
+    function renderChipsFoppType() {
+        const container = document.getElementById('foppTypeChipsContainer');
+        const label = document.getElementById('foppTypeDropdownLabel');
+        container.innerHTML = '';
+        
+        if (foppTypesSeleccionats.length === 0) {
+            label.textContent = 'Tots els tipus';
+            return;
+        }
+        
+        label.textContent = 'Afegeix més...';
+        
+        foppTypesSeleccionats.forEach(typeStr => {
+            const chip = document.createElement('span');
+            chip.className = 'inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 text-xs font-semibold';
+            chip.innerHTML = `
+                <span>${typeStr}</span>
+                <button type="button" class="ml-1 text-indigo-500 hover:text-indigo-700" onclick="removeFoppType('${typeStr.replace(/'/g, "\\'")}')">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            `;
+            container.appendChild(chip);
+        });
+    }
+
+    window.removeFoppType = function(typeStr) {
+        foppTypesSeleccionats = foppTypesSeleccionats.filter(t => t !== typeStr);
+        renderOpcionsFoppType();
+        renderChipsFoppType();
+        processAndRender();
+    };
+
+    function obrirDropdownFoppType() {
+        document.getElementById('foppTypeDropdownMenu').classList.remove('hidden');
+        // Reset search input on open
+        const input = document.getElementById('foppTypeSearchInput');
+        if (input) {
+            input.value = '';
+            foppTypeSearchVal = '';
+            renderOpcionsFoppType();
+        }
+    }
+
+    function tancarDropdownFoppType() {
+        document.getElementById('foppTypeDropdownMenu').classList.add('hidden');
+    }
+
+    document.addEventListener('click', (e) => {
+        const btn = document.getElementById('foppTypeDropdownBtn');
+        const menu = document.getElementById('foppTypeDropdownMenu');
+        if (!btn || !menu) return;
+        if (!btn.contains(e.target) && !menu.contains(e.target)) {
+            tancarDropdownFoppType();
+        }
+    });
+
+    document.getElementById('foppTypeDropdownBtn').addEventListener('click', (e) => {
+        e.stopPropagation();
+        const menu = document.getElementById('foppTypeDropdownMenu');
+        if (menu.classList.contains('hidden')) {
+            obrirDropdownFoppType();
+        } else {
+            tancarDropdownFoppType();
+        }
+    });
+
+    function updateKpis(programList, yearFiltered) {
+        // KPI 1: Unique program count
+        document.getElementById('kpi-programs').textContent = programList.length.toLocaleString('es-ES');
+        
+        // KPI 2: Total concessions & Leadership
+        let totalCount = 0;
+        let totalLider = 0;
+        programList.forEach(p => {
+            totalCount += p.total;
+            totalLider += p.liderTotal;
+        });
+        
+        document.getElementById('kpi-concessions').textContent = totalCount.toLocaleString('es-ES');
+        
+        // KPI 3: Leadership UAB
+        document.getElementById('kpi-leadership').textContent = totalLider.toLocaleString('es-ES');
+        const pct = totalCount > 0 ? Math.round((totalLider / totalCount) * 100) : 0;
+        document.getElementById('kpi-leadership-desc').textContent = `${pct}% del total d'ajuts`;
+        
+        // KPI 4: Program with most leadership ("donde la UAB es leadership")
+        let maxLiderProg = '-';
+        let maxLiderVal = 0;
+        programList.forEach(p => {
+            if (p.liderTotal > maxLiderVal) {
+                maxLiderVal = p.liderTotal;
+                maxLiderProg = p.name;
+            }
+        });
+        
+        const topLiderEl = document.getElementById('kpi-top-leadership');
+        const topLiderDescEl = document.getElementById('kpi-top-leadership-desc');
+        if (maxLiderVal > 0) {
+            topLiderEl.textContent = maxLiderProg;
+            topLiderEl.title = maxLiderProg;
+            topLiderEl.className = "text-sm font-black text-rose-600 mt-2 truncate cursor-help";
+            topLiderDescEl.textContent = `${maxLiderVal.toLocaleString('es-ES')} concessions liderades`;
+        } else {
+            topLiderEl.textContent = '-';
+            topLiderEl.title = '';
+            topLiderEl.className = "text-4xl font-black text-slate-800 mt-2";
+            topLiderDescEl.textContent = 'Sense dades';
+        }
+        
+        // KPI 5: Year with most activity
+        const yearCounts = {};
+        yearFiltered.forEach(item => {
+            yearCounts[item.anyo] = (yearCounts[item.anyo] || 0) + item.count;
+        });
+        
+        let maxYear = '-';
+        let maxVal = 0;
+        Object.entries(yearCounts).forEach(([y, val]) => {
+            if (val > maxVal) {
+                maxVal = val;
+                maxYear = y;
+            }
+        });
+        
+        document.getElementById('kpi-max-year').textContent = maxYear;
+        document.getElementById('kpi-max-year-desc').textContent = `${maxVal.toLocaleString('es-ES')} concessions`;
+    }
+
+    function renderTable(programList, minYear, maxYear) {
+        const header = document.getElementById('tabla-header');
+        const body = document.getElementById('tabla-body');
+        const infoFooter = document.getElementById('info-footer');
+        
+        const yearsToShow = [];
+        for (let y = minYear; y <= maxYear; y++) {
+            yearsToShow.push(y);
+        }
+        
+        // Header
+        header.innerHTML = `
+            <tr class="bg-slate-50/70 border-b border-slate-100 text-slate-500 text-xs uppercase tracking-wider">
+                <th class="px-6 py-4 font-black min-w-[320px]">Programa de Convocatòria</th>
+                ${yearsToShow.map(y => `<th class="px-4 py-4 font-black text-center w-24">${y}</th>`).join('')}
+                <th class="px-6 py-4 font-black text-right w-28 bg-slate-50/40">Total</th>
+            </tr>
+        `;
+        
+        if (programList.length === 0) {
+            body.innerHTML = `
+                <tr>
+                    <td colspan="${yearsToShow.length + 2}" class="px-6 py-12 text-center text-slate-400 italic">
+                        <i class="fa-solid fa-folder-open mr-2"></i> No s'ha trobat cap programa amb els filtres actius
+                    </td>
+                </tr>
+            `;
+            infoFooter.textContent = 'Mostrant 0 programes';
+            return;
+        }
+        
+        // Rows
+        let rowsHtml = programList.map(prog => {
+            return `
+                <tr class="hover:bg-slate-50/80 transition-colors border-b border-slate-100">
+                    <td class="px-6 py-4 text-sm font-semibold text-slate-700 leading-tight">
+                        ${prog.name}
+                    </td>
+                    ${yearsToShow.map(y => {
+                        const val = prog.years[y] || 0;
+                        const cellClass = val > 0 
+                            ? 'bg-emerald-50 text-emerald-700 font-bold' 
+                            : 'text-slate-300';
+                        return `<td class="px-4 py-4 text-center text-sm ${cellClass}">${val > 0 ? val.toLocaleString('es-ES') : '-'}</td>`;
+                    }).join('')}
+                    <td class="px-6 py-4 text-right text-sm font-black text-indigo-600 bg-slate-50/30">
+                        ${prog.total.toLocaleString('es-ES')}
+                    </td>
+                </tr>
+            `;
+        }).join('');
+
+        // Calculate year column totals
+        const yearTotals = {};
+        let grandTotal = 0;
+        yearsToShow.forEach(y => {
+            yearTotals[y] = 0;
+        });
+        
+        programList.forEach(prog => {
+            yearsToShow.forEach(y => {
+                yearTotals[y] += (prog.years[y] || 0);
+            });
+            grandTotal += prog.total;
+        });
+
+        // Summary row
+        const summaryRowHtml = `
+            <tr class="bg-slate-50 font-bold border-t-2 border-slate-200">
+                <td class="px-6 py-4 text-sm text-slate-800 uppercase tracking-wider">
+                    Total
+                </td>
+                ${yearsToShow.map(y => {
+                    const val = yearTotals[y];
+                    return `<td class="px-4 py-4 text-center text-sm text-slate-800">${val > 0 ? val.toLocaleString('es-ES') : '-'}</td>`;
+                }).join('')}
+                <td class="px-6 py-4 text-right text-sm font-black text-indigo-600 bg-slate-100/50">
+                    ${grandTotal.toLocaleString('es-ES')}
+                </td>
+            </tr>
+        `;
+
+        body.innerHTML = rowsHtml + summaryRowHtml;
+        
+        infoFooter.textContent = `Mostrant ${programList.length} ${programList.length === 1 ? 'programa' : 'programes'}`;
+    }
+
+    function processAndRender() {
+        const searchTxt = document.getElementById('inputBuscar').value.trim().toLowerCase();
+        let minYear = Number(document.getElementById('selectMinYear').value);
+        let maxYear = Number(document.getElementById('selectMaxYear').value);
+        const sortBy = document.getElementById('selectSort').value;
+        
+        if (minYear > maxYear) {
+            const temp = minYear;
+            minYear = maxYear;
+            maxYear = temp;
+            document.getElementById('selectMinYear').value = minYear;
+            document.getElementById('selectMaxYear').value = maxYear;
+        }
+        
+        // Filter by year range and selected convocatoria types
+        const filteredByFilters = rawData.filter(d => {
+            const matchesYear = d.anyo >= minYear && d.anyo <= maxYear;
+            if (!matchesYear) return false;
+            
+            if (foppTypesSeleccionats.length > 0) {
+                const typeStr = normalitzarTextMultillengua(d.fOppType, '');
+                return foppTypesSeleccionats.includes(typeStr);
+            }
+            return true;
+        });
+        
+        // Pivot/Group by program
+        const programMap = new Map();
+        filteredByFilters.forEach(item => {
+            const titleNormalized = normalitzarTextMultillengua(item.program, 'Sense programa');
+            if (!programMap.has(titleNormalized)) {
+                programMap.set(titleNormalized, {
+                    name: titleNormalized,
+                    years: {},
+                    liderYears: {},
+                    total: 0,
+                    liderTotal: 0
+                });
+            }
+            const progObj = programMap.get(titleNormalized);
+            progObj.years[item.anyo] = (progObj.years[item.anyo] || 0) + item.count;
+            progObj.liderYears[item.anyo] = (progObj.liderYears[item.anyo] || 0) + (item.liderCount || 0);
+            progObj.total += item.count;
+            progObj.liderTotal += (item.liderCount || 0);
+        });
+        
+        // Filter by text search
+        let programList = Array.from(programMap.values());
+        if (searchTxt) {
+            programList = programList.filter(p => p.name.toLowerCase().includes(searchTxt));
+        }
+        
+        // Sort
+        if (sortBy === 'total_desc') {
+            programList.sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
+        } else {
+            programList.sort((a, b) => a.name.localeCompare(b.name));
+        }
+        
+        // Filter raw data by all filters (including text search on program) for KPIs and Chart
+        const filteredByAll = filteredByFilters.filter(item => {
+            if (searchTxt) {
+                const programName = normalitzarTextMultillengua(item.program, '').toLowerCase();
+                return programName.includes(searchTxt);
+            }
+            return true;
+        });
+        
+        updateKpis(programList, filteredByAll);
+        renderTable(programList, minYear, maxYear);
+
+        // Chart aggregation
+        const yearsToShow = [];
+        for (let y = minYear; y <= maxYear; y++) {
+            yearsToShow.push(y);
+        }
+        
+        const yearStatsMap = {};
+        yearsToShow.forEach(y => {
+            yearStatsMap[y] = { count: 0, liderCount: 0 };
+        });
+        
+        filteredByAll.forEach(item => {
+            if (yearStatsMap[item.anyo] != null) {
+                yearStatsMap[item.anyo].count += item.count;
+                yearStatsMap[item.anyo].liderCount += (item.liderCount || 0);
+            }
+        });
+        
+        const countsData = yearsToShow.map(y => yearStatsMap[y].count);
+        const liderData = yearsToShow.map(y => yearStatsMap[y].liderCount);
+        
+        renderEvolutionChart(yearsToShow, countsData, liderData);
+
+        // Filter and render individual awards
+        const filteredAwards = rawAwards.filter(aw => {
+            const matchesYear = aw.anyo >= minYear && aw.anyo <= maxYear;
+            if (!matchesYear) return false;
+            
+            if (foppTypesSeleccionats.length > 0) {
+                const typeStr = normalitzarTextMultillengua(aw.fOppType, '');
+                if (!foppTypesSeleccionats.includes(typeStr)) return false;
+            }
+            
+            if (searchTxt) {
+                const progStr = normalitzarTextMultillengua(aw.program, '').toLowerCase();
+                const titleStr = normalitzarTextMultillengua(aw.title, '').toLowerCase();
+                return progStr.includes(searchTxt) || titleStr.includes(searchTxt);
+            }
+            return true;
+        });
+
+        renderAwardsTable(filteredAwards);
+    }
+
+    function formatearImporte(val) {
+        if (val == null || val === 0) return '<span class="text-slate-300">-</span>';
+        return `<span class="font-semibold text-slate-700">${val.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €</span>`;
+    }
+
+    function renderAwardsTable(awards) {
+        const body = document.getElementById('awards-tabla-body');
+        const countBadge = document.getElementById('awards-count-badge');
+        const footer = document.getElementById('awards-info-footer');
+        
+        countBadge.textContent = `${awards.length} ${awards.length === 1 ? 'ajut' : 'ajuts'}`;
+        footer.textContent = `Mostrant ${awards.length} ${awards.length === 1 ? 'ajut' : 'ajuts'}`;
+        
+        if (awards.length === 0) {
+            body.innerHTML = `
+                <tr>
+                    <td colspan="6" class="px-6 py-12 text-center text-slate-400 italic">
+                        <i class="fa-solid fa-folder-open mr-2"></i> No s'han trobat ajuts amb els filtres actius
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+        
+        body.innerHTML = awards.map(aw => {
+            const uuidShort = aw.uuid ? (aw.uuid.substring(0, 8) + '...') : '-';
+            const titleStr = normalitzarTextMultillengua(aw.title, 'Sense títol');
+            const typeStr = normalitzarTextMultillengua(aw.fOppType, '-');
+            const progStr = normalitzarTextMultillengua(aw.program, '-');
+            
+            const leaderBadge = aw.esLider 
+                ? `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-bold"><i class="fa-solid fa-crown text-[10px]"></i> Sí</span>`
+                : `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-100 text-slate-500 text-xs font-semibold">No</span>`;
+                
+            const titleHtml = aw.pureId
+                ? `<button type="button" data-egreta-id="${String(aw.pureId).replace(/"/g, '&quot;')}" class="text-left text-indigo-600 hover:text-indigo-800 hover:underline cursor-pointer font-bold">${titleStr}</button>`
+                : `<span class="font-semibold text-slate-700">${titleStr}</span>`;
+                
+            return `
+                <tr class="hover:bg-slate-50/80 transition-colors border-b border-slate-100">
+                    <td class="px-6 py-4">
+                        <code class="text-xs text-slate-400 font-mono cursor-help" title="${aw.uuid || ''}">${uuidShort}</code>
+                    </td>
+                    <td class="px-6 py-4 leading-tight max-w-sm break-words">
+                        ${titleHtml}
+                    </td>
+                    <td class="px-6 py-4 text-xs font-semibold text-slate-500 max-w-xs break-words">
+                        ${typeStr}
+                    </td>
+                    <td class="px-6 py-4 text-xs font-semibold text-slate-500 max-w-xs break-words">
+                        ${progStr}
+                    </td>
+                    <td class="px-6 py-4 text-right">
+                        ${formatearImporte(aw.importe)}
+                    </td>
+                    <td class="px-6 py-4 text-center">
+                        ${leaderBadge}
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    async function loadData() {
+        try {
+            const [respStats, respAwards] = await Promise.all([
+                fetch(apiUrl('/awards/stats/concessions-by-program')),
+                fetch(apiUrl('/awards/stats/concessions-awards'))
+            ]);
+            if (!respStats.ok) throw new Error("HTTP error stats " + respStats.status);
+            if (!respAwards.ok) throw new Error("HTTP error awards " + respAwards.status);
+            
+            rawData = await respStats.json();
+            rawAwards = await respAwards.json();
+            
+            // Extract years
+            const yearsSet = new Set();
+            rawData.forEach(item => {
+                if (item.anyo) yearsSet.add(Number(item.anyo));
+            });
+            allYears = Array.from(yearsSet).sort((a, b) => b - a);
+            
+            initChart();
+            populateYearSelectors();
+            populateFoppTypeSelector();
+            processAndRender();
+        } catch (error) {
+            console.error("Error loading concessions data:", error);
+            document.getElementById('tabla-body').innerHTML = `
+                <tr>
+                    <td colspan="100" class="px-6 py-12 text-center text-rose-500 font-semibold">
+                        <i class="fa-solid fa-triangle-exclamation mr-2"></i> Error en carregar les dades de les concessions.
+                    </td>
+                </tr>
+            `;
+            document.getElementById('awards-tabla-body').innerHTML = `
+                <tr>
+                    <td colspan="100" class="px-6 py-12 text-center text-rose-500 font-semibold">
+                        <i class="fa-solid fa-triangle-exclamation mr-2"></i> Error en carregar la llista de concessions.
+                    </td>
+                </tr>
+            `;
+        }
+    }
+
+    // Event listeners
+    document.getElementById('inputBuscar').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            processAndRender();
+        }
+    });
+    document.getElementById('selectMinYear').addEventListener('change', processAndRender);
+    document.getElementById('selectMaxYear').addEventListener('change', processAndRender);
+    document.getElementById('selectSort').addEventListener('change', processAndRender);
+    
+    document.getElementById('foppTypeSearchInput').addEventListener('input', (e) => {
+        foppTypeSearchVal = e.target.value.toLowerCase().trim();
+        renderOpcionsFoppType();
+    });
+
+    // Initialize
+    loadData();
+
+    function initChart() {
+        const container = document.getElementById('chartEvolution');
+        if (!container) return;
+        evolutionChart = echarts.init(container);
+        window.addEventListener('resize', () => {
+            if (evolutionChart) evolutionChart.resize();
+        });
+    }
+
+    function renderEvolutionChart(years, counts, lider) {
+        if (!evolutionChart) return;
+        
+        const option = {
+            tooltip: {
+                trigger: 'axis',
+                backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                borderColor: '#e2e8f0',
+                borderWidth: 1,
+                textStyle: {
+                    color: '#334155',
+                    fontSize: 12,
+                    fontFamily: 'sans-serif'
+                },
+                shadowColor: 'rgba(0, 0, 0, 0.05)',
+                shadowBlur: 10
+            },
+            grid: {
+                top: '10%',
+                left: '3%',
+                right: '3%',
+                bottom: '3%',
+                containLabel: true
+            },
+            xAxis: {
+                type: 'category',
+                data: years.map(String),
+                axisLine: {
+                    lineStyle: {
+                        color: '#cbd5e1'
+                    }
+                },
+                axisLabel: {
+                    color: '#64748b',
+                    fontWeight: 600
+                }
+            },
+            yAxis: {
+                type: 'value',
+                splitLine: {
+                    lineStyle: {
+                        color: '#f1f5f9',
+                        type: 'dashed'
+                    }
+                },
+                axisLabel: {
+                    color: '#64748b',
+                    fontWeight: 600
+                }
+            },
+            series: [
+                {
+                    name: 'Participació (Total)',
+                    type: 'bar',
+                    barWidth: '35%',
+                    data: counts,
+                    itemStyle: {
+                        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                            { offset: 0, color: '#6366f1' },
+                            { offset: 1, color: '#818cf8' }
+                        ]),
+                        borderRadius: [4, 4, 0, 0]
+                    }
+                },
+                {
+                    name: 'Lideratge UAB',
+                    type: 'line',
+                    smooth: true,
+                    showSymbol: true,
+                    symbolSize: 8,
+                    data: lider,
+                    lineStyle: {
+                        width: 3,
+                        color: '#10b981'
+                    },
+                    itemStyle: {
+                        color: '#10b981',
+                        borderWidth: 2,
+                        borderColor: '#ffffff'
+                    },
+                    areaStyle: {
+                        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                            { offset: 0, color: 'rgba(16, 185, 129, 0.2)' },
+                            { offset: 1, color: 'rgba(16, 185, 129, 0.0)' }
+                        ])
+                    }
+                }
+            ]
+        };
+        
+        evolutionChart.setOption(option);
+    }
+</script>
+</body>
+</html>

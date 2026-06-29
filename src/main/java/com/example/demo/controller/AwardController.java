@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.math.BigInteger;
 import java.util.Date;
 import java.util.HashMap;
@@ -296,6 +297,204 @@ public class AwardController {
                 categoria,
                 tipus
                 );
+    }
+
+    /*
+    ===============================
+    CONCESIONES POR PROGRAMA
+    ===============================
+    */
+
+    @GetMapping("/stats/concessions-by-program")
+    public List<Document> getConcessionsByProgram() {
+        List<Document> pipeline = List.of(
+            new Document("$match", new Document("$or", List.of(
+                new Document("type.term.ca_ES", "Conveni extern a la UAB")
+                    .append("workflow.step", "approved"),
+                new Document("type.term.ca_ES", new Document("$ne", "Conveni extern a la UAB"))
+                    .append("workflow.step", "validated")
+            ))),
+            new Document("$lookup", new Document()
+                .append("from", "Applications")
+                .append("localField", "applications.uuid")
+                .append("foreignField", "uuid")
+                .append("as", "appDocs")),
+            new Document("$unwind", "$appDocs"),
+            new Document("$lookup", new Document()
+                .append("from", "FundingOpportunities")
+                .append("localField", "appDocs.fundingOpportunity.uuid")
+                .append("foreignField", "uuid")
+                .append("as", "fOpp")),
+            new Document("$unwind", "$fOpp"),
+            new Document("$project", new Document()
+                .append("awardDate", 1)
+                .append("uuid", 1)
+                .append("collaborators", 1)
+                .append("fOppType", "$fOpp.type.term")
+                .append("keywordGroups", "$fOpp.keywordGroups")),
+            new Document("$unwind", "$keywordGroups"),
+            new Document("$match", new Document("keywordGroups.logicalName", "/uab/fundingopportunities/programes")),
+            new Document("$unwind", "$keywordGroups.keywordContainers"),
+            new Document("$project", new Document()
+                .append("uuid", 1)
+                .append("awardDate", 1)
+                .append("fOppType", 1)
+                .append("collaborators", 1)
+                .append("program", "$keywordGroups.keywordContainers.structuredKeyword.term")),
+            new Document("$addFields", new Document("esLider", new Document("$let", new Document()
+                .append("vars", new Document("internalLeads", new Document("$filter", new Document()
+                    .append("input", new Document("$ifNull", Arrays.asList("$collaborators", Collections.emptyList())))
+                    .append("as", "c")
+                    .append("cond", new Document("$and", Arrays.asList(
+                        new Document("$eq", Arrays.asList("$$c.leadCollaborator", true)),
+                        new Document("$eq", Arrays.asList("$$c.typeDiscriminator", "InternalCollaboratorAssociation"))
+                    ))))).append("hasCollaborators", new Document("$gt", Arrays.asList(
+                    new Document("$size", new Document("$ifNull", Arrays.asList("$collaborators", Collections.emptyList()))),
+                    0
+                ))))
+                .append("in", new Document("$cond", Arrays.asList(
+                    "$$hasCollaborators",
+                    new Document("$gt", Arrays.asList(new Document("$size", "$$internalLeads"), 0)),
+                    true
+                )))
+            ))),
+            new Document("$addFields", new Document("anyo", new Document("$cond", Arrays.asList(
+                new Document("$ifNull", Arrays.asList("$awardDate", false)),
+                new Document("$year", "$awardDate"),
+                null
+            )))),
+            new Document("$match", new Document("anyo", new Document("$ne", null))),
+            new Document("$group", new Document()
+                .append("_id", new Document("anyo", "$anyo")
+                    .append("program", "$program")
+                    .append("fOppType", "$fOppType"))
+                .append("count", new Document("$sum", 1))
+                .append("liderCount", new Document("$sum", new Document("$cond", Arrays.asList("$esLider", 1, 0))))),
+            new Document("$project", new Document()
+                .append("_id", 0)
+                .append("anyo", "$_id.anyo")
+                .append("program", "$_id.program")
+                .append("fOppType", "$_id.fOppType")
+                .append("count", "$count")
+                .append("liderCount", "$liderCount")),
+            new Document("$sort", new Document("anyo", -1).append("count", -1))
+        );
+
+        List<Document> results = new ArrayList<>();
+        mongoTemplate.getCollection("Awards")
+            .aggregate(pipeline)
+            .into(results);
+        return results;
+    }
+
+    @GetMapping("/stats/concessions-awards")
+    public List<Document> getConcessionsAwards() {
+        List<Document> pipeline = List.of(
+            new Document("$match", new Document("$or", List.of(
+                new Document("type.term.ca_ES", "Conveni extern a la UAB")
+                    .append("workflow.step", "approved"),
+                new Document("type.term.ca_ES", new Document("$ne", "Conveni extern a la UAB"))
+                    .append("workflow.step", "validated")
+            ))),
+            new Document("$lookup", new Document()
+                .append("from", "Applications")
+                .append("localField", "applications.uuid")
+                .append("foreignField", "uuid")
+                .append("as", "appDocs")),
+            new Document("$unwind", "$appDocs"),
+            new Document("$lookup", new Document()
+                .append("from", "FundingOpportunities")
+                .append("localField", "appDocs.fundingOpportunity.uuid")
+                .append("foreignField", "uuid")
+                .append("as", "fOpp")),
+            new Document("$unwind", "$fOpp"),
+            new Document("$project", new Document()
+                .append("awardDate", 1)
+                .append("uuid", 1)
+                .append("pureId", 1)
+                .append("title", 1)
+                .append("collaborators", 1)
+                .append("fundings", 1)
+                .append("fOppType", "$fOpp.type.term")
+                .append("keywordGroups", "$fOpp.keywordGroups")),
+            new Document("$unwind", "$keywordGroups"),
+            new Document("$match", new Document("keywordGroups.logicalName", "/uab/fundingopportunities/programes")),
+            new Document("$unwind", "$keywordGroups.keywordContainers"),
+            new Document("$project", new Document()
+                .append("uuid", 1)
+                .append("pureId", 1)
+                .append("title", 1)
+                .append("awardDate", 1)
+                .append("fOppType", 1)
+                .append("collaborators", 1)
+                .append("fundings", 1)
+                .append("program", "$keywordGroups.keywordContainers.structuredKeyword.term")),
+            new Document("$addFields", new Document("esLider", new Document("$let", new Document()
+                .append("vars", new Document("internalLeads", new Document("$filter", new Document()
+                    .append("input", new Document("$ifNull", Arrays.asList("$collaborators", Collections.emptyList())))
+                    .append("as", "c")
+                    .append("cond", new Document("$and", Arrays.asList(
+                        new Document("$eq", Arrays.asList("$$c.leadCollaborator", true)),
+                        new Document("$eq", Arrays.asList("$$c.typeDiscriminator", "InternalCollaboratorAssociation"))
+                    ))))).append("hasCollaborators", new Document("$gt", Arrays.asList(
+                    new Document("$size", new Document("$ifNull", Arrays.asList("$collaborators", Collections.emptyList()))),
+                    0
+                ))))
+                .append("in", new Document("$cond", Arrays.asList(
+                    "$$hasCollaborators",
+                    new Document("$gt", Arrays.asList(new Document("$size", "$$internalLeads"), 0)),
+                    true
+                )))
+            ))),
+            new Document("$addFields", new Document("anyo", new Document("$cond", Arrays.asList(
+                new Document("$ifNull", Arrays.asList("$awardDate", false)),
+                new Document("$year", "$awardDate"),
+                null
+            )))),
+            new Document("$match", new Document("anyo", new Document("$ne", null))),
+            new Document("$project", new Document()
+                .append("uuid", 1)
+                .append("pureId", 1)
+                .append("title", 1)
+                .append("anyo", 1)
+                .append("fOppType", 1)
+                .append("program", 1)
+                .append("esLider", 1)
+                .append("fundings", 1)),
+            new Document("$sort", new Document("anyo", -1).append("title.es_ES", 1))
+        );
+
+        List<Document> rawResults = new ArrayList<>();
+        mongoTemplate.getCollection("Awards")
+            .aggregate(pipeline)
+            .into(rawResults);
+
+        List<Document> processed = new ArrayList<>();
+        for (Document doc : rawResults) {
+            double totalImport = 0.0;
+            List<Document> fundings = castList(doc.get("fundings"));
+            if (fundings != null && !fundings.isEmpty()) {
+                for (Document f : fundings) {
+                    List<Document> cols = castList(f.get("fundingCollaborators"));
+                    if (cols != null) {
+                        for (Document col : cols) {
+                            Document part = (Document) col.get("institutionalPart");
+                            if (part != null) {
+                                Object val = part.get("value");
+                                if (val instanceof Number n) {
+                                    totalImport += n.doubleValue();
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            doc.remove("fundings");
+            doc.append("importe", totalImport);
+            processed.add(doc);
+        }
+
+        return processed;
     }
 
     /*

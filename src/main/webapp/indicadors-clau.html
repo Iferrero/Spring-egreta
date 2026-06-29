@@ -137,7 +137,7 @@
                                 <i class="fa-solid fa-circle-info text-indigo-200 hover:text-white cursor-help transition-colors text-[10px]"></i>
                                 <span class="absolute bottom-full left-0 mb-2 w-64 p-3 bg-slate-950 text-white text-[11px] leading-relaxed rounded-xl shadow-xl opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-20 font-medium normal-case text-left">
                                     <span class="block font-bold mb-1 border-b border-slate-800 pb-0.5 text-indigo-400">Càlcul de l'indicador</span>
-                                    Recompte de personal docent i investigador (PDI) actiu amb grau de doctor i dedicació a temps complet que està assignat a un grup de recerca de la convocatòria SGR actiu.
+                                    Recompte de personal docent i investigador (PDI) actiu que té la titulació de doctor declarada o pertany a categories docents/investigadores de doctor (catedràtics, titulars, agregats, lectors, postdoctorals, etc.) amb dedicació a temps complet i assignat a un grup de recerca SGR actiu.
                                     <span class="absolute top-full left-4 border-4 border-transparent border-t-slate-950"></span>
                                 </span>
                             </span>
@@ -148,7 +148,7 @@
                         <i class="fa-solid fa-users-viewfinder"></i>
                     </div>
                 </div>
-                <p class="text-indigo-100/80 text-xs leading-relaxed">Personal docent i investigador (PDI) doctor de temps complet associat a grups de recerca certificats.</p>
+                <p class="text-indigo-100/80 text-xs leading-relaxed">Personal docent i investigador actiu amb grau o categoria de doctor amb dedicació completa en grups SGR.</p>
             </div>
 
             <!-- Card 3: Publications -->
@@ -215,8 +215,8 @@
                         <option value="sgrDoctors">Doctors en grups SGR</option>
                         <option value="europeanProjectsLead">Lideratge en projectes europeus</option>
                         <option value="europeanProjectsPart">Participació en projectes europeus</option>
-                        <option value="competitiveFunding">Ingressos via competitiva</option>
-                        <option value="nonCompetitiveFunding">Ingressos via no competitiva / transferència</option>
+                        <option value="competitiveFunding">Captació de fons via competitiva</option>
+                        <option value="nonCompetitiveFunding">Captació de fons via no competitiva / transferència</option>
                         <option value="q1q2Publications">Publicacions en Q1 / Q2</option>
                         <option value="incubatedCompanies">Empreses incubades</option>
                         <option value="transferAgreements">Acords de transferència (patents)</option>
@@ -262,11 +262,11 @@
             {
                 key: 'sgrDoctors',
                 title: 'PDI doctor a temps complet que pertany a grups SGR',
-                desc: 'Docents doctors amb vinculació permanent o activa registrats com a integrants d\'un grup SGR.',
-                unit: 'Doctors a temps complet',
-                icon: 'fa-users-viewfinder',
-                color: 'indigo',
-                calculation: '<b>Origen:</b> Col·leccions <code>Organizations</code> i <code>Persons</code> de MongoDB.<br/><b>Camps i Valors:</b> Filtra organitzacions on <code>type.term.ca_ES</code> és "Grup de Recerca" o "Grup de Recerca UAB" i <code>lifecycle.endDate</code> és buit; després compta persones associades a aquestes organitzacions via <code>staffOrganizationAssociations.organization.uuid</code>.'
+                 desc: 'Docents i investigadors doctors (o amb categoria docent/investigadora de doctor: catedràtics, titulars, agregats, lectors, postdoctorals) actius a temps complet en grups SGR.',
+                 unit: 'Doctors a temps complet',
+                 icon: 'fa-users-viewfinder',
+                 color: 'indigo',
+                 calculation: '<b>Origen:</b> Col·leccions <code>Organizations</code> i <code>Persons</code> de MongoDB.<br/><b>Camps i Valors:</b> Filtra organitzacions SGR actives. Compta persones associades amb dedicació completa que tenen el grau de doctor declarat o bé un contracte actiu en categories de doctor (catedràtic, titular, agregat, lector, postdoctoral, etc.).'
             },
             {
                 key: 'europeanProjectsLead',
@@ -280,15 +280,15 @@
             {
                 key: 'europeanProjectsPart',
                 title: 'Participació (P) en projectes europeus i grans projectes',
-                desc: 'Projectes europeus o de recerca internacionals en què la UAB és una entitat beneficiària/sòcia participant.',
+                desc: 'Projectes europeus o de recerca internacionals en què la UAB participa (ja sigui com a líder/coordinadora o com a sòcia participant).',
                 unit: 'Projectes',
                 icon: 'fa-globe',
                 color: 'cyan',
-                calculation: '<b>Origen:</b> Col·lecció <code>Awards</code> de MongoDB.<br/><b>Camps i Valors:</b> Filtra projectes de la convocatòria <code>PROJ_PJE</code> (on el tipus de projecte és "Programa Marc Europeu") i on <code>esLider</code> és <code>false</code>; suma el camp <code>ajuts</code>.'
+                calculation: '<b>Origen:</b> Col·lecció <code>Awards</code> de MongoDB.<br/><b>Camps i Valors:</b> Filtra projectes de la convocatòria <code>PROJ_PJE</code> (on el tipus de projecte és "Programa Marc Europeu"); suma el camp <code>ajuts</code>.'
             },
             {
                 key: 'competitiveFunding',
-                title: 'Ingressos per via competitiva',
+                title: 'Captació de fons per via competitiva',
                 desc: 'Fons obtinguts de convocatòries de recerca del Plan Nacional, fons europeus, beques, etc.',
                 unit: 'Milions d\'euros',
                 icon: 'fa-sack-dollar',
@@ -298,13 +298,13 @@
             },
             {
                 key: 'nonCompetitiveFunding',
-                title: 'Ingressos no competitius, recerca i transferència',
-                desc: 'Ingressos derivats de contractes art. 60 (LOU) / art. 83 (LOSU), convenis privats i prestació de serveis.',
+                title: 'Captació de fons via no competitiva / transferència',
+                desc: 'Fons obtinguts de convocatòries de recerca del Plan Nacional, fons europeus, beques, etc.',
                 unit: 'Milions d\'euros',
                 icon: 'fa-handshake',
                 color: 'teal',
                 isCurrency: true,
-                calculation: '<b>Origen:</b> Col·lecció <code>Awards</code> de MongoDB.<br/><b>Camps i Valors:</b> Filtra registres on <code>categoria</code> no comença per "Ajudes competitives"; calcula el sumatori del camp <code>import</code> en milions d\'euros.'
+                calculation: '<b>Origen:</b> Col·lecció <code>Awards</code> de MongoDB.<br/><b>Camps i Valors:</b> Sumatori en milions d\'euros del camp <code>import</code> per a les categories de Convenis nacionals/no competitius (<code>Ajudes no competitives nacionals</code>) i Prestació de Serveis (<code>Prestació de Serveis</code>).'
             },
             {
                 key: 'q1q2Publications',
