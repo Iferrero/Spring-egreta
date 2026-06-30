@@ -49,6 +49,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import javax.imageio.ImageIO;
@@ -4284,5 +4285,140 @@ public class PersonaController {
         }
 
         return false;
+    }
+
+    @GetMapping("/stats/recursos-humans")
+    public Map<String, Object> getRecursosHumansStats() {
+        Query query = new Query();
+        query.fields().include("gender").include("staffOrganizationAssociations");
+        List<Document> persons = mongoTemplate.find(query, Document.class, "Persons");
+
+        // Helper class to store gender counts
+        class GenderCount {
+            long total = 0;
+            long homes = 0;
+            long dones = 0;
+            long subCount = 0; // PIF or Vinculat a recerca
+        }
+
+        // Helper class for yearly stats
+        class YearHRStats {
+            GenderCount pdiEstable = new GenderCount();
+            GenderCount postdoc = new GenderCount();
+            GenderCount predoc = new GenderCount();
+            GenderCount ptgas = new GenderCount();
+        }
+
+        Map<Integer, YearHRStats> stats = new TreeMap<>();
+        int[] years = {2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026};
+
+        for (Document p : persons) {
+            String genderStr = extractGender(p);
+            boolean isM = isMale(genderStr);
+            boolean isF = isFemale(genderStr);
+
+            @SuppressWarnings("unchecked")
+            List<Document> associations = (List<Document>) p.get("staffOrganizationAssociations");
+            if (associations == null) continue;
+
+            for (int yr : years) {
+                LocalDate yearStart = LocalDate.of(yr, 1, 1);
+                LocalDate yearEnd = LocalDate.of(yr, 12, 31);
+
+                java.util.Set<String> activeCategories = new java.util.HashSet<>();
+                boolean isPif = false;
+                boolean isVinculat = false;
+
+                for (Document assoc : associations) {
+                    Document period = (Document) assoc.get("period");
+                    LocalDate startDate = null;
+                    LocalDate endDate = null;
+
+                    if (period != null) {
+                        startDate = parseDate(period.get("startDate"));
+                        endDate = parseDate(period.get("endDate"));
+                    }
+
+                    boolean isActive = true;
+                    if (startDate != null && startDate.isAfter(yearEnd)) {
+                        isActive = false;
+                    }
+                    if (endDate != null && endDate.isBefore(yearStart)) {
+                        isActive = false;
+                    }
+
+                    if (isActive) {
+                        Document empType = (Document) assoc.get("employmentType");
+                        if (empType != null) {
+                            Document termDoc = (Document) empType.get("term");
+                            if (termDoc != null) {
+                                String termCa = termDoc.getString("ca_ES");
+                                if (termCa != null) {
+                                    String norm = termCa.toLowerCase();
+                                    if (norm.contains("catedr") || norm.contains("titular") || norm.contains("agregat") || norm.contains("agregad")) {
+                                        activeCategories.add("pdi");
+                                    } else if (norm.contains("postdoctoral") || norm.contains("cajal") || norm.contains("beatriu") || norm.contains("cierva") || norm.contains("doctor distingit")) {
+                                        activeCategories.add("postdoc");
+                                    } else if (norm.contains("predoctoral") || norm.contains("en formaci") || norm.contains("fpi") || norm.contains("fpu") || norm.contains("novell") || norm.contains("la caixa") || norm.contains("pif") || norm.contains("estudiant de doctorat") || norm.contains("dgu")) {
+                                        activeCategories.add("predoc");
+                                        if (norm.contains("pif") || norm.contains("en formaci") || norm.contains("fpi") || norm.contains("fpu")) {
+                                            isPif = true;
+                                        }
+                                    } else if (norm.contains("suport a la recerca") || norm.contains("tècnic/a") || norm.contains("tecnic/a") || norm.contains("suport recerca")) {
+                                        activeCategories.add("ptgas");
+                                        if (norm.contains("suport a la recerca") || norm.contains("suport recerca")) {
+                                            isVinculat = true;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (!activeCategories.isEmpty()) {
+                    YearHRStats ys = stats.computeIfAbsent(yr, k -> new YearHRStats());
+                    if (activeCategories.contains("pdi")) {
+                        ys.pdiEstable.total++;
+                        if (isM) ys.pdiEstable.homes++;
+                        else if (isF) ys.pdiEstable.dones++;
+                    }
+                    if (activeCategories.contains("postdoc")) {
+                        ys.postdoc.total++;
+                        if (isM) ys.postdoc.homes++;
+                        else if (isF) ys.postdoc.dones++;
+                    }
+                    if (activeCategories.contains("predoc")) {
+                        ys.predoc.total++;
+                        if (isM) ys.predoc.homes++;
+                        else if (isF) ys.predoc.dones++;
+                        if (isPif) ys.predoc.subCount++;
+                    }
+                    if (activeCategories.contains("ptgas")) {
+                        ys.ptgas.total++;
+                        if (isM) ys.ptgas.homes++;
+                        else if (isF) ys.ptgas.dones++;
+                        if (isVinculat) ys.ptgas.subCount++;
+                    }
+                }
+            }
+        }
+
+        // Convert to response format
+        Map<String, Object> response = new LinkedHashMap<>();
+        for (Map.Entry<Integer, YearHRStats> entry : stats.entrySet()) {
+            Integer yr = entry.getKey();
+            YearHRStats ys = entry.getValue();
+
+            Map<String, Object> yrData = new LinkedHashMap<>();
+            yrData.put("pdiEstable", Map.of("total", ys.pdiEstable.total, "dones", ys.pdiEstable.dones, "homes", ys.pdiEstable.homes));
+            yrData.put("postdoc", Map.of("total", ys.postdoc.total, "dones", ys.postdoc.dones, "homes", ys.postdoc.homes));
+            yrData.put("predoc", Map.of("total", ys.predoc.total, "dones", ys.predoc.dones, "homes", ys.predoc.homes, "pif", ys.predoc.subCount));
+            yrData.put("ptgas", Map.of("total", ys.ptgas.total, "dones", ys.ptgas.dones, "homes", ys.ptgas.homes, "vinculats", ys.ptgas.subCount));
+
+            response.put(String.valueOf(yr), yrData);
+        }
+
+        return response;
     }
 }

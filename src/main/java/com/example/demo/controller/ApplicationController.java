@@ -239,11 +239,21 @@ public class ApplicationController {
                 fundingYear = extractYearFromTitle(fundingTitle);
             }
 
+            Long pureId = null;
+            if (fundingDoc != null && fundingDoc.get("pureId") != null) {
+                try {
+                    pureId = ((Number) fundingDoc.get("pureId")).longValue();
+                } catch (Exception e) {
+                    // Ignore
+                }
+            }
+
             Map<String, Object> item = new LinkedHashMap<>();
             item.put("fundingUuid", fundingUuid);
             item.put("fundingTitle", fundingTitle != null ? fundingTitle : "Sin título");
             item.put("fundingType", fundingType != null ? fundingType : "Desconocido");
             item.put("fundingYear", fundingYear);
+            item.put("pureId", pureId);
             item.put("sent", sent);
             item.put("accepted", accepted);
             item.put("rejected", rejected);

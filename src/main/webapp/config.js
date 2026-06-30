@@ -62,6 +62,9 @@ window.apiFetch = window.apiFetch || async function(path, options) {
                 return response;
             }
         } catch (error) {
+            if (error.name === 'AbortError') {
+                throw error;
+            }
             lastError = error;
         }
     }

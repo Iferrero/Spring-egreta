@@ -1749,6 +1749,9 @@ public class ExternalOrganizationController {
         } else if ("prod".equalsIgnoreCase(targetEnv)) {
             getUrl = getUrl.replace("egretat.uab.cat", "egreta.uab.cat");
             putUrl = putUrl.replace("egretat.uab.cat", "egreta.uab.cat");
+        } else {
+             getUrl = getUrl.replace("egretat.uab.cat", "egreta.uab.cat");
+            putUrl = putUrl.replace("egretat.uab.cat", "egreta.uab.cat");
         }
 
         if (putUrl.isBlank()) {

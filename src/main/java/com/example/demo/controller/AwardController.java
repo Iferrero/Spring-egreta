@@ -1983,11 +1983,122 @@ public class AwardController {
             genderEvolutionList.add(point);
         });
 
+        // 1. Find all calls (FundingOpportunities) on which the selected scholarship awards depend
+        List<Document> convocatoriasPipeline = new ArrayList<>();
+        convocatoriasPipeline.add(new Document("$match", matchStage));
+        convocatoriasPipeline.add(new Document("$lookup", new Document()
+                .append("from", "Applications")
+                .append("localField", "applications.uuid")
+                .append("foreignField", "uuid")
+                .append("as", "appDocs")));
+        convocatoriasPipeline.add(new Document("$unwind", "$appDocs"));
+        convocatoriasPipeline.add(new Document("$group", new Document("_id", "$appDocs.fundingOpportunity.uuid")));
+
+        List<String> fundingOppUuids = new ArrayList<>();
+        try {
+            List<Document> fOppDocs = mongoTemplate.getCollection("Awards")
+                    .aggregate(convocatoriasPipeline)
+                    .into(new ArrayList<>());
+            for (Document doc : fOppDocs) {
+                String fUuid = doc.getString("_id");
+                if (fUuid != null && !fUuid.isBlank()) {
+                    fundingOppUuids.add(fUuid);
+                }
+            }
+        } catch (Exception e) {
+            // Silently catch
+        }
+
+        // 2. Query rejected applications from Applications collection filtering by those calls
+        List<Document> appDocs = new ArrayList<>();
+        if (!fundingOppUuids.isEmpty()) {
+            List<Document> appPipeline = new ArrayList<>();
+            appPipeline.add(new Document("$match", new Document("fundingOpportunity.uuid", new Document("$in", fundingOppUuids))));
+            
+            appPipeline.add(new Document("$addFields", new Document("appDateReal",
+                    new Document("$convert", new Document()
+                            .append("input", "$applicationDate")
+                            .append("to", "date")
+                            .append("onError", null)
+                            .append("onNull", null)))));
+                            
+            appPipeline.add(new Document("$addFields", new Document("anyo",
+                    new Document("$cond", Arrays.asList(
+                            new Document("$ne", Arrays.asList("$appDateReal", null)),
+                            new Document("$year", "$appDateReal"),
+                            null
+                    )))));
+
+            appPipeline.add(new Document("$project", new Document("anyo", 1)
+                    .append("replyText", new Document("$toLower", new Document("$ifNull", Arrays.asList(
+                        "$funderReply.key",
+                        new Document("$ifNull", Arrays.asList(
+                            "$funderReply.description.en_GB",
+                            new Document("$ifNull", Arrays.asList(
+                                "$funderReply.description.es_ES",
+                                new Document("$ifNull", Arrays.asList(
+                                    "$funderReply.description.ca_ES",
+                                    new Document("$ifNull", Arrays.asList(
+                                        "$funderReply.en_GB",
+                                        new Document("$ifNull", Arrays.asList(
+                                            "$funderReply.es_ES",
+                                            new Document("$ifNull", Arrays.asList(
+                                                "$funderReply.ca_ES",
+                                                new Document("$ifNull", Arrays.asList("$funderReply", ""))
+                                            ))
+                                        ))
+                                    ))
+                                ))
+                            ))
+                        ))
+                    ))
+                ))));
+
+            appPipeline.add(new Document("$project", new Document("anyo", 1)
+                    .append("rejected", new Document("$cond", Arrays.asList(
+                        new Document("$regexMatch", new Document("input", "$replyText")
+                            .append("regex", "reject|deneg|declin|desestim|rebutj|unfavorable|refused|not funded|no funded")),
+                        1,
+                        0
+                    )))));
+
+            appPipeline.add(new Document("$group", new Document("_id", "$anyo")
+                    .append("count", new Document("$sum", "$rejected"))));
+
+            try {
+                String appColl = "Applications";
+                List<String> candidates = Arrays.asList("Applications", "applications", "Application", "application");
+                for (String name : candidates) {
+                    if (mongoTemplate.collectionExists(name)) {
+                        appColl = name;
+                        break;
+                    }
+                }
+                appDocs = mongoTemplate.getCollection(appColl)
+                        .aggregate(appPipeline)
+                        .into(new ArrayList<>());
+            } catch (Exception e) {
+                // Silently catch
+            }
+        }
+
+        List<Map<String, Object>> rejectedEvolutionList = new ArrayList<>();
+        for (Document doc : appDocs) {
+            Integer year = doc.getInteger("_id");
+            if (year != null && year >= 2000 && year <= 2100) {
+                Map<String, Object> point = new LinkedHashMap<>();
+                point.put("year", year);
+                point.put("count", ((Number) doc.get("count")).longValue());
+                rejectedEvolutionList.add(point);
+            }
+        }
+
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("natures", availableNatures);
         response.put("evolution", evolutionList);
         response.put("gender", genderList);
         response.put("genderEvolution", genderEvolutionList);
+        response.put("rejectedEvolution", rejectedEvolutionList);
 
         return response;
     }

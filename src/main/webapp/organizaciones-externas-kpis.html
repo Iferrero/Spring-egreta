@@ -110,8 +110,8 @@
                             class="text-xs font-bold text-slate-500 uppercase tracking-wider">Entorn:</label>
                         <select id="autoApplyEnv"
                             class="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-400 text-xs text-slate-700 font-semibold cursor-pointer">
-                            <option value="test" selected>Test (egretat.uab.cat)</option>
-                            <option value="prod">Producció (egreta.uab.cat)</option>
+                            <option value="test" >Test (egretat.uab.cat)</option>
+                            <option value="prod" selected>Producció (egreta.uab.cat)</option>
                         </select>
                     </div>
                     <!-- Confidence Selector -->
@@ -186,8 +186,8 @@
                             class="text-xs font-bold text-slate-500 uppercase tracking-wider">Entorn:</label>
                         <select id="autoValidateEnv"
                             class="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-400 text-xs text-slate-700 font-semibold cursor-pointer">
-                            <option value="test" selected>Test (egretat.uab.cat)</option>
-                            <option value="prod">Producció (egreta.uab.cat)</option>
+                            <option value="test" >Test (egretat.uab.cat)</option>
+                            <option value="prod" selected>Producció (egreta.uab.cat)</option>
                         </select>
                     </div>
                     <div class="flex gap-3 shrink-0">
@@ -331,6 +331,7 @@
         let currentSortDirection = 'asc';
         let debounceTimer = null;
         let currentLoadId = 0;
+        let currentAbortController = null;
         const countrySuggestionCache = new Map();
         const typeSuggestionCache = new Map();
         const fundingSuggestionCache = new Map();
@@ -522,7 +523,7 @@
             return bundle;
         }
 
-        async function preloadSuggestionsForPage(rows, loadId) {
+        async function preloadSuggestionsForPage(rows, loadId, signal) {
             const targets = (rows || []);
             if (!targets.length) return;
 
@@ -552,7 +553,7 @@
                 }
 
                 try {
-                    const res = await apiFetch('/external-organizations/stats/suggest-metadata?name=' + encodeURIComponent(orgName));
+                    const res = await apiFetch('/external-organizations/stats/suggest-metadata?name=' + encodeURIComponent(orgName), { signal });
                     if (!res.ok) throw new Error('HTTP ' + res.status);
                     const data = await res.json();
 
@@ -582,6 +583,7 @@
                     typeSuggestionCache.set(key, bundle.type);
                     fundingSuggestionCache.set(key, bundle.funding);
                 } catch (err) {
+                    if (err.name === 'AbortError') return;
                     console.error('Error preloading suggestions for org:', org, err);
                 } finally {
                     if (loadId === currentLoadId) {
@@ -612,8 +614,8 @@
             }
         }
 
-        async function preloadCountrySuggestions(rows, loadId) {
-            await preloadSuggestionsForPage(rows, loadId);
+        async function preloadCountrySuggestions(rows, loadId, signal) {
+            await preloadSuggestionsForPage(rows, loadId, signal);
         }
 
         async function preloadTypeSuggestions(rows) {
@@ -1091,6 +1093,12 @@
             const kpi = KPI_DEFS[activeKpi];
             if (!kpi) return;
 
+            if (currentAbortController) {
+                currentAbortController.abort();
+            }
+            currentAbortController = new AbortController();
+            const signal = currentAbortController.signal;
+
             currentLoadId++;
             const myLoadId = currentLoadId;
 
@@ -1114,7 +1122,7 @@
             try {
                 await ensureTypeCatalogOptions();
                 if (myLoadId !== currentLoadId) return;
-                const res = await apiFetch(kpi.listEndpoint + '?' + params.toString());
+                const res = await apiFetch(kpi.listEndpoint + '?' + params.toString(), { signal });
                 if (!res.ok) throw new Error('HTTP ' + res.status);
                 const data = await res.json();
                 if (myLoadId !== currentLoadId) return;
@@ -1126,8 +1134,9 @@
 
                 // Lanzar la pre-carga asíncrona de sugerencias en segundo plano.
                 // Se encarga automáticamente de pintar spinners y de repintar al terminar.
-                preloadCountrySuggestions(data.content || [], myLoadId);
+                preloadCountrySuggestions(data.content || [], myLoadId, signal);
             } catch (e) {
+                if (e.name === 'AbortError') return;
                 if (myLoadId === currentLoadId) {
                     body.innerHTML = '<tr><td colspan="8" class="px-6 py-10 text-center text-rose-500">Error carregant dades: ' + esc(e.message) + '</td></tr>';
                 }

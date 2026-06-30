@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recursos humans en recerca | UAB</title>
+    <!-- Google Fonts: Inter & Outfit -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Apache ECharts -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    
+    <script src="config.js"></script>
+    <script src="uab-brand.js" defer></script>
+    <link rel="stylesheet" href="uab-theme.css">
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc;
+        }
+        h1, h2, h3, h4, .font-display {
+            font-family: 'Outfit', sans-serif;
+        }
+        
+        :root {
+            --uab-green-primary: #008037;
+            --uab-green-dark: #004d21;
+            --uab-green-light: #00cc58;
+            --uab-green-bg: #d8f3e3;
+            --uab-grey-dark: #2a3037;
+            --uab-grey-light: #a9b1bc;
+        }
+
+        .text-uab-green { color: var(--uab-green-primary); }
+        
+        .premium-shadow {
+            box-shadow: 0 4px 20px -2px rgba(0, 128, 55, 0.06), 0 2px 8px -1px rgba(0, 128, 55, 0.04);
+        }
+        
+        .card-glow:hover {
+            box-shadow: 0 10px 30px -5px rgba(0, 128, 55, 0.12), 0 4px 12px -2px rgba(0, 128, 55, 0.08);
+        }
+
+        .animate-fade-in {
+            animation: fadeIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        
+        .animate-slide-up {
+            animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(15px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .hover-lift {
+            transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+        }
+        .hover-lift:hover {
+            transform: translateY(-4px);
+        }
+
+        .chart-container {
+            width: 100%;
+            height: 140px;
+            margin-top: 10px;
+            transition: all 0.3s ease;
+        }
+    </style>
+</head>
+<body class="min-h-screen text-slate-800 flex flex-col">
+
+    <!-- UAB brandbar bypass element -->
+    <header class="uab-brandbar flex flex-col md:flex-row items-center justify-between gap-4 py-4 px-6 md:px-12 bg-white border-b border-slate-200 shadow-sm z-30">
+        <a class="uab-brandbar__link flex items-center" href="https://www.uab.cat/" target="_blank" rel="noopener noreferrer">
+            <img class="h-12 w-auto hover:opacity-90 transition-opacity" src="https://www.uab.cat/Xcelerate/WAI/img/UAB-2linies-verd.svg" alt="Logotip de la Universitat Autònoma de Barcelona">
+        </a>
+        
+        <div class="flex flex-col md:items-end text-center md:text-right flex-grow md:px-8">
+            <h1 class="text-xl md:text-2xl font-extrabold text-[#008037] flex flex-wrap justify-center md:justify-end items-center gap-x-2">
+                <span class="font-light text-slate-500">INPUT ·</span>
+                <span>Recursos humans en recerca</span>
+            </h1>
+            <p class="text-xs md:text-sm italic text-[#008037] font-semibold mt-1">
+                Una base humana àmplia i diversificada per sostenir la recerca de la UAB
+            </p>
+        </div>
+        
+        <div class="flex items-center gap-3">
+            <!-- Historical Toggle Button -->
+            <button id="toggleTrendBtn" onclick="toggleTrendView()" class="flex items-center gap-2 px-4 py-2 text-xs font-bold text-[#008037] bg-[#d8f3e3] hover:bg-[#c2edd2] rounded-full transition-all active:scale-95 shadow-sm border border-[#008037]/20">
+                <i id="toggleTrendIcon" class="fa-solid fa-chart-line"></i>
+                <span id="toggleTrendText">Veure Gràfics de Tendència</span>
+            </button>
+            
+            <a href="index.html" class="flex items-center gap-2 px-4 py-2 text-xs font-bold text-slate-600 hover:text-emerald-700 bg-white border border-slate-200 rounded-full transition-all shadow-sm active:scale-95">
+                <i class="fa-solid fa-house"></i>
+                <span>Inici</span>
+            </a>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="flex-grow w-full max-w-[1400px] mx-auto px-6 md:px-12 py-8 flex flex-col gap-8 animate-fade-in">
+
+        <!-- Year/Course Selector Panel -->
+        <section class="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-6 hover:border-emerald-200 transition-all duration-300">
+            <div>
+                <h2 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                    <i class="fa-solid fa-users text-[#008037]"></i>
+                    <span>Paràmetres de l'Informe</span>
+                </h2>
+                <p class="text-xs text-slate-500 mt-1">Selecciona el curs de referència. Les dades es calculen dinàmicament des del cens de persones de MongoDB.</p>
+            </div>
+            <div id="yearButtonsContainer" class="flex flex-wrap items-center bg-slate-100 p-1.5 rounded-2xl border border-slate-200/60 shadow-inner">
+                <span class="text-xs text-slate-400 font-semibold px-4 py-2">Carregant cursos...</span>
+            </div>
+        </section>
+
+        <!-- Top Bracket connecting header (Only on large screens) -->
+        <section class="relative pt-6">
+            <!-- Grid-based CSS Bracket System -->
+            <div class="hidden lg:grid grid-cols-4 h-16 relative">
+                <!-- Column 1 connecter -->
+                <div class="relative h-full">
+                    <div class="absolute right-0 top-8 left-1/2 border-t-2 border-[#008037]"></div>
+                    <div class="absolute left-1/2 top-8 h-8 border-l-2 border-[#008037]"></div>
+                    <div class="absolute left-1/2 top-16 -translate-x-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-[#008037]"></div>
+                </div>
+                <!-- Column 2 connecter -->
+                <div class="relative h-full">
+                    <div class="absolute left-0 right-0 top-8 border-t-2 border-[#008037]"></div>
+                    <div class="absolute left-1/2 top-8 h-8 border-l-2 border-[#008037]"></div>
+                    <div class="absolute left-1/2 top-16 -translate-x-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-[#008037]"></div>
+                </div>
+                <!-- Column 3 connecter -->
+                <div class="relative h-full">
+                    <div class="absolute left-0 right-0 top-8 border-t-2 border-[#008037]"></div>
+                    <div class="absolute left-1/2 top-8 h-8 border-l-2 border-[#008037]"></div>
+                    <div class="absolute left-1/2 top-16 -translate-x-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-[#008037]"></div>
+                </div>
+                <!-- Column 4 connecter -->
+                <div class="relative h-full">
+                    <div class="absolute left-0 top-8 right-1/2 border-t-2 border-[#008037]"></div>
+                    <div class="absolute left-1/2 top-8 h-8 border-l-2 border-[#008037]"></div>
+                    <div class="absolute left-1/2 top-16 -translate-x-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-[#008037]"></div>
+                </div>
+                
+                <!-- Center Green Badge Overlay -->
+                <div class="absolute inset-0 flex justify-center items-start">
+                    <span class="bg-[#008037] text-white text-xs md:text-sm font-extrabold tracking-widest px-8 py-3 rounded-full uppercase shadow-md border-2 border-white">
+                        Una cadena de valor que fa possible la recerca
+                    </span>
+                </div>
+            </div>
+
+            <!-- Mobile-only section header -->
+            <div class="block lg:hidden text-center mb-6">
+                <span class="bg-[#008037] text-white text-xs font-bold tracking-wider px-6 py-2.5 rounded-full uppercase inline-block">
+                    Estructura del personal investigador
+                </span>
+            </div>
+
+            <!-- 4-Column Grid -->
+            <div id="dashboardGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 items-stretch mt-4 opacity-50 transition-opacity duration-300">
+                
+                <!-- COLUMN 1: PDI estable amb recerca assignada -->
+                <article class="bg-white border border-slate-200/80 rounded-3xl p-6 flex flex-col justify-between hover-lift premium-shadow card-glow transition-all duration-300">
+                    <div class="flex flex-col gap-5">
+                        <!-- Column Header -->
+                        <header class="flex items-center gap-3">
+                            <span class="w-8 h-8 rounded-full bg-[#008037] text-white flex items-center justify-center font-bold text-sm">1</span>
+                            <h2 class="text-sm font-bold text-[#008037] tracking-tight leading-tight">PDI estable amb recerca assignada</h2>
+                        </header>
+
+                        <!-- Main Stat Block -->
+                        <div class="bg-slate-50/50 border border-slate-100 rounded-2xl p-4 flex flex-col gap-2 relative overflow-hidden">
+                            <div class="flex items-center gap-4">
+                                <div class="w-14 h-14 rounded-2xl bg-[#d8f3e3] text-[#008037] flex items-center justify-center text-2xl flex-shrink-0">
+                                    <i class="fa-solid fa-chart-line"></i>
+                                </div>
+                                <div>
+                                    <span id="pdi-val" class="block text-3xl font-black text-slate-900 tracking-tight">0 <span class="text-lg font-bold text-slate-500">ETC</span></span>
+                                    <span id="pdi-gender" class="block text-[10px] font-bold text-slate-500 mt-0.5">0 dones · 0 homes</span>
+                                </div>
+                            </div>
+                            <div class="mt-2 bg-[#d8f3e3] text-[#004d21] text-xs font-semibold py-1.5 px-3 rounded-xl inline-flex items-center justify-center gap-1 border border-[#008037]/10">
+                                <span class="w-1.5 h-1.5 rounded-full bg-[#00cc58]"></span>
+                                <span id="pdi-pct">0% dones</span>
+                            </div>
+
+                            <!-- Trend Chart Container -->
+                            <div id="chart-pdi" class="chart-container hidden"></div>
+                        </div>
+
+                        <!-- Description -->
+                        <div class="flex items-start gap-3 mt-1">
+                            <i class="fa-solid fa-people-group text-[#008037] text-sm mt-0.5"></i>
+                            <p class="text-slate-600 text-xs leading-relaxed">
+                                <strong class="text-slate-800">Nucli estructural</strong> de la capacitat investigadora. Correspon a catedràtics/a i titulars d'universitat o agregats actius.
+                            </p>
+                        </div>
+                    </div>
+                </article>
+
+                <!-- COLUMN 2: Personal investigador postdoctoral -->
+                <article class="bg-white border border-slate-200/80 rounded-3xl p-6 flex flex-col justify-between hover-lift premium-shadow card-glow transition-all duration-300">
+                    <div class="flex flex-col gap-5">
+                        <!-- Column Header -->
+                        <header class="flex items-center gap-3">
+                            <span class="w-8 h-8 rounded-full bg-[#008037] text-white flex items-center justify-center font-bold text-sm">2</span>
+                            <h2 class="text-sm font-bold text-[#008037] tracking-tight leading-tight">Personal investigador postdoctoral</h2>
+                        </header>
+
+                        <!-- Main Stat Block -->
+                        <div class="bg-slate-50/50 border border-slate-100 rounded-2xl p-4 flex flex-col gap-2 relative overflow-hidden">
+                            <div class="flex items-center gap-4">
+                                <div class="w-14 h-14 rounded-2xl bg-[#d8f3e3] text-[#008037] flex items-center justify-center text-2xl flex-shrink-0">
+                                    <i class="fa-solid fa-microscope"></i>
+                                </div>
+                                <div>
+                                    <span id="postdoc-val" class="block text-3xl font-black text-slate-900 tracking-tight">0</span>
+                                    <span id="postdoc-gender" class="block text-[10px] font-bold text-slate-500 mt-0.5">0 dones · 0 homes</span>
+                                </div>
+                            </div>
+                            <div class="mt-2 bg-slate-100 text-slate-700 text-xs font-semibold py-1.5 px-3 rounded-xl inline-flex items-center justify-center gap-1.5 border border-slate-200/60">
+                                <i class="fa-solid fa-bullseye text-[#008037]"></i>
+                                <span>Captació i consolidació de talent</span>
+                            </div>
+
+                            <!-- Trend Chart Container -->
+                            <div id="chart-postdoc" class="chart-container hidden"></div>
+                        </div>
+
+                        <!-- Description -->
+                        <div class="flex flex-col gap-2 mt-1">
+                            <p class="text-slate-600 text-xs leading-relaxed">
+                                Figures clau dels programes competitius d'incorporació de doctors: <strong class="text-slate-800">Ramón y Cajal, Beatriu de Pinós, Juan de la Cierva</strong>.
+                            </p>
+                        </div>
+                    </div>
+                </article>
+
+                <!-- COLUMN 3: Comunitat doctoral -->
+                <article class="bg-white border border-slate-200/80 rounded-3xl p-6 flex flex-col justify-between hover-lift premium-shadow card-glow transition-all duration-300">
+                    <div class="flex flex-col gap-5">
+                        <!-- Column Header -->
+                        <header class="flex items-center gap-3">
+                            <span class="w-8 h-8 rounded-full bg-[#008037] text-white flex items-center justify-center font-bold text-sm">3</span>
+                            <h2 class="text-sm font-bold text-[#008037] tracking-tight leading-tight">Comunitat doctoral</h2>
+                        </header>
+
+                        <!-- Main Stat Block -->
+                        <div class="bg-slate-50/50 border border-slate-100 rounded-2xl p-4 flex flex-col gap-2 relative overflow-hidden">
+                            <div class="flex items-center gap-4">
+                                <div class="w-14 h-14 rounded-2xl bg-[#d8f3e3] text-[#008037] flex items-center justify-center text-2xl flex-shrink-0">
+                                    <i class="fa-solid fa-graduation-cap"></i>
+                                </div>
+                                <div>
+                                    <span id="predoc-val" class="block text-3xl font-black text-slate-900 tracking-tight">0</span>
+                                    <span id="predoc-gender" class="block text-[10px] font-bold text-slate-500 mt-0.5">0 dones · 0 homes</span>
+                                </div>
+                            </div>
+                            <div class="mt-2 bg-[#d8f3e3]/50 text-[#004d21] text-xs font-bold py-1.5 px-3 rounded-xl inline-flex items-center justify-center gap-1.5 border border-dashed border-[#008037]/30">
+                                <i class="fa-solid fa-people-group"></i>
+                                <span>Dins del col·lectiu: <strong id="pif-val">0</strong> PIF</span>
+                            </div>
+
+                            <!-- Trend Chart Container -->
+                            <div id="chart-predoc" class="chart-container hidden"></div>
+                        </div>
+
+                        <!-- Description -->
+                        <div class="flex items-start gap-3 mt-1">
+                            <i class="fa-solid fa-compass text-[#008037] text-sm mt-0.5"></i>
+                            <p class="text-slate-600 text-xs leading-relaxed">
+                                <strong class="text-slate-800">Base de talent predoctoral</strong>. Inclou personal en formació de programes FPI/FPU o similars, impulsant la renovació del sistema.
+                            </p>
+                        </div>
+                    </div>
+                </article>
+
+                <!-- COLUMN 4: PTGAS -->
+                <article class="bg-white border border-slate-200/80 rounded-3xl p-6 flex flex-col justify-between hover-lift premium-shadow card-glow transition-all duration-300">
+                    <div class="flex flex-col gap-5">
+                        <!-- Column Header -->
+                        <header class="flex items-center gap-3">
+                            <span class="w-8 h-8 rounded-full bg-[#008037] text-white flex items-center justify-center font-bold text-sm">4</span>
+                            <h2 class="text-sm font-bold text-[#008037] tracking-tight leading-tight">PTGAS</h2>
+                        </header>
+
+                        <!-- Main Stat Block -->
+                        <div class="bg-slate-50/50 border border-slate-100 rounded-2xl p-4 flex flex-col gap-2 relative overflow-hidden">
+                            <div class="flex items-center gap-4">
+                                <div class="w-14 h-14 rounded-2xl bg-[#d8f3e3] text-[#008037] flex items-center justify-center text-2xl flex-shrink-0">
+                                    <i class="fa-solid fa-users-gear"></i>
+                                </div>
+                                <div>
+                                    <span id="ptgas-val" class="block text-3xl font-black text-slate-900 tracking-tight">0</span>
+                                    <span id="ptgas-gender" class="block text-[10px] font-bold text-slate-500 mt-0.5">0 dones · 0 homes</span>
+                                </div>
+                            </div>
+                            <div class="mt-2 bg-[#d8f3e3] text-[#004d21] text-xs font-semibold py-1.5 px-3 rounded-xl inline-flex items-center justify-center gap-1 border border-[#008037]/10">
+                                <span id="ptgas-vinculats">0 vinculats a investigació</span>
+                            </div>
+
+                            <!-- Trend Chart Container -->
+                            <div id="chart-ptgas" class="chart-container hidden"></div>
+                        </div>
+
+                        <!-- Description -->
+                        <div class="flex flex-col gap-1.5 mt-1 text-slate-600 text-xs">
+                            <div class="flex items-center gap-2">
+                                <i class="fa-solid fa-cogs text-[#008037] text-xs flex-shrink-0"></i>
+                                <span>Suport tècnic, de gestió, admin. i serveis</span>
+                            </div>
+                            <div class="flex items-center gap-2 mt-1">
+                                <i class="fa-solid fa-venus text-rose-500 text-xs flex-shrink-0"></i>
+                                <span class="font-semibold text-slate-700">Presència majoritària de dones</span>
+                            </div>
+                        </div>
+                    </div>
+                </article>
+
+            </div>
+        </section>
+
+        <!-- SECTION: Per què és clau aquesta estructura? -->
+        <section class="bg-white border border-slate-200/80 rounded-3xl overflow-hidden premium-shadow animate-slide-up flex flex-col lg:flex-row hover:border-emerald-200 transition-all duration-300">
+            <!-- Left Banner Label -->
+            <div class="bg-[#008037] text-white p-6 lg:p-8 flex flex-col justify-center items-center lg:items-start text-center lg:text-left lg:w-72 flex-shrink-0 gap-3 relative overflow-hidden">
+                <div class="absolute -right-10 -bottom-10 text-white/5 text-9xl pointer-events-none">
+                    <i class="fa-solid fa-bullseye"></i>
+                </div>
+                <div class="w-12 h-12 rounded-2xl bg-white/10 flex items-center justify-center text-xl">
+                    <i class="fa-solid fa-crosshairs"></i>
+                </div>
+                <h3 class="text-lg md:text-xl font-extrabold leading-snug">Per què és clau aquesta estructura?</h3>
+            </div>
+            <!-- Right Content Grid -->
+            <div class="p-6 md:p-8 flex-grow grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 bg-slate-50/20">
+                <!-- Item 1 -->
+                <div class="flex items-start gap-4 hover:bg-slate-50 p-2.5 rounded-2xl transition-colors">
+                    <div class="w-10 h-10 rounded-xl bg-[#d8f3e3] text-[#008037] flex items-center justify-center text-sm flex-shrink-0 shadow-inner">
+                        <i class="fa-solid fa-trophy"></i>
+                    </div>
+                    <p class="text-xs font-semibold text-slate-700 leading-relaxed mt-1">Sosté la captació competitiva de fons de recerca</p>
+                </div>
+                <!-- Item 2 -->
+                <div class="flex items-start gap-4 hover:bg-slate-50 p-2.5 rounded-2xl transition-colors">
+                    <div class="w-10 h-10 rounded-xl bg-[#d8f3e3] text-[#008037] flex items-center justify-center text-sm flex-shrink-0 shadow-inner">
+                        <i class="fa-solid fa-chart-line"></i>
+                    </div>
+                    <p class="text-xs font-semibold text-slate-700 leading-relaxed mt-1">Impulsa de manera directa la producció científica</p>
+                </div>
+                <!-- Item 3 -->
+                <div class="flex items-start gap-4 hover:bg-slate-50 p-2.5 rounded-2xl transition-colors">
+                    <div class="w-10 h-10 rounded-xl bg-[#d8f3e3] text-[#008037] flex items-center justify-center text-sm flex-shrink-0 shadow-inner">
+                        <i class="fa-solid fa-globe"></i>
+                    </div>
+                    <p class="text-xs font-semibold text-slate-700 leading-relaxed mt-1">Fa possible la direcció de tesis i la col·laboració internacional</p>
+                </div>
+                <!-- Item 4 -->
+                <div class="flex items-start gap-4 hover:bg-slate-50 p-2.5 rounded-2xl transition-colors">
+                    <div class="w-10 h-10 rounded-xl bg-[#d8f3e3] text-[#008037] flex items-center justify-center text-sm flex-shrink-0 shadow-inner">
+                        <i class="fa-solid fa-star"></i>
+                    </div>
+                    <p class="text-xs font-semibold text-slate-700 leading-relaxed mt-1">Contribueix directament a l'impacte i valor social de la recerca</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION: Reptes estratègics -->
+        <section class="bg-white border border-slate-200/80 rounded-3xl overflow-hidden premium-shadow animate-slide-up flex flex-col lg:flex-row hover:border-slate-300 transition-all duration-300">
+            <!-- Left Banner Label -->
+            <div class="bg-[#2a3037] text-white p-6 lg:p-8 flex flex-col justify-center items-center lg:items-start text-center lg:text-left lg:w-72 flex-shrink-0 gap-3 relative overflow-hidden">
+                <div class="absolute -right-10 -bottom-10 text-white/5 text-9xl pointer-events-none">
+                    <i class="fa-solid fa-flag"></i>
+                </div>
+                <div class="w-12 h-12 rounded-2xl bg-white/10 flex items-center justify-center text-xl">
+                    <i class="fa-solid fa-bullseye"></i>
+                </div>
+                <h3 class="text-lg md:text-xl font-extrabold leading-snug">Reptes estratègics</h3>
+            </div>
+            <!-- Right Content Grid -->
+            <div class="p-6 md:p-8 flex-grow grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 bg-slate-50/20">
+                <!-- Challenge 1 -->
+                <div class="flex items-start gap-4 hover:bg-slate-50 p-2.5 rounded-2xl transition-colors">
+                    <span class="w-7 h-7 rounded-full bg-[#008037] text-white flex items-center justify-center font-bold text-xs flex-shrink-0 shadow-sm">1</span>
+                    <div class="flex flex-col gap-1.5">
+                        <i class="fa-solid fa-users text-[#008037] text-sm"></i>
+                        <p class="text-xs font-semibold text-slate-700 leading-relaxed">Consolidar i retenir el talent d'alt nivell captat</p>
+                    </div>
+                </div>
+                <!-- Challenge 2 -->
+                <div class="flex items-start gap-4 hover:bg-slate-50 p-2.5 rounded-2xl transition-colors">
+                    <span class="w-7 h-7 rounded-full bg-[#008037] text-white flex items-center justify-center font-bold text-xs flex-shrink-0 shadow-sm">2</span>
+                    <div class="flex flex-col gap-1.5">
+                        <i class="fa-solid fa-link text-[#008037] text-sm"></i>
+                        <p class="text-xs font-semibold text-slate-700 leading-relaxed">Enfortir les trajectòries predoctoral-postdoctoral-estable</p>
+                    </div>
+                </div>
+                <!-- Challenge 3 -->
+                <div class="flex items-start gap-4 hover:bg-slate-50 p-2.5 rounded-2xl transition-colors">
+                    <span class="w-7 h-7 rounded-full bg-[#008037] text-white flex items-center justify-center font-bold text-xs flex-shrink-0 shadow-sm">3</span>
+                    <div class="flex flex-col gap-1.5">
+                        <i class="fa-solid fa-scale-balanced text-[#008037] text-sm"></i>
+                        <p class="text-xs font-semibold text-slate-700 leading-relaxed">Avançar en l'equilibri de gènere de manera transversal</p>
+                    </div>
+                </div>
+                <!-- Challenge 4 -->
+                <div class="flex items-start gap-4 hover:bg-slate-50 p-2.5 rounded-2xl transition-colors">
+                    <span class="w-7 h-7 rounded-full bg-[#008037] text-white flex items-center justify-center font-bold text-xs flex-shrink-0 shadow-sm">4</span>
+                    <div class="flex flex-col gap-1.5">
+                        <i class="fa-solid fa-building text-[#008037] text-sm"></i>
+                        <p class="text-xs font-semibold text-slate-700 leading-relaxed">Dimensionar de forma adequada el suport tècnic i de gestió</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="mt-auto py-8 bg-slate-50 border-t border-slate-200">
+        <div class="max-w-[1400px] mx-auto px-6 md:px-12 flex flex-col md:flex-row items-center justify-between gap-4 text-xs font-semibold text-slate-400">
+            <span class="flex items-center gap-2">
+                <i class="fa-regular fa-folder-open"></i>
+                <span id="footer-course-info">Dades internes UAB · Curs 2023-2024</span>
+            </span>
+            <div class="h-px bg-slate-200 flex-grow mx-4 hidden md:block"></div>
+            <span>© 2026 Universitat Autònoma de Barcelona</span>
+        </div>
+    </footer>
+
+    <!-- Dashboard Controller -->
+    <script>
+        let showTrend = false;
+        let chartInstances = {};
+        let hrData = {};
+        let selectedYear = 2024;
+
+        // Fetch dynamic HR stats from Persona Controller on load
+        document.addEventListener('DOMContentLoaded', () => {
+            fetch('/api/persons/stats/recursos-humans')
+                .then(response => {
+                    if (!response.ok) throw new Error('API response error');
+                    return response.json();
+                })
+                .then(data => {
+                    hrData = data;
+                    
+                    // Populate Curs selector
+                    populateYearSelector();
+                    
+                    // Show Grid and update dashboard
+                    const grid = document.getElementById('dashboardGrid');
+                    grid.classList.remove('opacity-50');
+                    
+                    const availableYears = Object.keys(hrData).map(Number).sort((a,b)=>b-a);
+                    if (availableYears.includes(2024)) {
+                        selectedYear = 2024;
+                    } else if (availableYears.length > 0) {
+                        selectedYear = availableYears[0];
+                    }
+                    
+                    updateDashboard(selectedYear);
+                })
+                .catch(error => {
+                    console.error('Error loading dynamic HR data:', error);
+                    alert("No s'han pogut carregar les dades de recursos humans de la base de dades. Comproveu la connexió.");
+                });
+        });
+
+        function populateYearSelector() {
+            const container = document.getElementById('yearButtonsContainer');
+            container.innerHTML = '';
+            
+            // Get years from API response, filter for range 2020-2025 and sort ascending
+            const years = Object.keys(hrData)
+                .map(Number)
+                .filter(y => y >= 2020 && y <= 2025)
+                .sort((a, b) => a - b);
+                
+            if (years.length === 0) {
+                container.innerHTML = '<span class="text-xs text-slate-400 font-semibold px-4 py-2">Sense dades</span>';
+                return;
+            }
+            
+            years.forEach(y => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'year-btn px-4 py-2 rounded-xl text-sm font-semibold transition-all hover:bg-white/60 active:scale-95 text-slate-600';
+                btn.setAttribute('data-year', y);
+                btn.innerText = `Curs ${y - 1}-${y}`;
+                btn.onclick = () => changeYear(y);
+                container.appendChild(btn);
+            });
+        }
+
+        function changeYear(year) {
+            updateDashboard(year);
+        }
+
+        function updateDashboard(year) {
+            selectedYear = year;
+            
+            // Highlight selected year button
+            document.querySelectorAll('.year-btn').forEach(btn => {
+                const btnYear = parseInt(btn.getAttribute('data-year'));
+                if (btnYear === year) {
+                    btn.className = "year-btn px-4 py-2 rounded-xl text-sm font-semibold bg-white text-slate-900 shadow-sm border border-slate-200/40";
+                } else {
+                    btn.className = "year-btn px-4 py-2 rounded-xl text-sm font-semibold transition-all hover:bg-white/60 active:scale-95 text-slate-600";
+                }
+            });
+
+            const data = hrData[year];
+            if (!data) return;
+
+            // Update footer text
+            document.getElementById('footer-course-info').innerText = `Dades internes UAB · Curs ${year - 1}-${year}`;
+
+            // Helper to format values
+            function formatN(num) {
+                return num.toLocaleString('ca-ES');
+            }
+            function toPct(part, total) {
+                if (total === 0) return '0';
+                return ((part / total) * 100.0).toFixed(1).replace('.', ',');
+            }
+
+            // 1. PDI Estable
+            const pdi = data.pdiEstable;
+            document.getElementById('pdi-val').innerHTML = formatN(pdi.total) + ' <span class="text-lg font-bold text-slate-500">ETC</span>';
+            document.getElementById('pdi-gender').innerText = `${formatN(pdi.dones)} dones · ${formatN(pdi.homes)} homes`;
+            document.getElementById('pdi-pct').innerText = `${toPct(pdi.dones, pdi.total)}% dones`;
+
+            // 2. Postdocs
+            const postdoc = data.postdoc;
+            document.getElementById('postdoc-val').innerText = formatN(postdoc.total);
+            document.getElementById('postdoc-gender').innerText = `${formatN(postdoc.dones)} dones · ${formatN(postdoc.homes)} homes`;
+
+            // 3. Predocs
+            const predoc = data.predoc;
+            document.getElementById('predoc-val').innerText = formatN(predoc.total);
+            document.getElementById('predoc-gender').innerText = `${formatN(predoc.dones)} dones · ${formatN(predoc.homes)} homes`;
+            document.getElementById('pif-val').innerText = formatN(predoc.pif);
+
+            // 4. PTGAS
+            const ptgas = data.ptgas;
+            document.getElementById('ptgas-val').innerText = formatN(ptgas.total);
+            document.getElementById('ptgas-gender').innerText = `${formatN(ptgas.dones)} dones · ${formatN(ptgas.homes)} homes`;
+            document.getElementById('ptgas-vinculats').innerText = `${formatN(ptgas.vinculats)} vinculats a investigació`;
+
+            // Re-render sparklines if active
+            if (showTrend) {
+                initCharts();
+            }
+        }
+
+        function toggleTrendView() {
+            showTrend = !showTrend;
+            
+            const btn = document.getElementById('toggleTrendBtn');
+            const icon = document.getElementById('toggleTrendIcon');
+            const text = document.getElementById('toggleTrendText');
+            
+            const pdiChartEl = document.getElementById('chart-pdi');
+            const postdocChartEl = document.getElementById('chart-postdoc');
+            const predocChartEl = document.getElementById('chart-predoc');
+            const ptgasChartEl = document.getElementById('chart-ptgas');
+
+            if (showTrend) {
+                btn.classList.remove('bg-[#d8f3e3]', 'text-[#008037]');
+                btn.classList.add('bg-[#008037]', 'text-white');
+                icon.className = 'fa-solid fa-xmark';
+                text.innerText = 'Amagar Gràfics de Tendència';
+                
+                pdiChartEl.classList.remove('hidden');
+                postdocChartEl.classList.remove('hidden');
+                predocChartEl.classList.remove('hidden');
+                ptgasChartEl.classList.remove('hidden');
+                
+                setTimeout(() => {
+                    initCharts();
+                }, 100);
+            } else {
+                btn.classList.remove('bg-[#008037]', 'text-white');
+                btn.classList.add('bg-[#d8f3e3]', 'text-[#008037]');
+                icon.className = 'fa-solid fa-chart-line';
+                text.innerText = 'Veure Gràfics de Tendència';
+                
+                pdiChartEl.classList.add('hidden');
+                postdocChartEl.classList.add('hidden');
+                predocChartEl.classList.add('hidden');
+                ptgasChartEl.classList.add('hidden');
+            }
+        }
+
+        function initCharts() {
+            const sortedYears = Object.keys(hrData)
+                .map(Number)
+                .filter(y => y >= 2020 && y <= 2025)
+                .sort((a, b) => a - b);
+            
+            const yearsStr = sortedYears.map(y => `Curs ${y - 1}-${y}`);
+            
+            const dataPdi = sortedYears.map(y => hrData[y].pdiEstable.total);
+            const dataPostdoc = sortedYears.map(y => hrData[y].postdoc.total);
+            const dataPredoc = sortedYears.map(y => hrData[y].predoc.total);
+            const dataPtgas = sortedYears.map(y => hrData[y].ptgas.total);
+
+            if (!chartInstances['pdi']) {
+                chartInstances['pdi'] = echarts.init(document.getElementById('chart-pdi'));
+            }
+            renderSparkline(chartInstances['pdi'], yearsStr, dataPdi, '#008037', 'PDI Estable');
+
+            if (!chartInstances['postdoc']) {
+                chartInstances['postdoc'] = echarts.init(document.getElementById('chart-postdoc'));
+            }
+            renderSparkline(chartInstances['postdoc'], yearsStr, dataPostdoc, '#008037', 'Postdocs');
+
+            if (!chartInstances['predoc']) {
+                chartInstances['predoc'] = echarts.init(document.getElementById('chart-predoc'));
+            }
+            renderSparkline(chartInstances['predoc'], yearsStr, dataPredoc, '#008037', 'Doctorands');
+
+            if (!chartInstances['ptgas']) {
+                chartInstances['ptgas'] = echarts.init(document.getElementById('chart-ptgas'));
+            }
+            renderSparkline(chartInstances['ptgas'], yearsStr, dataPtgas, '#00cc58', 'PTGAS');
+        }
+
+        function renderSparkline(chart, xData, yData, colorHex, labelName) {
+            const option = {
+                tooltip: {
+                    trigger: 'axis',
+                    formatter: function (params) {
+                        return `<strong>${params[0].name}</strong>: ${params[0].value.toLocaleString('ca-ES')} persones`;
+                    },
+                    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                    borderColor: '#e2e8f0',
+                    borderWidth: 1,
+                    textStyle: {
+                        color: '#1e293b',
+                        fontSize: 11,
+                        fontFamily: 'Inter'
+                    },
+                    padding: [6, 10]
+                },
+                grid: {
+                    left: '5%',
+                    right: '5%',
+                    top: '20%',
+                    bottom: '15%',
+                    containLabel: false
+                },
+                xAxis: {
+                    type: 'category',
+                    data: xData,
+                    boundaryGap: false,
+                    axisLine: { show: false },
+                    axisTick: { show: false },
+                    axisLabel: {
+                        color: '#64748b',
+                        fontSize: 9,
+                        fontFamily: 'Inter',
+                        margin: 8
+                    }
+                },
+                yAxis: {
+                    type: 'value',
+                    show: false,
+                    min: function (value) {
+                        return Math.floor(value.min * 0.9);
+                    }
+                },
+                series: [{
+                    name: labelName,
+                    type: 'line',
+                    data: yData,
+                    smooth: true,
+                    showSymbol: true,
+                    symbol: 'circle',
+                    symbolSize: 6,
+                    itemStyle: {
+                        color: colorHex,
+                        borderWidth: 2,
+                        borderColor: '#ffffff'
+                    },
+                    lineStyle: {
+                        width: 3,
+                        color: colorHex
+                    },
+                    areaStyle: {
+                        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                            { offset: 0, color: colorHex + '2A' },
+                            { offset: 1, color: colorHex + '00' }
+                        ])
+                    }
+                }]
+            };
+            chart.setOption(option);
+        }
+
+        window.addEventListener('resize', () => {
+            if (showTrend) {
+                Object.values(chartInstances).forEach(chart => {
+                    if (chart) chart.resize();
+                });
+            }
+        });
+    </script>
+</body>
+</html>
