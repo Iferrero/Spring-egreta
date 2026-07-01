@@ -305,6 +305,59 @@
     }
 
     bootstrapPage();
+    btn.onclick = async () => {
+        btn.disabled = true;
+        setStatus('Sincronitzant Activities...');
+        try {
+            const res = await fetch('/egreta/sync/activities', { method: 'POST' });
+            if (res.ok) {
+                setStatus('Sincronització de Activities iniciada correctament.');
+                pollProgress('Activities', () => { btn.disabled = false; });
+            } else {
+                setStatus('Error a l\'iniciar la Sincronització de Activities.', 'error');
+                btn.disabled = false;
+            }
+        } catch (e) {
+            setStatus('Error de red.', 'error');
+            btn.disabled = false;
+        }
+    };
+
+    btnOrg.onclick = async () => {
+        btnOrg.disabled = true;
+        setStatus('Sincronitzant Organizations...');
+        try {
+            const res = await fetch('/egreta/sync/organizations', { method: 'POST' });
+            if (res.ok) {
+                setStatus('Sincronització de Organizations iniciada correctament.');
+                pollProgress('Organizations', () => { btnOrg.disabled = false; });
+            } else {
+                setStatus('Error a l\'iniciar la Sincronització de Organizations.', 'error');
+                btnOrg.disabled = false;
+            }
+        } catch (e) {
+            setStatus('Error de red.', 'error');
+            btnOrg.disabled = false;
+        }
+    };
+
+    btnApp.onclick = async () => {
+        btnApp.disabled = true;
+        setStatus('Sincronitzant Applications...');
+        try {
+            const res = await fetch('/egreta/sync/applications', { method: 'POST' });
+            if (res.ok) {
+                setStatus('Sincronització de Applications iniciada correctament.');
+                pollProgress('Applications', () => { btnApp.disabled = false; });
+            } else {
+                setStatus('Error a l\'iniciar la Sincronització de Applications.', 'error');
+                btnApp.disabled = false;
+            }
+        } catch (e) {
+            setStatus('Error de red.', 'error');
+            btnApp.disabled = false;
+        }
+    };
         btnAuthorcollaborations.onclick = async () => {
             btnAuthorcollaborations.disabled = true;
             setStatus('Sincronitzant Authorcollaborations...');
@@ -741,59 +794,7 @@
         }, 500);
     }
 
-    btn.onclick = async () => {
-        btn.disabled = true;
-        setStatus('Sincronitzant Activities...');
-        try {
-            const res = await fetch('/egreta/sync/activities', { method: 'POST' });
-            if (res.ok) {
-                setStatus('Sincronització de Activities iniciada correctament.');
-                pollProgress('Activities', () => { btn.disabled = false; });
-            } else {
-                setStatus('Error a l\'iniciar la Sincronització de Activities.', 'error');
-                btn.disabled = false;
-            }
-        } catch (e) {
-            setStatus('Error de red.', 'error');
-            btn.disabled = false;
-        }
-    };
-
-    btnOrg.onclick = async () => {
-        btnOrg.disabled = true;
-        setStatus('Sincronitzant Organizations...');
-        try {
-            const res = await fetch('/egreta/sync/organizations', { method: 'POST' });
-            if (res.ok) {
-                setStatus('Sincronització de Organizations iniciada correctament.');
-                pollProgress('Organizations', () => { btnOrg.disabled = false; });
-            } else {
-                setStatus('Error a l\'iniciar la Sincronització de Organizations.', 'error');
-                btnOrg.disabled = false;
-            }
-        } catch (e) {
-            setStatus('Error de red.', 'error');
-            btnOrg.disabled = false;
-        }
-    };
-
-    btnApp.onclick = async () => {
-        btnApp.disabled = true;
-        setStatus('Sincronitzant Applications...');
-        try {
-            const res = await fetch('/egreta/sync/applications', { method: 'POST' });
-            if (res.ok) {
-                setStatus('Sincronització de Applications iniciada correctament.');
-                pollProgress('Applications', () => { btnApp.disabled = false; });
-            } else {
-                setStatus('Error a l\'iniciar la Sincronització de Applications.', 'error');
-                btnApp.disabled = false;
-            }
-        } catch (e) {
-            setStatus('Error de red.', 'error');
-            btnApp.disabled = false;
-        }
-    };
+    
 </script>
 </body>
 </html>

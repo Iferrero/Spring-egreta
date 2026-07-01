@@ -15,21 +15,13 @@
 </head>
 <body class="bg-slate-50 min-h-screen font-sans">
 
-<div class="mx-auto py-10 px-4 max-w-7xl">
+<div class="py-0 px-6 w-full max-w-none">
     <header class="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 mb-8">
         <div>
             <h1 class="hidden text-2xl font-extrabold text-slate-800 tracking-tight">Funding Opportunities <span class="text-indigo-600">vs Applications</span></h1>
             <p class="hidden text-slate-500 text-sm">Sol·licituds enviades, acceptades i rebutjades per convocatòria</p>
         </div>
-        <div class="bg-white shadow-sm p-3 rounded-xl flex items-center gap-3 border border-slate-200">
-            <div class="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center">
-                <i class="fa-solid fa-chart-column text-indigo-600"></i>
-            </div>
-            <div>
-                <p class="text-xs text-slate-400 uppercase font-bold">Font</p>
-                <p class="text-sm font-bold text-slate-700">Applications + FundingOpportunities</p>
-            </div>
-        </div>
+        
     </header>
 
     <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 mb-6">
@@ -56,20 +48,30 @@
         </div>
     </div>
 
-    <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-y-auto max-h-[700px]">
         <table class="w-full text-left border-collapse">
             <thead>
             <tr class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider">
-                <th class="px-6 py-4 font-bold">Convocatòria</th>
-                <th class="px-6 py-4 font-bold">Tipus</th>
-                <th class="px-6 py-4 font-bold text-right">Any</th>
-                <th class="px-6 py-4 font-bold text-right">Enviades</th>
-                <th class="px-6 py-4 font-bold text-right text-emerald-700">Acceptades</th>
-                <th class="px-6 py-4 font-bold text-right text-rose-700">Rebutjades</th>
-                <th class="px-6 py-4 font-bold text-right text-amber-700">Pendents</th>
+                <th class="sticky top-0 bg-slate-50 z-10 px-6 py-4 font-bold w-[35%] min-w-[300px]">Convocatòria</th>
+                <th class="sticky top-0 bg-slate-50 z-10 px-6 py-4 font-bold w-[20%] min-w-[150px]">Tipus</th>
+                <th class="sticky top-0 bg-slate-50 z-10 px-6 py-4 font-bold text-right">Any</th>
+                <th class="sticky top-0 bg-slate-50 z-10 px-6 py-4 font-bold text-right">Enviades</th>
+                <th class="sticky top-0 bg-slate-50 z-10 px-6 py-4 font-bold text-right text-emerald-700">Acceptades</th>
+                <th class="sticky top-0 bg-slate-50 z-10 px-6 py-4 font-bold text-right text-emerald-700">Acceptades (Dones)</th>
+                <th class="sticky top-0 bg-slate-50 z-10 px-6 py-4 font-bold text-right text-emerald-700">Acceptades (Homes)</th>
+                <th class="sticky top-0 bg-slate-50 z-10 px-6 py-4 font-bold text-right text-rose-700">Rebutjades</th>
+                <th class="sticky top-0 bg-slate-50 z-10 px-6 py-4 font-bold text-right text-rose-700">Rebutjades (Dones)</th>
+                <th class="sticky top-0 bg-slate-50 z-10 px-6 py-4 font-bold text-right text-rose-700">Rebutjades (Homes)</th>
+                <th class="sticky top-0 bg-slate-50 z-10 px-6 py-4 font-bold text-right text-amber-700">Pendents</th>
             </tr>
             </thead>
-            <tbody id="tabla-body" class="divide-y divide-slate-50"></tbody>
+            <tbody id="tabla-body" class="divide-y divide-slate-50">
+                <tr>
+                    <td colspan="11" class="px-6 py-12 text-center text-slate-500 italic">
+                        <i class="fa-solid fa-spinner animate-spin mr-2"></i> Carregant dades...
+                    </td>
+                </tr>
+            </tbody>
         </table>
     </div>
 </div>
@@ -156,11 +158,20 @@
         const body = document.getElementById('tabla-body');
 
         if (!lista || lista.length === 0) {
-            body.innerHTML = '<tr><td colspan="7" class="px-6 py-12 text-center text-slate-400 italic">No hi ha resultats</td></tr>';
+            body.innerHTML = '<tr><td colspan="11" class="px-6 py-12 text-center text-slate-400 italic">No hi ha resultats</td></tr>';
             return;
         }
 
-        body.innerHTML = lista.map(item => `
+        body.innerHTML = lista.map(item => {
+            const accTotal = item.accepted ?? 0;
+            const accFemPct = accTotal > 0 ? Math.round((item.acceptedFemale ?? 0) / accTotal * 100) : 0;
+            const accMalePct = accTotal > 0 ? Math.round((item.acceptedMale ?? 0) / accTotal * 100) : 0;
+
+            const rejTotal = item.rejected ?? 0;
+            const rejFemPct = rejTotal > 0 ? Math.round((item.rejectedFemale ?? 0) / rejTotal * 100) : 0;
+            const rejMalePct = rejTotal > 0 ? Math.round((item.rejectedMale ?? 0) / rejTotal * 100) : 0;
+
+            return `
             <tr class="hover:bg-slate-50/80 transition-colors">
                 <td class="px-6 py-4">
                     ${item.pureId ? `
@@ -172,14 +183,21 @@
                     `}
                     <div class="text-xs text-slate-400 font-mono mt-1">${item.fundingUuid || '-'}</div>
                 </td>
-                <td class="px-6 py-4 text-sm text-slate-600">${item.fundingType || 'Desconocido'}</td>
+                <td class="px-6 py-4 text-sm text-slate-600">
+                    <div class="line-clamp-2" title="${item.fundingType || 'Desconocido'}">${item.fundingType || 'Desconocido'}</div>
+                </td>
                 <td class="px-6 py-4 text-right font-semibold text-slate-700">${obtenerAnio(item) ?? '-'}</td>
                 <td class="px-6 py-4 text-right font-semibold text-slate-700">${item.sent ?? 0}</td>
-                <td class="px-6 py-4 text-right font-bold text-emerald-700">${item.accepted ?? 0}</td>
-                <td class="px-6 py-4 text-right font-bold text-rose-700">${item.rejected ?? 0}</td>
+                <td class="px-6 py-4 text-right font-bold text-emerald-700">${accTotal}</td>
+                <td class="px-6 py-4 text-right font-bold text-emerald-700">${item.acceptedFemale ?? 0} (${accFemPct}%)</td>
+                <td class="px-6 py-4 text-right font-bold text-emerald-700">${item.acceptedMale ?? 0} (${accMalePct}%)</td>
+                <td class="px-6 py-4 text-right font-bold text-rose-700">${rejTotal}</td>
+                <td class="px-6 py-4 text-right font-bold text-rose-700">${item.rejectedFemale ?? 0} (${rejFemPct}%)</td>
+                <td class="px-6 py-4 text-right font-bold text-rose-700">${item.rejectedMale ?? 0} (${rejMalePct}%)</td>
                 <td class="px-6 py-4 text-right font-bold text-amber-700">${item.pending ?? 0}</td>
             </tr>
-        `).join('');
+            `;
+        }).join('');
     }
 
     function populateTipos(lista) {
@@ -238,7 +256,7 @@
             configurarSliderAnios(datos);
             aplicarFiltro();
         } catch (error) {
-            document.getElementById('tabla-body').innerHTML = '<tr><td colspan="7" class="px-6 py-12 text-center text-rose-500">Error carregant dades</td></tr>';
+            document.getElementById('tabla-body').innerHTML = '<tr><td colspan="11" class="px-6 py-12 text-center text-rose-500">Error carregant dades</td></tr>';
         }
     }
 
