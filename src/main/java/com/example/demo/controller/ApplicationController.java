@@ -120,21 +120,56 @@ public class ApplicationController {
     }
 
     @GetMapping("/stats/by-funding-opportunity")
-    public List<Map<String, Object>> statsByFundingOpportunity() {
+    public List<Map<String, Object>> statsByFundingOpportunity(
+            @RequestParam(value = "excludeResigned", required = false, defaultValue = "false") boolean excludeResigned) {
         String applicationCollection = resolveApplicationCollection();
         if (applicationCollection == null) {
             return List.of();
         }
 
+        List<String> resignedAppUuids = new ArrayList<>();
+        List<Document> resignedAwards = mongoTemplate.getCollection("Awards")
+            .find(new Document("$or", Arrays.asList(
+                new Document("keywordGroups.keywordContainers.structuredKeyword.uri", "/uab/awards/estat_ajut/resigned"),
+                new Document("status.typeDiscriminator", "DeclinedAwardStatus")
+            )))
+            .projection(new Document("applications.uuid", 1))
+            .into(new ArrayList<>());
+        for (Document doc : resignedAwards) {
+            List<?> apps = (List<?>) doc.get("applications");
+            if (apps != null) {
+                for (Object appObj : apps) {
+                    if (appObj instanceof Document appDoc) {
+                        String uuid = appDoc.getString("uuid");
+                        if (uuid != null && !uuid.isBlank()) {
+                            resignedAppUuids.add(uuid);
+                        }
+                    }
+                }
+            }
+        }
+
+        Document matchStage = new Document("fundingOpportunity.uuid", new Document("$ne", null));
+        if (excludeResigned && !resignedAppUuids.isEmpty()) {
+            matchStage.append("uuid", new Document("$nin", resignedAppUuids));
+        }
+
+        Document firstProjectSpec = new Document("fundingUuid", "$fundingOpportunity.uuid")
+            .append("sent", 1)
+            .append("applicationDateRaw", "$applicationDate")
+            .append("replyText", new Document("$toLower", new Document("$ifNull", Arrays.asList("$funderReply.key", new Document("$ifNull", Arrays.asList("$funderReply.description.en_GB", new Document("$ifNull", Arrays.asList("$funderReply.description.es_ES", new Document("$ifNull", Arrays.asList("$funderReply.description.ca_ES", new Document("$ifNull", Arrays.asList("$funderReply.en_GB", new Document("$ifNull", Arrays.asList("$funderReply.es_ES", new Document("$ifNull", Arrays.asList("$funderReply.ca_ES", new Document("$ifNull", Arrays.asList("$funderReply", ""))))))))))))))))))
+            .append("piUuids", new Document("$let", new Document("vars", new Document("applicantsArr", new Document("$cond", Arrays.asList(new Document("$isArray", "$applicants"), "$applicants", List.of())))).append("in", new Document("$let", new Document("vars", new Document("pis", new Document("$filter", new Document("input", "$$applicantsArr").append("as", "app").append("cond", new Document("$eq", Arrays.asList("$$app.role.uri", "/dk/atira/pure/application/roles/application/pi")))))).append("in", new Document("$cond", Arrays.asList(new Document("$gt", Arrays.asList(new Document("$size", "$$pis"), 0)), "$$pis.person.uuid", "$$applicantsArr.person.uuid")))))))
+            .append("isResigned", new Document("$cond", Arrays.asList(new Document("$in", Arrays.asList("$uuid", resignedAppUuids)), 1, 0)));
+
         List<Document> pipeline = List.of(
-            new Document("$match", new Document("fundingOpportunity.uuid", new Document("$ne", null))),
-            new Document("$project", new Document("fundingUuid", "$fundingOpportunity.uuid").append("sent", 1).append("applicationDateRaw", "$applicationDate").append("replyText", new Document("$toLower", new Document("$ifNull", Arrays.asList("$funderReply.key", new Document("$ifNull", Arrays.asList("$funderReply.description.en_GB", new Document("$ifNull", Arrays.asList("$funderReply.description.es_ES", new Document("$ifNull", Arrays.asList("$funderReply.description.ca_ES", new Document("$ifNull", Arrays.asList("$funderReply.en_GB", new Document("$ifNull", Arrays.asList("$funderReply.es_ES", new Document("$ifNull", Arrays.asList("$funderReply.ca_ES", new Document("$ifNull", Arrays.asList("$funderReply", "")))))))))))))))))).append("piUuids", new Document("$let", new Document("vars", new Document("applicantsArr", new Document("$cond", Arrays.asList(new Document("$isArray", "$applicants"), "$applicants", List.of())))).append("in", new Document("$let", new Document("vars", new Document("pis", new Document("$filter", new Document("input", "$$applicantsArr").append("as", "app").append("cond", new Document("$eq", Arrays.asList("$$app.role.uri", "/dk/atira/pure/application/roles/application/pi")))))).append("in", new Document("$cond", Arrays.asList(new Document("$gt", Arrays.asList(new Document("$size", "$$pis"), 0)), "$$pis.person.uuid", "$$applicantsArr.person.uuid")))))))),
+            new Document("$match", matchStage),
+            new Document("$project", firstProjectSpec),
             new Document("$lookup", new Document("from", "Persons").append("localField", "piUuids").append("foreignField", "uuid").append("as", "piPersons")),
-            new Document("$project", new Document("fundingUuid", 1).append("sent", 1).append("applicationDateRaw", 1).append("replyText", 1).append("genderVal", new Document("$arrayElemAt", Arrays.asList("$piPersons.gender", 0))).append("sexVal", new Document("$arrayElemAt", Arrays.asList("$piPersons.sex", 0)))),
-            new Document("$project", new Document("fundingUuid", 1).append("sent", 1).append("applicationDateRaw", 1).append("rejected", new Document("$cond", Arrays.asList(new Document("$regexMatch", new Document("input", "$replyText").append("regex", "reject|deneg|declin|desestim|rebutj|unfavorable|refused|not funded|no funded")), 1, 0))).append("accepted", new Document("$cond", Arrays.asList(new Document("$and", Arrays.asList(new Document("$not", Arrays.asList(new Document("$regexMatch", new Document("input", "$replyText").append("regex", "reject|deneg|declin|desestim|rebutj|unfavorable|refused|not funded|no funded")))), new Document("$regexMatch", new Document("input", "$replyText").append("regex", "accept|approved|award|granted|conced|aprobad|admis|seleccion|favorable")))), 1, 0))).append("rawGender", new Document("$toLower", new Document("$ifNull", Arrays.asList("$genderVal.uri", new Document("$ifNull", Arrays.asList("$genderVal.term.en_GB", new Document("$ifNull", Arrays.asList("$genderVal.term.ca_ES", new Document("$ifNull", Arrays.asList("$genderVal.term.es_ES", new Document("$ifNull", Arrays.asList("$genderVal", new Document("$ifNull", Arrays.asList("$sexVal.term.en_GB", new Document("$ifNull", Arrays.asList("$sexVal.term.ca_ES", new Document("$ifNull", Arrays.asList("$sexVal", ""))))))))))))))))))),
-            new Document("$project", new Document("fundingUuid", 1).append("sent", 1).append("applicationDateRaw", 1).append("rejected", 1).append("accepted", 1).append("isFemale", new Document("$cond", Arrays.asList(new Document("$or", Arrays.asList(new Document("$regexMatch", new Document("input", "$rawGender").append("regex", "female|mujer|femeni|dona")), new Document("$eq", Arrays.asList("$rawGender", "f")))), 1, 0))).append("isMale", new Document("$cond", Arrays.asList(new Document("$and", Arrays.asList(new Document("$not", Arrays.asList(new Document("$regexMatch", new Document("input", "$rawGender").append("regex", "female")))), new Document("$or", Arrays.asList(new Document("$regexMatch", new Document("input", "$rawGender").append("regex", "male|hombre|masculi|home")), new Document("$eq", Arrays.asList("$rawGender", "m")))))), 1, 0)))),
-            new Document("$group", new Document("_id", "$fundingUuid").append("sent", new Document("$sum", 1)).append("accepted", new Document("$sum", "$accepted")).append("rejected", new Document("$sum", "$rejected")).append("acceptedFemale", new Document("$sum", new Document("$cond", Arrays.asList(new Document("$eq", Arrays.asList("$isFemale", 1)), "$accepted", 0)))).append("acceptedMale", new Document("$sum", new Document("$cond", Arrays.asList(new Document("$eq", Arrays.asList("$isMale", 1)), "$accepted", 0)))).append("rejectedFemale", new Document("$sum", new Document("$cond", Arrays.asList(new Document("$eq", Arrays.asList("$isFemale", 1)), "$rejected", 0)))).append("rejectedMale", new Document("$sum", new Document("$cond", Arrays.asList(new Document("$eq", Arrays.asList("$isMale", 1)), "$rejected", 0)))).append("applicationDateRaw", new Document("$push", "$applicationDateRaw"))),
-            new Document("$project", new Document("_id", 0).append("fundingUuid", "$_id").append("sent", 1).append("accepted", 1).append("rejected", 1).append("acceptedFemale", 1).append("acceptedMale", 1).append("rejectedFemale", 1).append("rejectedMale", 1).append("applicationDateRaw", 1))
+            new Document("$project", new Document("fundingUuid", 1).append("sent", 1).append("applicationDateRaw", 1).append("replyText", 1).append("genderVal", new Document("$arrayElemAt", Arrays.asList("$piPersons.gender", 0))).append("sexVal", new Document("$arrayElemAt", Arrays.asList("$piPersons.sex", 0))).append("isResigned", 1)),
+            new Document("$project", new Document("fundingUuid", 1).append("sent", 1).append("applicationDateRaw", 1).append("rejected", new Document("$cond", Arrays.asList(new Document("$regexMatch", new Document("input", "$replyText").append("regex", "reject|deneg|declin|desestim|rebutj|unfavorable|refused|not funded|no funded")), 1, 0))).append("accepted", new Document("$cond", Arrays.asList(new Document("$and", Arrays.asList(new Document("$not", Arrays.asList(new Document("$regexMatch", new Document("input", "$replyText").append("regex", "reject|deneg|declin|desestim|rebutj|unfavorable|refused|not funded|no funded")))), new Document("$regexMatch", new Document("input", "$replyText").append("regex", "accept|approved|award|granted|conced|aprobad|admis|seleccion|favorable")))), 1, 0))).append("rawGender", new Document("$toLower", new Document("$ifNull", Arrays.asList("$genderVal.uri", new Document("$ifNull", Arrays.asList("$genderVal.term.en_GB", new Document("$ifNull", Arrays.asList("$genderVal.term.ca_ES", new Document("$ifNull", Arrays.asList("$genderVal.term.es_ES", new Document("$ifNull", Arrays.asList("$genderVal", new Document("$ifNull", Arrays.asList("$sexVal.term.en_GB", new Document("$ifNull", Arrays.asList("$sexVal.term.ca_ES", new Document("$ifNull", Arrays.asList("$sexVal", ""))))))))))))))))))   .append("isResigned", 1)),
+            new Document("$project", new Document("fundingUuid", 1).append("sent", 1).append("applicationDateRaw", 1).append("rejected", 1).append("accepted", 1).append("isFemale", new Document("$cond", Arrays.asList(new Document("$or", Arrays.asList(new Document("$regexMatch", new Document("input", "$rawGender").append("regex", "female|mujer|femeni|dona")), new Document("$eq", Arrays.asList("$rawGender", "f")))), 1, 0))).append("isMale", new Document("$cond", Arrays.asList(new Document("$and", Arrays.asList(new Document("$not", Arrays.asList(new Document("$regexMatch", new Document("input", "$rawGender").append("regex", "female")))), new Document("$or", Arrays.asList(new Document("$regexMatch", new Document("input", "$rawGender").append("regex", "male|hombre|masculi|home")), new Document("$eq", Arrays.asList("$rawGender", "m")))))), 1, 0))).append("isResigned", 1)),
+            new Document("$group", new Document("_id", "$fundingUuid").append("sent", new Document("$sum", 1)).append("accepted", new Document("$sum", "$accepted")).append("rejected", new Document("$sum", "$rejected")).append("acceptedFemale", new Document("$sum", new Document("$cond", Arrays.asList(new Document("$eq", Arrays.asList("$isFemale", 1)), "$accepted", 0)))).append("acceptedMale", new Document("$sum", new Document("$cond", Arrays.asList(new Document("$eq", Arrays.asList("$isMale", 1)), "$accepted", 0)))).append("rejectedFemale", new Document("$sum", new Document("$cond", Arrays.asList(new Document("$eq", Arrays.asList("$isFemale", 1)), "$rejected", 0)))).append("rejectedMale", new Document("$sum", new Document("$cond", Arrays.asList(new Document("$eq", Arrays.asList("$isMale", 1)), "$rejected", 0)))).append("resigned", new Document("$sum", "$isResigned")).append("applicationDateRaw", new Document("$push", "$applicationDateRaw"))),
+            new Document("$project", new Document("_id", 0).append("fundingUuid", "$_id").append("sent", 1).append("accepted", 1).append("rejected", 1).append("acceptedFemale", 1).append("acceptedMale", 1).append("rejectedFemale", 1).append("rejectedMale", 1).append("resigned", 1).append("applicationDateRaw", 1))
         );
 
         List<Document> stats = mongoTemplate
@@ -212,6 +247,7 @@ public class ApplicationController {
             item.put("acceptedMale", toInt(row.get("acceptedMale")));
             item.put("rejectedFemale", toInt(row.get("rejectedFemale")));
             item.put("rejectedMale", toInt(row.get("rejectedMale")));
+            item.put("resigned", toInt(row.get("resigned")));
             result.add(item);
         }
 

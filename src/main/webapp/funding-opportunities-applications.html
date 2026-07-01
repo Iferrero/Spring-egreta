@@ -26,7 +26,7 @@
 
     <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 mb-6">
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 items-end">
-            <div class="lg:col-span-5 relative">
+            <div class="lg:col-span-4 relative">
             <i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-slate-400"></i>
             <input id="inputBuscar" type="text" placeholder="Filtrar per títol o tipus de convocatòria..."
                    class="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm">
@@ -37,7 +37,14 @@
                     <option value="all">Tots els tipus de convocatòria</option>
                 </select>
             </div>
-            <div class="lg:col-span-4">
+            <div class="lg:col-span-2 flex items-center h-full pb-2">
+                <label class="inline-flex items-center cursor-pointer select-none">
+                    <input type="checkbox" id="checkExcloureRenunciats" class="sr-only peer">
+                    <div class="relative w-9 h-5 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+                    <span class="ms-2 text-xs font-bold text-slate-500 uppercase tracking-wider">Excloure renunciats</span>
+                </label>
+            </div>
+            <div class="lg:col-span-3">
                 <div class="flex items-center justify-between mb-1">
                     <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Rang d'anys</label>
                     <span id="valorRango" class="text-xs font-bold text-indigo-600"></span>
@@ -56,18 +63,19 @@
                 <th class="sticky top-0 bg-slate-50 z-10 px-6 py-4 font-bold w-[20%] min-w-[150px]">Tipus</th>
                 <th class="sticky top-0 bg-slate-50 z-10 px-6 py-4 font-bold text-right">Any</th>
                 <th class="sticky top-0 bg-slate-50 z-10 px-6 py-4 font-bold text-right">Enviades</th>
-                <th class="sticky top-0 bg-slate-50 z-10 px-6 py-4 font-bold text-right text-emerald-700">Acceptades</th>
-                <th class="sticky top-0 bg-slate-50 z-10 px-6 py-4 font-bold text-right text-emerald-700">Acceptades (Dones)</th>
-                <th class="sticky top-0 bg-slate-50 z-10 px-6 py-4 font-bold text-right text-emerald-700">Acceptades (Homes)</th>
+                <th class="sticky top-0 bg-slate-50 z-10 px-6 py-4 font-bold text-right text-emerald-700">Concedides</th>
+                <th class="sticky top-0 bg-slate-50 z-10 px-6 py-4 font-bold text-right text-emerald-700">Concedides (Dones)</th>
+                <th class="sticky top-0 bg-slate-50 z-10 px-6 py-4 font-bold text-right text-emerald-700">Concedides (Homes)</th>
                 <th class="sticky top-0 bg-slate-50 z-10 px-6 py-4 font-bold text-right text-rose-700">Rebutjades</th>
                 <th class="sticky top-0 bg-slate-50 z-10 px-6 py-4 font-bold text-right text-rose-700">Rebutjades (Dones)</th>
                 <th class="sticky top-0 bg-slate-50 z-10 px-6 py-4 font-bold text-right text-rose-700">Rebutjades (Homes)</th>
+                <th id="th-renunciades" class="sticky top-0 bg-slate-50 z-10 px-6 py-4 font-bold text-right text-slate-600">Renunciades</th>
                 <th class="sticky top-0 bg-slate-50 z-10 px-6 py-4 font-bold text-right text-amber-700">Pendents</th>
             </tr>
             </thead>
             <tbody id="tabla-body" class="divide-y divide-slate-50">
                 <tr>
-                    <td colspan="11" class="px-6 py-12 text-center text-slate-500 italic">
+                    <td colspan="12" class="px-6 py-12 text-center text-slate-500 italic">
                         <i class="fa-solid fa-spinner animate-spin mr-2"></i> Carregant dades...
                     </td>
                 </tr>
@@ -118,9 +126,12 @@
         const { max: maxDetectado } = obtenerExtremosAnios(lista);
         const min = 2015;
         const max = Math.max(maxDetectado, min);
-        const start = [min, max];
-
+        let start = [min, max];
         if (slider.noUiSlider) {
+            const currentValues = slider.noUiSlider.get();
+            const curMin = Math.max(Number(currentValues[0]), min);
+            const curMax = Math.min(Number(currentValues[1]), max);
+            start = [curMin, curMax];
             slider.noUiSlider.destroy();
         }
 
@@ -156,9 +167,19 @@
 
     function renderTabla(lista) {
         const body = document.getElementById('tabla-body');
+        const excl = document.getElementById('checkExcloureRenunciats').checked;
+        const thRenunciades = document.getElementById('th-renunciades');
+
+        if (excl) {
+            thRenunciades.style.display = 'none';
+        } else {
+            thRenunciades.style.display = '';
+        }
+
+        const colSpanCount = excl ? 11 : 12;
 
         if (!lista || lista.length === 0) {
-            body.innerHTML = '<tr><td colspan="11" class="px-6 py-12 text-center text-slate-400 italic">No hi ha resultats</td></tr>';
+            body.innerHTML = `<tr><td colspan="${colSpanCount}" class="px-6 py-12 text-center text-slate-400 italic">No hi ha resultats</td></tr>`;
             return;
         }
 
@@ -194,6 +215,7 @@
                 <td class="px-6 py-4 text-right font-bold text-rose-700">${rejTotal}</td>
                 <td class="px-6 py-4 text-right font-bold text-rose-700">${item.rejectedFemale ?? 0} (${rejFemPct}%)</td>
                 <td class="px-6 py-4 text-right font-bold text-rose-700">${item.rejectedMale ?? 0} (${rejMalePct}%)</td>
+                ${!excl ? `<td class="px-6 py-4 text-right font-bold text-slate-500">${item.resigned ?? 0}</td>` : ''}
                 <td class="px-6 py-4 text-right font-bold text-amber-700">${item.pending ?? 0}</td>
             </tr>
             `;
@@ -249,19 +271,31 @@
     }
 
     async function cargarDatos() {
+        const body = document.getElementById('tabla-body');
+        const excl = document.getElementById('checkExcloureRenunciats').checked;
+        const colSpanCount = excl ? 11 : 12;
+        body.innerHTML = `
+            <tr>
+                <td colspan="${colSpanCount}" class="px-6 py-12 text-center text-slate-500 italic">
+                    <i class="fa-solid fa-spinner animate-spin mr-2"></i> Carregant dades...
+                </td>
+            </tr>
+        `;
         try {
-            const response = await fetch(apiUrl('/applications/stats/by-funding-opportunity'));
+            const url = apiUrl('/applications/stats/by-funding-opportunity') + (excl ? '?excludeResigned=true' : '');
+            const response = await fetch(url);
             datos = await response.json();
             populateTipos(datos);
             configurarSliderAnios(datos);
             aplicarFiltro();
         } catch (error) {
-            document.getElementById('tabla-body').innerHTML = '<tr><td colspan="11" class="px-6 py-12 text-center text-rose-500">Error carregant dades</td></tr>';
+            body.innerHTML = `<tr><td colspan="${colSpanCount}" class="px-6 py-12 text-center text-rose-500">Error carregant dades</td></tr>`;
         }
     }
 
     document.getElementById('inputBuscar').addEventListener('input', aplicarFiltro);
     document.getElementById('selectTipo').addEventListener('change', aplicarFiltro);
+    document.getElementById('checkExcloureRenunciats').addEventListener('change', cargarDatos);
     cargarDatos();
 </script>
 </body>
