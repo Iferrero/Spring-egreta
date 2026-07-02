@@ -18,7 +18,6 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.7.1/nouislider.min.js"></script>
     
     <script src="config.js"></script>
-    <script src="ingressos-data.js"></script>
     <script src="uab-brand.js" defer></script>
     <link rel="stylesheet" href="uab-theme.css">
 
@@ -426,12 +425,8 @@
     <!-- Page Logic -->
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            // Verify data availability
-            if (typeof INGRESSOS_DATA === 'undefined') {
-                console.error("Dades d'ingressos no trobades.");
-                alert("Error en carregar les dades d'ingressos.");
-                return;
-            }            // Global State
+            // Global State
+            let INGRESSOS_DATA = [];
             let seleccionats = [];
             let chartInstance = null;
             let currentChartType = 'line'; // 'line' or 'bar'
@@ -517,15 +512,27 @@
                 "Projectes (Cap. 4, 7 i 9)"
             ];
             
-            seleccionats = INGRESSOS_DATA.filter(item => initialConcepts.includes(item.concept)).map(item => item.concept);
+            async function initApp() {
+                try {
+                    const response = await fetch('/api/ingressos/data');
+                    if (!response.ok) throw new Error("HTTP " + response.status);
+                    INGRESSOS_DATA = await response.json();
+                    
+                    seleccionats = INGRESSOS_DATA.filter(item => initialConcepts.includes(item.concept)).map(item => item.concept);
 
-            // Initialize Page Components
-            initDropdown();
-            initTipologiesDropdown();
-            initChart();
-            initSlider();
-            updateUI();
-            loadAwardsData();
+                    // Initialize Page Components
+                    initDropdown();
+                    initTipologiesDropdown();
+                    initChart();
+                    initSlider();
+                    updateUI();
+                    loadAwardsData();
+                } catch (error) {
+                    console.error("Error carregant les dades d'ingressos:", error);
+                    alert("Error en carregar les dades d'ingressos des de l'Excel.");
+                }
+            }
+            initApp();
             // Initialize Slider
             function initSlider() {
                 noUiSlider.create(sliderAnios, {
@@ -1350,9 +1357,12 @@
                         data,
                         barMaxWidth: 24,
                         itemStyle: {
-                            color,
-                            borderRadius: [4, 4, 0, 0],
-                            opacity: 0.85
+                            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                { offset: 0, color: color },
+                                { offset: 1, color: color + 'a0' }
+                            ]),
+                            borderRadius: [6, 6, 0, 0],
+                            opacity: 0.9
                         },
                         emphasis: { focus: 'series' },
                         tooltip: {
@@ -1977,7 +1987,8 @@ function formatEuro(val) {
                         if (y >= 2026) {
                             histData.push(null);
                         } else {
-                            const val = item.values[y.toString()] || 0;                            histData.push(roundToDecimals(val, 2));
+                            const val = item.values[y.toString()] || 0;
+                            histData.push(roundToDecimals(val, 2));
                         }
                     }
 
@@ -1989,14 +2000,18 @@ function formatEuro(val) {
                         smooth: currentChartType === 'line',
                         symbolSize: 8,
                         lineStyle: {
-                            width: 3.5
+                            width: 3.8,
+                            shadowColor: color + '33',
+                            shadowBlur: 8,
+                            shadowOffsetY: 3
                         },
                         itemStyle: {
-                            color: color
+                            color: color,
+                            borderRadius: currentChartType === 'bar' ? [6, 6, 0, 0] : [0, 0, 0, 0]
                         },
-                        areaStyle: (selectedItems.length === 1 && currentChartType === 'line') ? {
+                        areaStyle: currentChartType === 'line' ? {
                             color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                                { offset: 0, color: color + '44' },
+                                { offset: 0, color: color + (selectedItems.length === 1 ? '28' : '0f') },
                                 { offset: 1, color: color + '00' }
                             ])
                         } : null
@@ -2009,7 +2024,8 @@ function formatEuro(val) {
                             if (y < 2025) {
                                 forecastData.push(null);
                             } else if (y === 2025) {
-                                const val = item.values['2025'] || 0;                                forecastData.push(roundToDecimals(val, 2));
+                                const val = item.values['2025'] || 0;
+                                forecastData.push(roundToDecimals(val, 2));
                             } else if (y === 2026 || y === 2027) {
                                 const forecast = calcularPrevisio(item.values, forecastMethod);
                                 const val = forecast[y.toString()];
@@ -2026,14 +2042,25 @@ function formatEuro(val) {
                             symbolSize: 8,
                             symbol: 'emptyCircle',
                             lineStyle: {
-                                width: 3.5,
-                                type: 'dashed'
+                                width: 3.8,
+                                type: 'dashed',
+                                shadowColor: color + '22',
+                                shadowBlur: 6,
+                                shadowOffsetY: 2
                             },
                             itemStyle: {
-                                color: color
-                            }
+                                color: color,
+                                borderRadius: currentChartType === 'bar' ? [6, 6, 0, 0] : [0, 0, 0, 0]
+                            },
+                            areaStyle: currentChartType === 'line' ? {
+                                color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                    { offset: 0, color: color + (selectedItems.length === 1 ? '1a' : '08') },
+                                    { offset: 1, color: color + '00' }
+                                ])
+                            } : null
                         });
-                    }                });
+                    }
+                });
 
                 // Build award overlay series (secondary Y-axis)
                 const awardSeries = buildAwardSeries(chartYears);
@@ -2043,21 +2070,28 @@ function formatEuro(val) {
                 const option = {
                     tooltip: {
                         trigger: 'axis',
-                        backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                        backgroundColor: 'rgba(255, 255, 255, 0.98)',
                         borderWidth: 1,
                         borderColor: '#e2e8f0',
+                        shadowColor: 'rgba(15, 23, 42, 0.08)',
+                        shadowBlur: 15,
+                        shadowOffsetX: 0,
+                        shadowOffsetY: 10,
+                        padding: [14, 18],
                         textStyle: {
                             color: '#1e293b',
                             fontSize: 12
                         },
-                        formatter: function(params) {                            const rawYear = params[0].name; // e.g. "2025", "2026 (P)", "2027 (P)"
+                        formatter: function(params) {
+                            const rawYear = params[0].name; // e.g. "2025", "2026 (P)", "2027 (P)"
                             const isForecastYear = rawYear.includes('(P)');
                             const cleanYear = rawYear.replace(' (P)', '').replace(' (parcial)', '');
                             
-                            let result = `<div class="font-bold border-b border-slate-100 pb-1 mb-1 text-slate-800">Exercici a 31/12/${rawYear}</div>`;
+                            let result = `<div class="font-bold border-b border-slate-100 pb-2 mb-2 text-slate-800 text-[13px]">Exercici a 31/12/${rawYear}</div>`;
                             if (isForecastYear) {
-                                result = `<div class="font-bold border-b border-slate-100 pb-1 mb-1 text-slate-800 text-emerald-800">Previsió Exercici ${cleanYear} (P)</div>`;
-                            }                            const seenConcepts = new Set();
+                                result = `<div class="font-bold border-b border-slate-100 pb-2 mb-2 text-emerald-800 text-[13px] flex items-center gap-1.5"><i class="fa-solid fa-wand-magic-sparkles text-[11px]"></i> Previsió Exercici ${cleanYear} (P)</div>`;
+                            }
+                            const seenConcepts = new Set();
                             params.forEach(param => {
                                 if (param.value === null || param.value === undefined || isNaN(param.value)) return;
                                 if (seenConcepts.has(param.seriesName)) return;
@@ -2067,12 +2101,12 @@ function formatEuro(val) {
                                 if (param.seriesName.startsWith('🏆 ')) {
                                     const formatted = new Intl.NumberFormat('ca-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(param.value);
                                     result += `
-                                        <div class="flex items-center justify-between gap-6 py-0.5">
-                                            <span class="flex items-center gap-1.5 text-amber-700 font-medium">
-                                                <span class="w-2.5 h-2.5 rounded-sm inline-block" style="background-color: ${param.color}"></span>
+                                        <div class="flex items-center justify-between gap-8 py-1">
+                                            <span class="flex items-center gap-2 text-amber-700 font-semibold text-xs">
+                                                <span class="w-3 h-3 rounded-[3px] inline-block" style="background: ${param.color}"></span>
                                                 ${param.seriesName}
                                             </span>
-                                            <span class="font-mono font-bold text-amber-800">${formatted}</span>
+                                            <span class="font-mono font-bold text-amber-900 text-xs">${formatted}</span>
                                         </div>
                                     `;
                                     return;
@@ -2090,34 +2124,38 @@ function formatEuro(val) {
                                 }
                                 
                                 result += `
-                                    <div class="flex items-center justify-between gap-6 py-0.5">
-                                        <span class="flex items-center gap-1.5 text-slate-600 font-medium">
+                                    <div class="flex items-center justify-between gap-8 py-1">
+                                        <span class="flex items-center gap-2 text-slate-600 font-semibold text-xs">
                                             <span class="w-2.5 h-2.5 rounded-full inline-block" style="background-color: ${param.color}"></span>
-                                            ${param.seriesName} ${isForecastYear ? '<span class="text-[10px] text-emerald-600 bg-emerald-50 px-1 rounded font-bold">Prev</span>' : ''}
+                                            ${param.seriesName} ${isForecastYear ? '<span class="text-[9px] text-emerald-600 bg-emerald-50 px-1 py-0.5 rounded font-bold uppercase tracking-wider">Prev</span>' : ''}
                                         </span>
-                                        <span class="font-mono font-bold text-slate-800">${formatEuro(origVal)}</span>
+                                        <span class="font-mono font-bold text-slate-900 text-xs">${formatEuro(origVal)}</span>
                                     </div>
                                 `;
                             });
                             return result;
                         }
-                    },                    legend: {
+                    },
+                    legend: {
                         data: [
                             ...selectedItems.map(item => item.concept),
                             ...awardSeries.map(s => s.name)
                         ],
                         bottom: 0,
                         type: 'scroll',
+                        itemGap: 18,
                         textStyle: {
                             fontSize: 11,
+                            fontWeight: '500',
                             color: '#475569'
                         },
                         icon: 'circle'
-                    },                    grid: {
-                        top: '8%',
+                    },
+                    grid: {
+                        top: '10%',
                         left: '2%',
                         right: '4%',
-                        bottom: '12%',
+                        bottom: '15%',
                         containLabel: true
                     },
                     xAxis: {
