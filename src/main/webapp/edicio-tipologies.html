@@ -263,6 +263,7 @@
         }
         .col-pill.selected-uuid  { background: #fef9c3; border-color: #fbbf24; color: #92400e; }
         .col-pill.selected-valor { background: #dbeafe; border-color: #60a5fa; color: #1e40af; }
+        .col-pill.selected-dictvalue { background: #dcfce7; border-color: #4ade80; color: #166534; }
         .col-pill:hover { border-color: var(--uab-campus); }
 
         /* ── Progress bar ── */
@@ -553,7 +554,7 @@
             </div>
         </div>
 
-        <div class="grid grid-cols-2 gap-6 mb-5">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-5">
             <div>
                 <label class="block text-xs font-bold mb-2" style="color:#92400e">
                     <i class="fa-solid fa-key mr-1"></i> Columna UUID
@@ -565,6 +566,12 @@
                     <i class="fa-solid fa-arrow-right-to-bracket mr-1"></i> Columna Valor
                 </label>
                 <div id="valor-col-pills" class="flex flex-wrap gap-2"></div>
+            </div>
+            <div>
+                <label class="block text-xs font-bold mb-2" style="color:#166534">
+                    <i class="fa-solid fa-search mr-1"></i> Columna dictValue (opcional)
+                </label>
+                <div id="dictvalue-col-pills" class="flex flex-wrap gap-2"></div>
             </div>
         </div>
 
@@ -647,6 +654,7 @@ let parsedRows   = [];     // [{col0, col1, ...}]
 let headers      = [];     // noms de les columnes detectades
 let uuidCol      = null;   // índex columna UUID
 let valorCol     = null;   // índex columna Valor
+let dictValueCol = null;   // índex columna dictValue (opcional)
 let resultats    = [];     // resultats del batch
 
 let activePreset = 'custom';
@@ -1289,6 +1297,9 @@ function parseData() {
 }
 
 function autoSelectColumns() {
+    uuidCol = null;
+    valorCol = null;
+    dictValueCol = null;
     const looksLikeUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-/i;
     const looksLikeUri  = /^\/dk\//i;
 
@@ -1301,6 +1312,8 @@ function autoSelectColumns() {
         } else if (!valorCol && (headerLower.includes('uri') || headerLower.includes('valor') ||
                 sampleVals.some(v => looksLikeUri.test(v)))) {
             selectValorCol(i);
+        } else if (!dictValueCol && (headerLower.includes('dictvalue') || headerLower.includes('dict-value') || headerLower.includes('cercar'))) {
+            selectDictValueCol(i);
         }
     });
 
@@ -1310,10 +1323,14 @@ function autoSelectColumns() {
 
 /* ── Column pickers ───────────────────────────────────────── */
 function buildColumnPickers() {
-    ['uuid-col-pills', 'valor-col-pills'].forEach(id => {
+    ['uuid-col-pills', 'valor-col-pills', 'dictvalue-col-pills'].forEach(id => {
         const container = document.getElementById(id);
+        if (!container) return;
         container.innerHTML = headers.map((h, i) => `
-            <button class="col-pill" id="${id}-${i}" onclick="${id === 'uuid-col-pills' ? 'selectUuidCol' : 'selectValorCol'}(${i})">
+            <button class="col-pill" id="${id}-${i}" onclick="${
+                id === 'uuid-col-pills' ? 'selectUuidCol' : 
+                id === 'valor-col-pills' ? 'selectValorCol' : 'selectDictValueCol'
+            }(${i})">
                 ${escHtml(h)}
             </button>
         `).join('');
@@ -1333,6 +1350,19 @@ function selectValorCol(i) {
     valorCol = i;
     document.querySelectorAll('#valor-col-pills .col-pill').forEach((el, idx) => {
         el.classList.toggle('selected-valor', idx === i);
+    });
+    refreshPreviewHighlight();
+    checkStep4Ready();
+}
+
+function selectDictValueCol(i) {
+    if (dictValueCol === i) {
+        dictValueCol = null;
+    } else {
+        dictValueCol = i;
+    }
+    document.querySelectorAll('#dictvalue-col-pills .col-pill').forEach((el, idx) => {
+        el.classList.toggle('selected-dictvalue', idx === dictValueCol);
     });
     refreshPreviewHighlight();
     checkStep4Ready();
@@ -1367,9 +1397,19 @@ function refreshPreviewHighlight() {
     headers.forEach((_, i) => {
         const th = document.getElementById(`th-col-${i}`);
         if (!th) return;
-        th.style.background  = i === uuidCol  ? '#fef9c3'
-                             : i === valorCol ? '#dbeafe' : '';
-        th.style.color = i === uuidCol ? '#92400e' : i === valorCol ? '#1e40af' : '';
+        if (i === uuidCol) {
+            th.style.background = '#fef9c3';
+            th.style.color = '#92400e';
+        } else if (i === valorCol) {
+            th.style.background = '#dbeafe';
+            th.style.color = '#1e40af';
+        } else if (i === dictValueCol) {
+            th.style.background = '#dcfce7';
+            th.style.color = '#166534';
+        } else {
+            th.style.background = '';
+            th.style.color = '';
+        }
     });
 }
 
@@ -1390,10 +1430,16 @@ async function executeBatch() {
         return;
     }
 
-    const files = parsedRows.map(row => ({
-        uuid:  (row[uuidCol]  || '').trim().toLowerCase(),
-        valor: (row[valorCol] || '').trim().toLowerCase()
-    })).filter(f => f.uuid && f.uuid !== 'null');
+    const files = parsedRows.map(row => {
+        const item = {
+            uuid:  (row[uuidCol]  || '').trim().toLowerCase(),
+            valor: (row[valorCol] || '').trim().toLowerCase()
+        };
+        if (dictValueCol !== null) {
+            item.dictValue = (row[dictValueCol] || '').trim();
+        }
+        return item;
+    }).filter(f => f.uuid && f.uuid !== 'null');
 
     if (files.length === 0) { alert('No hi ha files vàlides per processar.'); return; }
 
@@ -1525,7 +1571,7 @@ function exportCSV() {
 /* ── Reset ────────────────────────────────────────────────── */
 function resetAll() {
     if (!confirm('Vols reiniciar? Es perdran les dades carregades.')) return;
-    parsedRows = []; headers = []; uuidCol = null; valorCol = null; resultats = [];
+    parsedRows = []; headers = []; uuidCol = null; valorCol = null; dictValueCol = null; resultats = [];
     document.getElementById('paste-area').value = '';
     document.getElementById('paste-area').classList.remove('has-data');
     document.getElementById('parse-count').textContent = '';

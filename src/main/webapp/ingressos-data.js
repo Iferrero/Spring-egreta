@@ -1,4 +1,3 @@
-// This file is auto-generated from Ingressos Recerca.xlsx
 const INGRESSOS_DATA = [
   {
     "concept": "PS Recerca (Cap. 3)  No competitiva",

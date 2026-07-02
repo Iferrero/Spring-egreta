@@ -288,7 +288,14 @@ public class EgretaEditorController {
                 }
 
                 // ── 3. Editar ────────────────────────────────────────────────
-                boolean changed = edicioDades(data, clave, valor, dictType, dictName, dictValue);
+                String rowDictValue = dictValue;
+                if (fila.containsKey("dictValue")) {
+                    rowDictValue = (String) fila.get("dictValue");
+                    if (rowDictValue != null) {
+                        rowDictValue = rowDictValue.trim();
+                    }
+                }
+                boolean changed = edicioDades(data, clave, valor, dictType, dictName, rowDictValue);
 
                 if (!changed) {
                     resultat.put("status",  "SKIP");
@@ -356,76 +363,132 @@ public class EgretaEditorController {
 
         // ── Camp simple ──────────────────────────────────────────────────────
         if (dictType == null || dictType.isBlank()) {
-            String actual = String.valueOf(data.getOrDefault(clave, ""));
-            if (valor.equals(actual)) return false;
-            data.put(clave, valor);
-            return true;
+            Object actualObj = data.get(clave);
+            String actual = actualObj != null ? String.valueOf(actualObj) : "";
+            if (!valor.equals(actual)) {
+                data.put(clave, valor);
+                return true;
+            } else {
+                System.out.println("Ya existe clave " + clave + " con valor: " + valor);
+                return false;
+            }
         }
 
         // ── Dict (objecte annidat) ──────────────────────────────────────────
         if ("dict".equals(dictType)) {
             Map<String, Object> nested = (Map<String, Object>) data.computeIfAbsent(
                     dictName, k -> new LinkedHashMap<>());
-            String actual = String.valueOf(nested.getOrDefault(clave, ""));
-            if (dictValue != null && !dictValue.isBlank()) {
-                // Comprovem contra dictValue (valor actual esperat), no contra valor nou
-                if (dictValue.equals(actual)) {
-                    return false; // ja correcte
+            Object actualObj = nested.get(clave);
+            String actual = actualObj != null ? String.valueOf(actualObj) : "";
+
+            if (dictValue == null || dictValue.isBlank()) {
+                if (!valor.equals(actual)) {
+                    nested.put(clave, valor);
+                    return true;
+                } else {
+                    System.out.println("Ya existe clave " + clave + " con valor: " + valor);
+                    return false;
                 }
-                nested.put(clave, valor);
-                return true;
+            } else {
+                // comprobamos
+                if (!dictValue.equals(actual)) {
+                    nested.put(clave, valor);
+                    return true;
+                } else {
+                    // no editamos
+                    return false;
+                }
             }
-            if (valor.equals(actual)) return false;
-            nested.put(clave, valor);
-            return true;
         }
 
         // ── List ─────────────────────────────────────────────────────────────
         if ("list".equals(dictType)) {
-            List<Map<String, Object>> list;
-            if (!data.containsKey(dictName)) {
-                list = new ArrayList<>();
-                data.put(dictName, list);
-                Map<String, Object> nouElement = new LinkedHashMap<>();
-                setNestedValue(nouElement, clave, valor);
-                list.add(nouElement);
+            if (!data.containsKey(dictName) || data.get(dictName) == null) {
+                List<Map<String, Object>> listaRegistros = new ArrayList<>();
+                data.put(dictName, listaRegistros);
+                Map<String, Object> nuevoElemento = new LinkedHashMap<>();
+                if (clave.contains(".")) {
+                    String[] claves = clave.split("\\.", 2);
+                    Map<String, Object> subMap = new LinkedHashMap<>();
+                    subMap.put(claves[1], valor);
+                    nuevoElemento.put(claves[0], subMap);
+                } else {
+                    nuevoElemento.put(clave, valor);
+                }
+                listaRegistros.add(nuevoElemento);
                 return true;
             }
-            list = (List<Map<String, Object>>) data.get(dictName);
 
-            boolean[] dotNotation = {clave.contains(".")};
-            String[] parts = dotNotation[0] ? clave.split("\\.", 2) : new String[]{clave};
+            List<Map<String, Object>> list = (List<Map<String, Object>>) data.get(dictName);
+            boolean modified = false;
 
-            for (Map<String, Object> elem : list) {
-                String elemVal;
-                if (dotNotation[0]) {
-                    Map<?, ?> nestedMap = (Map<?, ?>) elem.getOrDefault(parts[0], Map.of());
-                    Object nestedVal = nestedMap.get(parts[1]);
-                    elemVal = String.valueOf(nestedVal == null ? "" : nestedVal);
-                } else {
-                    elemVal = String.valueOf(elem.getOrDefault(clave, ""));
+            if (clave.contains(".")) {
+                String[] claves = clave.split("\\.", 2);
+                for (Map<String, Object> elemento : list) {
+                    if (!elemento.containsKey(claves[0])) {
+                        Map<String, Object> subMap = new LinkedHashMap<>();
+                        subMap.put(claves[1], valor);
+                        elemento.put(claves[0], subMap);
+                        modified = true;
+                    } else {
+                        Object subMapObj = elemento.get(claves[0]);
+                        if (subMapObj instanceof Map) {
+                            Map<String, Object> subMap = (Map<String, Object>) subMapObj;
+                            Object currentVal = subMap.get(claves[1]);
+                            if (currentVal == null) {
+                                subMap.put(claves[1], valor);
+                                modified = true;
+                            } else {
+                                if (dictValue != null && !dictValue.isBlank() && dictValue.equals(String.valueOf(currentVal))) {
+                                    if (!valor.equals(currentVal)) {
+                                        subMap.put(claves[1], valor);
+                                        modified = true;
+                                    }
+                                } else {
+                                    continue;
+                                }
+                            }
+                        }
+                    }
                 }
-
-                boolean matchesDictValue = dictValue != null && !dictValue.isBlank()
-                        && elem.containsValue(dictValue);
-
-                if (matchesDictValue) {
-                    setNestedValue(elem, clave, valor);
-                    return true;
+            } else {
+                boolean foundOrBroken = false;
+                for (Map<String, Object> elemento : list) {
+                    if (dictValue != null && !dictValue.isBlank() && elemento.containsValue(dictValue)) {
+                        Object currentValObj = elemento.get(clave);
+                        String currentVal = currentValObj != null ? String.valueOf(currentValObj) : "";
+                        if (!valor.equals(currentVal)) {
+                            elemento.put(clave, valor);
+                            modified = true;
+                        }
+                        foundOrBroken = true;
+                        break;
+                    } else {
+                        Object currentValObj = elemento.get(clave);
+                        String currentVal = currentValObj != null ? String.valueOf(currentValObj) : "";
+                        if (valor.equals(currentVal)) {
+                            foundOrBroken = true;
+                            break;
+                        } else {
+                            if (list.size() == 1) {
+                                if (!valor.equals(currentVal)) {
+                                    elemento.put(clave, valor);
+                                    modified = true;
+                                }
+                                foundOrBroken = true;
+                                break;
+                            }
+                        }
+                    }
                 }
-                if (valor.equals(elemVal)) {
-                    return false; // ja correcte
-                }
-                if (list.size() == 1) {
-                    setNestedValue(elem, clave, valor);
-                    return true;
+                if (!foundOrBroken) {
+                    Map<String, Object> nuevoElemento = new LinkedHashMap<>();
+                    nuevoElemento.put(clave, valor);
+                    list.add(nuevoElemento);
+                    modified = true;
                 }
             }
-            // No trobat → afegim element nou
-            Map<String, Object> nouElement = new LinkedHashMap<>();
-            setNestedValue(nouElement, clave, valor);
-            list.add(nouElement);
-            return true;
+            return modified;
         }
 
         return false;

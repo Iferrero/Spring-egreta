@@ -96,6 +96,11 @@ public class AwardController {
         return service.getTipusPerCategoria();
     }
 
+    @GetMapping("/stats/import-per-tipus-anio")
+    public List<Document> getImportPerTipusAnio() {
+        return service.getImportPerTipusAnio();
+    }
+
     @GetMapping("/stats/total")
     public Map<String, Object> getTotalStats() {
         return service.getTotalStats();
@@ -2101,6 +2106,192 @@ public class AwardController {
         response.put("rejectedEvolution", rejectedEvolutionList);
 
         return response;
+    }
+
+    @GetMapping("/stats/fellowship-call-types")
+    public List<String> getFellowshipCallTypes() {
+        List<String> appUuids = mongoTemplate.getCollection("Awards")
+                .distinct("applications.uuid", new Document("type.term.ca_ES", new Document("$in", Arrays.asList("Beques", "Beques Internacionals")))
+                        .append("workflow.step", "validated"), String.class)
+                .into(new ArrayList<>());
+
+        if (appUuids.isEmpty()) {
+            return List.of();
+        }
+
+        List<String> fundingOppUuids = mongoTemplate.getCollection("Applications")
+                .distinct("fundingOpportunity.uuid", new Document("uuid", new Document("$in", appUuids)), String.class)
+                .into(new ArrayList<>());
+
+        if (fundingOppUuids.isEmpty()) {
+            return List.of();
+        }
+
+        List<Document> fOpps = mongoTemplate.getCollection("FundingOpportunities")
+                .find(new Document("uuid", new Document("$in", fundingOppUuids)))
+                .projection(new Document("type", 1))
+                .into(new ArrayList<>());
+
+        Set<String> callTypes = new java.util.TreeSet<>();
+        for (Document doc : fOpps) {
+            Object typeObj = doc.get("type");
+            if (typeObj instanceof Document tDoc) {
+                Object termObj = tDoc.get("term");
+                if (termObj instanceof Document termDoc) {
+                    String caVal = termDoc.getString("ca_ES");
+                    if (caVal != null && !caVal.isBlank()) {
+                        callTypes.add(caVal);
+                        continue;
+                    }
+                    Object textObj = termDoc.get("text");
+                    if (textObj instanceof List<?> list) {
+                        for (Object o : list) {
+                            if (o instanceof Document td && "ca_ES".equals(td.getString("locale"))) {
+                                String val = td.getString("value");
+                                if (val != null && !val.isBlank()) {
+                                    callTypes.add(val);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                } else if (termObj instanceof List<?> list) {
+                    for (Object o : list) {
+                        if (o instanceof Document td && "ca_ES".equals(td.getString("locale"))) {
+                            String val = td.getString("value");
+                            if (val != null && !val.isBlank()) {
+                                callTypes.add(val);
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return new ArrayList<>(callTypes);
+    }
+
+    @GetMapping("/stats/international-call-types")
+    public List<String> getInternationalCallTypes() {
+        List<String> appUuids = mongoTemplate.getCollection("Awards")
+                .distinct("applications.uuid", new Document("type.term.ca_ES", "Projectes d'investigació Internacionals")
+                        .append("workflow.step", "validated"), String.class)
+                .into(new ArrayList<>());
+
+        if (appUuids.isEmpty()) {
+            return List.of();
+        }
+
+        List<String> fundingOppUuids = mongoTemplate.getCollection("Applications")
+                .distinct("fundingOpportunity.uuid", new Document("uuid", new Document("$in", appUuids)), String.class)
+                .into(new ArrayList<>());
+
+        if (fundingOppUuids.isEmpty()) {
+            return List.of();
+        }
+
+        List<Document> fOpps = mongoTemplate.getCollection("FundingOpportunities")
+                .find(new Document("uuid", new Document("$in", fundingOppUuids)))
+                .projection(new Document("type", 1))
+                .into(new ArrayList<>());
+
+        Set<String> callTypes = new java.util.TreeSet<>();
+        for (Document doc : fOpps) {
+            Object typeObj = doc.get("type");
+            if (typeObj instanceof Document tDoc) {
+                Object termObj = tDoc.get("term");
+                if (termObj instanceof Document termDoc) {
+                    String caVal = termDoc.getString("ca_ES");
+                    if (caVal != null && !caVal.isBlank()) {
+                        callTypes.add(caVal);
+                        continue;
+                    }
+                    Object textObj = termDoc.get("text");
+                    if (textObj instanceof List<?> list) {
+                        for (Object o : list) {
+                            if (o instanceof Document td && "ca_ES".equals(td.getString("locale"))) {
+                                String val = td.getString("value");
+                                if (val != null && !val.isBlank()) {
+                                    callTypes.add(val);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                } else if (termObj instanceof List<?> list) {
+                    for (Object o : list) {
+                        if (o instanceof Document td && "ca_ES".equals(td.getString("locale"))) {
+                            String val = td.getString("value");
+                            if (val != null && !val.isBlank()) {
+                                callTypes.add(val);
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return new ArrayList<>(callTypes);
+    }
+
+    @GetMapping("/stats/research-project-programs")
+    public List<String> getResearchProjectPrograms() {
+        // Step 1: get application UUIDs from Projectes i Ajuts a la Recerca awards
+        List<String> appUuids = mongoTemplate.getCollection("Awards")
+                .distinct("applications.uuid",
+                        new Document("type.term.ca_ES", "Projectes i Ajuts a la Recerca")
+                                .append("workflow.step", "validated"),
+                        String.class)
+                .into(new ArrayList<>());
+
+        if (appUuids.isEmpty()) return List.of();
+
+        // Step 2: get FundingOpportunity UUIDs from Applications
+        List<String> foppUuids = mongoTemplate.getCollection("Applications")
+                .distinct("fundingOpportunity.uuid",
+                        new Document("uuid", new Document("$in", appUuids)),
+                        String.class)
+                .into(new ArrayList<>());
+
+        if (foppUuids.isEmpty()) return List.of();
+
+        // Step 3: get programme names from FundingOpportunities keywordGroups
+        List<Document> fOpps = mongoTemplate.getCollection("FundingOpportunities")
+                .find(new Document("uuid", new Document("$in", foppUuids)))
+                .projection(new Document("keywordGroups", 1))
+                .into(new ArrayList<>());
+
+        Set<String> programs = new java.util.TreeSet<>();
+        for (Document fopp : fOpps) {
+            Object kgObj = fopp.get("keywordGroups");
+            if (!(kgObj instanceof List<?> kgList)) continue;
+            for (Object kgItem : kgList) {
+                if (!(kgItem instanceof Document kg)) continue;
+                if (!"/uab/fundingopportunities/programes".equals(kg.getString("logicalName"))) continue;
+                Object kcObj = kg.get("keywordContainers");
+                if (!(kcObj instanceof List<?> kcList) || kcList.isEmpty()) continue;
+                for (Object kcItem : kcList) {
+                    if (!(kcItem instanceof Document kc)) continue;
+                    Object skObj = kc.get("structuredKeyword");
+                    if (!(skObj instanceof Document sk)) continue;
+                    Object termObj = sk.get("term");
+                    if (!(termObj instanceof Document termDoc)) continue;
+                    Object textObj = termDoc.get("text");
+                    if (textObj instanceof List<?> textList) {
+                        for (Object tItem : textList) {
+                            if (tItem instanceof Document td && "ca_ES".equals(td.getString("locale"))) {
+                                String val = td.getString("value");
+                                if (val != null && !val.isBlank()) {
+                                    programs.add(val);
+                                }
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return new ArrayList<>(programs);
     }
 
     private boolean isBeneficiaryRole(String uri, String ca, String es) {
