@@ -138,12 +138,57 @@ public class AwardService {
         .toList();
     }
 
-        public List<Document> getTipusPerCategoria() {
-                return runPipeline(
-                                "mongodb/awards/tipus-per-categoria.json",
-                                null
-                );
+    public List<Document> getTipusPerCategoria() {
+        List<Document> list = new ArrayList<>(runPipeline(
+                "mongodb/awards/tipus-per-categoria.json",
+                null
+        ));
+        boolean exists = list.stream().anyMatch(d -> "Prestació de Serveis".equals(d.getString("tipus")));
+        if (!exists) {
+            list.add(new Document()
+                    .append("categoria", "Ajudes no competitives nacionals")
+                    .append("tipus", "Prestació de Serveis"));
         }
+        return list;
+    }
+
+    public List<Document> getImportPerTipusAnio() {
+        List<Document> list = new ArrayList<>(runPipeline(
+                "mongodb/awards/import-per-tipus-anio.json",
+                null
+        ));
+        
+        // Aggregate Excel-based Prestació de Serveis imports across all units (global UAB totals)
+        Map<Integer, Map<String, Double>> byYear = new LinkedHashMap<>();
+        if (excelCache != null) {
+            for (Map<Integer, Map<String, Double>> orgCache : excelCache.values()) {
+                if (orgCache != null) {
+                    orgCache.forEach((year, ids) -> {
+                        if (ids != null) {
+                            Map<String, Double> aggregatedIds = byYear.computeIfAbsent(year, k -> new LinkedHashMap<>());
+                            ids.forEach((id, val) -> {
+                                aggregatedIds.merge(id, val, Double::sum);
+                            });
+                        }
+                    });
+                }
+            }
+        }
+
+        byYear.forEach((year, ids) -> {
+            if (ids != null && !ids.isEmpty()) {
+                double totalImport = ids.values().stream().mapToDouble(Double::doubleValue).sum();
+                list.add(new Document()
+                        .append("tipus", "Prestació de Serveis")
+                        .append("anyo", year)
+                        .append("totalImport", totalImport)
+                        .append("count", ids.size())
+                        .append("orgScope", "UAB")
+                        .append("isDeclined", false));
+            }
+        });
+        return list;
+    }
 
     /*
     ===============================
@@ -215,7 +260,7 @@ public class AwardService {
         return combined;
     }
 
-    private List<Document> getExcelPrestacioLlistaRows(String orgUuid, Integer desde, Integer hasta) {
+    public List<Document> getExcelPrestacioLlistaRows(String orgUuid, Integer desde, Integer hasta) {
         Map<Integer, Map<String, Double>> byYear = excelCache.get(orgUuid);
         if (byYear == null || byYear.isEmpty()) return List.of();
         Map<Integer, Map<String, String>> tipusByYear = excelTipusCache.getOrDefault(orgUuid, Map.of());
@@ -238,12 +283,16 @@ public class AwardService {
                         .append("anyo", year)
                         .append("titulo", titol)
                         .append("tipoAward", "Prestació de Serveis")
-                        .append("categoria", "Prestació de Serveis")
+                        .append("categoria", "Ajudes no competitives nacionals")
                         .append("awardHoldersUuids", holdersUuids)
                         .append("institutionalPart", Math.round(importVal * 100.0) / 100.0));
             });
         });
         return result;
+    }
+
+    public Map<String, Map<Integer, Map<String, Double>>> getExcelCache() {
+        return excelCache;
     }
 
     public List<Document> getIpsInstitut(String collaboratorUuid,
@@ -487,7 +536,7 @@ public class AwardService {
             double totalImport = ids.values().stream().mapToDouble(Double::doubleValue).sum();
             result.add(new Document()
                     .append("anio", year)
-                    .append("categoria", "Prestació de Serveis")
+                    .append("categoria", "Ajudes no competitives nacionals")
                     .append("tipo", "Prestació de Serveis")
                     .append("ajuts", ids.size())
                     .append("import", Math.round(totalImport * 100.0) / 100.0)

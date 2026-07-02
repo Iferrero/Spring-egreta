@@ -1,0 +1,262 @@
+{
+  "collection": "Awards",
+  "pipeline": [
+    {
+      "$match": {
+        "$or": [
+          {
+            "type.term.ca_ES": "Conveni extern a la UAB",
+            "workflow.step": "approved"
+          },
+          {
+            "type.term.ca_ES": { "$ne": "Conveni extern a la UAB" },
+            "workflow.step": "validated"
+          }
+        ]
+      }
+    },
+    {
+      "$graphLookup": {
+        "from": "Organizations",
+        "startWith": "$managingOrganization.uuid",
+        "connectFromField": "parents.uuid",
+        "connectToField": "uuid",
+        "as": "orgAncestors"
+      }
+    },
+    {
+      "$addFields": {
+        "orgScope": {
+          "$cond": [
+            {
+              "$or": [
+                { "$eq": ["$managingOrganization.uuid", "53d7b18a-caf7-4ded-840e-942ff50adc82"] },
+                { "$in": ["53d7b18a-caf7-4ded-840e-942ff50adc82", "$orgAncestors.uuid"] }
+              ]
+            },
+            "Esfera",
+            "UAB"
+          ]
+        }
+      }
+    },
+    {
+      "$lookup": {
+        "from": "Applications",
+        "localField": "applications.uuid",
+        "foreignField": "uuid",
+        "as": "appDocs"
+      }
+    },
+    {
+      "$unwind": {
+        "path": "$appDocs",
+        "preserveNullAndEmptyArrays": true
+      }
+    },
+    {
+      "$lookup": {
+        "from": "FundingOpportunities",
+        "localField": "appDocs.fundingOpportunity.uuid",
+        "foreignField": "uuid",
+        "as": "fOpp"
+      }
+    },
+    {
+      "$unwind": {
+        "path": "$fOpp",
+        "preserveNullAndEmptyArrays": true
+      }
+    },
+    {
+      "$addFields": {
+        "awardDateReal": {
+          "$convert": {
+            "input": "$awardDate",
+            "to": "date",
+            "onError": null,
+            "onNull": null
+          }
+        },
+        "callType": {
+          "$cond": [
+            { "$eq": ["$type.term.ca_ES", "Projectes i Ajuts a la Recerca"] },
+            {
+              "$let": {
+                "vars": {
+                  "progGroup": {
+                    "$arrayElemAt": [
+                      {
+                        "$filter": {
+                          "input": { "$ifNull": ["$fOpp.keywordGroups", []] },
+                          "as": "kg",
+                          "cond": { "$eq": ["$$kg.logicalName", "/uab/fundingopportunities/programes"] }
+                        }
+                      },
+                      0
+                    ]
+                  }
+                },
+                "in": {
+                  "$let": {
+                    "vars": {
+                      "kc": { "$arrayElemAt": ["$$progGroup.keywordContainers", 0] }
+                    },
+                    "in": {
+                      "$let": {
+                        "vars": {
+                          "caText": {
+                            "$filter": {
+                              "input": { "$ifNull": ["$$kc.structuredKeyword.term.text", []] },
+                              "as": "t",
+                              "cond": { "$eq": ["$$t.locale", "ca_ES"] }
+                            }
+                          }
+                        },
+                        "in": {
+                          "$cond": [
+                            { "$gt": [{ "$size": "$$caText" }, 0] },
+                            { "$arrayElemAt": ["$$caText.value", 0] },
+                            null
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "$let": {
+                "vars": {
+                  "caText": {
+                    "$filter": {
+                      "input": { "$ifNull": ["$fOpp.type.term.text", []] },
+                      "as": "t",
+                      "cond": { "$eq": ["$$t.locale", "ca_ES"] }
+                    }
+                  }
+                },
+                "in": {
+                  "$cond": [
+                    { "$gt": [{ "$size": "$$caText" }, 0] },
+                    { "$arrayElemAt": ["$$caText.value", 0] },
+                    { "$ifNull": ["$fOpp.type.term.ca_ES", null] }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "$addFields": {
+        "anyo": {
+          "$cond": [
+            { "$ne": ["$awardDateReal", null] },
+            { "$year": "$awardDateReal" },
+            null
+          ]
+        }
+      }
+    },
+    {
+      "$match": {
+        "anyo": { "$ne": null },
+        "type.term.ca_ES": { "$ne": null, "$nin": [""] }
+      }
+    },
+    {
+      "$unwind": {
+        "path": "$fundings",
+        "preserveNullAndEmptyArrays": false
+      }
+    },
+    {
+      "$unwind": {
+        "path": "$fundings.fundingCollaborators",
+        "preserveNullAndEmptyArrays": false
+      }
+    },
+    {
+      "$match": {
+        "fundings.fundingCollaborators.collaborator.uuid": "84443078-1a60-462d-9d0a-b04312afd9eb"
+      }
+    },
+    {
+      "$addFields": {
+        "importe_partida": {
+          "$convert": {
+            "input": "$fundings.fundingCollaborators.institutionalPart.value",
+            "to": "double",
+            "onError": 0,
+            "onNull": 0
+          }
+        }
+      }
+    },
+    {
+      "$group": {
+        "_id": {
+          "uuid": "$uuid",
+          "tipus": "$type.term.ca_ES",
+          "anyo": "$anyo"
+        },
+        "importe": { "$sum": "$importe_partida" },
+        "nature": {
+          "$first": {
+            "$ifNull": [
+              { "$arrayElemAt": ["$natureTypes.term.ca_ES", 0] },
+              null
+            ]
+          }
+        },
+        "callType": { "$first": "$callType" },
+        "isDeclined": {
+          "$first": {
+            "$cond": [
+              { "$eq": ["$status.typeDiscriminator", "DeclinedAwardStatus"] },
+              true,
+              false
+            ]
+          }
+        },
+        "orgScope": { "$first": "$orgScope" }
+      }
+    },
+    {
+      "$group": {
+        "_id": {
+          "tipus": "$_id.tipus",
+          "anyo": "$_id.anyo",
+          "nature": "$nature",
+          "callType": "$callType",
+          "isDeclined": "$isDeclined",
+          "orgScope": "$orgScope"
+        },
+        "totalImport": { "$sum": "$importe" },
+        "count": { "$sum": 1 }
+      }
+    },
+    {
+      "$project": {
+        "_id": 0,
+        "tipus": "$_id.tipus",
+        "anyo": "$_id.anyo",
+        "nature": "$_id.nature",
+        "callType": "$_id.callType",
+        "isDeclined": "$_id.isDeclined",
+        "orgScope": "$_id.orgScope",
+        "totalImport": 1,
+        "count": 1
+      }
+    },
+    {
+      "$sort": {
+        "tipus": 1,
+        "anyo": 1
+      }
+    }
+  ]
+}

@@ -1,0 +1,36 @@
+=== INICI DE PROCES AUTO-APLICAR PAIS (TEST, Confiança >= 90%) === 2026-06-17T11:12:05.411194500
+[11:12:06] S'han trobat 8587 organitzacions sense pais. Processant en paral·lel (Confiança >= 90%)...
+[11:12:15] [APLICAT] Aventis-Pharma -> France (Confiança: 92%)
+[11:12:16] [APLICAT] Unidad de Bioestadistica (U.A.B.) -> Spain (Confiança: 96%)
+[11:12:16] [APLICAT] European Research Network Ltd -> United Kingdom (Confiança: 95%)
+[11:12:18] [OMES] A.C.C.C., S.A. (UUID: 475d8b3f-fd05-4f9a-b6ee-b63a8c0f4f96) - Sense suggeriment de pais.
+[11:12:18] [OMES] I.T.A. , S.A. ( Quimica-Farm.) (UUID: 9ca89da5-6cdb-497e-9e7f-337e604fe620) - Sense suggeriment de pais.
+[11:12:18] [OMES] Emcon Associates Inc. (UUID: a8c021e2-97e6-4efb-9561-4fcda97dbbc9) - Sense suggeriment de pais.
+[11:12:18] [OMES] Sweet-Edwards/EMCON, Inc. (UUID: 2212f04c-60e1-40f9-ac4d-872e00bdb81c) - Sense suggeriment de pais.
+[11:12:18] [OMES] Regional Activities Centre (RAC) (UUID: bb006f23-11cd-40ad-9e9a-7a36b336a4a9) - Sense suggeriment de pais.
+[11:12:18] [OMES] ICT - FOMENT (UUID: 9b13c3e9-6ad2-461b-9e24-eea0ddfe9fd1) - Sense suggeriment de pais.
+[11:12:18] [OMES] Athenaeum Beta (UUID: 1ca4f1bd-fc5b-43ca-aa29-42c08f6063c4) - Sense suggeriment de pais.
+[11:12:18] [OMES] Adecco-Aventis Pharma (UUID: d8b22609-6564-4fa7-9dc9-621773a5a2f8) - Sense suggeriment de pais.
+[11:12:18] [OMES] COSCE (UUID: 61341542-fdf8-4a0e-9936-f76ff7a98119) - Sense suggeriment de pais.
+[11:12:18] [OMES] EATRIS (UUID: eb87540a-0a37-401d-9846-8bda49eb62bc) - Sense suggeriment de pais.
+[11:12:18] [OMES] Centro de Estudios de Planificación (UUID: cdce2ffc-4f1a-44aa-9bc9-f9a9844dbd5a) - Sense suggeriment de pais.
+[11:12:18] [OMES] Sistemas Comunicación Pub. (UUID: c7e95c24-fc9f-4586-911d-c9817b3a585a) - Sense suggeriment de pais.
+[11:12:18] [OMES] Entitat Col·laboradora de l'Administració, S.A. (ECA) (UUID: b93f1229-1adf-40a7-8d8a-fe5213e8492a) - Sense suggeriment de pais.
+[11:12:20] Petició d'aturar el procés rebuda.
+[11:12:27] [OMES] Lab. Psico. Enfant París - Suggeriment: France (Confiança: 80% - baixa).
+[11:12:27] [OMES] Freudenberg, T.S.T., S.A. (UUID: 8fcffe71-320b-4adb-82a2-6fd1520c74c0) - Sense suggeriment de pais.
+[11:12:27] [OMES] Instituto Alemán - Suggeriment: Chile (Confiança: 79% - baixa).
+[11:12:27] [APLICAT] Instituto de Biología Celular del C.S.I.C -> Spain (Confiança: 99%)
+[11:12:27] [APLICAT] DICEN (Diario Deportivo) -> Spain (Confiança: 95%)
+[11:12:30] [OMES] Inst.Nat.Rech.Ped.París (UUID: f5002a59-f97c-4c84-85e0-b00c38792508) - Sense suggeriment de pais.
+[11:12:30] [OMES] Alas-J. Walter Thomson (UUID: 63b92797-9c45-48dc-a647-a84a7d602caf) - Sense suggeriment de pais.
+[11:12:30] [OMES] Burke Marketing Research (UUID: c1df6dd7-4d76-47ea-bb2a-2f2edf27a57f) - Sense suggeriment de pais.
+[11:12:30] [OMES] MMLB Publicidad (UUID: 3a007824-5fef-4088-a9dd-df28ac36611f) - Sense suggeriment de pais.
+[11:12:30] [OMES] Cid Publicidad (UUID: 8131518f-9c25-4a1b-8701-5571a4d560f0) - Sense suggeriment de pais.
+[11:12:30] [OMES] Promostaff (UUID: e57571bb-c787-408f-82c0-8516cd5af50d) - Sense suggeriment de pais.
+[11:12:30] [OMES] Reclamo Danone Publicidad (UUID: 47e1e9b3-da75-4fe9-88f2-d9317b5aabc7) - Sense suggeriment de pais.
+[11:12:30] [OMES] Empresa Sector Químico/HALL (UUID: 100dcd0d-59a4-4e9e-9620-d8ebeca73295) - Sense suggeriment de pais.
+[11:12:30] [OMES] Escuela Superior de Tecnología del ICT (UUID: 7e28c44b-4e96-4a31-808a-64d00504e178) - Sense suggeriment de pais.
+[11:12:30] [OMES] Fundación Centro de Estudios de Planificación (UUID: 7ceb206c-9e73-47fa-9b6e-bee376a9f4d2) - Sense suggeriment de pais.
+[11:12:30] [OMES] Privada (BUP) (UUID: d51f87e2-8863-40be-af8e-8cad322b80de) - Sense suggeriment de pais.
+[11:12:30] Proces finalitzat. Total processades: 32, Aplicades: 5

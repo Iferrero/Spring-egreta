@@ -116,17 +116,17 @@ public class ExternalOrganizationController {
     @Value("${app.ai.country-suggest.timeout-ms:2000}")
     private int aiCountrySuggestTimeoutMs;  // Reducido de 8000 a 2000ms para fallback rápido
 
-    @Value("${app.searxng.country-suggest.enabled:false}")
-    private boolean searxngCountrySuggestEnabled;
+    @Value("${app.websearch.country-suggest.enabled:false}")
+    private boolean websearchCountrySuggestEnabled;
 
-    @Value("${app.searxng.country-suggest.url:}")
-    private String searxngCountrySuggestUrl;
+    @Value("${app.websearch.country-suggest.url:}")
+    private String websearchCountrySuggestUrl;
 
-    @Value("${app.searxng.country-suggest.timeout-ms:2500}")
-    private int searxngCountrySuggestTimeoutMs;
+    @Value("${app.websearch.country-suggest.timeout-ms:2500}")
+    private int websearchCountrySuggestTimeoutMs;
 
-    @Value("${app.searxng.country-suggest.max-results:5}")
-    private int searxngCountrySuggestMaxResults;
+    @Value("${app.websearch.country-suggest.max-results:5}")
+    private int websearchCountrySuggestMaxResults;
 
     @Value("${app.egreta.external-org.enabled:false}")
     private boolean egretaExternalOrgEnabled;
@@ -703,41 +703,39 @@ public class ExternalOrganizationController {
         List<CountryAggregate> countryCatalog = getCachedCountryCatalog();
         List<TypeAggregate>    typeCatalog    = getCachedTypeCatalog();
 
-        InferenceResult     countryResult = inferCountryFromName(orgName, countryCatalog);
-        TypeInferenceResult typeResult    = inferTypeFromName(orgName, typeCatalog);
-        FundingInferenceResult fundingResult = inferFundingFromName(orgName);
+        MetadataInferenceResult aiResult = inferMetadataWithLocalAi(orgName, countryCatalog, typeCatalog);
 
-        /*if (countryResult.countryLabel.isBlank()) {
-            InferenceResult searxngCountry = inferCountryWithSearxng(orgName, countryCatalog);
-            if (searxngCountry != null && !searxngCountry.countryLabel.isBlank()) {
-                countryResult = searxngCountry;
+        InferenceResult countryResult = null;
+        TypeInferenceResult typeResult = null;
+        FundingInferenceResult fundingResult = null;
+
+        if (aiResult != null) {
+            countryResult = aiResult.country();
+            typeResult = aiResult.type();
+            fundingResult = aiResult.funding();
+        }
+
+        // Fallbacks for country
+        if (countryResult == null || countryResult.countryLabel.isBlank()) {
+            countryResult = inferCountryWithWebSearch(orgName, countryCatalog);
+            if (countryResult == null || countryResult.countryLabel.isBlank()) {
+                countryResult = inferCountryFromName(orgName, countryCatalog);
             }
         }
 
-        if (typeResult.typeLabel.isBlank()) {
-            TypeInferenceResult aiType = inferTypeWithLocalAi(orgName, typeCatalog);
-            if (aiType != null && !aiType.typeLabel.isBlank()) {
-                typeResult = aiType;
-            }
-        }*/
-
-        if (countryResult.countryLabel.isBlank() || typeResult.typeLabel.isBlank() || fundingResult.fundingLabel.isBlank()) {
-            MetadataInferenceResult aiResult = inferMetadataWithLocalAi(orgName, countryCatalog, typeCatalog);
-            if (aiResult != null) {
-                if (countryResult.countryLabel.isBlank()
-                        && aiResult.country() != null && !aiResult.country().countryLabel.isBlank()) {
-                    countryResult = aiResult.country();
-                }
-                if (typeResult.typeLabel.isBlank()
-                        && aiResult.type() != null && !aiResult.type().typeLabel.isBlank()) {
-                    typeResult = aiResult.type();
-                }
-                if (fundingResult.fundingLabel.isBlank()
-                        && aiResult.funding() != null && !aiResult.funding().fundingLabel.isBlank()) {
-                    fundingResult = aiResult.funding();
-                }
+        // Fallbacks for type
+        if (typeResult == null || typeResult.typeLabel.isBlank()) {
+            typeResult = inferTypeWithLocalAi(orgName, typeCatalog);
+            if (typeResult == null || typeResult.typeLabel.isBlank()) {
+                typeResult = inferTypeFromName(orgName, typeCatalog);
             }
         }
+
+        // Fallbacks for funding
+        if (fundingResult == null || fundingResult.fundingLabel.isBlank()) {
+            fundingResult = inferFundingFromName(orgName);
+        }
+        
 
         String suggestedCountryUri = resolveCountryUriByLabel(countryResult.countryLabel);
 
@@ -1078,7 +1076,7 @@ public class ExternalOrganizationController {
                 HttpRequest.Builder getBuilder = HttpRequest.newBuilder()
                     .uri(URI.create(getUrl))
                     .timeout(Duration.ofMillis(Math.max(1000, egretaExternalOrgTimeoutMs)))
-                    .header("Accept", "application/json")
+                    .header("Accept", "application/json; charset=utf-8")
                     .GET();
                 appendEgretaAuth(getBuilder);
 
@@ -1750,6 +1748,9 @@ public class ExternalOrganizationController {
             putUrl = putUrl.replace("egreta.uab.cat", "egretat.uab.cat");
         } else if ("prod".equalsIgnoreCase(targetEnv)) {
             getUrl = getUrl.replace("egretat.uab.cat", "egreta.uab.cat");
+            putUrl = putUrl.replace("egretat.uab.cat", "egreta.uab.cat");
+        } else {
+             getUrl = getUrl.replace("egretat.uab.cat", "egreta.uab.cat");
             putUrl = putUrl.replace("egretat.uab.cat", "egreta.uab.cat");
         }
 
@@ -2626,7 +2627,7 @@ public class ExternalOrganizationController {
 
         InferenceResult result = suggestWithFallback(
             orgName,
-            () -> inferCountryWithSearxng(orgName, catalog),
+            () -> inferCountryWithWebSearch(orgName, catalog),
             r  -> r == null || r.countryLabel.isBlank(),
             () -> inferCountryFromName(orgName, catalog)
         );
@@ -2900,15 +2901,59 @@ public class ExternalOrganizationController {
     }
 
     private List<CountryAggregate> buildCountryCatalog() {
-        return statsByCountry(null).stream()
-            .map(row -> {
+        // 1. Get counts of already used countries to keep sorting by count
+        Map<String, Integer> counts = new HashMap<>();
+        try {
+            statsByCountry(null).forEach(row -> {
                 String label = Objects.toString(row.get("label"), "").trim();
                 int count = ((Number) row.getOrDefault("count", 0)).intValue();
-                return new CountryAggregate(label, normalizeText(label), count);
-            })
-            .filter(c -> !c.label.isBlank() && !"(desconegut)".equalsIgnoreCase(c.label))
-            .sorted(Comparator.comparingInt(CountryAggregate::count).reversed())
-            .collect(Collectors.toList());
+                counts.put(normalizeText(label), count);
+            });
+        } catch (Exception ignored) {}
+
+        List<CountryAggregate> fullCatalog = new ArrayList<>();
+        
+        // 2. Load all countries from the classification scheme
+        try {
+            Query query = new Query(Criteria.where("baseUri").is("/dk/atira/pure/core/countries"));
+            Document schemeDoc = mongoTemplate.findOne(query, Document.class, "Classificationschemes");
+            if (schemeDoc != null) {
+                @SuppressWarnings("unchecked")
+                List<Document> contained = (List<Document>) schemeDoc.get("containedClassifications");
+                if (contained != null) {
+                    for (Document c : contained) {
+                        Document termDoc = (Document) c.get("term");
+                        if (termDoc != null) {
+                            // Get Catalan label as primary, fallback to Spanish, then English
+                            String label = termDoc.getString("ca_ES");
+                            if (label == null || label.isBlank()) label = termDoc.getString("es_ES");
+                            if (label == null || label.isBlank()) label = termDoc.getString("en_GB");
+                            
+                            if (label != null && !label.isBlank() && !"(desconegut)".equalsIgnoreCase(label)) {
+                                int count = counts.getOrDefault(normalizeText(label), 0);
+                                fullCatalog.add(new CountryAggregate(label, normalizeText(label), count));
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Exception ignored) {}
+
+        // If the classification scheme failed to load or is empty, fallback to the stats-based catalog
+        if (fullCatalog.isEmpty()) {
+            return statsByCountry(null).stream()
+                .map(row -> {
+                    String label = Objects.toString(row.get("label"), "").trim();
+                    int count = ((Number) row.getOrDefault("count", 0)).intValue();
+                    return new CountryAggregate(label, normalizeText(label), count);
+                })
+                .filter(c -> !c.label.isBlank() && !"(desconegut)".equalsIgnoreCase(c.label))
+                .sorted(Comparator.comparingInt(CountryAggregate::count).reversed())
+                .collect(Collectors.toList());
+        }
+
+        fullCatalog.sort(Comparator.comparingInt(CountryAggregate::count).reversed().thenComparing(CountryAggregate::label));
+        return fullCatalog;
     }
 
     private int countryCountByLabel(String countryLabel, List<CountryAggregate> catalog) {
@@ -3050,17 +3095,17 @@ public class ExternalOrganizationController {
     }
 
     // =========================================================================
-    // Inferencia asistida por SearxNG para país + AI local para tipo
+    // Inferencia asistida por WebSearch para país + AI local para tipo
     // =========================================================================
 
-    private CompletableFuture<String> callSearxngApiAsync(String orgName) {
-        if (!searxngCountrySuggestEnabled || searxngCountrySuggestUrl == null || searxngCountrySuggestUrl.isBlank()) {
+    private CompletableFuture<String> callWebSearchApiAsync(String orgName) {
+        if (!websearchCountrySuggestEnabled || websearchCountrySuggestUrl == null || websearchCountrySuggestUrl.isBlank()) {
             return CompletableFuture.completedFuture(null);
         }
 
         try {
             String query = "\"" + orgName + "\" organization country";
-            String baseSearchUrl = resolveSearxngSearchUrl(searxngCountrySuggestUrl);
+            String baseSearchUrl = resolveWebSearchUrl(websearchCountrySuggestUrl);
             String separator = baseSearchUrl.contains("?") ? "&" : "?";
             String requestUrl = baseSearchUrl
                 + separator
@@ -3069,7 +3114,7 @@ public class ExternalOrganizationController {
 
             HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(requestUrl))
-                .timeout(Duration.ofMillis(Math.max(800, searxngCountrySuggestTimeoutMs)))
+                .timeout(Duration.ofMillis(Math.max(800, websearchCountrySuggestTimeoutMs)))
                 .header("Accept", "application/json")
                 .GET()
                 .build();
@@ -3081,14 +3126,14 @@ public class ExternalOrganizationController {
                     }
                     return response.body();
                 })
-                .orTimeout(searxngCountrySuggestTimeoutMs, TimeUnit.MILLISECONDS)
+                .orTimeout(websearchCountrySuggestTimeoutMs, TimeUnit.MILLISECONDS)
                 .exceptionally(e -> null);
         } catch (Exception e) {
             return CompletableFuture.completedFuture(null);
         }
     }
 
-    private String resolveSearxngSearchUrl(String configuredUrl) {
+    private String resolveWebSearchUrl(String configuredUrl) {
         String safe = configuredUrl == null ? "" : configuredUrl.trim();
         if (safe.endsWith("/sse")) {
             return safe.substring(0, safe.length() - 4) + "/search";
@@ -3096,13 +3141,13 @@ public class ExternalOrganizationController {
         return safe;
     }
 
-    private InferenceResult inferCountryWithSearxng(String orgName, List<CountryAggregate> catalog) {
-        String cacheKey = "country:searxng:" + orgName;
+    private InferenceResult inferCountryWithWebSearch(String orgName, List<CountryAggregate> catalog) {
+        String cacheKey = "country:websearch:" + orgName;
         CachedInference cached = countryInferenceCache.get(cacheKey);
         if (cached != null && (System.currentTimeMillis() - cached.timestamp()) < INFERENCE_CACHE_TTL_MS) {
             String cachedBody = cached.result();
             if (cachedBody != null) {
-                InferenceResult result = parseSearxngCountryResponse(cachedBody, catalog);
+                InferenceResult result = parseWebSearchCountryResponse(cachedBody, catalog);
                 return (result == null || result.countryLabel.isBlank()) ? null : result;
             }
             return null;
@@ -3110,22 +3155,22 @@ public class ExternalOrganizationController {
 
         String body = null;
         try {
-            body = callSearxngApiAsync(orgName)
-                .get(searxngCountrySuggestTimeoutMs + 500, TimeUnit.MILLISECONDS);
+            body = callWebSearchApiAsync(orgName)
+                .get(websearchCountrySuggestTimeoutMs + 500, TimeUnit.MILLISECONDS);
         } catch (Exception ignored) {
             body = null;
         }
 
         if (body != null) {
             countryInferenceCache.put(cacheKey, new CachedInference(body, System.currentTimeMillis()));
-            InferenceResult result = parseSearxngCountryResponse(body, catalog);
+            InferenceResult result = parseWebSearchCountryResponse(body, catalog);
             return (result == null || result.countryLabel.isBlank()) ? null : result;
         }
 
         return null;
     }
 
-    private InferenceResult parseSearxngCountryResponse(String rawBody, List<CountryAggregate> catalog) {
+    private InferenceResult parseWebSearchCountryResponse(String rawBody, List<CountryAggregate> catalog) {
         if (rawBody == null || rawBody.isBlank() || catalog == null || catalog.isEmpty()) {
             return null;
         }
@@ -3137,7 +3182,7 @@ public class ExternalOrganizationController {
                 return null;
             }
 
-            int maxResults = Math.max(1, searxngCountrySuggestMaxResults);
+            int maxResults = Math.max(1, websearchCountrySuggestMaxResults);
             Map<String, Integer> scores = new HashMap<>();
             int rank = 0;
 
@@ -3191,7 +3236,7 @@ public class ExternalOrganizationController {
             int score = scores.getOrDefault(bestCountry, 0);
             double confidence = clamp(0.55 + Math.min(0.40, score / 20.0));
             confidence = Math.round(confidence * 100.0) / 100.0;
-            return new InferenceResult(bestCountry, confidence, "searxng-match");
+            return new InferenceResult(bestCountry, confidence, "websearch-match");
         } catch (Exception ignored) {
             return null;
         }
@@ -3213,12 +3258,13 @@ public class ExternalOrganizationController {
             payload.put("model", aiCountrySuggestModel == null || aiCountrySuggestModel.isBlank()
                 ? "local-model" : aiCountrySuggestModel);
             payload.put("temperature", 0);
+            payload.put("reasoning_effort", "low"); 
             payload.put("messages", List.of(
                 Map.of("role", "system", "content", systemPrompt),
                 Map.of("role", "user",   "content", userPrompt)
             ));
             payload.put("response_format", Map.of("type", "json_object"));
-            //payload.put("max_tokens", maxTokens);
+            payload.put("max_tokens", 800);
 
             HttpRequest.Builder builder = HttpRequest.newBuilder()
                 .uri(URI.create(aiCountrySuggestUrl))
@@ -3257,13 +3303,20 @@ public class ExternalOrganizationController {
             return null;
         }
 
-        String systemPrompt =
-                "You are a data quality assistant specialized in research organizations. "
-                + "Given an organization name, infer the most likely country. "
-                + "Return strict JSON with exactly these keys: suggestedCountry, confidence, reason. "
-                + "confidence must be between 0 and 1. "
-                + "If uncertain, return suggestedCountry as empty string and confidence as 0. "
-                + "Never include explanation or markdown outside the JSON object.";
+       String systemPrompt =
+        "You are a data quality assistant specialized in research organizations. "
+        + "Given an organization name, first evaluate your internal confidence in inferring its country. "
+        + "CRITICAL RULE: you MUST use the web-search tool to research the organization and improve your confidence before generating the final answer. "
+         + "Return strict JSON with exactly these keys: \"suggestedCountry\", \"confidence\", \"reason\". "
+        + "confidence must be a number between 0 and 1. "
+        + "CRITICAL: Output ONLY the raw JSON object. Do NOT wrap the response in markdown blocks like ```json ... ```. "
+        + "Your response must start with '{' and end with '}'.\n\n"
+        + "Example Output:\n"
+        + "{\n"
+        + "  \"suggestedCountry\": \"Spain\",\n"
+        + "  \"confidence\": 0.95,\n"
+        + "  \"reason\": \"Web search confirms the organization is located in Barcelona or associated with UAB.\"\n"
+        + "}";
 
         String userPrompt = "Organization: '" + orgName + "'";
 
@@ -3303,13 +3356,16 @@ public class ExternalOrganizationController {
                 .collect(Collectors.joining(", "));
 
         String systemPrompt =
-                "You are a data quality assistant specialized in research organizations. "
-            + "Given an organization name, infer the most likely country, organization type, and funding profile (Publica or Privada). "
-                + "Return strict JSON with exactly these keys: "
-            + "suggestedCountry, countryConfidence, countryReason, suggestedType, typeConfidence, typeReason, suggestedFunding, fundingConfidence, fundingReason. "
-                + "Confidence values must be between 0 and 1. "
-                + "If uncertain, return the corresponding suggested field as empty string and its confidence as 0. "
-                + "Never include explanation or markdown outside the JSON object.";
+        "You are a data quality assistant for research organization metadata. "
+        + "Based solely on your training knowledge, infer the country, organization type, and funding profile. "
+         + "CRITICAL RULE: you MUST use the web-search tool to research the organization and improve your confidence before generating the final answer. "
+        + "Return ONLY a raw JSON object with exactly these keys: "
+        + "\"suggestedCountry\", \"countryConfidence\", \"countryReason\", "
+        + "\"suggestedType\", \"typeConfidence\", \"typeReason\", "
+        + "\"suggestedFunding\", \"fundingConfidence\", \"fundingReason\". "
+        + "Confidence values must be numbers between 0 and 1. "
+        + "If uncertain, return empty string and confidence 0. "
+        + "No markdown. Start with '{' and end with '}'.";
 
         String userPrompt = "Organization: '" + orgName + "'. Candidate types: " + typeCatalogText;
 
@@ -3402,11 +3458,12 @@ public class ExternalOrganizationController {
 
         String systemPrompt =
                 "You are a data quality assistant specialized in research organizations. "
-                + "Given an organization name, infer the most likely organization type. "
-                + "Return strict JSON with exactly these keys: suggestedType, confidence, reason. "
-                + "confidence must be between 0 and 1. "
-                + "If uncertain, return suggestedType as empty string and confidence as 0. "
-                + "Never include explanation or markdown outside the JSON object.";
+                + "Given an organization name, first evaluate your internal confidence in inferring its organization type. "
+               + "CRITICAL RULE: you MUST use the web-search tool to research the organization and improve your confidence before generating the final answer. "
+                + "Return strict JSON with exactly these keys: \"suggestedType\", \"confidence\", \"reason\". "
+                + "confidence must be a number between 0 and 1. "
+                + "CRITICAL: Output ONLY the raw JSON object. Do NOT wrap the response in markdown blocks like ```json ... ```. "
+                + "Your final response must start with '{' and end with '}'.";
 
         String userPrompt = "Organization: '" + orgName + "'. Candidate types: " + catalogText;
 
@@ -3446,12 +3503,16 @@ public class ExternalOrganizationController {
 
         String systemPrompt =
                 "You are a data quality assistant specialized in research organizations. "
-            + "Given an organization name, infer the most likely country, organization type, and funding profile (Publica or Privada). "
+                + "Given an organization name, first evaluate your internal confidence for its country, organization type, and funding profile (Publica or Privada). "
+                
                 + "Return strict JSON with exactly these keys: "
-            + "suggestedCountry, countryConfidence, countryReason, suggestedType, typeConfidence, typeReason, suggestedFunding, fundingConfidence, fundingReason. "
-                + "Confidence values must be between 0 and 1. "
-                + "If uncertain, return the corresponding suggested field as empty string and its confidence as 0. "
-                + "Never include explanation or markdown outside the JSON object.";
+                + "\"suggestedCountry\", \"countryConfidence\", \"countryReason\", "
+                + "\"suggestedType\", \"typeConfidence\", \"typeReason\", "
+                + "\"suggestedFunding\", \"fundingConfidence\", \"fundingReason\". "
+                + "Confidence values must be numbers between 0 and 1. "
+                
+                + "CRITICAL: Output ONLY the raw JSON object. Do NOT wrap the response in markdown blocks like ```json ... ```. "
+                + "Your final response must start with '{' and end with '}'.";
 
         String userPrompt = "Organization: '" + orgName + "'. Candidate types: " + typeCatalogText;
 
@@ -3624,11 +3685,32 @@ public class ExternalOrganizationController {
         String target = normalizeText(modelType);
         if (target.isBlank()) return "";
 
-        return catalog.stream()
+        // 1. Exact match
+        String direct = catalog.stream()
             .filter(t -> t.normalizedLabel.equals(target))
             .map(TypeAggregate::label)
             .findFirst()
             .orElse("");
+        if (!direct.isBlank()) return direct;
+
+        // 2. Partial match (if a catalog label is contained in the target, or target in catalog label)
+        String partial = catalog.stream()
+            .filter(t -> target.contains(t.normalizedLabel) || t.normalizedLabel.contains(target))
+            .max(Comparator.comparingInt(TypeAggregate::count))
+            .map(TypeAggregate::label)
+            .orElse("");
+        if (!partial.isBlank()) return partial;
+
+        // 3. Match via TYPE_HINTS
+        for (Map.Entry<String, List<String>> hint : TYPE_HINTS.entrySet()) {
+            boolean matched = hint.getValue().stream().anyMatch(k -> target.contains(normalizeText(k)));
+            if (matched) {
+                String resolved = resolveTypeByHint(hint.getValue(), catalog);
+                if (!resolved.isBlank()) return resolved;
+            }
+        }
+
+        return "";
     }
 
     private String resolveModelFundingLabel(String modelFunding) {
@@ -4078,9 +4160,9 @@ public class ExternalOrganizationController {
                             // 1. Coincidencia IA (solo prompt de país)
                             InferenceResult countryResult = inferCountryWithLocalAi(name, countryCatalog);
 
-                            // 2. SearxNG si la IA tampoco encuentra nada
+                            // 2. WebSearch si la IA tampoco encuentra nada
                             if (countryResult == null || countryResult.countryLabel.isBlank()) {
-                                countryResult = inferCountryWithSearxng(name, countryCatalog);
+                                countryResult = inferCountryWithWebSearch(name, countryCatalog);
                             }
                             
                             if (countryResult == null || countryResult.countryLabel.isBlank()) {

@@ -1,0 +1,959 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Finançament de les activitats de recerca | UAB</title>
+    <!-- Google Fonts: Inter & Outfit -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Apache ECharts -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    
+    <script src="config.js"></script>
+    <script src="uab-brand.js" defer></script>
+    <link rel="stylesheet" href="uab-theme.css">
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc;
+        }
+        h1, h2, h3, h4, .font-display {
+            font-family: 'Outfit', sans-serif;
+        }
+        
+        /* Custom palette matching UAB brand */
+        :root {
+            --uab-green-primary: #008037;
+            --uab-green-dark: #004d21;
+            --uab-green-light: #00cc58;
+            --uab-green-bg: #d8f3e3;
+            --uab-grey-dark: #2a3037;
+            --uab-grey-light: #a9b1bc;
+        }
+
+        .text-uab-green { color: var(--uab-green-primary); }
+        .bg-uab-green { bg-color: var(--uab-green-primary); }
+        .border-uab-green { border-color: var(--uab-green-primary); }
+        
+        .premium-shadow {
+            box-shadow: 0 4px 20px -2px rgba(0, 128, 55, 0.06), 0 2px 8px -1px rgba(0, 128, 55, 0.04);
+        }
+        
+        .card-glow:hover {
+            box-shadow: 0 10px 30px -5px rgba(0, 128, 55, 0.12), 0 4px 12px -2px rgba(0, 128, 55, 0.08);
+        }
+
+        .animate-fade-in {
+            animation: fadeIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        
+        .animate-slide-up {
+            animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(15px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Micro-interactions */
+        .hover-lift {
+            transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+        }
+        .hover-lift:hover {
+            transform: translateY(-4px);
+        }
+
+        /* ECharts container styling */
+        .chart-container {
+            width: 100%;
+            height: 140px;
+            margin-top: 10px;
+            transition: all 0.3s ease;
+        }
+    </style>
+</head>
+<body class="min-h-screen text-slate-800 flex flex-col">
+
+    <!-- UAB brandbar bypass element -->
+    <header class="uab-brandbar flex flex-col md:flex-row items-center justify-between gap-4 py-4 px-6 md:px-12 bg-white border-b border-slate-200 shadow-sm z-30">
+        <a class="uab-brandbar__link flex items-center" href="https://www.uab.cat/" target="_blank" rel="noopener noreferrer">
+            <img class="h-12 w-auto hover:opacity-90 transition-opacity" src="https://www.uab.cat/Xcelerate/WAI/img/UAB-2linies-verd.svg" alt="Logotip de la Universitat Autònoma de Barcelona">
+        </a>
+        
+        <div class="flex flex-col md:items-end text-center md:text-right flex-grow md:px-8">
+            <h1 class="text-xl md:text-2xl font-extrabold text-[#008037] flex flex-wrap justify-center md:justify-end items-center gap-x-2">
+                <span class="font-light text-slate-500">INPUT ·</span>
+                <span>Finançament de les activitats de recerca</span>
+            </h1>
+            <p class="text-xs md:text-sm italic text-[#008037] font-semibold mt-1">
+                Una base econòmica robusta i diversificada per sostenir la recerca de la UAB
+            </p>
+        </div>
+        
+        <div class="flex items-center gap-3">
+            <!-- Historical Toggle Button -->
+            <button id="toggleTrendBtn" onclick="toggleTrendView()" class="flex items-center gap-2 px-4 py-2 text-xs font-bold text-[#008037] bg-[#d8f3e3] hover:bg-[#c2edd2] rounded-full transition-all active:scale-95 shadow-sm border border-[#008037]/20">
+                <i id="toggleTrendIcon" class="fa-solid fa-chart-line"></i>
+                <span id="toggleTrendText">Veure Gràfics de Tendència</span>
+            </button>
+            
+            <a href="index.html" class="flex items-center gap-2 px-4 py-2 text-xs font-bold text-slate-600 hover:text-emerald-700 bg-white border border-slate-200 rounded-full transition-all shadow-sm active:scale-95">
+                <i class="fa-solid fa-house"></i>
+                <span>Inici</span>
+            </a>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="flex-grow w-full max-w-[1400px] mx-auto px-6 md:px-12 py-8 flex flex-col gap-8 animate-fade-in">
+
+        <!-- Year Selector Panel -->
+        <section class="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-6 hover:border-emerald-200 transition-all duration-300">
+            <div>
+                <h2 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                    <i class="fa-solid fa-calendar-days text-[#008037]"></i>
+                    <span>Paràmetres del Dashboard</span>
+                </h2>
+                <p class="text-xs text-slate-500 mt-1">Selecciona l'any d'anàlisi. Les dades es calculen en temps real des de la base de dades kraken de MongoDB.</p>
+            </div>
+            <div id="yearButtonsContainer" class="flex flex-wrap items-center bg-slate-100 p-1.5 rounded-2xl border border-slate-200/60 shadow-inner">
+                <!-- Year buttons will be populated dynamically -->
+                <span class="text-xs text-slate-400 font-semibold px-4 py-2">Carregant anys...</span>
+            </div>
+        </section>
+
+        <!-- Top Bracket connecting header (Only on large screens) -->
+        <section class="relative pt-6">
+            <!-- Grid-based CSS Bracket System -->
+            <div class="hidden lg:grid grid-cols-4 h-16 relative">
+                <!-- Column 1 connecter -->
+                <div class="relative h-full">
+                    <div class="absolute right-0 top-8 left-1/2 border-t-2 border-[#008037]"></div>
+                    <div class="absolute left-1/2 top-8 h-8 border-l-2 border-[#008037]"></div>
+                    <div class="absolute left-1/2 top-16 -translate-x-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-[#008037]"></div>
+                </div>
+                <!-- Column 2 connecter -->
+                <div class="relative h-full">
+                    <div class="absolute left-0 right-0 top-8 border-t-2 border-[#008037]"></div>
+                    <div class="absolute left-1/2 top-8 h-8 border-l-2 border-[#008037]"></div>
+                    <div class="absolute left-1/2 top-16 -translate-x-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-[#008037]"></div>
+                </div>
+                <!-- Column 3 connecter -->
+                <div class="relative h-full">
+                    <div class="absolute left-0 right-0 top-8 border-t-2 border-[#008037]"></div>
+                    <div class="absolute left-1/2 top-8 h-8 border-l-2 border-[#008037]"></div>
+                    <div class="absolute left-1/2 top-16 -translate-x-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-[#008037]"></div>
+                </div>
+                <!-- Column 4 connecter -->
+                <div class="relative h-full">
+                    <div class="absolute left-0 top-8 right-1/2 border-t-2 border-[#008037]"></div>
+                    <div class="absolute left-1/2 top-8 h-8 border-l-2 border-[#008037]"></div>
+                    <div class="absolute left-1/2 top-16 -translate-x-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-[#008037]"></div>
+                </div>
+                
+                <!-- Center Green Badge Overlay -->
+                <div class="absolute inset-0 flex justify-center items-start">
+                    <span class="bg-[#008037] text-white text-xs md:text-sm font-extrabold tracking-widest px-8 py-3 rounded-full uppercase shadow-md border-2 border-white">
+                        Una estructura de finançament que fa possible la recerca
+                    </span>
+                </div>
+            </div>
+
+            <!-- Mobile-only section header -->
+            <div class="block lg:hidden text-center mb-6">
+                <span class="bg-[#008037] text-white text-xs font-bold tracking-wider px-6 py-2.5 rounded-full uppercase inline-block">
+                    Estructura del finançament
+                </span>
+            </div>
+
+            <!-- 4-Column Grid -->
+            <div id="dashboardGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 items-stretch mt-4 opacity-50 transition-opacity duration-300">
+                
+                <!-- COLUMN 1: Recursos totals per a recerca -->
+                <article class="bg-white border border-slate-200/80 rounded-3xl p-6 flex flex-col justify-between hover-lift premium-shadow card-glow transition-all duration-300">
+                    <div class="flex flex-col gap-5">
+                        <!-- Column Header -->
+                        <header class="flex items-center gap-3">
+                            <span class="w-8 h-8 rounded-full bg-[#008037] text-white flex items-center justify-center font-bold text-sm">1</span>
+                            <h2 class="text-base font-bold text-[#008037] tracking-tight">Recursos totals per a recerca</h2>
+                        </header>
+
+                        <!-- Main Stat Block -->
+                        <div class="bg-slate-50/50 border border-slate-100 rounded-2xl p-4 flex flex-col gap-2 relative overflow-hidden">
+                            <div class="flex items-center gap-4">
+                                <div class="w-14 h-14 rounded-2xl bg-[#d8f3e3] text-[#008037] flex items-center justify-center text-2xl flex-shrink-0">
+                                    <i class="fa-solid fa-money-bill-trend-up"></i>
+                                </div>
+                                <div>
+                                    <span id="total-resources-val" class="block text-3xl font-black text-slate-900 tracking-tight">0,0 <span class="text-xl font-bold text-slate-600">M€</span></span>
+                                    <span id="total-resources-sub" class="block text-xs font-bold text-slate-500 mt-0.5">2024 · 0,0% vs. 2020</span>
+                                </div>
+                            </div>
+                            <div class="mt-2 bg-[#d8f3e3] text-[#004d21] text-xs font-semibold py-1.5 px-3 rounded-xl inline-flex items-center justify-center gap-1 border border-[#008037]/10">
+                                <span class="w-1.5 h-1.5 rounded-full bg-[#00cc58]"></span>
+                                <span id="total-resources-max-label">Màxim de la sèrie: <strong>0,0 M€</strong> el 2020</span>
+                            </div>
+
+                            <!-- Trend Chart Container (Hidden by default, shown via toggle) -->
+                            <div id="chart-totals" class="chart-container hidden"></div>
+                        </div>
+
+                        <!-- Description -->
+                        <p class="text-slate-600 text-xs leading-relaxed">
+                            Els recursos per a activitats de recerca liderades pel PDI de la UAB creixen de manera significativa. Tot i les possibles fluctuacions anuals respecte dels anys anteriors, la tendència de captació reflecteix el dinamisme del portal de recerca de la universitat.
+                        </p>
+                    </div>
+
+                    <!-- Bottom Info Box -->
+                    <footer class="mt-6 pt-4 border-t border-slate-100 flex items-start gap-2.5 text-slate-400">
+                        <i class="fa-solid fa-circle-info text-slate-400/80 mt-0.5 text-sm flex-shrink-0"></i>
+                        <span class="text-[10px] leading-relaxed font-medium">Activitats de recerca amb PDI UAB com a IP, gestionades per la UAB o per centres de l'Esfera UAB.</span>
+                    </footer>
+                </article>
+
+                <!-- COLUMN 2: Via competitiva -->
+                <article class="bg-white border border-slate-200/80 rounded-3xl p-6 flex flex-col justify-between hover-lift premium-shadow card-glow transition-all duration-300">
+                    <div class="flex flex-col gap-5">
+                        <!-- Column Header -->
+                        <header class="flex items-center gap-3">
+                            <span class="w-8 h-8 rounded-full bg-[#008037] text-white flex items-center justify-center font-bold text-sm">2</span>
+                            <h2 class="text-base font-bold text-[#008037] tracking-tight">Via competitiva</h2>
+                        </header>
+
+                        <!-- Main Stat Block -->
+                        <div class="bg-slate-50/50 border border-slate-100 rounded-2xl p-4 flex flex-col gap-2 relative overflow-hidden">
+                            <div class="flex items-center gap-4">
+                                <div class="w-14 h-14 rounded-2xl bg-[#d8f3e3] text-[#008037] flex items-center justify-center text-2xl flex-shrink-0">
+                                    <i class="fa-solid fa-trophy"></i>
+                                </div>
+                                <div>
+                                    <span id="comp-val" class="block text-3xl font-black text-slate-900 tracking-tight">0,0 <span class="text-xl font-bold text-slate-600">M€</span></span>
+                                    <span id="comp-sub" class="block text-xs font-bold text-slate-500 mt-0.5">2024 · 0,0% del total</span>
+                                </div>
+                            </div>
+                            <div class="text-[10px] font-bold text-[#008037] flex flex-wrap gap-x-2 gap-y-1 mt-1 justify-center text-center">
+                                <span id="comp-sub2">+0,0% vs. 2020 · Màxim: 0,0 M€ el 2020</span>
+                            </div>
+
+                            <!-- Trend Chart Container (Hidden by default, shown via toggle) -->
+                            <div id="chart-competitiva" class="chart-container hidden"></div>
+                        </div>
+
+                        <!-- Sub Breakdown Grid -->
+                        <div class="grid grid-cols-2 gap-2.5">
+                            <!-- Projectes estatals -->
+                            <div class="bg-white border border-slate-200/60 rounded-xl p-3 flex flex-col justify-between hover:border-emerald-300 transition-colors">
+                                <div class="flex items-center gap-2">
+                                    <i class="fa-solid fa-building-columns text-[#008037] text-xs"></i>
+                                    <span class="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">Estatals</span>
+                                </div>
+                                <span id="estatals-val" class="block text-sm font-extrabold text-slate-900 mt-2">0,0 M€</span>
+                                <span id="estatals-trend" class="block text-[9px] font-bold text-[#008037] mt-1 flex items-center gap-0.5">
+                                    <i class="fa-solid fa-arrow-trend-up"></i> Ascendent
+                                </span>
+                            </div>
+                            <!-- Projectes internacionals -->
+                            <div class="bg-white border border-slate-200/60 rounded-xl p-3 flex flex-col justify-between hover:border-emerald-300 transition-colors">
+                                <div class="flex items-center gap-2">
+                                    <i class="fa-solid fa-globe text-[#008037] text-xs"></i>
+                                    <span class="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">Internac.</span>
+                                </div>
+                                <span id="internacionals-val" class="block text-sm font-extrabold text-slate-900 mt-2">0,0 M€</span>
+                                <span id="internacionals-sub" class="block text-[8px] leading-tight text-slate-500 mt-1 font-semibold">
+                                    Dades calculades dinàmicament
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- Description -->
+                        <p class="text-slate-600 text-xs leading-relaxed">
+                            La via competitiva continua sent el principal motor del finançament de la recerca i reflecteix una capacitat consolidada per captar recursos en convocatòries públiques d'R+D+I.
+                        </p>
+                    </div>
+                </article>
+
+                <!-- COLUMN 3: Via no competitiva -->
+                <article class="bg-white border border-slate-200/80 rounded-3xl p-6 flex flex-col justify-between hover-lift premium-shadow card-glow transition-all duration-300">
+                    <div class="flex flex-col gap-5">
+                        <!-- Column Header -->
+                        <header class="flex items-center gap-3">
+                            <span class="w-8 h-8 rounded-full bg-[#008037] text-white flex items-center justify-center font-bold text-sm">3</span>
+                            <h2 class="text-base font-bold text-[#008037] tracking-tight">Via no competitiva</h2>
+                        </header>
+
+                        <!-- Main Stat Block -->
+                        <div class="bg-slate-50/50 border border-slate-100 rounded-2xl p-4 flex flex-col gap-2 relative overflow-hidden">
+                            <div class="flex items-center gap-4">
+                                <div class="w-14 h-14 rounded-2xl bg-[#d8f3e3] text-[#008037] flex items-center justify-center text-2xl flex-shrink-0">
+                                    <i class="fa-solid fa-handshake"></i>
+                                </div>
+                                <div>
+                                    <span id="nocomp-val" class="block text-3xl font-black text-slate-900 tracking-tight">0,0 <span class="text-xl font-bold text-slate-600">M€</span></span>
+                                    <span id="nocomp-sub" class="block text-xs font-bold text-slate-500 mt-0.5">2024 · 0,0% vs. 2020</span>
+                                </div>
+                            </div>
+                            <div id="nocomp-max" class="mt-2 bg-emerald-500 text-white text-[10px] font-bold py-1 px-3 rounded-full inline-flex items-center justify-center gap-1 shadow-sm">
+                                <i class="fa-solid fa-star text-amber-300"></i>
+                                <span>Millor any de la sèrie</span>
+                            </div>
+
+                            <!-- Trend Chart Container (Hidden by default, shown via toggle) -->
+                            <div id="chart-nocompetitiva" class="chart-container hidden"></div>
+                        </div>
+
+                        <!-- Sub Breakdown Grid -->
+                        <div class="grid grid-cols-2 gap-2.5">
+                            <!-- Convenis -->
+                            <div class="bg-white border border-slate-200/60 rounded-xl p-3 flex flex-col justify-between hover:border-emerald-300 transition-colors">
+                                <div class="flex items-center gap-2">
+                                    <i class="fa-regular fa-file-lines text-[#008037] text-xs"></i>
+                                    <span class="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">Convenis</span>
+                                </div>
+                                <span id="convenis-val" class="block text-sm font-extrabold text-slate-900 mt-2">0,0 M€</span>
+                            </div>
+                            <!-- Prestació de serveis -->
+                            <div class="bg-white border border-slate-200/60 rounded-xl p-3 flex flex-col justify-between hover:border-emerald-300 transition-colors">
+                                <div class="flex items-center gap-2">
+                                    <i class="fa-solid fa-briefcase text-[#008037] text-xs"></i>
+                                    <span class="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">Altres/Serv.</span>
+                                </div>
+                                <span id="serveis-val" class="block text-sm font-extrabold text-slate-900 mt-2">0,0 M€</span>
+                            </div>
+                        </div>
+
+                        <!-- Quote block -->
+                        <blockquote class="bg-[#d8f3e3]/45 border-l-4 border-[#00cc58] rounded-r-2xl p-3 relative">
+                            <i class="fa-solid fa-quote-left text-emerald-300/60 text-2xl absolute -top-1.5 left-2 z-0"></i>
+                            <p class="text-[10px] italic font-semibold text-[#004d21] leading-normal relative z-10">
+                                Els convenis i la prestació de serveis mostren la capacitat de la UAB i de l'Esfera UAB per transformar coneixement en col·laboració, transferència i resposta a demandes externes.
+                            </p>
+                        </blockquote>
+
+                        <!-- Description -->
+                        <p class="text-slate-600 text-xs leading-relaxed">
+                            La via no competitiva té un pes menor, però és estratègica perquè connecta la recerca amb empreses, administracions, institucions i altres agents externs.
+                        </p>
+                    </div>
+                </article>
+
+                <!-- COLUMN 4: Sistema UAB i Esfera UAB -->
+                <article class="bg-white border border-slate-200/80 rounded-3xl p-6 flex flex-col justify-between hover-lift premium-shadow card-glow transition-all duration-300">
+                    <div class="flex flex-col gap-5">
+                        <!-- Column Header -->
+                        <header class="flex items-center gap-3">
+                            <span class="w-8 h-8 rounded-full bg-[#008037] text-white flex items-center justify-center font-bold text-sm">4</span>
+                            <h2 class="text-base font-bold text-[#008037] tracking-tight">Sistema UAB i Esfera UAB</h2>
+                        </header>
+
+                        <!-- Main Stat Block -->
+                        <div class="bg-slate-50/50 border border-slate-100 rounded-2xl p-4 flex flex-col gap-2 relative overflow-hidden">
+                            <div class="flex items-center gap-4">
+                                <div class="w-14 h-14 rounded-2xl bg-[#d8f3e3] text-[#008037] flex items-center justify-center text-2xl flex-shrink-0">
+                                    <i class="fa-solid fa-diagram-project"></i>
+                                </div>
+                                <div>
+                                    <span id="sphere-totals-label" class="block text-base font-extrabold text-slate-900 tracking-tight flex flex-col">
+                                        <span><strong class="text-[#008037] text-lg">0,0%</strong> UAB</span>
+                                        <span><strong class="text-emerald-500 text-lg">0,0%</strong> Esfera</span>
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="bg-slate-200/70 h-2 w-full rounded-full overflow-hidden flex mt-1">
+                                <div id="sphere-totals-bar-uab" class="bg-[#008037] h-full" style="width: 50%"></div>
+                                <div id="sphere-totals-bar-esfera" class="bg-emerald-400 h-full" style="width: 50%"></div>
+                            </div>
+                            <span class="block text-center text-[10px] font-bold text-slate-500">Distribució dels recursos totals</span>
+                        </div>
+
+                        <!-- Stacked Breakdown list -->
+                        <div class="flex flex-col gap-2">
+                            <!-- Via competitiva breakdown -->
+                            <div class="bg-white border border-slate-200/60 rounded-xl p-3 flex flex-col gap-1 hover:border-emerald-300 transition-colors">
+                                <div class="flex items-center gap-1.5">
+                                    <i class="fa-solid fa-bullseye text-[#008037] text-xs"></i>
+                                    <span class="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider">Via competitiva</span>
+                                </div>
+                                <span id="sphere-comp-breakdown" class="text-xs font-extrabold text-slate-800">
+                                    <strong class="text-[#008037]">0,0%</strong> UAB <span class="text-slate-300">•</span> <strong class="text-emerald-500">0,0%</strong> Esfera
+                                </span>
+                            </div>
+                            <!-- Via no competitiva breakdown -->
+                            <div class="bg-white border border-slate-200/60 rounded-xl p-3 flex flex-col gap-1 hover:border-emerald-300 transition-colors">
+                                <div class="flex items-center gap-1.5">
+                                    <i class="fa-solid fa-handshake text-[#008037] text-xs"></i>
+                                    <span class="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider">Via no competitiva</span>
+                                </div>
+                                <span id="sphere-nocomp-breakdown" class="text-xs font-extrabold text-slate-800">
+                                    <strong class="text-[#008037]">0,0%</strong> UAB <span class="text-slate-300">•</span> <strong class="text-emerald-500">0,0%</strong> Esfera
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- Description -->
+                        <p class="text-slate-600 text-xs leading-relaxed">
+                            La capacitat real de captació s'ha d'interpretar des d'una perspectiva de sistema, integrant tant la universitat com els centres i estructures vinculades.
+                        </p>
+                    </div>
+                </article>
+
+            </div>
+        </section>
+
+        <!-- SECTION: Per què és clau aquesta estructura? -->
+        <section class="bg-white border border-slate-200/80 rounded-3xl overflow-hidden premium-shadow animate-slide-up flex flex-col lg:flex-row hover:border-emerald-200 transition-all duration-300">
+            <!-- Left Banner Label -->
+            <div class="bg-[#008037] text-white p-6 lg:p-8 flex flex-col justify-center items-center lg:items-start text-center lg:text-left lg:w-72 flex-shrink-0 gap-3 relative overflow-hidden">
+                <div class="absolute -right-10 -bottom-10 text-white/5 text-9xl pointer-events-none">
+                    <i class="fa-solid fa-bullseye"></i>
+                </div>
+                <div class="w-12 h-12 rounded-2xl bg-white/10 flex items-center justify-center text-xl">
+                    <i class="fa-solid fa-crosshairs"></i>
+                </div>
+                <h3 class="text-lg md:text-xl font-extrabold leading-snug">Per què és clau aquesta estructura?</h3>
+            </div>
+            <!-- Right Content Grid -->
+            <div class="p-6 md:p-8 flex-grow grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 bg-slate-50/20">
+                <!-- Item 1 -->
+                <div class="flex items-start gap-4 hover:bg-slate-50 p-2.5 rounded-2xl transition-colors">
+                    <div class="w-10 h-10 rounded-xl bg-[#d8f3e3] text-[#008037] flex items-center justify-center text-sm flex-shrink-0 shadow-inner">
+                        <i class="fa-solid fa-users"></i>
+                    </div>
+                    <p class="text-xs font-semibold text-slate-700 leading-relaxed mt-1">Sosté una activitat investigadora de gran dimensió</p>
+                </div>
+                <!-- Item 2 -->
+                <div class="flex items-start gap-4 hover:bg-slate-50 p-2.5 rounded-2xl transition-colors">
+                    <div class="w-10 h-10 rounded-xl bg-[#d8f3e3] text-[#008037] flex items-center justify-center text-sm flex-shrink-0 shadow-inner">
+                        <i class="fa-solid fa-book-open"></i>
+                    </div>
+                    <p class="text-xs font-semibold text-slate-700 leading-relaxed mt-1">Impulsa la producció científica i la direcció de projectes i tesis</p>
+                </div>
+                <!-- Item 3 -->
+                <div class="flex items-start gap-4 hover:bg-slate-50 p-2.5 rounded-2xl transition-colors">
+                    <div class="w-10 h-10 rounded-xl bg-[#d8f3e3] text-[#008037] flex items-center justify-center text-sm flex-shrink-0 shadow-inner">
+                        <i class="fa-solid fa-globe"></i>
+                    </div>
+                    <p class="text-xs font-semibold text-slate-700 leading-relaxed mt-1">Reforça la participació competitiva i internacional</p>
+                </div>
+                <!-- Item 4 -->
+                <div class="flex items-start gap-4 hover:bg-slate-50 p-2.5 rounded-2xl transition-colors">
+                    <div class="w-10 h-10 rounded-xl bg-[#d8f3e3] text-[#008037] flex items-center justify-center text-sm flex-shrink-0 shadow-inner">
+                        <i class="fa-solid fa-arrows-rotate"></i>
+                    </div>
+                    <p class="text-xs font-semibold text-slate-700 leading-relaxed mt-1">Connecta recerca, transferència i resposta a demandes externes</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION: Reptes estratègics -->
+        <section class="bg-white border border-slate-200/80 rounded-3xl overflow-hidden premium-shadow animate-slide-up flex flex-col lg:flex-row hover:border-slate-300 transition-all duration-300">
+            <!-- Left Banner Label -->
+            <div class="bg-[#2a3037] text-white p-6 lg:p-8 flex flex-col justify-center items-center lg:items-start text-center lg:text-left lg:w-72 flex-shrink-0 gap-3 relative overflow-hidden">
+                <div class="absolute -right-10 -bottom-10 text-white/5 text-9xl pointer-events-none">
+                    <i class="fa-solid fa-mountain"></i>
+                </div>
+                <div class="w-12 h-12 rounded-2xl bg-white/10 flex items-center justify-center text-xl">
+                    <i class="fa-solid fa-flag"></i>
+                </div>
+                <h3 class="text-lg md:text-xl font-extrabold leading-snug">Reptes estratègics</h3>
+            </div>
+            <!-- Right Content Grid -->
+            <div class="p-6 md:p-8 flex-grow grid grid-cols-1 md:grid-cols-3 gap-8 bg-slate-50/20">
+                <!-- Challenge 1 -->
+                <div class="flex items-start gap-4 hover:bg-slate-50 p-3 rounded-2xl transition-colors">
+                    <span class="w-7 h-7 rounded-full bg-[#008037] text-white flex items-center justify-center font-bold text-xs flex-shrink-0 shadow-sm">1</span>
+                    <div class="flex flex-col gap-2">
+                        <div class="w-10 h-10 rounded-xl bg-red-50 text-red-600 flex items-center justify-center text-sm shadow-inner">
+                            <i class="fa-solid fa-arrow-trend-down"></i>
+                        </div>
+                        <p class="text-xs font-semibold text-slate-700 leading-relaxed">Estabilitzar la captació internacional en un escenari altament competitiu</p>
+                    </div>
+                </div>
+                <!-- Challenge 2 -->
+                <div class="flex items-start gap-4 hover:bg-slate-50 p-3 rounded-2xl transition-colors">
+                    <span class="w-7 h-7 rounded-full bg-[#008037] text-white flex items-center justify-center font-bold text-xs flex-shrink-0 shadow-sm">2</span>
+                    <div class="flex flex-col gap-2">
+                        <div class="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center text-sm shadow-inner">
+                            <i class="fa-solid fa-gears"></i>
+                        </div>
+                        <p class="text-xs font-semibold text-slate-700 leading-relaxed">Continuar reforçant els instruments de suport a la participació competitiva</p>
+                    </div>
+                </div>
+                <!-- Challenge 3 -->
+                <div class="flex items-start gap-4 hover:bg-slate-50 p-3 rounded-2xl transition-colors">
+                    <span class="w-7 h-7 rounded-full bg-[#008037] text-white flex items-center justify-center font-bold text-xs flex-shrink-0 shadow-sm">3</span>
+                    <div class="flex flex-col gap-2">
+                        <div class="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-sm shadow-inner">
+                            <i class="fa-solid fa-handshake"></i>
+                        </div>
+                        <p class="text-xs font-semibold text-slate-700 leading-relaxed">Consolidar la via no competitiva com a mecanisme de transferència, col·laboració i connexió amb l'entorn</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION: Conclusió -->
+        <section class="flex justify-center animate-slide-up">
+            <div class="bg-[#d8f3e3]/70 border-2 border-[#008037]/35 rounded-full px-8 py-4 flex items-center gap-3 shadow-md max-w-4xl hover:bg-[#d8f3e3] transition-colors">
+                <i class="fa-solid fa-circle-check text-[#008037] text-xl md:text-2xl flex-shrink-0"></i>
+                <span class="text-xs md:text-sm font-extrabold text-[#004d21] text-center">
+                    En conjunt, el finançament de la recerca mostra una UAB amb una capacitat de captació robusta i creixent.
+                </span>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="mt-auto py-8 bg-slate-50 border-t border-slate-200">
+        <div class="max-w-[1400px] mx-auto px-6 md:px-12 flex flex-col md:flex-row items-center justify-between gap-4 text-xs font-semibold text-slate-400">
+            <span class="flex items-center gap-2">
+                <i class="fa-regular fa-folder-open"></i>
+                <span>Dades internes UAB (MongoDB Kraken) · Període 2018–2025</span>
+            </span>
+            <div class="h-px bg-slate-200 flex-grow mx-4 hidden md:block"></div>
+            <span>© 2026 Universitat Autònoma de Barcelona</span>
+        </div>
+    </footer>
+
+    <!-- Dashboard Controller & Rendering logic -->
+    <script>
+        // Track dashboard state
+        let showTrend = false;
+        let chartInstances = {};
+        let financamentData = {};
+        let selectedYear = 2024;
+
+        // Fetch dynamic stats from Mongo API on load
+        document.addEventListener('DOMContentLoaded', () => {
+            fetch('/api/strategic-indicators/financament-recerca')
+                .then(response => {
+                    if (!response.ok) throw new Error('API response error');
+                    return response.json();
+                })
+                .then(data => {
+                    financamentData = data;
+                    
+                    // Populate Year Selector Buttons
+                    populateYearSelector();
+                    
+                    // Show Grid and update dashboard
+                    const grid = document.getElementById('dashboardGrid');
+                    grid.classList.remove('opacity-50');
+                    
+                    // Default to 2024, or fallback to the latest available year
+                    const availableYears = Object.keys(financamentData).map(Number).sort((a,b)=>b-a);
+                    if (availableYears.includes(2024)) {
+                        selectedYear = 2024;
+                    } else if (availableYears.length > 0) {
+                        selectedYear = availableYears[0];
+                    }
+                    
+                    updateDashboard(selectedYear);
+                })
+                .catch(error => {
+                    console.error('Error loading dynamic research funding data:', error);
+                    alert("No s'han pogut carregar les dades de finançament de la base de dades. Comproveu la connexió.");
+                });
+        });
+
+        function populateYearSelector() {
+            const container = document.getElementById('yearButtonsContainer');
+            container.innerHTML = '';
+            
+            // Get years from API response, filter for range 2020-2025 and sort ascending
+            const years = Object.keys(financamentData)
+                .map(Number)
+                .filter(y => y >= 2020 && y <= 2025)
+                .sort((a, b) => a - b);
+                
+            if (years.length === 0) {
+                container.innerHTML = '<span class="text-xs text-slate-400 font-semibold px-4 py-2">Sense dades</span>';
+                return;
+            }
+            
+            years.forEach(y => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'year-btn px-4 py-2 rounded-xl text-sm font-semibold transition-all hover:bg-white/60 active:scale-95 text-slate-600';
+                btn.setAttribute('data-year', y);
+                btn.innerText = y;
+                btn.onclick = () => changeYear(y);
+                container.appendChild(btn);
+            });
+        }
+
+        function changeYear(year) {
+            updateDashboard(year);
+        }
+
+        function updateDashboard(year) {
+            selectedYear = year;
+            
+            // Highlight selected year button
+            document.querySelectorAll('.year-btn').forEach(btn => {
+                const btnYear = parseInt(btn.getAttribute('data-year'));
+                if (btnYear === year) {
+                    btn.className = "year-btn px-4 py-2 rounded-xl text-sm font-semibold bg-white text-slate-900 shadow-sm border border-slate-200/40";
+                } else {
+                    btn.className = "year-btn px-4 py-2 rounded-xl text-sm font-semibold transition-all hover:bg-white/60 active:scale-95 text-slate-600";
+                }
+            });
+
+            const data = financamentData[year];
+            if (!data) return;
+
+            // Formatter helpers
+            function toM(val) {
+                return (val / 1000000.0).toFixed(1).replace('.', ',');
+            }
+            
+            function toPct(val) {
+                return val.toFixed(1).replace('.', ',');
+            }
+
+            // 1. Recursos totals per a recerca
+            const totalVal = data.totalUab + data.totalEsfera;
+            document.getElementById('total-resources-val').innerHTML = toM(totalVal) + ' <span class="text-xl font-bold text-slate-600">M€</span>';
+            
+            // Comparison vs 2020
+            const data2020 = financamentData[2020];
+            if (data2020) {
+                const total2020 = data2020.totalUab + data2020.totalEsfera;
+                const diffPct = total2020 > 0 ? ((totalVal - total2020) / total2020) * 100.0 : 0.0;
+                const sign = diffPct >= 0 ? '+' : '';
+                document.getElementById('total-resources-sub').innerText = year + ' · ' + sign + toPct(diffPct) + '% vs. 2020';
+            } else {
+                document.getElementById('total-resources-sub').innerText = year;
+            }
+
+            // Max year in series (2020-2025)
+            let maxTotal = 0.0;
+            let maxTotalYear = 2020;
+            Object.entries(financamentData).forEach(([yStr, yData]) => {
+                const y = parseInt(yStr);
+                if (y >= 2020 && y <= 2025) {
+                    const val = yData.totalUab + yData.totalEsfera;
+                    if (val > maxTotal) {
+                        maxTotal = val;
+                        maxTotalYear = y;
+                    }
+                }
+            });
+            document.getElementById('total-resources-max-label').innerHTML = 'Màxim de la sèrie: <strong>' + toM(maxTotal) + ' M€</strong> el ' + maxTotalYear;
+
+            // 2. Via competitiva
+            const compVal = data.compUab + data.compEsfera;
+            document.getElementById('comp-val').innerHTML = toM(compVal) + ' <span class="text-xl font-bold text-slate-600">M€</span>';
+            
+            const compPctOfTotal = totalVal > 0 ? (compVal / totalVal) * 100.0 : 0.0;
+            document.getElementById('comp-sub').innerText = year + ' · ' + toPct(compPctOfTotal) + '% del total';
+
+            // Max competitive in series
+            let maxComp = 0.0;
+            let maxCompYear = 2020;
+            Object.entries(financamentData).forEach(([yStr, yData]) => {
+                const y = parseInt(yStr);
+                if (y >= 2020 && y <= 2025) {
+                    const val = yData.compUab + yData.compEsfera;
+                    if (val > maxComp) {
+                        maxComp = val;
+                        maxCompYear = y;
+                    }
+                }
+            });
+
+            if (data2020) {
+                const comp2020 = data2020.compUab + data2020.compEsfera;
+                const compDiff2020 = comp2020 > 0 ? ((compVal - comp2020) / comp2020) * 100.0 : 0.0;
+                const compSign = compDiff2020 >= 0 ? '+' : '';
+                document.getElementById('comp-sub2').innerText = compSign + toPct(compDiff2020) + '% vs. 2020 · Màxim: ' + toM(maxComp) + ' M€ el ' + maxCompYear;
+            } else {
+                document.getElementById('comp-sub2').innerText = 'Màxim: ' + toM(maxComp) + ' M€ el ' + maxCompYear;
+            }
+
+            // Subcategories (Estatals & Internacionals)
+            document.getElementById('estatals-val').innerText = toM(data.estatals) + ' M€';
+            
+            const prevYearData = financamentData[year - 1];
+            const trendEl = document.getElementById('estatals-trend');
+            if (prevYearData) {
+                const diffEstatals = data.estatals - prevYearData.estatals;
+                const trendText = diffEstatals >= 0 ? 'Trajectòria ascendent' : 'Trajectòria descendent';
+                const trendIcon = diffEstatals >= 0 ? '<i class="fa-solid fa-arrow-trend-up"></i> ' : '<i class="fa-solid fa-arrow-trend-down text-rose-500"></i> ';
+                trendEl.innerHTML = trendIcon + trendText;
+                if (diffEstatals < 0) {
+                    trendEl.className = "block text-[9px] font-bold text-rose-500 mt-1 flex items-center gap-0.5";
+                } else {
+                    trendEl.className = "block text-[9px] font-bold text-[#008037] mt-1 flex items-center gap-0.5";
+                }
+            } else {
+                trendEl.innerHTML = '<i class="fa-solid fa-minus text-slate-400"></i> Dades estables';
+                trendEl.className = "block text-[9px] font-bold text-slate-400 mt-1 flex items-center gap-0.5";
+            }
+
+            document.getElementById('internacionals-val').innerText = toM(data.internacionals) + ' M€';
+            
+            // Internacionals subtext
+            let maxInt = 0.0;
+            let maxIntYear = 2020;
+            Object.entries(financamentData).forEach(([yStr, yData]) => {
+                const y = parseInt(yStr);
+                if (y >= 2020 && y <= 2025) {
+                    const val = yData.internacionals;
+                    if (val > maxInt) {
+                        maxInt = val;
+                        maxIntYear = y;
+                    }
+                }
+            });
+            const intSubEl = document.getElementById('internacionals-sub');
+            if (year > maxIntYear && data.internacionals < maxInt) {
+                intSubEl.innerText = 'Davallada el ' + year + ' després del pic de ' + toM(maxInt) + ' M€ el ' + maxIntYear;
+                intSubEl.className = "block text-[8px] leading-tight text-amber-600 mt-1 font-semibold";
+            } else if (year === maxIntYear) {
+                intSubEl.innerText = 'Màxim de la sèrie el ' + year;
+                intSubEl.className = "block text-[8px] leading-tight text-emerald-600 mt-1 font-semibold";
+            } else {
+                intSubEl.innerText = 'Trajectòria regular';
+                intSubEl.className = "block text-[8px] leading-tight text-slate-500 mt-1 font-semibold";
+            }
+
+            // 3. Via no competitiva
+            const nocompVal = data.nocompUab + data.nocompEsfera;
+            document.getElementById('nocomp-val').innerHTML = toM(nocompVal) + ' <span class="text-xl font-bold text-slate-600">M€</span>';
+            
+            if (data2020) {
+                const nocomp2020 = data2020.nocompUab + data2020.nocompEsfera;
+                const nocompDiff2020 = nocomp2020 > 0 ? ((nocompVal - nocomp2020) / nocomp2020) * 100.0 : 0.0;
+                const nocompSign = nocompDiff2020 >= 0 ? '+' : '';
+                document.getElementById('nocomp-sub').innerText = year + ' · ' + nocompSign + toPct(nocompDiff2020) + '% vs. 2020';
+            } else {
+                document.getElementById('nocomp-sub').innerText = year;
+            }
+
+            // Max nocomp
+            let maxNoComp = 0.0;
+            let maxNoCompYear = 2020;
+            Object.entries(financamentData).forEach(([yStr, yData]) => {
+                const y = parseInt(yStr);
+                if (y >= 2020 && y <= 2025) {
+                    const val = yData.nocompUab + yData.nocompEsfera;
+                    if (val > maxNoComp) {
+                        maxNoComp = val;
+                        maxNoCompYear = y;
+                    }
+                }
+            });
+            const nocompMaxEl = document.getElementById('nocomp-max');
+            if (year === maxNoCompYear) {
+                nocompMaxEl.innerHTML = '<i class="fa-solid fa-star text-amber-300"></i><span>Millor any de la sèrie</span>';
+                nocompMaxEl.className = "mt-2 bg-emerald-500 text-white text-[10px] font-bold py-1 px-3 rounded-full inline-flex items-center justify-center gap-1 shadow-sm";
+            } else {
+                nocompMaxEl.innerHTML = '<i class="fa-solid fa-circle-chevron-up text-slate-400"></i><span>Màxim de la sèrie: <strong>' + toM(maxNoComp) + ' M€</strong> el ' + maxNoCompYear + '</span>';
+                nocompMaxEl.className = "mt-2 bg-slate-100 text-slate-700 text-[10px] font-semibold py-1 px-3 rounded-full inline-flex items-center justify-center gap-1 border border-slate-200";
+            }
+
+            // Subcategories (Convenis & Serveis)
+            document.getElementById('convenis-val').innerText = toM(data.convenis) + ' M€';
+            document.getElementById('serveis-val').innerText = toM(data.serveis) + ' M€';
+
+            // 4. Sistema UAB i Esfera UAB
+            const uabPct = totalVal > 0 ? (data.totalUab / totalVal) * 100.0 : 0.0;
+            const esferaPct = totalVal > 0 ? (data.totalEsfera / totalVal) * 100.0 : 0.0;
+            
+            document.getElementById('sphere-totals-label').innerHTML = 
+                '<span><strong class="text-[#008037] text-lg">' + toPct(uabPct) + '%</strong> UAB</span>' +
+                '<span class="text-slate-300 mx-1.5">•</span>' +
+                '<span><strong class="text-emerald-500 text-lg">' + toPct(esferaPct) + '%</strong> Esfera UAB</span>';
+                
+            document.getElementById('sphere-totals-bar-uab').style.width = uabPct + '%';
+            document.getElementById('sphere-totals-bar-esfera').style.width = esferaPct + '%';
+
+            // Breakdowns
+            const compTotal = data.compUab + data.compEsfera;
+            const compUabPct = compTotal > 0 ? (data.compUab / compTotal) * 100.0 : 0.0;
+            const compEsferaPct = compTotal > 0 ? (data.compEsfera / compTotal) * 100.0 : 0.0;
+            document.getElementById('sphere-comp-breakdown').innerHTML = 
+                '<strong class="text-[#008037]">' + toPct(compUabPct) + '%</strong> UAB <span class="text-slate-300">•</span> <strong class="text-emerald-500">' + toPct(compEsferaPct) + '%</strong> Esfera UAB';
+
+            const nocompTotal = data.nocompUab + data.nocompEsfera;
+            const nocompUabPct = nocompTotal > 0 ? (data.nocompUab / nocompTotal) * 100.0 : 0.0;
+            const nocompEsferaPct = nocompTotal > 0 ? (data.nocompEsfera / nocompTotal) * 100.0 : 0.0;
+            document.getElementById('sphere-nocomp-breakdown').innerHTML = 
+                '<strong class="text-[#008037]">' + toPct(nocompUabPct) + '%</strong> UAB <span class="text-slate-300">•</span> <strong class="text-emerald-500">' + toPct(nocompEsferaPct) + '%</strong> Esfera UAB';
+
+            // Re-render sparklines if active
+            if (showTrend) {
+                initCharts();
+            }
+        }
+
+        function toggleTrendView() {
+            showTrend = !showTrend;
+            
+            const btn = document.getElementById('toggleTrendBtn');
+            const icon = document.getElementById('toggleTrendIcon');
+            const text = document.getElementById('toggleTrendText');
+            
+            const totalChartEl = document.getElementById('chart-totals');
+            const compChartEl = document.getElementById('chart-competitiva');
+            const noCompChartEl = document.getElementById('chart-nocompetitiva');
+
+            if (showTrend) {
+                // Switch to Trend mode
+                btn.classList.remove('bg-[#d8f3e3]', 'text-[#008037]');
+                btn.classList.add('bg-[#008037]', 'text-white');
+                icon.className = 'fa-solid fa-xmark';
+                text.innerText = 'Amagar Gràfics de Tendència';
+                
+                // Show chart containers
+                totalChartEl.classList.remove('hidden');
+                compChartEl.classList.remove('hidden');
+                noCompChartEl.classList.remove('hidden');
+                
+                setTimeout(() => {
+                    initCharts();
+                }, 100);
+            } else {
+                // Switch back to standard mode
+                btn.classList.remove('bg-[#008037]', 'text-white');
+                btn.classList.add('bg-[#d8f3e3]', 'text-[#008037]');
+                icon.className = 'fa-solid fa-chart-line';
+                text.innerText = 'Veure Gràfics de Tendència';
+                
+                // Hide chart containers
+                totalChartEl.classList.add('hidden');
+                compChartEl.classList.add('hidden');
+                noCompChartEl.classList.add('hidden');
+            }
+        }
+
+        function initCharts() {
+            // Extract years list dynamically (2020-2025)
+            const sortedYears = Object.keys(financamentData)
+                .map(Number)
+                .filter(y => y >= 2020 && y <= 2025)
+                .sort((a, b) => a - b);
+            
+            const yearsStr = sortedYears.map(String);
+            
+            // Sparkline Series calculations (in M€)
+            const dataTotals = sortedYears.map(y => (financamentData[y].totalUab + financamentData[y].totalEsfera) / 1000000.0);
+            const dataCompetitiva = sortedYears.map(y => (financamentData[y].compUab + financamentData[y].compEsfera) / 1000000.0);
+            const dataNoCompetitiva = sortedYears.map(y => (financamentData[y].nocompUab + financamentData[y].nocompEsfera) / 1000000.0);
+
+            // Chart 1: Totals
+            if (!chartInstances['totals']) {
+                chartInstances['totals'] = echarts.init(document.getElementById('chart-totals'));
+            }
+            renderSparkline(chartInstances['totals'], yearsStr, dataTotals, '#008037', 'Recursos totals (M€)');
+
+            // Chart 2: Competitiva
+            if (!chartInstances['competitiva']) {
+                chartInstances['competitiva'] = echarts.init(document.getElementById('chart-competitiva'));
+            }
+            renderSparkline(chartInstances['competitiva'], yearsStr, dataCompetitiva, '#008037', 'Via competitiva (M€)');
+
+            // Chart 3: No competitiva
+            if (!chartInstances['nocompetitiva']) {
+                chartInstances['nocompetitiva'] = echarts.init(document.getElementById('chart-nocompetitiva'));
+            }
+            renderSparkline(chartInstances['nocompetitiva'], yearsStr, dataNoCompetitiva, '#00cc58', 'Via no competitiva (M€)');
+        }
+
+        function renderSparkline(chart, xData, yData, colorHex, labelName) {
+            const option = {
+                tooltip: {
+                    trigger: 'axis',
+                    formatter: function (params) {
+                        return `<strong>${params[0].name}</strong>: ${params[0].value.toFixed(1).replace('.', ',')} M€`;
+                    },
+                    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                    borderColor: '#e2e8f0',
+                    borderWidth: 1,
+                    textStyle: {
+                        color: '#1e293b',
+                        fontSize: 11,
+                        fontFamily: 'Inter'
+                    },
+                    padding: [6, 10]
+                },
+                grid: {
+                    left: '5%',
+                    right: '5%',
+                    top: '20%',
+                    bottom: '15%',
+                    containLabel: false
+                },
+                xAxis: {
+                    type: 'category',
+                    data: xData,
+                    boundaryGap: false,
+                    axisLine: { show: false },
+                    axisTick: { show: false },
+                    axisLabel: {
+                        color: '#64748b',
+                        fontSize: 9,
+                        fontFamily: 'Inter',
+                        margin: 8
+                    }
+                },
+                yAxis: {
+                    type: 'value',
+                    show: false,
+                    min: function (value) {
+                        return Math.floor(value.min * 0.9);
+                    }
+                },
+                series: [{
+                    name: labelName,
+                    type: 'line',
+                    data: yData,
+                    smooth: true,
+                    showSymbol: true,
+                    symbol: 'circle',
+                    symbolSize: 6,
+                    itemStyle: {
+                        color: colorHex,
+                        borderWidth: 2,
+                        borderColor: '#ffffff'
+                    },
+                    lineStyle: {
+                        width: 3,
+                        color: colorHex
+                    },
+                    areaStyle: {
+                        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                            { offset: 0, color: colorHex + '2A' },
+                            { offset: 1, color: colorHex + '00' }
+                        ])
+                    }
+                }]
+            };
+            chart.setOption(option);
+        }
+
+        // Resize charts on window resize
+        window.addEventListener('resize', () => {
+            if (showTrend) {
+                Object.values(chartInstances).forEach(chart => {
+                    if (chart) chart.resize();
+                });
+            }
+        });
+    </script>
+</body>
+</html>

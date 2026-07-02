@@ -14,6 +14,9 @@ public interface StudentThesisRepository extends MongoRepository<StudentThesis, 
     @Query("{ '$and': [ { '$or': [ { 'type.term.es_ES': { $regex: 'tesis doctoral', $options: 'i' } }, { 'type.term.ca_ES': { $regex: 'tesi doctoral', $options: 'i' } }, { 'type.term.en_GB': { $regex: 'doctoral thesis|phd thesis', $options: 'i' } } ] }, { 'title.value': { $regex: ?0, $options: 'i' } } ] }")
     Page<StudentThesis> findDoctoralByTitleContainingIgnoreCase(String title, Pageable pageable);
 
+    @Query("{ '$and': [ { '$or': [ { 'type.term.es_ES': { $regex: 'tesis doctoral', $options: 'i' } }, { 'type.term.ca_ES': { $regex: 'tesi doctoral', $options: 'i' } }, { 'type.term.en_GB': { $regex: 'doctoral thesis|phd thesis', $options: 'i' } } ] }, { '$or': [ { 'title.value': { $regex: ?0, $options: 'i' } }, { 'contributors.name.firstName': { $regex: ?0, $options: 'i' } }, { 'contributors.name.lastName': { $regex: ?0, $options: 'i' } }, { 'supervisors.name.firstName': { $regex: ?0, $options: 'i' } }, { 'supervisors.name.lastName': { $regex: ?0, $options: 'i' } } ] } ] }")
+    Page<StudentThesis> findDoctoralBySearchTerm(String search, Pageable pageable);
+
     @Query("{ '$and': [ { '$or': [ { 'type.term.es_ES': { $regex: 'tesis doctoral', $options: 'i' } }, { 'type.term.ca_ES': { $regex: 'tesi doctoral', $options: 'i' } }, { 'type.term.en_GB': { $regex: 'doctoral thesis|phd thesis', $options: 'i' } } ] }, { 'awardDate.year': ?0 } ] }")
     Page<StudentThesis> findDoctoralByAwardDateYear(Integer year, Pageable pageable);
 }

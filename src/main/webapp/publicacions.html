@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="ca">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pure Repository Manager</title>
+    <title>Gestor de Repositori Pure | Portal de Recerca UAB</title>
     <script src="config.js"></script>
     <script src="uab-brand.js" defer></script>
     <script src="https://cdn.tailwindcss.com"></script>
@@ -12,11 +12,11 @@
 </head>
 <div class="max-w-6xl mx-auto py-8">
     <div class="mb-4 flex justify-end">
-        <a href="tesis-autor-director.html" class="px-4 py-2 rounded-xl border border-slate-300 text-sm font-semibold text-slate-700 hover:bg-white">Tesis mismo autor/director</a>
+        <a href="tesis-autor-director.html" class="px-4 py-2 rounded-xl border border-slate-300 text-sm font-semibold text-slate-700 hover:bg-white">Tesis del mateix autor/director</a>
     </div>
     <div class="mb-6">
         <input type="text" id="busqueda" oninput="resetYBuscar()" 
-               placeholder="🔍 Buscar por título en Pure..." 
+               placeholder="🔍 Cercar per títol a Pure..." 
                class="w-full p-4 rounded-xl border-none shadow-md focus:ring-2 focus:ring-indigo-500">
     </div>
 
@@ -24,8 +24,8 @@
         <table class="w-full text-left">
             <thead class="bg-indigo-600 text-white">
                 <tr>
-                    <th class="p-4">Título y Autores</th>
-                    <th class="p-4 w-24">Año</th>
+                    <th class="p-4">Títol i Autors</th>
+                    <th class="p-4 w-24">Any</th>
                 </tr>
             </thead>
             <tbody id="tabla" class="divide-y divide-gray-100"></tbody>
@@ -33,8 +33,8 @@
         
         <div class="p-4 bg-gray-50 flex justify-between items-center">
             <button id="btnPrev" onclick="cambiarPagina(-1)" class="px-4 py-2 bg-white border rounded shadow hover:bg-gray-100 disabled:opacity-50">Anterior</button>
-            <span id="infoPagina" class="text-sm text-gray-600 font-medium">Página 1</span>
-            <button id="btnNext" onclick="cambiarPagina(1)" class="px-4 py-2 bg-white border rounded shadow hover:bg-gray-100 disabled:opacity-50">Siguiente</button>
+            <span id="infoPagina" class="text-sm text-gray-600 font-medium">Pàgina 1</span>
+            <button id="btnNext" onclick="cambiarPagina(1)" class="px-4 py-2 bg-white border rounded shadow hover:bg-gray-100 disabled:opacity-50">Següent</button>
         </div>
     </div>
 </div>
@@ -76,7 +76,7 @@
     }
 
     function actualizarControles(data) {
-        document.getElementById('infoPagina').innerText = `Página ${data.number + 1} de ${data.totalPages}`;
+        document.getElementById('infoPagina').innerText = `Pàgina ${data.number + 1} de ${data.totalPages}`;
         document.getElementById('btnPrev').disabled = data.first;
         document.getElementById('btnNext').disabled = data.last;
     }
@@ -103,7 +103,7 @@
             data: {
                 labels: dataAnios.map(d => d.anio),
                 datasets: [{
-                    label: 'Publicaciones por año',
+                    label: 'Publicacions per any',
                     data: dataAnios.map(d => d.total),
                     borderColor: '#4F46E5',
                     tension: 0.3

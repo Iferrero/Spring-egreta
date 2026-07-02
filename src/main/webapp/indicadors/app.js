@@ -285,7 +285,7 @@ function updateEconomicsChartsFromPowertable() {
 
 
         // Facturació Directa (Prestació de Serveis)
-        const entriesFact = powertableData.filter(d => d.anio === y && d.categoria === 'Prestació de Serveis');
+        const entriesFact = powertableData.filter(d => d.anio === y && d.tipo === 'Prestació de Serveis');
         const totalFact = entriesFact.reduce((sum, d) => sum + (d.import || 0.0), 0.0);
         dataFacturacio.push(totalFact / 1000000.0);
 

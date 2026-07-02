@@ -1,0 +1,2375 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Evolució d'Ingressos de Recerca | UAB</title>
+    <!-- Google Fonts: Inter & Outfit -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>    <!-- Apache ECharts -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <!-- noUiSlider CSS & JS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.7.1/nouislider.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.7.1/nouislider.min.js"></script>
+    
+    <script src="config.js"></script>
+    <script src="uab-brand.js" defer></script>
+    <link rel="stylesheet" href="uab-theme.css">
+
+    <style>
+        /* Custom noUiSlider Styling to match UAB Emerald theme */
+        .noUi-connect {
+            background: #008037 !important; /* UAB Green */
+        }
+        .noUi-horizontal {
+            height: 6px !important;
+            border-radius: 3px !important;
+            border: none !important;
+            background: #e2e8f0 !important; /* slate-200 */
+            box-shadow: inset 0 1px 2px rgba(0,0,0,0.1) !important;
+        }
+        .noUi-handle {
+            width: 16px !important;
+            height: 16px !important;
+            right: -8px !important;
+            top: -5px !important;
+            border-radius: 50% !important;
+            border: 2px solid #ffffff !important;
+            background: #008037 !important; /* UAB Green */
+            box-shadow: 0 2px 4px rgba(0,0,0,0.15) !important;
+            cursor: pointer !important;
+            transition: transform 0.1s, background-color 0.1s !important;
+        }
+        .noUi-handle:hover {
+            transform: scale(1.15);
+            background: #004d21 !important; /* Darker UAB Green */
+        }
+        .noUi-handle:before, .noUi-handle:after {
+            display: none !important; /* Hide default lines inside handles */
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        h1, h2, h3, .font-display {
+            font-family: 'Outfit', sans-serif;
+        }
+        .premium-shadow {
+            box-shadow: 0 4px 20px -2px rgba(148, 163, 184, 0.12), 0 2px 8px -1px rgba(148, 163, 184, 0.08);
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+        }
+        .animate-fade-in {
+            animation: fadeIn 0.5s ease-out forwards;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        /* Custom scrollbar for multi-select dropdown */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #f1f2f4;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #c9d1dc;
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #a9b1bc;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen text-slate-800 flex flex-col">
+
+    <!-- Header for uab-brand.js -->
+    <header class="hidden">
+        <h1>Ingressos de Recerca</h1>
+        <p>Evolució anual dels ingressos de recerca a 31 de desembre (2018-2025)</p>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-grow w-[95%] max-w-[95%] mx-auto py-8 flex flex-col gap-8 animate-fade-in">
+        
+        <!-- Page Title & Navigation -->
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+                <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">Evolució d'Ingressos de Recerca</h1>
+                <p class="text-slate-500 mt-1">Dades històriques tancades a 31/12 de cada exercici per a diferents conceptes de recerca.</p>
+            </div>
+            <div class="flex items-center gap-2">
+                <a href="index.html" class="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-slate-600 hover:text-emerald-700 bg-white border border-slate-200 rounded-2xl transition-all shadow-sm active:scale-95">
+                    <i class="fa-solid fa-house"></i>
+                    <span>Tornar a l'Inici</span>
+                </a>
+            </div>
+        </div>        <!-- Filter Panel -->
+        <section class="glass-panel border border-slate-200 rounded-3xl p-6 premium-shadow flex flex-col lg:flex-row gap-6 justify-between items-stretch lg:items-end">
+            <!-- Concept Selector -->
+            <div class="flex flex-col gap-2 flex-grow">
+                <label class="text-xs font-bold text-slate-500 uppercase tracking-wider">Conceptes de Recerca (Selecció Múltiple)</label>
+                <div class="relative z-30">
+                    <button
+                        id="conceptsDropdownBtn"
+                        type="button"
+                        class="w-full border border-slate-200 rounded-2xl px-4 py-3 text-sm bg-white text-left flex items-center justify-between font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all cursor-pointer shadow-sm"
+                    >
+                        <span id="conceptsDropdownLabel" class="w-0 flex-1 truncate">Carregant conceptes...</span>
+                        <i class="fa fa-chevron-down ml-2 text-slate-400"></i>
+                    </button>
+                    
+                    <div
+                        id="conceptsDropdownMenu"
+                        class="absolute z-[9999] left-0 right-0 mt-2 bg-white border border-slate-200 rounded-2xl shadow-xl max-h-96 overflow-hidden hidden flex flex-col"
+                    >
+                        <!-- Dropdown Search -->
+                        <div class="p-3 border-b border-slate-100 bg-slate-50/50 sticky top-0 z-10 flex gap-2">
+                            <div class="relative flex-grow">
+                                <i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-slate-400 text-xs"></i>
+                                <input
+                                    id="conceptsSearchInput"
+                                    type="text"
+                                    placeholder="Cerca conceptes..."
+                                    class="w-full pl-8 pr-4 py-2 bg-white border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500 text-xs font-semibold text-slate-700 shadow-inner"
+                                >
+                            </div>
+                            <!-- Selection helper buttons -->
+                            <button id="btnDeselectAll" type="button" class="text-[10px] font-bold text-slate-500 hover:text-slate-800 bg-slate-200 hover:bg-slate-300 px-2 py-1 rounded-lg transition-colors border border-slate-300">Buida</button>
+                        </div>
+                        
+                        <!-- Grouped List -->
+                        <div id="conceptsDropdownList" class="overflow-y-auto max-h-64 flex-1 custom-scrollbar text-xs">
+                            <!-- Populated Dynamically -->
+                        </div>
+                    </div>
+                </div>
+            </div>            <!-- Quick Presets -->
+            <div class="flex flex-col gap-2 min-w-[280px]">
+                <label class="text-xs font-bold text-slate-500 uppercase tracking-wider">Presets Ràpids</label>
+                <div class="grid grid-cols-2 gap-2">
+                    <button id="presetTotals" type="button" class="px-3 py-2.5 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 border border-slate-200 hover:border-emerald-300 rounded-xl transition-all shadow-sm active:scale-95 text-center">
+                        <i class="fa-solid fa-calculator mr-1"></i> Totals Generals
+                    </button>
+                    <button id="presetPersonal" type="button" class="px-3 py-2.5 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 border border-slate-200 hover:border-emerald-300 rounded-xl transition-all shadow-sm active:scale-95 text-center">
+                        <i class="fa-solid fa-users mr-1"></i> Pers. Investigador
+                    </button>
+                    <button id="presetProjectes" type="button" class="px-3 py-2.5 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 border border-slate-200 hover:border-emerald-300 rounded-xl transition-all shadow-sm active:scale-95 text-center">
+                        <i class="fa-solid fa-diagram-project mr-1"></i> Projectes/Altres
+                    </button>
+                    <button id="presetTots" type="button" class="px-3 py-2.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 border border-transparent rounded-xl transition-all shadow-sm active:scale-95 text-center">
+                        <i class="fa-solid fa-check-double mr-1"></i> Selecciona Tot
+                    </button>
+                </div>
+            </div>
+
+            <!-- Awards Tipologies Selector -->
+            <div class="flex flex-col gap-2 flex-grow border-t lg:border-t-0 lg:border-l border-slate-200 pt-4 lg:pt-0 lg:pl-6">
+                <label class="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                    <i class="fa-solid fa-trophy text-amber-500"></i> Tipologies d'Ajuts (Mongo)
+                </label>
+                <div class="relative z-30">
+                    <button
+                        id="tipologiesDropdownBtn"
+                        type="button"
+                        class="w-full border border-slate-200 rounded-2xl px-4 py-3 text-sm bg-white text-left flex items-center justify-between font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-amber-400 focus:border-amber-400 transition-all cursor-pointer shadow-sm"
+                    >
+                        <span id="tipologiesDropdownLabel" class="w-0 flex-1 truncate text-slate-400 italic">Cap tipologia seleccionada</span>
+                        <i class="fa fa-chevron-down ml-2 text-slate-400"></i>
+                    </button>
+                    <div id="tipologiesTooltip" class="absolute left-0 top-full mt-1 z-[10000] hidden bg-slate-800 text-white text-[11px] leading-relaxed rounded-xl px-3 py-2 shadow-xl pointer-events-none max-w-xs whitespace-pre-line border border-slate-700"></div>
+
+                    <div
+                        id="tipologiesDropdownMenu"
+                        class="absolute z-[9999] left-0 right-0 mt-2 bg-white border border-slate-200 rounded-2xl shadow-xl max-h-96 overflow-hidden hidden flex flex-col"
+                    >
+                        <!-- Dropdown Search -->
+                        <div class="p-3 border-b border-slate-100 bg-slate-50/50 sticky top-0 z-10 flex gap-2">
+                            <div class="relative flex-grow">
+                                <i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-slate-400 text-xs"></i>
+                                <input
+                                    id="tipologiesSearchInput"
+                                    type="text"
+                                    placeholder="Cerca tipologies..."
+                                    class="w-full pl-8 pr-4 py-2 bg-white border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-amber-400 text-xs font-semibold text-slate-700 shadow-inner"
+                                >
+                            </div>
+                            <button id="btnDeselectAllTipologies" type="button" class="text-[10px] font-bold text-slate-500 hover:text-slate-800 bg-slate-200 hover:bg-slate-300 px-2 py-1 rounded-lg transition-colors border border-slate-300">Buida</button>
+                        </div>
+
+                        <!-- Grouped List -->
+                        <div id="tipologiesDropdownList" class="overflow-y-auto max-h-64 flex-1 custom-scrollbar text-xs">
+                            <div class="flex items-center justify-center py-8 text-slate-400 text-xs italic">
+                                <i class="fa-solid fa-spinner fa-spin mr-2"></i> Carregant tipologies...
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tipologies controls (Exclude Declined & Org Scope) -->
+                <div class="flex items-center justify-between gap-4 mt-2">
+                    <!-- Exclude Declined Switch -->
+                    <label class="relative inline-flex items-center cursor-pointer select-none">
+                        <input id="chkExcludeDeclined" type="checkbox" class="sr-only peer">
+                        <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
+                        <span class="ms-3 text-[11px] font-bold text-slate-600">Exclou Renunciats</span>
+                    </label>
+
+                    <!-- Org Scope Selector -->
+                    <div class="flex items-center gap-1.5">
+                        <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Àmbit:</span>
+                        <select id="selectOrgScope" class="bg-white border border-slate-200 rounded-xl px-2 py-1 text-[11px] font-bold text-slate-700 outline-none focus:ring-2 focus:ring-amber-400 focus:border-amber-400 transition-all cursor-pointer shadow-sm">
+                            <option value="all" selected>Tots</option>
+                            <option value="UAB">UAB</option>
+                            <option value="Esfera">Esfera</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+<!-- Forecast Controls -->
+            <div class="flex flex-col gap-2 border-t lg:border-t-0 lg:border-l border-slate-200 pt-4 lg:pt-0 lg:pl-6 min-w-[240px]">
+                <label class="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                    <i class="fa-solid fa-chart-line text-emerald-600"></i> Previsions 2026-2027
+                </label>
+                <div class="flex flex-col gap-3 mt-1">
+                    <!-- Toggle Switch -->
+                    <label class="relative inline-flex items-center cursor-pointer select-none">
+                        <input id="chkForecast" type="checkbox" class="sr-only peer">
+                        <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+                        <span class="ms-3 text-xs font-bold text-slate-600">Activa Previsions</span>
+                    </label>
+                    
+                    <!-- Method Select -->
+                    <div class="flex flex-col gap-1">
+                        <span class="text-[10px] font-bold text-slate-400 uppercase">Mètode de Previsió</span>
+                        <select id="selectForecastMethod" class="bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all cursor-pointer shadow-sm" disabled>
+                            <option value="linear" selected>Regressió Lineal (Ols)</option>
+                            <option value="cagr">Creixement Exponencial (CAGR)</option>
+                            <option value="absolute">Increment Lineal Mitjà</option>
+                        </select>
+                    </div>
+
+                    <!-- Methodology Explanation -->
+                    <div id="forecastMethodExplanation" class="text-[10px] text-slate-500 bg-slate-50 border border-slate-200/60 rounded-xl p-2.5 mt-1 hidden leading-relaxed transition-all duration-200 shadow-inner">
+                        <i class="fa-solid fa-circle-info text-emerald-600 mr-1.5 text-[11px]"></i>
+                        <span id="forecastExplanationText"></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Year Range Slider -->
+            <div class="flex flex-col gap-2 border-t lg:border-t-0 lg:border-l border-slate-200 pt-4 lg:pt-0 lg:pl-6 min-w-[260px]">
+                <div class="flex items-center justify-between mb-1">
+                    <label class="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                        <i class="fa-solid fa-calendar-days text-emerald-600"></i> Rang d'Anys
+                    </label>
+                    <span id="valorRango" class="text-xs font-bold text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-100/80">2018 — 2026</span>
+                </div>
+                <div class="px-2 py-4">
+                    <div id="sliderAnios" class="mt-1"></div>
+                </div>
+            </div>
+        </section>        <!-- Selected Concept Chips -->
+        <div id="selectedChipsContainer" class="flex flex-wrap gap-2 -mt-4 empty:hidden">
+            <!-- Injected dynamically -->
+        </div>
+
+        <!-- Selected Tipologies Chips -->
+        <div id="selectedTipologiesChipsContainer" class="flex flex-wrap gap-2 -mt-2 empty:hidden">
+            <!-- Injected dynamically -->
+        </div>
+<!-- KPI Grid -->
+        <section class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <!-- Card 1: Selected Total for latest year -->
+            <div class="bg-gradient-to-br from-emerald-600 to-teal-700 rounded-3xl p-6 text-white premium-shadow flex flex-col justify-between h-40 group hover:-translate-y-1 hover:shadow-lg transition-all duration-300">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <span class="text-emerald-100 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
+                            <span id="kpiSelectedTotalTitle">Suma Seleccionada (2025)</span>
+                            <i class="fa-solid fa-circle-info text-emerald-200 hover:text-white cursor-help transition-colors text-[10px]" title="Suma dels ingressos a 31/12/2025 per als conceptes actualment seleccionats"></i>
+                        </span>
+                        <h2 class="text-3xl font-black mt-2 font-display" id="kpiSelectedTotal">0,00 €</h2>
+                    </div>
+                    <div class="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-lg text-emerald-200 group-hover:bg-white/20 transition-colors">
+                        <i class="fa-solid fa-euro-sign"></i>
+                    </div>
+                </div>
+                <p id="kpiSelectedTotalDesc" class="text-emerald-100/80 text-xs leading-relaxed">Imports agregats dels conceptes filtrats a data 31/12/2025.</p>
+            </div>
+
+            <!-- Card 2: Forecast total for 2027 -->
+            <div id="kpiForecastCard" class="bg-gradient-to-br from-rose-500 to-pink-600 rounded-3xl p-6 text-white premium-shadow flex flex-col justify-between h-40 group hover:-translate-y-1 hover:shadow-lg transition-all duration-300">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <span class="text-rose-100 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
+                            <span>Previsió Ingressos (2027)</span>
+                            <i class="fa-solid fa-circle-info text-rose-200 hover:text-white cursor-help transition-colors text-[10px]" title="Suma dels ingressos previstos a 31/12/2027 per als conceptes seleccionats"></i>
+                        </span>
+                        <h2 class="text-3xl font-black mt-2 font-display text-rose-100/80" id="kpiForecastTotal">Desactivat</h2>
+                    </div>
+                    <div class="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-lg text-rose-200 group-hover:bg-white/20 transition-colors">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i>
+                    </div>
+                </div>
+                <p class="text-rose-100/80 text-xs leading-relaxed" id="kpiForecastDesc">Activa el switch de previsions per veure la projecció.</p>
+            </div>
+
+            <!-- Card 3: Growth rate 2018 vs 2025 -->
+            <div class="bg-gradient-to-br from-indigo-600 to-violet-700 rounded-3xl p-6 text-white premium-shadow flex flex-col justify-between h-40 group hover:-translate-y-1 hover:shadow-lg transition-all duration-300">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <span class="text-indigo-100 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
+                            <span id="kpiGrowthRateTitle">Evolució Global (2018 vs 2025)</span>
+                            <i class="fa-solid fa-circle-info text-indigo-200 hover:text-white cursor-help transition-colors text-[10px]" title="Creixement percentual agregat entre l'any 2018 i 2025 dels conceptes seleccionats"></i>
+                        </span>
+                        <h2 class="text-3xl font-black mt-2 font-display" id="kpiGrowthRate">+0,0%</h2>
+                    </div>
+                    <div class="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-lg text-indigo-200 group-hover:bg-white/20 transition-colors">
+                        <i class="fa-solid fa-arrow-trend-up" id="kpiGrowthIcon"></i>
+                    </div>
+                </div>
+                <p id="kpiGrowthRateDesc" class="text-indigo-100/80 text-xs leading-relaxed">Percentatge de variació en els ingressos de 2018 respecte a 2025.</p>
+            </div>
+
+            <!-- Card 4: Count of selected items -->
+            <div class="bg-gradient-to-br from-amber-500 to-orange-600 rounded-3xl p-6 text-white premium-shadow flex flex-col justify-between h-40 group hover:-translate-y-1 hover:shadow-lg transition-all duration-300">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <span class="text-amber-100 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
+                            <span>Conceptes Actius</span>
+                        </span>
+                        <h2 class="text-3xl font-black mt-2 font-display" id="kpiSelectedCount">0 / 0</h2>
+                    </div>
+                    <div class="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-lg text-amber-200 group-hover:bg-white/20 transition-colors">
+                        <i class="fa-solid fa-list-check"></i>
+                    </div>
+                </div>
+                <p class="text-amber-100/80 text-xs leading-relaxed">Nombre de conceptes individuals o agrupats visualitzats simultàniament.</p>
+            </div>
+        </section>
+
+        <!-- Chart Section -->
+        <section class="bg-white p-6 rounded-3xl premium-shadow border border-slate-200">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 border-b border-slate-100 pb-4">
+                <div>
+                    <h3 class="text-lg font-bold text-slate-800">Evolució Temporal de l'Ingrés</h3>
+                    <p class="text-xs text-slate-500 mt-1">Valors anuals en milions d'euros (€ M) a 31 de desembre per a cada concepte.</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button id="btnToggleChartType" type="button" class="text-xs font-semibold bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200 px-3 py-1.5 rounded-xl transition-all active:scale-95">
+                        <i class="fa-solid fa-chart-bar mr-1"></i> Canvia a Barres
+                    </button>
+                </div>
+            </div>
+            
+            <div id="chartRevenues" class="w-full h-96 min-h-[350px]"></div>
+        </section>
+
+        <!-- Data Table Section -->
+        <section class="bg-white rounded-3xl premium-shadow border border-slate-200 overflow-hidden flex flex-col">
+            <div class="px-6 py-5 border-b border-slate-100 flex flex-col md:flex-row justify-between items-stretch md:items-center gap-4 bg-slate-50/50">
+                <div>
+                    <h3 class="text-lg font-bold text-slate-800">Detall de les dades històriques</h3>
+                    <p class="text-xs text-slate-500 mt-1">Visualització tabular dels valors tancats a 31/12.</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button id="btnExportCSV" type="button" class="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-emerald-700 hover:text-white bg-emerald-50 hover:bg-emerald-600 border border-emerald-200 hover:border-transparent rounded-xl transition-all shadow-sm active:scale-95 cursor-pointer">
+                        <i class="fa-solid fa-file-csv text-sm"></i> Exporta a CSV
+                    </button>
+                </div>
+            </div>
+            
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse min-w-[900px] text-sm">
+                    <thead>
+                        <tr id="tableHeaderRow" class="bg-slate-50 text-slate-500 border-b border-slate-200 text-xs font-bold uppercase tracking-wider">
+                            <th class="px-6 py-4">Concepte de Recerca</th>
+                            <th class="px-4 py-4 text-right">2018</th>
+                            <th class="px-4 py-4 text-right">2019</th>
+                            <th class="px-4 py-4 text-right">2020</th>
+                            <th class="px-4 py-4 text-right">2021</th>
+                            <th class="px-4 py-4 text-right">2022</th>
+                            <th class="px-4 py-4 text-right">2023</th>
+                            <th class="px-4 py-4 text-right">2024</th>
+                            <th class="px-4 py-4 text-right">2025</th>
+                            <th class="px-6 py-4 text-right">Var %</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody" class="divide-y divide-slate-100 text-slate-700">
+                        <!-- Injected dynamically -->
+                    </tbody>
+                    <tfoot class="border-t-2 border-slate-200 bg-slate-50 font-bold text-slate-800">
+                        <tr id="tableFootRow">
+                            <!-- Injected dynamically -->
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+            <div class="px-6 py-4 bg-slate-50/70 border-t border-slate-100 flex justify-between items-center text-xs text-slate-400 font-semibold">
+                <span id="footerItemCount">Mostrant 0 conceptes</span>
+                <span>Font: Ingressos Recerca.xlsx i Egreta</span>
+            </div>
+        </section>
+    </main>
+
+    <!-- Page Logic -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // Global State
+            let INGRESSOS_DATA = [];
+            let seleccionats = [];
+            let chartInstance = null;
+            let currentChartType = 'line'; // 'line' or 'bar'
+            let searchVal = '';
+            let forecastEnabled = false;
+            let forecastMethod = 'linear';
+
+            // Tipologies state
+            let selectedTipologies = [];       // selected tipus strings
+            let fellowshipCallTypes = [];      // available fellowship call types from API
+            let selectedCallTypes = {};        // mapping: tipus -> array of selected callType strings
+            let internationalCallTypes = [];   // available international call types from API
+            let selectedProjectPrograms = {};  // mapping: tipus -> array of selected program strings
+            let researchProjectPrograms = [];  // available research project programs from API
+            let tipologiesData = [];           // raw API: [{categoria, tipus}]
+            let awardsImportData = [];         // raw API: [{tipus, anyo, totalImport}]
+            let awardsDataLoaded = false;
+            let excludeDeclined = false;       // whether to exclude declined/resigned awards
+            let selectedOrgScope = 'all';      // UAB vs Esfera filter scope
+
+            // Cache DOM Elements
+            const dropdownBtn = document.getElementById('conceptsDropdownBtn');
+            const dropdownMenu = document.getElementById('conceptsDropdownMenu');
+            const dropdownList = document.getElementById('conceptsDropdownList');
+            const dropdownLabel = document.getElementById('conceptsDropdownLabel');
+            const searchInput = document.getElementById('conceptsSearchInput');
+            const btnDeselectAll = document.getElementById('btnDeselectAll');
+            const chipsContainer = document.getElementById('selectedChipsContainer');
+            
+            const kpiSelectedTotal = document.getElementById('kpiSelectedTotal');
+            const kpiGrowthRate = document.getElementById('kpiGrowthRate');
+            const kpiGrowthIcon = document.getElementById('kpiGrowthIcon');
+            const kpiSelectedCount = document.getElementById('kpiSelectedCount');
+            
+            // Forecast DOM elements
+            const chkForecast = document.getElementById('chkForecast');
+            const selectForecastMethod = document.getElementById('selectForecastMethod');
+            const kpiForecastCard = document.getElementById('kpiForecastCard');
+            const kpiForecastTotal = document.getElementById('kpiForecastTotal');
+            const kpiForecastDesc = document.getElementById('kpiForecastDesc');
+            const forecastMethodExplanation = document.getElementById('forecastMethodExplanation');
+            const forecastExplanationText = document.getElementById('forecastExplanationText');
+
+            const btnToggleChartType = document.getElementById('btnToggleChartType');
+            const btnExportCSV = document.getElementById('btnExportCSV');
+            const tableBody = document.getElementById('tableBody');
+            const tableFootRow = document.getElementById('tableFootRow');
+            const footerItemCount = document.getElementById('footerItemCount');
+
+            // Quick Presets elements
+            const presetTotals = document.getElementById('presetTotals');
+            const presetPersonal = document.getElementById('presetPersonal');
+            const presetProjectes = document.getElementById('presetProjectes');
+            const presetTots = document.getElementById('presetTots');
+
+            // Year range slider elements
+            const sliderAnios = document.getElementById('sliderAnios');
+            const valorRango = document.getElementById('valorRango');
+
+            // Tipologies DOM elements
+            const tipologiesBtn = document.getElementById('tipologiesDropdownBtn');
+            const tipologiesMenu = document.getElementById('tipologiesDropdownMenu');
+            const tipologiesList = document.getElementById('tipologiesDropdownList');
+            const tipologiesLabel = document.getElementById('tipologiesDropdownLabel');
+            const tipologiesSearch = document.getElementById('tipologiesSearchInput');
+            const btnDeselectAllTipologies = document.getElementById('btnDeselectAllTipologies');
+            const tipologiesChipsContainer = document.getElementById('selectedTipologiesChipsContainer');
+            const tipologiesTooltip = document.getElementById('tipologiesTooltip');
+
+            tipologiesBtn.addEventListener('mouseenter', () => {
+                if (tipologiesTooltip.textContent.trim()) {
+                    tipologiesTooltip.classList.remove('hidden');
+                }
+            });
+            tipologiesBtn.addEventListener('mouseleave', () => {
+                tipologiesTooltip.classList.add('hidden');
+            });
+
+// Initial selected concepts: load the 3 major categories
+            const initialConcepts = [
+                "PS Recerca (Cap. 3)  No competitiva",
+                "Personal Investigador",
+                "Projectes (Cap. 4, 7 i 9)"
+            ];
+            
+            async function initApp() {
+                try {
+                    const response = await fetch('/api/ingressos/data');
+                    if (!response.ok) throw new Error("HTTP " + response.status);
+                    INGRESSOS_DATA = await response.json();
+                    
+                    seleccionats = INGRESSOS_DATA.filter(item => initialConcepts.includes(item.concept)).map(item => item.concept);
+
+                    // Initialize Page Components
+                    initDropdown();
+                    initTipologiesDropdown();
+                    initChart();
+                    initSlider();
+                    updateUI();
+                    loadAwardsData();
+                } catch (error) {
+                    console.error("Error carregant les dades d'ingressos:", error);
+                    alert("Error en carregar les dades d'ingressos des de l'Excel.");
+                }
+            }
+            initApp();
+            // Initialize Slider
+            function initSlider() {
+                noUiSlider.create(sliderAnios, {
+                    start: [2018, 2025],
+                    connect: true,
+                    step: 1,
+                    range: {
+                        'min': 2018,
+                        'max': 2025
+                    },
+                    format: {
+                        to: v => Math.round(v),
+                        from: v => Number(v)
+                    }
+                });
+
+                // Update range text label
+                sliderAnios.noUiSlider.on('update', (vals) => {
+                    const start = vals[0];
+                    const end = vals[1];
+                    const startLabel = start === '2026' ? '2026 (P)' : start === '2027' ? '2027 (P)' : start;
+                    const endLabel = end === '2026' ? '2026 (P)' : end === '2027' ? '2027 (P)' : end;
+                    valorRango.textContent = `${startLabel} — ${endLabel}`;
+                });
+
+                // Refresh UI on slider change
+                sliderAnios.noUiSlider.on('change', () => {
+                    updateUI();
+                });
+            }
+
+            // Get selected year range from slider
+            function getSelectedYearRange() {
+                if (!sliderAnios || !sliderAnios.noUiSlider) {
+                    return {
+                        start: 2018,
+                        end: forecastEnabled ? 2027 : 2025
+                    };
+                }
+                const vals = sliderAnios.noUiSlider.get().map(v => Math.round(v));
+                return {
+                    start: vals[0],
+                    end: vals[1]
+                };
+            }
+
+            // Forecast Event Listeners
+            chkForecast.addEventListener('change', (e) => {
+                forecastEnabled = e.target.checked;
+                selectForecastMethod.disabled = !forecastEnabled;
+                
+                // Update year range slider max limits
+                const currentVals = sliderAnios.noUiSlider.get().map(v => Math.round(v));
+                const newMax = forecastEnabled ? 2027 : 2025;
+                sliderAnios.noUiSlider.updateOptions({
+                    range: {
+                        'min': 2018,
+                        'max': newMax
+                    }
+                });
+                
+                // If forecast is enabled, automatically slide the end handle to 2027
+                // if it was previously at 2025, to show the forecast immediately.
+                let newEnd = currentVals[1];
+                if (forecastEnabled && newEnd === 2025) {
+                    newEnd = 2027;
+                } else if (!forecastEnabled && newEnd > 2025) {
+                    newEnd = 2025;
+                }
+                sliderAnios.noUiSlider.set([currentVals[0], newEnd]);
+                
+                updateUI();
+            });
+
+            selectForecastMethod.addEventListener('change', (e) => {
+                forecastMethod = e.target.value;
+                updateUI();
+            });
+
+            const chkExcludeDeclined = document.getElementById('chkExcludeDeclined');
+            chkExcludeDeclined.addEventListener('change', (e) => {
+                excludeDeclined = e.target.checked;
+                // Redraw third-level options (in case some options are no longer available)
+                renderTipologiesOptions(tipologiesSearch.value.toLowerCase());
+                renderTipologiesChips();
+                updateUI();
+            });
+
+            const selectOrgScope = document.getElementById('selectOrgScope');
+            selectOrgScope.addEventListener('change', (e) => {
+                selectedOrgScope = e.target.value;
+                // Redraw third-level options (in case some options are no longer available)
+                renderTipologiesOptions(tipologiesSearch.value.toLowerCase());
+                renderTipologiesChips();
+                updateUI();
+            });
+
+            // Forecasting Math Functions
+            function calcularPrevisio(values, method) {
+                // values: object mapping years to numbers
+                const y = [
+                    values['2018'] || 0,
+                    values['2019'] || 0,
+                    values['2020'] || 0,
+                    values['2021'] || 0,
+                    values['2022'] || 0,
+                    values['2023'] || 0,
+                    values['2024'] || 0,
+                    values['2025'] || 0
+                ];
+                
+                let val2026 = 0;
+                let val2027 = 0;
+
+                if (method === 'linear') {
+                    // Ordinary Least Squares Linear Regression
+                    // x: 0 (2018) to 7 (2025)
+                    const n = 8;
+                    const xMean = 3.5;
+                    let ySum = 0;
+                    for (let i = 0; i < n; i++) {
+                        ySum += y[i];
+                    }
+                    const yMean = ySum / n;
+                    
+                    let num = 0;
+                    let den = 42; // Sum of (x - xMean)^2 is 42
+                    for (let i = 0; i < n; i++) {
+                        num += (i - xMean) * (y[i] - yMean);
+                    }
+                    
+                    const slope = num / den;
+                    const intercept = yMean - slope * xMean;
+                    
+                    // Predict 2026 (x = 8) and 2027 (x = 9)
+                    val2026 = Math.max(0, slope * 8 + intercept);
+                    val2027 = Math.max(0, slope * 9 + intercept);
+                    
+                } else if (method === 'cagr') {
+                    // Compound Annual Growth Rate
+                    // Find first year with value > 0 to start CAGR calculation
+                    let startIdx = -1;
+                    for (let i = 0; i < 8; i++) {
+                        if (y[i] > 0) {
+                            startIdx = i;
+                            break;
+                        }
+                    }
+                    
+                    const val2025 = y[7];
+                    if (startIdx === -1 || val2025 <= 0 || startIdx === 7) {
+                        // Cannot calculate CAGR, fallback to 2025 value
+                        val2026 = val2025;
+                        val2027 = val2025;
+                    } else {
+                        const valStart = y[startIdx];
+                        const yearsDiff = 7 - startIdx;
+                        
+                        // CAGR calculation
+                        let cagr = Math.pow(val2025 / valStart, 1 / yearsDiff) - 1;
+                        
+                        // Cap CAGR to avoid exponential explosions (+100% and -50%)
+                        cagr = Math.max(-0.5, Math.min(1.0, cagr));
+                        
+                        val2026 = Math.max(0, val2025 * (1 + cagr));
+                        val2027 = Math.max(0, val2025 * Math.pow(1 + cagr, 2));
+                    }
+                    
+                } else if (method === 'absolute') {
+                    // Average Absolute Annual Increment
+                    // Extrapolate based on (y[7] - y[0]) / 7
+                    const diffAvg = (y[7] - y[0]) / 7;
+                    val2026 = Math.max(0, y[7] + diffAvg);
+                    val2027 = Math.max(0, y[7] + 2 * diffAvg);
+                }
+
+                return {
+                    '2026': val2026,
+                    '2027': val2027
+                };
+            }
+
+            // Toggle Dropdown Visibility
+            dropdownBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const isHidden = dropdownMenu.classList.contains('hidden');
+                if (isHidden) {
+                    openDropdown();
+                } else {
+                    closeDropdown();
+                }
+            });
+
+            // Close dropdown when clicking outside
+            document.addEventListener('click', (e) => {
+                if (!dropdownMenu.contains(e.target) && e.target !== dropdownBtn) {
+                    closeDropdown();
+                }
+            });
+
+            // Handle dropdown search
+            searchInput.addEventListener('input', (e) => {
+                searchVal = e.target.value.toLowerCase().trim();
+                renderDropdownOptions();
+            });
+
+            // Reset Selection (Buida)
+            btnDeselectAll.addEventListener('click', () => {
+                seleccionats = [];
+                searchInput.value = '';
+                searchVal = '';
+                renderDropdownOptions();
+                updateUI();
+            });
+
+            // Toggle Chart Type (line <-> bar)
+            btnToggleChartType.addEventListener('click', () => {
+                currentChartType = currentChartType === 'line' ? 'bar' : 'line';
+                btnToggleChartType.innerHTML = currentChartType === 'line' 
+                    ? '<i class="fa-solid fa-chart-bar mr-1"></i> Canvia a Barres'
+                    : '<i class="fa-solid fa-chart-line mr-1"></i> Canvia a Línies';
+                renderChart();
+            });
+
+            // Preset Buttons handlers
+            presetTotals.addEventListener('click', () => {
+                // Pre-select group headers and total general
+                seleccionats = INGRESSOS_DATA
+                    .filter(item => item.isGroupHeader)
+                    .map(item => item.concept);
+                renderDropdownOptions();
+                updateUI();
+            });
+
+            presetPersonal.addEventListener('click', () => {
+                // Pre-select only Personal Investigador subconcepts
+                seleccionats = INGRESSOS_DATA
+                    .filter(item => item.category === 'Personal Investigador' && !item.isGroupHeader)
+                    .map(item => item.concept);
+                renderDropdownOptions();
+                updateUI();
+            });
+
+            presetProjectes.addEventListener('click', () => {
+                // Pre-select only Projectes subconcepts
+                seleccionats = INGRESSOS_DATA
+                    .filter(item => item.category === 'Projectes' && !item.isGroupHeader)
+                    .map(item => item.concept);
+                renderDropdownOptions();
+                updateUI();
+            });
+
+            presetTots.addEventListener('click', () => {
+                // Select all concepts
+                seleccionats = INGRESSOS_DATA.map(item => item.concept);
+                renderDropdownOptions();
+                updateUI();
+            });
+
+            // Export to CSV
+            btnExportCSV.addEventListener('click', () => {
+                exportSelectedToCSV();
+            });
+
+            // Dropdown helper functions
+            function openDropdown() {
+                dropdownMenu.classList.remove('hidden');
+                searchInput.focus();
+                searchVal = '';
+                searchInput.value = '';
+                renderDropdownOptions();
+            }
+
+            // Close the dropdown menu
+            function closeDropdown() {
+                dropdownMenu.classList.add('hidden');
+            }            function initDropdown() {
+                renderDropdownOptions();
+            }
+
+            // ─── Awards Tipologies Dropdown ───────────────────────────────────
+            function initTipologiesDropdown() {
+                // Toggle open/close
+                tipologiesBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const isOpen = !tipologiesMenu.classList.contains('hidden');
+                    // Close conceptes dropdown if open
+                    dropdownMenu.classList.add('hidden');
+                    tipologiesMenu.classList.toggle('hidden', isOpen);
+                });
+
+                // Close on outside click
+                document.addEventListener('click', (e) => {
+                    if (!tipologiesBtn.contains(e.target) && !tipologiesMenu.contains(e.target)) {
+                        tipologiesMenu.classList.add('hidden');
+                    }
+                });
+
+                // Search filter
+                tipologiesSearch.addEventListener('input', () => {
+                    renderTipologiesOptions(tipologiesSearch.value.toLowerCase());
+                });
+
+                // Deselect all
+                btnDeselectAllTipologies.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    selectedTipologies = [];
+                    selectedCallTypes = {};
+                    selectedProjectPrograms = {};
+                    tipologiesSearch.value = '';
+                    renderTipologiesOptions('');
+                    updateTipologiesLabel();
+                    renderTipologiesChips();
+                    renderChart();
+                });
+}
+
+            function renderTipologiesOptions(searchFilter = '') {
+                tipologiesList.innerHTML = '';
+
+                // Get selected year range
+                const { start, end } = getSelectedYearRange();
+
+                function tipusMatchesSearch(tipus, searchVal) {
+                    if (!searchVal) return true;
+                    const query = searchVal.toLowerCase();
+                    if (tipus.toLowerCase().includes(query)) return true;
+
+                    // Level 3 matches
+                    if (isBecaTipus(tipus)) {
+                        return fellowshipCallTypes.some(call => 
+                            call.toLowerCase().includes(query) &&
+                            awardsImportData.some(d => d.anyo >= start && d.anyo <= end && isBecaTipus(d.tipus) && d.callType === call && (d.totalImport > 0 || d.count > 0) && (!excludeDeclined || !d.isDeclined) && (selectedOrgScope === 'all' || d.orgScope === selectedOrgScope))
+                        );
+                    }
+                    if (isProjectesInternacionals(tipus)) {
+                        return internationalCallTypes.some(call => 
+                            call.toLowerCase().includes(query) &&
+                            awardsImportData.some(d => d.anyo >= start && d.anyo <= end && isProjectesInternacionals(d.tipus) && d.callType === call && (d.totalImport > 0 || d.count > 0) && (!excludeDeclined || !d.isDeclined) && (selectedOrgScope === 'all' || d.orgScope === selectedOrgScope))
+                        );
+                    }
+                    if (isResearchProjectes(tipus)) {
+                        return researchProjectPrograms.some(prog => 
+                            prog.toLowerCase().includes(query) &&
+                            awardsImportData.some(d => d.anyo >= start && d.anyo <= end && isResearchProjectes(d.tipus) && d.callType === prog && (d.totalImport > 0 || d.count > 0) && (!excludeDeclined || !d.isDeclined) && (selectedOrgScope === 'all' || d.orgScope === selectedOrgScope))
+                        );
+                    }
+                    return false;
+                }
+
+                // Get all unique categories in tipologiesData
+                const uniqueCategories = [...new Set(tipologiesData.map(d => d.categoria || 'Sense categoria'))].sort();
+
+                // Group by category for individual tipus
+                const grouped = {};
+                tipologiesData.forEach(({ categoria, tipus }) => {
+                    if (!tipus) return;
+                    if (!tipusMatchesSearch(tipus, searchFilter)) return;
+                    const cat = categoria || 'Sense categoria';
+                    if (!grouped[cat]) grouped[cat] = [];
+                    grouped[cat].push(tipus);
+                });
+
+                // Prepare totals
+                const totalsGroup = [];
+                // Add Total Ajuts
+                if (!searchFilter || 'total ajuts'.includes(searchFilter)) {
+                    totalsGroup.push('Total Ajuts');
+                }
+                // Add category-level totals
+                uniqueCategories.forEach(cat => {
+                    const label = 'Total ' + cat;
+                    if (!searchFilter || label.toLowerCase().includes(searchFilter)) {
+                        totalsGroup.push(label);
+                    }
+                });
+
+                // Render totals first if there are any
+                if (totalsGroup.length > 0) {
+                    const header = document.createElement('div');
+                    header.className = 'px-4 py-2 bg-slate-100 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-y border-slate-200 sticky top-0';
+                    header.textContent = 'General / Totals de Categoria';
+                    tipologiesList.appendChild(header);
+
+                    totalsGroup.forEach(tipus => {
+                        const isChecked = selectedTipologies.includes(tipus);
+                        const row = document.createElement('div');
+                        row.className = `px-4 py-2.5 flex items-center gap-3 hover:bg-slate-100/60 cursor-pointer transition-colors ${isChecked ? 'bg-slate-100/40' : ''}`;
+
+                        const checkbox = document.createElement('input');
+                        checkbox.type = 'checkbox';
+                        checkbox.checked = isChecked;
+                        checkbox.className = 'w-4 h-4 text-emerald-600 border-slate-300 rounded focus:ring-emerald-500 cursor-pointer';
+
+                        const textSpan = document.createElement('span');
+                        textSpan.className = 'text-xs leading-normal text-slate-800 font-bold';
+                        textSpan.textContent = tipus;
+
+                        row.appendChild(checkbox);
+                        row.appendChild(textSpan);
+                        row.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            toggleTipologia(tipus);
+                        });
+                        tipologiesList.appendChild(row);
+                    });
+                }
+
+                // Render individual categories
+                const cats = Object.keys(grouped).sort();
+                if (cats.length === 0 && totalsGroup.length === 0) {
+                    tipologiesList.innerHTML = `<div class="px-4 py-6 text-center text-slate-400 italic text-xs">Cap tipologia coincideix</div>`;
+                    return;
+                }
+
+                // Filter available call types and programs based on selected year range
+                const availableFellowshipCalls = fellowshipCallTypes.filter(call =>
+                    awardsImportData.some(d => d.anyo >= start && d.anyo <= end && isBecaTipus(d.tipus) && d.callType === call && (d.totalImport > 0 || d.count > 0) && (!excludeDeclined || !d.isDeclined) && (selectedOrgScope === 'all' || d.orgScope === selectedOrgScope))
+                );
+
+                const availableCallTypes = internationalCallTypes.filter(call =>
+                    awardsImportData.some(d => d.anyo >= start && d.anyo <= end && isProjectesInternacionals(d.tipus) && d.callType === call && (d.totalImport > 0 || d.count > 0) && (!excludeDeclined || !d.isDeclined) && (selectedOrgScope === 'all' || d.orgScope === selectedOrgScope))
+                );
+
+                const availablePrograms = researchProjectPrograms.filter(prog =>
+                    awardsImportData.some(d => d.anyo >= start && d.anyo <= end && isResearchProjectes(d.tipus) && d.callType === prog && (d.totalImport > 0 || d.count > 0) && (!excludeDeclined || !d.isDeclined) && (selectedOrgScope === 'all' || d.orgScope === selectedOrgScope))
+                );
+
+                cats.forEach(cat => {
+                    // Category header
+                    const header = document.createElement('div');
+                    header.className = 'px-4 py-2 bg-amber-50 text-[10px] font-bold text-amber-700 uppercase tracking-wider border-y border-amber-100 sticky top-0';
+                    header.textContent = cat;
+                    tipologiesList.appendChild(header);
+
+                    grouped[cat].forEach(tipus => {
+                        const isChecked = selectedTipologies.includes(tipus);
+                        const row = document.createElement('div');
+                        row.className = `px-4 py-2.5 flex items-center gap-3 hover:bg-amber-50/60 cursor-pointer transition-colors ${isChecked ? 'bg-amber-50/40' : ''}`;
+
+                        const checkbox = document.createElement('input');
+                        checkbox.type = 'checkbox';
+                        checkbox.checked = isChecked;
+                        checkbox.className = 'w-4 h-4 text-amber-500 border-slate-300 rounded focus:ring-amber-400 cursor-pointer';
+
+                        const textSpan = document.createElement('span');
+                        textSpan.className = 'text-xs leading-normal text-slate-600 font-medium';
+                        textSpan.textContent = tipus;
+
+                        row.appendChild(checkbox);
+                        row.appendChild(textSpan);
+                        row.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            toggleTipologia(tipus);
+                        });
+                        tipologiesList.appendChild(row);
+
+                        // Third-level fellowship call types: visible only when this fellowship is checked
+                        if (isBecaTipus(tipus) && isChecked && availableFellowshipCalls.length > 0) {
+                            const subPanel = document.createElement('div');
+                            subPanel.className = 'pl-10 pr-4 py-1.5 bg-amber-50/20 border-b border-amber-100/40 flex flex-col gap-2';
+
+                            const matchedCalls = availableFellowshipCalls.filter(call => !searchFilter || call.toLowerCase().includes(searchFilter));
+
+                            matchedCalls.forEach(call => {
+                                const activeCalls = selectedCallTypes[tipus] || [];
+                                const isCallChecked = activeCalls.includes(call);
+
+                                const callRow = document.createElement('div');
+                                callRow.className = 'flex items-center gap-2.5 py-1 hover:bg-amber-50/40 rounded px-2 cursor-pointer transition-colors';
+
+                                const callCheckbox = document.createElement('input');
+                                callCheckbox.type = 'checkbox';
+                                callCheckbox.checked = isCallChecked;
+                                callCheckbox.className = 'w-3.5 h-3.5 text-amber-500 border-slate-300 rounded focus:ring-amber-400 cursor-pointer';
+
+                                const callText = document.createElement('span');
+                                callText.className = 'text-[11px] leading-none text-slate-500 font-medium';
+                                callText.textContent = call;
+
+                                callRow.appendChild(callCheckbox);
+                                callRow.appendChild(callText);
+                                callRow.addEventListener('click', (e) => {
+                                    e.stopPropagation();
+                                    toggleCallType(tipus, call);
+                                });
+                                subPanel.appendChild(callRow);
+                            });
+                            tipologiesList.appendChild(subPanel);
+                        }
+
+                        // Third-level call types: visible only when international projects is checked
+                        if (isProjectesInternacionals(tipus) && isChecked && availableCallTypes.length > 0) {
+                            const subPanel = document.createElement('div');
+                            subPanel.className = 'pl-10 pr-4 py-1.5 bg-amber-50/20 border-b border-amber-100/40 flex flex-col gap-2';
+
+                            const matchedCalls = availableCallTypes.filter(call => !searchFilter || call.toLowerCase().includes(searchFilter));
+
+                            matchedCalls.forEach(call => {
+                                const activeCalls = selectedCallTypes[tipus] || [];
+                                const isCallChecked = activeCalls.includes(call);
+
+                                const callRow = document.createElement('div');
+                                callRow.className = 'flex items-center gap-2.5 py-1 hover:bg-amber-50/40 rounded px-2 cursor-pointer transition-colors';
+
+                                const callCheckbox = document.createElement('input');
+                                callCheckbox.type = 'checkbox';
+                                callCheckbox.checked = isCallChecked;
+                                callCheckbox.className = 'w-3.5 h-3.5 text-amber-500 border-slate-300 rounded focus:ring-amber-400 cursor-pointer';
+
+                                const callText = document.createElement('span');
+                                callText.className = 'text-[11px] leading-none text-slate-500 font-medium';
+                                callText.textContent = call;
+
+                                callRow.appendChild(callCheckbox);
+                                callRow.appendChild(callText);
+                                callRow.addEventListener('click', (e) => {
+                                    e.stopPropagation();
+                                    toggleCallType(tipus, call);
+                                });
+
+                                subPanel.appendChild(callRow);
+                            });
+
+                            tipologiesList.appendChild(subPanel);
+                        }
+
+                        // Third-level project programs: visible only when Projectes i Ajuts a la Recerca is checked
+                        if (isResearchProjectes(tipus) && isChecked && availablePrograms.length > 0) {
+                            const subPanel = document.createElement('div');
+                            subPanel.className = 'pl-10 pr-4 py-1.5 bg-amber-50/20 border-b border-amber-100/40 flex flex-col gap-2 max-h-48 overflow-y-auto custom-scrollbar';
+
+                            const matchedProgs = availablePrograms.filter(prog => !searchFilter || prog.toLowerCase().includes(searchFilter));
+
+                            matchedProgs.forEach(prog => {
+                                const activeProgs = selectedProjectPrograms[tipus] || [];
+                                const isProgChecked = activeProgs.includes(prog);
+
+                                const progRow = document.createElement('div');
+                                progRow.className = 'flex items-center gap-2.5 py-1 hover:bg-amber-50/40 rounded px-2 cursor-pointer transition-colors';
+
+                                const progCheckbox = document.createElement('input');
+                                progCheckbox.type = 'checkbox';
+                                progCheckbox.checked = isProgChecked;
+                                progCheckbox.className = 'w-3.5 h-3.5 text-amber-500 border-slate-300 rounded focus:ring-amber-400 cursor-pointer';
+
+                                const progText = document.createElement('span');
+                                progText.className = 'text-[11px] leading-none text-slate-500 font-medium';
+                                progText.textContent = prog;
+
+                                progRow.appendChild(progCheckbox);
+                                progRow.appendChild(progText);
+                                progRow.addEventListener('click', (e) => {
+                                    e.stopPropagation();
+                                    toggleResearchProjectProgram(tipus, prog);
+                                });
+
+                                subPanel.appendChild(progRow);
+                            });
+
+                            tipologiesList.appendChild(subPanel);
+                        }
+                    });
+                });
+            }
+
+            function isBecaTipus(tipus) {
+                return tipus === "Beques";
+            }
+
+            function isProjectesInternacionals(tipus) {
+                return tipus === "Projectes d'investigació Internacionals";
+            }
+
+            function isResearchProjectes(tipus) {
+                return tipus === "Projectes i Ajuts a la Recerca";
+            }
+
+            function toggleCallType(tipus, call) {
+                if (!selectedCallTypes[tipus]) {
+                    selectedCallTypes[tipus] = [];
+                }
+                if (selectedCallTypes[tipus].includes(call)) {
+                    selectedCallTypes[tipus] = selectedCallTypes[tipus].filter(c => c !== call);
+                } else {
+                    selectedCallTypes[tipus].push(call);
+                }
+                renderTipologiesOptions(tipologiesSearch.value.toLowerCase());
+                updateTipologiesLabel();
+                renderTipologiesChips();
+                updateUI();
+            }
+
+            // Toggle research project program
+            function toggleResearchProjectProgram(tipus, prog) {
+                if (!selectedProjectPrograms[tipus]) {
+                    selectedProjectPrograms[tipus] = [];
+                }
+                if (selectedProjectPrograms[tipus].includes(prog)) {
+                    selectedProjectPrograms[tipus] = selectedProjectPrograms[tipus].filter(p => p !== prog);
+                } else {
+                    selectedProjectPrograms[tipus].push(prog);
+                }
+                renderTipologiesOptions(tipologiesSearch.value.toLowerCase());
+                updateTipologiesLabel();
+                renderTipologiesChips();
+                updateUI();
+            }
+
+            function toggleTipologia(tipus) {
+                if (selectedTipologies.includes(tipus)) {
+                    selectedTipologies = selectedTipologies.filter(t => t !== tipus);
+                    delete selectedCallTypes[tipus];
+                    delete selectedProjectPrograms[tipus];
+                } else {
+                    selectedTipologies.push(tipus);
+                }
+                renderTipologiesOptions(tipologiesSearch.value.toLowerCase());
+                updateTipologiesLabel();
+                renderTipologiesChips();
+                updateUI();
+            }
+
+            function updateTipologiesLabel() {
+                if (selectedTipologies.length === 0) {
+                    tipologiesLabel.textContent = 'Cap tipologia seleccionada';
+                    tipologiesLabel.className = 'truncate text-slate-400 italic';
+                    return;
+                }
+
+                // Count total individual chips (same logic as renderTipologiesChips)
+                const { start, end } = getSelectedYearRange();
+                let totalChips = 0;
+                const chipLabels = [];
+
+                selectedTipologies.forEach(tipus => {
+                    const activeCalls = (selectedCallTypes[tipus] || []).filter(call =>
+                        awardsImportData.some(d => d.anyo >= start && d.anyo <= end && (isBecaTipus(d.tipus) || isProjectesInternacionals(d.tipus)) && d.callType === call && (d.totalImport > 0 || d.count > 0) && (!excludeDeclined || !d.isDeclined) && (selectedOrgScope === 'all' || d.orgScope === selectedOrgScope))
+                    );
+                    const activeProgs = (selectedProjectPrograms[tipus] || []).filter(prog =>
+                        awardsImportData.some(d => d.anyo >= start && d.anyo <= end && isResearchProjectes(d.tipus) && d.callType === prog && (d.totalImport > 0 || d.count > 0) && (!excludeDeclined || !d.isDeclined) && (selectedOrgScope === 'all' || d.orgScope === selectedOrgScope))
+                    );
+                    const subCount = activeCalls.length + activeProgs.length;
+                    if (subCount > 0) {
+                        activeCalls.forEach(call => chipLabels.push(`🏆 ${tipus} · ${call}`));
+                        activeProgs.forEach(prog => chipLabels.push(`🏆 ${tipus} · ${prog}`));
+                        totalChips += subCount;
+                    } else {
+                        chipLabels.push(`🏆 ${tipus}`);
+                        totalChips += 1;
+                    }
+                });
+
+                // Update tooltip content
+                if (totalChips > 1) {
+                    tipologiesTooltip.textContent = chipLabels.join('\n');
+                } else {
+                    tipologiesTooltip.textContent = '';
+                    tipologiesTooltip.classList.add('hidden');
+                }
+
+                if (totalChips === 1) {
+                    // Find the single chip label
+                    const tipus = selectedTipologies[0];
+                    const activeCalls = (selectedCallTypes[tipus] || []).filter(call =>
+                        awardsImportData.some(d => d.anyo >= start && d.anyo <= end && (isBecaTipus(d.tipus) || isProjectesInternacionals(d.tipus)) && d.callType === call && (d.totalImport > 0 || d.count > 0) && (!excludeDeclined || !d.isDeclined) && (selectedOrgScope === 'all' || d.orgScope === selectedOrgScope))
+                    );
+                    const activeProgs = (selectedProjectPrograms[tipus] || []).filter(prog =>
+                        awardsImportData.some(d => d.anyo >= start && d.anyo <= end && isResearchProjectes(d.tipus) && d.callType === prog && (d.totalImport > 0 || d.count > 0) && (!excludeDeclined || !d.isDeclined) && (selectedOrgScope === 'all' || d.orgScope === selectedOrgScope))
+                    );
+                    if (activeCalls.length === 1) {
+                        tipologiesLabel.textContent = `${tipus} · ${activeCalls[0]}`;
+                    } else if (activeProgs.length === 1) {
+                        tipologiesLabel.textContent = `${tipus} · ${activeProgs[0]}`;
+                    } else {
+                        tipologiesLabel.textContent = tipus;
+                    }
+                } else {
+                    tipologiesLabel.textContent = `${totalChips} tipologies seleccionades`;
+                }
+                tipologiesLabel.className = 'truncate text-amber-700 font-semibold';
+            }
+
+            // ─── Load awards data from API ─────────────────────────────────────
+            async function loadAwardsData() {
+                try {
+                    // Load tipologies list (grouped by category)
+                    const tipRes = await fetch('/api/awards/stats/tipus-per-categoria');
+                    if (tipRes.ok) {
+                        tipologiesData = await tipRes.json();
+                    } else {
+                        tipologiesList.innerHTML = `<div class="px-4 py-6 text-center text-rose-400 text-xs italic">Error carregant tipologies (${tipRes.status})</div>`;
+                    }
+
+                    // Load fellowship call types list
+                    const natRes = await fetch('/api/awards/stats/fellowship-call-types');
+                    if (natRes.ok) {
+                        fellowshipCallTypes = await natRes.json();
+                    }
+
+                    // Load international call types list
+                    const callRes = await fetch('/api/awards/stats/international-call-types');
+                    if (callRes.ok) {
+                        internationalCallTypes = await callRes.json();
+                    }
+
+                    // Load research project programs list
+                    const progRes = await fetch('/api/awards/stats/research-project-programs');
+                    if (progRes.ok) {
+                        researchProjectPrograms = await progRes.json();
+                    }
+
+                    renderTipologiesOptions();
+
+                    // Load awarded amounts per type per year
+                    const impRes = await fetch('/api/awards/stats/import-per-tipus-anio');
+                    if (impRes.ok) {
+                        awardsImportData = await impRes.json();
+                        awardsDataLoaded = true;
+                        updateUI();
+                    }
+                } catch (err) {
+                    console.error('[Awards] Error loading data:', err);
+                    tipologiesList.innerHTML = `<div class="px-4 py-6 text-center text-rose-400 text-xs italic">No s'ha pogut connectar amb el servidor.</div>`;
+                }
+            }
+
+            // ─── Build award overlay series for ECharts ────────────────────────
+            function buildAwardSeries(chartYears) {
+                if (!awardsDataLoaded || selectedTipologies.length === 0) return [];
+
+                // Amber/orange palette for awards series
+                const awardColors = [
+                    '#f59e0b', // amber-400
+                    '#f97316', // orange-500
+                    '#ef4444', // red-500
+                    '#a855f7', // purple-500
+                    '#06b6d4', // cyan-500
+                    '#84cc16', // lime-500
+                    '#ec4899', // pink-500
+                    '#14b8a6', // teal-500
+                    '#3b82f6', // blue-500
+                    '#d97706', // amber-600
+                ];
+
+                const allSeries = [];
+                let colorIdx = 0;
+
+                // Build one entry per chip (same logic as renderTipologiesChips)
+                const chips = []; // { label, tipus, filterFn }
+                selectedTipologies.forEach(tipus => {
+                    const activeCalls = selectedCallTypes[tipus] || [];
+                    const activeProgs = selectedProjectPrograms[tipus] || [];
+
+                    if (activeCalls.length > 0) {
+                        activeCalls.forEach(call => {
+                            chips.push({ label: `${tipus} · ${call}`, tipus, callFilter: call, progFilter: null });
+                        });
+                    } else if (activeProgs.length > 0) {
+                        activeProgs.forEach(prog => {
+                            chips.push({ label: `${tipus} · ${prog}`, tipus, callFilter: null, progFilter: prog });
+                        });
+                    } else {
+                        chips.push({ label: tipus, tipus, callFilter: null, progFilter: null });
+                    }
+                });
+
+                chips.forEach(chip => {
+                    const color = awardColors[colorIdx % awardColors.length];
+                    colorIdx++;
+
+                    const { label, tipus, callFilter, progFilter } = chip;
+
+                    // Start with all awards for this tipus
+                    let filteredAwards = [];
+                    if (tipus === 'Total Ajuts') {
+                        filteredAwards = awardsImportData;
+                    } else if (tipus.startsWith('Total ')) {
+                        const catName = tipus.substring(6);
+                        const tipusInCat = tipologiesData
+                            .filter(d => (d.categoria || 'Sense categoria') === catName)
+                            .map(d => d.tipus);
+                        filteredAwards = awardsImportData.filter(d => tipusInCat.includes(d.tipus));
+                    } else {
+                        filteredAwards = awardsImportData.filter(d => d.tipus === tipus);
+                    }
+
+                    // Exclude declined if checked
+                    if (excludeDeclined) {
+                        filteredAwards = filteredAwards.filter(d => !d.isDeclined);
+                    }
+
+                    // Filter by orgScope
+                    if (selectedOrgScope !== 'all') {
+                        filteredAwards = filteredAwards.filter(d => d.orgScope === selectedOrgScope);
+                    }
+
+                    // Apply chip-level sub-filter
+                    if (callFilter) {
+                        filteredAwards = filteredAwards.filter(d => d.callType === callFilter);
+                    } else if (progFilter) {
+                        filteredAwards = filteredAwards.filter(d => d.callType === progFilter);
+                    }
+
+                    // Map year → amount
+                    const byYear = {};
+                    filteredAwards.forEach(d => {
+                        byYear[d.anyo] = (byYear[d.anyo] || 0) + (d.totalImport || 0);
+                    });
+
+                    const data = chartYears.map(lbl => {
+                        const yr = parseInt(lbl.replace(' (P)', ''));
+                        const val = byYear[yr];
+                        return val != null ? roundToDecimals(val, 2) : null;
+                    });
+
+                    allSeries.push({
+                        name: `🏆 ${label}`,
+                        type: 'bar',
+                        stack: 'awards',
+                        yAxisIndex: 0,
+                        data,
+                        barMaxWidth: 24,
+                        itemStyle: {
+                            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                { offset: 0, color: color },
+                                { offset: 1, color: color + 'a0' }
+                            ]),
+                            borderRadius: [6, 6, 0, 0],
+                            opacity: 0.9
+                        },
+                        emphasis: { focus: 'series' },
+                        tooltip: {
+                            valueFormatter: v =>
+                                v != null
+                                    ? new Intl.NumberFormat('ca-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v)
+                                    : 'Sense dades'
+                        }
+                    });
+                });
+
+                return allSeries;
+            }
+
+
+
+function renderDropdownOptions() {
+                dropdownList.innerHTML = '';
+                
+                // Group INGRESSOS_DATA by Category for display
+                const groups = {
+                    'General / Totals de Categoria': [],
+                    'Detall de Personal Investigador': [],
+                    'Detall de Projectes': []
+                };
+
+                INGRESSOS_DATA.forEach(item => {
+                    const matchesSearch = item.concept.toLowerCase().includes(searchVal);
+                    if (!matchesSearch) return;
+
+                    if (item.isGroupHeader) {
+                        groups['General / Totals de Categoria'].push(item);
+                    } else if (item.category === 'Personal Investigador') {
+                        groups['Detall de Personal Investigador'].push(item);
+                    } else if (item.category === 'Projectes') {
+                        groups['Detall de Projectes'].push(item);
+                    }
+                });
+
+                let hasAnyItems = false;
+
+                Object.keys(groups).forEach(groupName => {
+                    const items = groups[groupName];
+                    if (items.length === 0) return;
+                    hasAnyItems = true;
+
+                    // Render group header
+                    const header = document.createElement('div');
+                    header.className = 'px-4 py-2 bg-slate-50 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-y border-slate-100 sticky top-0';
+                    header.textContent = groupName;
+                    dropdownList.appendChild(header);
+
+                    // Render items
+                    items.forEach(item => {
+                        const isChecked = seleccionats.includes(item.concept);
+                        const optionRow = document.createElement('div');
+                        optionRow.className = `px-4 py-2.5 flex items-center gap-3 hover:bg-slate-50 cursor-pointer transition-colors ${isChecked ? 'bg-emerald-50/40' : ''}`;
+                        
+                        const checkbox = document.createElement('input');
+                        checkbox.type = 'checkbox';
+                        checkbox.checked = isChecked;
+                        checkbox.className = 'w-4 h-4 text-emerald-600 border-slate-300 rounded focus:ring-emerald-500 cursor-pointer';
+                        
+                        const textSpan = document.createElement('span');
+                        textSpan.className = `text-xs leading-normal ${item.isGroupHeader ? 'font-bold text-slate-800' : 'text-slate-600 font-medium'}`;
+                        textSpan.textContent = item.concept;
+
+                        optionRow.appendChild(checkbox);
+                        optionRow.appendChild(textSpan);
+
+                        optionRow.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            toggleConcept(item.concept);
+                        });
+
+                        dropdownList.appendChild(optionRow);
+                    });
+                });
+
+                if (!hasAnyItems) {
+                    const noResults = document.createElement('div');
+                    noResults.className = 'px-4 py-6 text-center text-slate-400 italic';
+                    noResults.textContent = 'Cap concepte coincideix amb la cerca';
+                    dropdownList.appendChild(noResults);
+                }
+            }
+
+            function toggleConcept(concept) {
+                if (seleccionats.includes(concept)) {
+                    seleccionats = seleccionats.filter(c => c !== concept);
+                } else {
+                    seleccionats.push(concept);
+                }
+                renderDropdownOptions();
+                updateUI();
+            }            // Update UI State (Label, Chips, KPIs, Table, Chart)
+            function updateUI() {
+                // Dynamically update Tipologies dropdown options based on the new year range
+                renderTipologiesOptions(tipologiesSearch.value.toLowerCase());
+
+                // Update dropdown label text
+                if (seleccionats.length === 0) {
+                    dropdownLabel.textContent = "Cap concepte seleccionat";
+                } else if (seleccionats.length === INGRESSOS_DATA.length) {
+                    dropdownLabel.textContent = "Tots els conceptes seleccionats";
+                } else if (seleccionats.length === 1) {
+                    dropdownLabel.textContent = seleccionats[0];
+                } else {
+                    dropdownLabel.textContent = `${seleccionats.length} conceptes seleccionats`;
+                }
+
+                // Render selected chips below dropdown
+                renderChips();
+
+                // Compute KPIs
+                computeKPIs();
+
+                // Render Table
+                renderTable();
+
+                // Render Chart
+                renderChart();
+
+                // Update Forecast Explanation
+                updateForecastExplanation();
+            }
+
+            const EXPLANATIONS = {
+                'linear': '<strong>Regressió Lineal (OLS)</strong>: Projecta una línia de tendència calculada mitjançant mínims quadrats usant tots els punts de dades històriques (2018-2025). Ideal per a tendències continuades.',
+                'cagr': '<strong>Creixement Exponencial (CAGR)</strong>: Calcula la taxa de creixement anual compost (CAGR) des del primer any amb dades fins al 2025 i l\'aplica de forma geomètrica. Capat entre -50% i +100% anual.',
+                'absolute': '<strong>Increment Lineal Mitjà</strong>: Calcula l\'increment o decrement anual mitjà en termes absoluts entre 2018 i 2025, extrapolant aquest valor constant per als propers anys.'
+            };
+
+            function updateForecastExplanation() {
+                if (forecastEnabled) {
+                    forecastExplanationText.innerHTML = EXPLANATIONS[forecastMethod];
+                    forecastMethodExplanation.classList.remove('hidden');
+                } else {
+                    forecastMethodExplanation.classList.add('hidden');
+                }
+            }            function renderChips() {
+                chipsContainer.innerHTML = '';
+                seleccionats.forEach(concept => {
+                    const chip = document.createElement('div');
+                    chip.className = 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 px-3 py-1 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-sm';
+                    
+                    const textSpan = document.createElement('span');
+                    textSpan.textContent = concept;
+                    
+                    const removeBtn = document.createElement('button');
+                    removeBtn.type = 'button';
+                    removeBtn.className = 'text-emerald-500 hover:text-emerald-800 transition-colors focus:outline-none';
+                    removeBtn.innerHTML = '<i class="fa-solid fa-xmark text-[10px]"></i>';
+                    removeBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        toggleConcept(concept);
+                    });
+
+                    chip.appendChild(textSpan);
+                    chip.appendChild(removeBtn);
+                    chipsContainer.appendChild(chip);
+                });
+            }
+
+            function renderTipologiesChips() {
+                const { start, end } = getSelectedYearRange();
+                tipologiesChipsContainer.innerHTML = '';
+
+                selectedTipologies.forEach(tipus => {
+                    // Resolve active call types for this tipus
+                    let activeCalls = (selectedCallTypes[tipus] || []).filter(call =>
+                        awardsImportData.some(d => d.anyo >= start && d.anyo <= end && (isBecaTipus(d.tipus) || isProjectesInternacionals(d.tipus)) && d.callType === call && (d.totalImport > 0 || d.count > 0) && (!excludeDeclined || !d.isDeclined) && (selectedOrgScope === 'all' || d.orgScope === selectedOrgScope))
+                    );
+                    let activeProgs = (selectedProjectPrograms[tipus] || []).filter(prog =>
+                        awardsImportData.some(d => d.anyo >= start && d.anyo <= end && isResearchProjectes(d.tipus) && d.callType === prog && (d.totalImport > 0 || d.count > 0) && (!excludeDeclined || !d.isDeclined) && (selectedOrgScope === 'all' || d.orgScope === selectedOrgScope))
+                    );
+
+                    const hasSubItems = activeCalls.length > 0 || activeProgs.length > 0;
+
+                    // --- Chip for the tipologia itself ---
+                    const makeChip = (label, onRemove) => {
+                        const chip = document.createElement('div');
+                        chip.className = 'bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 px-3 py-1 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-sm';
+
+                        const icon = document.createElement('i');
+                        icon.className = 'fa-solid fa-trophy text-amber-400 text-[10px]';
+
+                        const textSpan = document.createElement('span');
+                        textSpan.textContent = label;
+
+                        const removeBtn = document.createElement('button');
+                        removeBtn.type = 'button';
+                        removeBtn.className = 'text-amber-400 hover:text-amber-800 transition-colors focus:outline-none';
+                        removeBtn.innerHTML = '<i class="fa-solid fa-xmark text-[10px]"></i>';
+                        removeBtn.addEventListener('click', (e) => { e.stopPropagation(); onRemove(); });
+
+                        chip.appendChild(icon);
+                        chip.appendChild(textSpan);
+                        chip.appendChild(removeBtn);
+                        tipologiesChipsContainer.appendChild(chip);
+                    };
+
+                    if (!hasSubItems) {
+                        // No sub-selection: single chip for the tipologia
+                        makeChip(tipus, () => toggleTipologia(tipus));
+                    } else {
+                        // Sub-selections exist: one chip per call type / programme
+                        activeCalls.forEach(call => {
+                            makeChip(`${tipus} · ${call}`, () => toggleCallType(tipus, call));
+                        });
+                        activeProgs.forEach(prog => {
+                            makeChip(`${tipus} · ${prog}`, () => toggleResearchProjectProgram(tipus, prog));
+                        });
+                    }
+                });
+            }
+
+function formatEuro(val) {
+                if (val === null || val === undefined) return '-';
+                return new Intl.NumberFormat('ca-ES', { style: 'currency', currency: 'EUR' }).format(val);
+            }            function computeKPIs() {
+                kpiSelectedCount.textContent = `${seleccionats.length} / ${INGRESSOS_DATA.length}`;
+
+                const { start, end } = getSelectedYearRange();
+
+                if (seleccionats.length === 0) {
+                    kpiSelectedTotal.textContent = '0,00 €';
+                    kpiGrowthRate.textContent = '+0,0%';
+                    kpiGrowthRate.className = 'text-3xl font-black mt-2 font-display text-white';
+                    kpiGrowthIcon.className = 'fa-solid fa-minus';
+                    
+                    kpiForecastTotal.textContent = forecastEnabled ? '0,00 €' : 'Desactivat';
+                    kpiForecastDesc.textContent = forecastEnabled ? 'Cap concepte seleccionat.' : 'Activa el switch de previsions per veure la projecció.';
+                    kpiForecastTotal.className = forecastEnabled ? 'text-3xl font-black mt-2 font-display text-white' : 'text-3xl font-black mt-2 font-display text-rose-100/80';
+                    return;
+                }
+
+                // Determine latest historical year in range
+                const latestHistYear = Math.min(end, 2026);
+                const startLabel = start === 2026 ? '2026 parcial' : start;
+                const endLabel = end === 2027 ? '2027P' : end === 2026 ? '2026 parcial' : end;
+
+                // Update Card 1 Title & Description dynamically
+                const card1Title = document.getElementById('kpiSelectedTotalTitle');
+                if (card1Title) {
+                    card1Title.textContent = `Suma Seleccionada (${latestHistYear === 2026 ? '2026 parcial' : latestHistYear})`;
+                }
+                const card1Desc = document.getElementById('kpiSelectedTotalDesc');
+                if (card1Desc) {
+                    card1Desc.textContent = `Imports agregats dels conceptes filtrats a data tancament ${latestHistYear === 2026 ? '31/03/2026 (parcial)' : '31/12/' + latestHistYear}.`;
+                }
+
+                // Calculate selected sum for start, latestHistYear, and 2027
+                let totalStart = 0;
+                let totalLatestHist = 0;
+                let total2027Forecast = 0;
+
+                INGRESSOS_DATA.forEach(item => {
+                    if (seleccionats.includes(item.concept)) {
+                        // start year value
+                        if (start === 2027) {
+                            const forecast = calcularPrevisio(item.values, forecastMethod);
+                            totalStart += forecast['2027'] || 0;
+                        } else {
+                            totalStart += item.values[start.toString()] || 0;
+                        }
+
+                        // latest historical year value
+                        totalLatestHist += item.values[latestHistYear.toString()] || 0;
+
+                        // 2027 forecast value
+                        if (forecastEnabled) {
+                            const forecast = calcularPrevisio(item.values, forecastMethod);
+                            total2027Forecast += forecast['2027'] || 0;
+                        }
+                    }
+                });
+
+                kpiSelectedTotal.textContent = formatEuro(totalLatestHist);
+
+                // Update Forecast KPI Card
+                if (forecastEnabled && end === 2027) {
+                    kpiForecastTotal.textContent = formatEuro(total2027Forecast);
+                    let forecastGrowth = 0;
+                    if (totalLatestHist > 0) {
+                        forecastGrowth = ((total2027Forecast - totalLatestHist) / totalLatestHist) * 100;
+                    }
+                    const fSign = forecastGrowth >= 0 ? '+' : '';
+                    const methodName = forecastMethod === 'linear' ? 'Regr. Lineal' : forecastMethod === 'cagr' ? 'CAGR' : 'Inc. Mitjà';
+                    kpiForecastDesc.textContent = `Projecció ${latestHistYear === 2026 ? '2026' : latestHistYear} vs 2027: ${fSign}${forecastGrowth.toFixed(1)}% (${methodName})`;
+                    kpiForecastTotal.className = 'text-3xl font-black mt-2 font-display text-white';
+                } else {
+                    kpiForecastTotal.textContent = !forecastEnabled ? 'Desactivat' : 'Fora de Rang';
+                    kpiForecastDesc.textContent = !forecastEnabled 
+                        ? 'Activa el switch de previsions per veure la projecció.'
+                        : 'Estén el slider fins al 2027 per veure la previsió.';
+                    kpiForecastTotal.className = 'text-3xl font-black mt-2 font-display text-rose-100/80';
+                }
+
+                // Growth rate for the selected range (start vs end)
+                let totalEnd = 0;
+                if (end === 2027) {
+                    totalEnd = total2027Forecast;
+                } else {
+                    totalEnd = INGRESSOS_DATA.reduce((acc, item) => {
+                        if (seleccionats.includes(item.concept)) {
+                            return acc + (item.values[end.toString()] || 0);
+                        }
+                        return acc;
+                    }, 0);
+                }
+
+                let growth = 0;
+                if (totalStart > 0) {
+                    growth = ((totalEnd - totalStart) / totalStart) * 100;
+                } else if (totalStart === 0 && totalEnd > 0) {
+                    growth = 100;
+                }
+
+                // Update Card 3 Title & Description dynamically
+                const card3Title = document.getElementById('kpiGrowthRateTitle');
+                if (card3Title) {
+                    card3Title.textContent = `Evolució Global (${startLabel} vs ${endLabel})`;
+                }
+                const card3Desc = document.getElementById('kpiGrowthRateDesc');
+                if (card3Desc) {
+                    card3Desc.textContent = `Percentatge de variació en els ingressos de ${startLabel} respecte a ${endLabel}.`;
+                }
+
+                const sign = growth >= 0 ? '+' : '';
+                kpiGrowthRate.textContent = `${sign}${growth.toFixed(1)}%`;
+                
+                if (growth >= 0) {
+                    kpiGrowthRate.className = 'text-3xl font-black mt-2 font-display text-white';
+                    kpiGrowthIcon.className = 'fa-solid fa-arrow-trend-up';
+                } else {
+                    kpiGrowthRate.className = 'text-3xl font-black mt-2 font-display text-amber-200';
+                    kpiGrowthIcon.className = 'fa-solid fa-arrow-trend-down';
+                }
+            }            function renderTableHeader(start, end) {
+                const headerRow = document.getElementById('tableHeaderRow');
+                if (!headerRow) return;
+                
+                let html = '<th class="px-6 py-4">Concepte de Recerca</th>';
+                for (let y = start; y <= end; y++) {
+                    if (y === 2026) {
+                        html += '<th class="px-4 py-4 text-right bg-emerald-50/10 text-emerald-800 border-r border-slate-100 font-semibold">2026 (P)</th>';
+                    } else if (y === 2027) {
+                        html += '<th class="px-4 py-4 text-right bg-emerald-50/40 text-emerald-900 border-r border-slate-100 font-bold">2027 (P)</th>';
+                    } else {
+                        html += `<th class="px-4 py-4 text-right">${y}</th>`;
+                    }
+                }
+                html += `<th class="px-6 py-4 text-right font-bold text-slate-800 bg-slate-50/50">Var % (${start === 2026 || start === 2027 ? start + 'P' : start} vs ${end === 2026 || end === 2027 ? end + 'P' : end})</th>`;
+                headerRow.innerHTML = html;
+            }
+
+            function renderTable() {
+                const { start, end } = getSelectedYearRange();
+                renderTableHeader(start, end);
+                tableBody.innerHTML = '';
+                footerItemCount.textContent = `Mostrant ${seleccionats.length} conceptes i ${selectedTipologies.length} tipologies`;
+
+                if (seleccionats.length === 0 && selectedTipologies.length === 0) {
+                    const colSpanVal = (end - start + 2); // years + concept + growth
+                    tableBody.innerHTML = `
+                        <tr>
+                            <td colspan="${colSpanVal}" class="px-6 py-12 text-center text-slate-400 italic">
+                                <i class="fa-solid fa-triangle-exclamation mr-2 text-amber-500 text-lg"></i>
+                                Cap concepte ni tipologia seleccionada. Fes servir els cercadors o els presets per afegir-ne.
+                            </td>
+                        </tr>
+                    `;
+                    tableFootRow.innerHTML = '';
+                    return;
+                }
+
+                // Selected items details
+                const itemsToRender = INGRESSOS_DATA.filter(item => seleccionats.includes(item.concept));
+
+                // MongoDB Selected Tipologies details
+                const tipologiesItems = selectedTipologies.map(tipus => {
+                    let filteredAwards = [];
+                    if (tipus === 'Total Ajuts') {
+                        filteredAwards = awardsImportData;
+                    } else if (tipus.startsWith('Total ')) {
+                        const catName = tipus.substring(6);
+                        const tipusInCat = tipologiesData
+                            .filter(d => (d.categoria || 'Sense categoria') === catName)
+                            .map(d => d.tipus);
+                        filteredAwards = awardsImportData.filter(d => tipusInCat.includes(d.tipus));
+                    } else {
+                        filteredAwards = awardsImportData.filter(d => d.tipus === tipus);
+                    }
+
+                    if (excludeDeclined) {
+                        filteredAwards = filteredAwards.filter(d => !d.isDeclined);
+                    }
+
+                    if (selectedOrgScope !== 'all') {
+                        filteredAwards = filteredAwards.filter(d => d.orgScope === selectedOrgScope);
+                    }
+
+                    // Check if there are active call type filters for this tipus (Beques and International Call Types)
+                    const activeCalls = selectedCallTypes[tipus] || [];
+                    let filteredCalls = activeCalls.filter(call =>
+                        awardsImportData.some(d => d.anyo >= start && d.anyo <= end && (isBecaTipus(d.tipus) || isProjectesInternacionals(d.tipus)) && d.callType === call && (d.totalImport > 0 || d.count > 0) && (!excludeDeclined || !d.isDeclined) && (selectedOrgScope === 'all' || d.orgScope === selectedOrgScope))
+                    );
+                    if (filteredCalls.length > 0) {
+                        filteredAwards = filteredAwards.filter(d => filteredCalls.includes(d.callType));
+                    }
+
+                    // Check if there are active research project program filters for this tipus
+                    const activeProgs = selectedProjectPrograms[tipus] || [];
+                    let filteredProgs = activeProgs.filter(prog =>
+                        awardsImportData.some(d => d.anyo >= start && d.anyo <= end && isResearchProjectes(d.tipus) && d.callType === prog && (d.totalImport > 0 || d.count > 0) && (!excludeDeclined || !d.isDeclined) && (selectedOrgScope === 'all' || d.orgScope === selectedOrgScope))
+                    );
+                    if (filteredProgs.length > 0) {
+                        filteredAwards = filteredAwards.filter(d => filteredProgs.includes(d.callType));
+                    }
+
+                    const values = {};
+                    for (let y = 2018; y <= 2025; y++) {
+                        values[y.toString()] = 0;
+                    }
+                    filteredAwards.forEach(d => {
+                        if (d.anyo >= 2018 && d.anyo <= 2025) {
+                            values[d.anyo.toString()] = (values[d.anyo.toString()] || 0) + (d.totalImport || 0);
+                        }
+                    });
+
+                    let label = tipus;
+                    if (filteredCalls.length > 0) {
+                        label = `${tipus} (${filteredCalls.join(', ')})`;
+                    } else if (filteredProgs.length > 0) {
+                        label = `${tipus} (${filteredProgs.join(', ')})`;
+                    }
+
+                    return {
+                        concept: label,
+                        values: values,
+                        isAward: true
+                    };
+                });
+
+                // Combine them to render
+                const allItems = [...itemsToRender, ...tipologiesItems];
+
+                // Totals for selected
+                const colTotals = {};
+                for (let y = start; y <= end; y++) {
+                    colTotals[y] = 0;
+                }
+
+                allItems.forEach(item => {
+                    const tr = document.createElement('tr');
+                    if (item.isAward) {
+                        tr.className = 'transition-colors hover:bg-amber-50/20 bg-amber-50/5';
+                    } else {
+                        tr.className = `transition-colors hover:bg-slate-50/75 ${item.isGroupHeader ? 'bg-slate-50/30 font-semibold' : ''}`;
+                    }
+                    
+                    // Concept name cell
+                    const conceptTd = document.createElement('td');
+                    if (item.isAward) {
+                        conceptTd.className = 'px-6 py-3.5 text-amber-800 pl-6 font-semibold flex items-center gap-1.5';
+                        conceptTd.innerHTML = `<i class="fa-solid fa-trophy text-amber-500 text-[10px]"></i> <span>${item.concept}</span>`;
+                    } else {
+                        conceptTd.className = `px-6 py-3.5 ${item.isGroupHeader ? 'font-bold text-slate-800' : 'text-slate-600 pl-10'}`;
+                        conceptTd.textContent = item.concept;
+                    }
+                    tr.appendChild(conceptTd);
+
+                    // Year values cells
+                    for (let y = start; y <= end; y++) {
+                        let val = 0;
+                        if (y === 2026 || y === 2027) {
+                            const forecast = calcularPrevisio(item.values, forecastMethod);
+                            val = forecast[y.toString()];
+                        } else {
+                            val = item.values[y.toString()] || 0;
+                        }
+                        
+                        if (!item.isAward) {
+                            colTotals[y] += val;
+                        }
+
+                        const valTd = document.createElement('td');
+                        valTd.className = 'px-4 py-3.5 text-right font-mono text-xs';
+                        if (item.isAward) {
+                            valTd.className += ' text-amber-700/90';
+                        }
+                        if (y === 2026) {
+                            valTd.className += ' bg-emerald-50/5 border-r border-slate-100 text-emerald-800/90';
+                        } else if (y === 2027) {
+                            valTd.className += ' bg-emerald-50/15 border-r border-slate-100 text-emerald-900 font-semibold';
+                        }
+                        valTd.textContent = formatEuro(val);
+                        tr.appendChild(valTd);
+                    }
+
+                    // Growth cell (start vs end)
+                    let vStart = 0;
+                    if (start === 2026 || start === 2027) {
+                        const forecast = calcularPrevisio(item.values, forecastMethod);
+                        vStart = forecast[start.toString()];
+                    } else {
+                        vStart = item.values[start.toString()] || 0;
+                    }
+
+                    let vEnd = 0;
+                    if (end === 2026 || end === 2027) {
+                        const forecast = calcularPrevisio(item.values, forecastMethod);
+                        vEnd = forecast[end.toString()];
+                    } else {
+                        vEnd = item.values[end.toString()] || 0;
+                    }
+
+                    let varPct = 0;
+                    if (vStart > 0) {
+                        varPct = ((vEnd - vStart) / vStart) * 100;
+                    }
+
+                    const growthTd = document.createElement('td');
+                    growthTd.className = `px-6 py-3.5 text-right font-bold text-xs ${varPct >= 0 ? (item.isAward ? 'text-amber-700' : 'text-emerald-700') : 'text-rose-600'}`;
+                    growthTd.textContent = vStart > 0 ? `${varPct >= 0 ? '+' : ''}${varPct.toFixed(1)}%` : '-';
+                    tr.appendChild(growthTd);
+
+                    tableBody.appendChild(tr);
+                });
+
+                // Inject footer total row
+                tableFootRow.innerHTML = '';
+                
+                const footLabel = document.createElement('td');
+                footLabel.className = 'px-6 py-4 text-left';
+                footLabel.textContent = 'TOTAL SELECCIONAT';
+                tableFootRow.appendChild(footLabel);
+
+                for (let y = start; y <= end; y++) {
+                    const totalVal = colTotals[y];
+                    const footVal = document.createElement('td');
+                    footVal.className = 'px-4 py-4 text-right font-mono text-sm';
+                    if (y === 2026) {
+                        footVal.className += ' bg-emerald-50/10 border-r border-slate-100 text-emerald-800';
+                    } else if (y === 2027) {
+                        footVal.className += ' bg-emerald-50/20 border-r border-slate-100 text-emerald-900 font-bold';
+                    }
+                    footVal.textContent = formatEuro(totalVal);
+                    tableFootRow.appendChild(footVal);
+                }
+
+                const tStart = colTotals[start];
+                const tEnd = colTotals[end];
+                let totalGrowth = 0;
+                if (tStart > 0) {
+                    totalGrowth = ((tEnd - tStart) / tStart) * 100;
+                }
+                const footGrowth = document.createElement('td');
+                footGrowth.className = `px-6 py-4 text-right font-mono text-sm ${totalGrowth >= 0 ? 'text-emerald-800' : 'text-rose-700'}`;
+                footGrowth.textContent = tStart > 0 ? `${totalGrowth >= 0 ? '+' : ''}${totalGrowth.toFixed(1)}%` : '-';
+                tableFootRow.appendChild(footGrowth);
+            }
+
+            // Apache ECharts functions
+            function initChart() {
+                const chartDom = document.getElementById('chartRevenues');
+                chartInstance = echarts.init(chartDom);
+                
+                // Handle responsive resize
+                window.addEventListener('resize', () => {
+                    if (chartInstance) {
+                        chartInstance.resize();
+                    }
+                });
+            }            function renderChart() {
+                if (!chartInstance) return;
+
+                if (seleccionats.length === 0) {
+                    chartInstance.clear();
+                    chartInstance.showLoading({
+                        text: 'No hi ha cap concepte seleccionat',
+                        showSpinner: false,
+                        textColor: '#7e8a9a',
+                        maskColor: 'rgba(255, 255, 255, 0.8)'
+                    });
+                    return;
+                }
+
+                chartInstance.hideLoading();                const { start, end } = getSelectedYearRange();
+                const chartYears = [];
+                for (let y = start; y <= end; y++) {
+                    if (y === 2026) chartYears.push('2026 (P)');
+                    else if (y === 2027) chartYears.push('2027 (P)');
+                    else chartYears.push(y.toString());
+                }
+
+                const selectedItems = INGRESSOS_DATA.filter(item => seleccionats.includes(item.concept));
+
+                // Color Palette mapping
+                const colors = [
+                    '#008037', // UAB green
+                    '#004d5e', // UAB cala blue
+                    '#f88c12', // UAB ocas orange
+                    '#4f46e5', // indigo
+                    '#06b6d4', // cyan
+                    '#ec4899', // pink
+                    '#8b5cf6', // violet
+                    '#10b981', // emerald
+                    '#f59e0b', // amber
+                    '#ef4444', // red
+                    '#64748b'  // slate
+                ];
+
+                const series = [];
+                selectedItems.forEach((item, idx) => {
+                    const color = colors[idx % colors.length];
+
+                    // 1. Historical part (solid line up to 2025)
+                    const histData = [];
+                    for (let y = start; y <= end; y++) {
+                        if (y >= 2026) {
+                            histData.push(null);
+                        } else {
+                            const val = item.values[y.toString()] || 0;
+                            histData.push(roundToDecimals(val, 2));
+                        }
+                    }
+
+                    series.push({
+                        name: item.concept,
+                        type: currentChartType,
+                        stack: currentChartType === 'bar' ? 'concepts' : null,
+                        data: histData,
+                        smooth: currentChartType === 'line',
+                        symbolSize: 8,
+                        lineStyle: {
+                            width: 3.8,
+                            shadowColor: color + '33',
+                            shadowBlur: 8,
+                            shadowOffsetY: 3
+                        },
+                        itemStyle: {
+                            color: color,
+                            borderRadius: currentChartType === 'bar' ? [6, 6, 0, 0] : [0, 0, 0, 0]
+                        },
+                        areaStyle: currentChartType === 'line' ? {
+                            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                { offset: 0, color: color + (selectedItems.length === 1 ? '28' : '0f') },
+                                { offset: 1, color: color + '00' }
+                            ])
+                        } : null
+                    });
+
+                    // 2. Forecast part (only if range includes 2026 or 2027)
+                    if (forecastEnabled && end >= 2026) {
+                        const forecastData = [];
+                        for (let y = start; y <= end; y++) {
+                            if (y < 2025) {
+                                forecastData.push(null);
+                            } else if (y === 2025) {
+                                const val = item.values['2025'] || 0;
+                                forecastData.push(roundToDecimals(val, 2));
+                            } else if (y === 2026 || y === 2027) {
+                                const forecast = calcularPrevisio(item.values, forecastMethod);
+                                const val = forecast[y.toString()];
+                                forecastData.push(roundToDecimals(val, 2));
+                            }
+                        }
+
+                        series.push({
+                            name: item.concept,
+                            type: currentChartType,
+                            stack: currentChartType === 'bar' ? 'concepts' : null,
+                            data: forecastData,
+                            smooth: currentChartType === 'line',
+                            symbolSize: 8,
+                            symbol: 'emptyCircle',
+                            lineStyle: {
+                                width: 3.8,
+                                type: 'dashed',
+                                shadowColor: color + '22',
+                                shadowBlur: 6,
+                                shadowOffsetY: 2
+                            },
+                            itemStyle: {
+                                color: color,
+                                borderRadius: currentChartType === 'bar' ? [6, 6, 0, 0] : [0, 0, 0, 0]
+                            },
+                            areaStyle: currentChartType === 'line' ? {
+                                color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                    { offset: 0, color: color + (selectedItems.length === 1 ? '1a' : '08') },
+                                    { offset: 1, color: color + '00' }
+                                ])
+                            } : null
+                        });
+                    }
+                });
+
+                // Build award overlay series (secondary Y-axis)
+                const awardSeries = buildAwardSeries(chartYears);
+                const allSeries = [...series, ...awardSeries];
+                const hasAwards = awardSeries.length > 0;
+
+                const option = {
+                    tooltip: {
+                        trigger: 'axis',
+                        backgroundColor: 'rgba(255, 255, 255, 0.98)',
+                        borderWidth: 1,
+                        borderColor: '#e2e8f0',
+                        shadowColor: 'rgba(15, 23, 42, 0.08)',
+                        shadowBlur: 15,
+                        shadowOffsetX: 0,
+                        shadowOffsetY: 10,
+                        padding: [14, 18],
+                        textStyle: {
+                            color: '#1e293b',
+                            fontSize: 12
+                        },
+                        formatter: function(params) {
+                            const rawYear = params[0].name; // e.g. "2025", "2026 (P)", "2027 (P)"
+                            const isForecastYear = rawYear.includes('(P)');
+                            const cleanYear = rawYear.replace(' (P)', '').replace(' (parcial)', '');
+                            
+                            let result = `<div class="font-bold border-b border-slate-100 pb-2 mb-2 text-slate-800 text-[13px]">Exercici a 31/12/${rawYear}</div>`;
+                            if (isForecastYear) {
+                                result = `<div class="font-bold border-b border-slate-100 pb-2 mb-2 text-emerald-800 text-[13px] flex items-center gap-1.5"><i class="fa-solid fa-wand-magic-sparkles text-[11px]"></i> Previsió Exercici ${cleanYear} (P)</div>`;
+                            }
+                            const seenConcepts = new Set();
+                            params.forEach(param => {
+                                if (param.value === null || param.value === undefined || isNaN(param.value)) return;
+                                if (seenConcepts.has(param.seriesName)) return;
+                                seenConcepts.add(param.seriesName);
+
+                                // Award series (secondary axis) — show raw euros
+                                if (param.seriesName.startsWith('🏆 ')) {
+                                    const formatted = new Intl.NumberFormat('ca-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(param.value);
+                                    result += `
+                                        <div class="flex items-center justify-between gap-8 py-1">
+                                            <span class="flex items-center gap-2 text-amber-700 font-semibold text-xs">
+                                                <span class="w-3 h-3 rounded-[3px] inline-block" style="background: ${param.color}"></span>
+                                                ${param.seriesName}
+                                            </span>
+                                            <span class="font-mono font-bold text-amber-900 text-xs">${formatted}</span>
+                                        </div>
+                                    `;
+                                    return;
+                                }
+
+                                const conceptItem = INGRESSOS_DATA.find(i => i.concept === param.seriesName);
+                                if (!conceptItem) return;
+                                
+                                let origVal = 0;
+                                if (isForecastYear) {
+                                    const forecast = calcularPrevisio(conceptItem.values, forecastMethod);
+                                    origVal = forecast[cleanYear] || 0;
+                                } else {
+                                    origVal = conceptItem.values[cleanYear] || 0;
+                                }
+                                
+                                result += `
+                                    <div class="flex items-center justify-between gap-8 py-1">
+                                        <span class="flex items-center gap-2 text-slate-600 font-semibold text-xs">
+                                            <span class="w-2.5 h-2.5 rounded-full inline-block" style="background-color: ${param.color}"></span>
+                                            ${param.seriesName} ${isForecastYear ? '<span class="text-[9px] text-emerald-600 bg-emerald-50 px-1 py-0.5 rounded font-bold uppercase tracking-wider">Prev</span>' : ''}
+                                        </span>
+                                        <span class="font-mono font-bold text-slate-900 text-xs">${formatEuro(origVal)}</span>
+                                    </div>
+                                `;
+                            });
+                            return result;
+                        }
+                    },
+                    legend: {
+                        data: [
+                            ...selectedItems.map(item => item.concept),
+                            ...awardSeries.map(s => s.name)
+                        ],
+                        bottom: 0,
+                        type: 'scroll',
+                        itemGap: 18,
+                        textStyle: {
+                            fontSize: 11,
+                            fontWeight: '500',
+                            color: '#475569'
+                        },
+                        icon: 'circle'
+                    },
+                    grid: {
+                        top: '10%',
+                        left: '2%',
+                        right: '4%',
+                        bottom: '15%',
+                        containLabel: true
+                    },
+                    xAxis: {
+                        type: 'category',
+                        boundaryGap: currentChartType === 'bar',
+                        data: chartYears,
+                        axisLine: {
+                            lineStyle: {
+                                color: '#cbd5e1'
+                            }
+                        },
+                        axisLabel: {
+                            color: '#64748b',
+                            fontWeight: 'bold',
+                            margin: 12
+                        }
+                    },
+                    yAxis: {
+                        type: 'value',                        name: '€',
+                        nameTextStyle: {
+                            color: '#64748b',
+                            fontWeight: 'bold',
+                            padding: [0, 0, 8, 0]
+                        },
+                        axisLabel: {
+                            color: '#64748b',                            formatter: v => {
+                                if (Math.abs(v) >= 1e6) return (v / 1e6).toFixed(1).replace('.', ',') + ' M€';
+                                if (Math.abs(v) >= 1e3) return (v / 1e3).toFixed(0) + ' k€';
+                                return v + ' €';
+                            }
+                        },
+                        splitLine: {
+                            lineStyle: {
+                                color: '#f1f5f9',
+                                type: 'dashed'
+                            }
+                        }
+                    },
+                    series: allSeries
+                };
+
+                chartInstance.setOption(option, true);
+            }
+
+            function roundToDecimals(num, decimals) {
+                const t = Math.pow(10, decimals);
+                return Math.round((num + Number.EPSILON) * t) / t;
+            }            // Export to CSV Functionality
+            function exportSelectedToCSV() {
+                if (seleccionats.length === 0 && selectedTipologies.length === 0) {
+                    alert('No hi ha cap concepte ni tipologia seleccionada per exportar.');
+                    return;
+                }
+
+                const { start, end } = getSelectedYearRange();
+                const selectedItems = INGRESSOS_DATA.filter(item => seleccionats.includes(item.concept));
+
+                // MongoDB Selected Tipologies details
+                const tipologiesItems = selectedTipologies.map(tipus => {
+                    let filteredAwards = [];
+                    if (tipus === 'Total Ajuts') {
+                        filteredAwards = awardsImportData;
+                    } else if (tipus.startsWith('Total ')) {
+                        const catName = tipus.substring(6);
+                        const tipusInCat = tipologiesData
+                            .filter(d => (d.categoria || 'Sense categoria') === catName)
+                            .map(d => d.tipus);
+                        filteredAwards = awardsImportData.filter(d => tipusInCat.includes(d.tipus));
+                    } else {
+                        filteredAwards = awardsImportData.filter(d => d.tipus === tipus);
+                    }
+
+                    if (excludeDeclined) {
+                        filteredAwards = filteredAwards.filter(d => !d.isDeclined);
+                    }
+
+                    if (selectedOrgScope !== 'all') {
+                        filteredAwards = filteredAwards.filter(d => d.orgScope === selectedOrgScope);
+                    }
+
+                    const activeCalls = selectedCallTypes[tipus] || [];
+                    let filteredCalls = activeCalls.filter(call =>
+                        awardsImportData.some(d => d.anyo >= start && d.anyo <= end && (isBecaTipus(d.tipus) || isProjectesInternacionals(d.tipus)) && d.callType === call && (d.totalImport > 0 || d.count > 0) && (!excludeDeclined || !d.isDeclined) && (selectedOrgScope === 'all' || d.orgScope === selectedOrgScope))
+                    );
+                    if (filteredCalls.length > 0) {
+                        filteredAwards = filteredAwards.filter(d => filteredCalls.includes(d.callType));
+                    }
+
+                    const activeProgs = selectedProjectPrograms[tipus] || [];
+                    let filteredProgs = activeProgs.filter(prog =>
+                        awardsImportData.some(d => d.anyo >= start && d.anyo <= end && isResearchProjectes(d.tipus) && d.callType === prog && (d.totalImport > 0 || d.count > 0) && (!excludeDeclined || !d.isDeclined) && (selectedOrgScope === 'all' || d.orgScope === selectedOrgScope))
+                    );
+                    if (filteredProgs.length > 0) {
+                        filteredAwards = filteredAwards.filter(d => filteredProgs.includes(d.callType));
+                    }
+
+                    const values = {};
+                    for (let y = 2018; y <= 2025; y++) {
+                        values[y.toString()] = 0;
+                    }
+                    filteredAwards.forEach(d => {
+                        if (d.anyo >= 2018 && d.anyo <= 2025) {
+                            values[d.anyo.toString()] = (values[d.anyo.toString()] || 0) + (d.totalImport || 0);
+                        }
+                    });
+
+                    let label = tipus;
+                    if (filteredCalls.length > 0) {
+                        label = `${tipus} (${filteredCalls.join(', ')})`;
+                    } else if (filteredProgs.length > 0) {
+                        label = `${tipus} (${filteredProgs.join(', ')})`;
+                    }
+
+                    return {
+                        concept: label,
+                        values: values,
+                        isAward: true
+                    };
+                });
+
+                const allItems = [...selectedItems, ...tipologiesItems];
+                let csvContent = '\uFEFF'; // BOM for Excel UTF-8 representation
+                
+                // Build CSV Headers
+                const headers = ['Concepte / Tipologia d\'Ajut'];
+                for (let y = start; y <= end; y++) {
+                    if (y === 2026) headers.push('2026 (P)');
+                    else if (y === 2027) headers.push('2027 (P)');
+                    else headers.push(y.toString());
+                }
+                headers.push(`Variacio (${start === 2026 || start === 2027 ? start + 'P' : start} vs ${end === 2026 || end === 2027 ? end + 'P' : end})`);
+                csvContent += headers.map(h => `"${h}"`).join(';') + '\r\n';
+
+                // Calculate Totals Map
+                const colTotals = {};
+                for (let y = start; y <= end; y++) {
+                    colTotals[y] = 0;
+                }
+
+                // CSV Rows
+                allItems.forEach(item => {
+                    const prefix = item.isAward ? '[Tipologia] ' : '';
+                    const rowName = `"${(prefix + item.concept).replace(/"/g, '""')}"`;
+                    const rowValues = [];
+                    for (let y = start; y <= end; y++) {
+                        let val = 0;
+                        if (y === 2026 || y === 2027) {
+                            const forecast = calcularPrevisio(item.values, forecastMethod);
+                            val = forecast[y.toString()];
+                        } else {
+                            val = item.values[y.toString()] || 0;
+                        }
+                        if (!item.isAward) {
+                            colTotals[y] += val;
+                        }
+                        rowValues.push(val.toString().replace('.', ',')); // Excel format
+                    }
+                    
+                    // Var % Start vs End
+                    let vStart = 0;
+                    if (start === 2026 || start === 2027) {
+                        const forecast = calcularPrevisio(item.values, forecastMethod);
+                        vStart = forecast[start.toString()];
+                    } else {
+                        vStart = item.values[start.toString()] || 0;
+                    }
+
+                    let vEnd = 0;
+                    if (end === 2026 || end === 2027) {
+                        const forecast = calcularPrevisio(item.values, forecastMethod);
+                        vEnd = forecast[end.toString()];
+                    } else {
+                        vEnd = item.values[end.toString()] || 0;
+                    }
+
+                    let varPctStr = '-';
+                    if (vStart > 0) {
+                        const varPct = ((vEnd - vStart) / vStart) * 100;
+                        varPctStr = `"${(varPct >= 0 ? '+' : '') + varPct.toFixed(2).replace('.', ',')}%"`;
+                    }
+
+                    csvContent += `${rowName};${rowValues.join(';')};${varPctStr}\r\n`;
+                });
+
+                // Totals Row
+                const totalRowName = '"TOTAL SELECCIONAT"';
+                const totalRowValues = [];
+                for (let y = start; y <= end; y++) {
+                    totalRowValues.push(colTotals[y].toString().replace('.', ','));
+                }
+                
+                const tStart = colTotals[start];
+                const tEnd = colTotals[end];
+                let totalVarPctStr = '-';
+                if (tStart > 0) {
+                    const totalVarPct = ((tEnd - tStart) / tStart) * 100;
+                    totalVarPctStr = `"${(totalVarPct >= 0 ? '+' : '') + totalVarPct.toFixed(2).replace('.', ',')}%"`;
+                }
+
+                csvContent += `${totalRowName};${totalRowValues.join(';')};${totalVarPctStr}\r\n`;
+
+                // Trigger file download
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement('a');
+                const url = URL.createObjectURL(blob);
+                
+                link.setAttribute('href', url);
+                link.setAttribute('download', `Ingressos_Recerca_UAB_Filtre_${start}_${end}.csv`);
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+        });
+    </script>
+</body>
+</html>

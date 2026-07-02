@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="ca">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Personas por Instituto</title>
+    <title>Persones per Institut | Portal de Recerca UAB</title>
     <script src="config.js"></script>
     <script src="uab-brand.js" defer></script>
     <script src="https://cdn.tailwindcss.com"></script>
@@ -21,21 +21,21 @@
 <div class="max-w-[98%] mx-auto py-6 px-4">
     <header class="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 mb-8">
         <div>
-            <h1 class="text-xl font-black text-slate-800 tracking-tight">Personas por Instituto</h1>
-            <p class="text-slate-500 font-medium text-sm">Selecciona un instituto y rango de años para ver asociaciones.</p>
+            <h1 class="text-xl font-black text-slate-800 tracking-tight">Persones per Institut</h1>
+            <p class="text-slate-500 font-medium text-sm">Selecciona un institut i un rang d'anys per veure les associacions.</p>
         </div>
 
         <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 flex flex-col sm:flex-row items-center gap-6 min-w-[420px]">
             <div class="w-full sm:w-64 px-2">
-                <label class="block text-xxs font-black text-slate-400 uppercase tracking-widest mb-1">Instituto</label>
+                <label class="block text-xxs font-black text-slate-400 uppercase tracking-widest mb-1">Institut</label>
                 <select id="departamentoSelect" class="w-full border border-slate-300 rounded-xl px-3 py-2 text-[13px] bg-white font-semibold text-slate-700">
-                    <option value="">Cargando...</option>
+                    <option value="">Carregant...</option>
                 </select>
             </div>
 
             <div class="flex-1 w-full px-2">
                 <div class="flex items-center justify-between mb-1">
-                    <span class="text-xxs font-black text-slate-400 uppercase tracking-widest">Rango de años</span>
+                    <span class="text-xxs font-black text-slate-400 uppercase tracking-widest">Rang d'anys</span>
                     <span id="valorRango" class="text-xs font-black text-indigo-600"></span>
                 </div>
                 <div id="sliderAnios"></div>
@@ -43,8 +43,8 @@
 
             <div class="flex items-center gap-2">
                 <select id="modoReporte" class="border border-slate-300 rounded-xl px-3 py-2 text-[13px] bg-white font-semibold text-slate-700">
-                    <option value="report">Reporte (rango de años)</option>
-                    <option value="latest">Último contrato (IBB)</option>
+                    <option value="report">Informe (rang d'anys)</option>
+                    <option value="latest">Últim contracte (IBB)</option>
                 </select>
                 <button id="btnRefrescar" class="bg-indigo-600 text-white px-4 py-2 rounded-xl font-semibold">Refrescar</button>
             </div>

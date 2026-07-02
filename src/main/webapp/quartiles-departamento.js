@@ -1535,8 +1535,8 @@ function configurarModeComparativa() {
 
 async function init() {
     const min = 2015;
-    const max = 2024;
-    configurarSlider(min, max, 2021, 2024);
+    const max = 2025;
+    configurarSlider(min, max, 2021, 2025);
     await cargarDepartamentos();
 
     await carregarAmbits();

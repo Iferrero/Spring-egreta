@@ -3,13 +3,16 @@
   "pipeline": [
     {
       "$match": {
-        "workflow.step": "validated",
-        "type.term.ca_ES": {
-          "$in": [
-            "Concessió conveni",
-            "Conveni extern a la UAB"
-          ]
-        }
+        "$or": [
+          {
+            "type.term.ca_ES": "Conveni extern a la UAB",
+            "workflow.step": "approved"
+          },
+          {
+            "type.term.ca_ES": "Concessió conveni",
+            "workflow.step": "validated"
+          }
+        ]
       }
     },
     {

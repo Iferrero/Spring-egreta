@@ -1176,7 +1176,7 @@ function inicializarTablas() {
                 hozAlign: 'left',
                 bottomCalc: () => 'TOTAL'
             },
-            { title: 'Persona', field: 'persona', sorter: 'string', headerFilter: 'input', headerFilterPlaceholder: 'Buscar persona...' },
+            { title: 'Persona', field: 'persona', sorter: 'string', headerFilter: 'input', headerFilterPlaceholder: 'Cercar persona...' },
             {
                 title: 'Ajuts IP',
                 field: 'proyectosIp',
@@ -2761,7 +2761,7 @@ async function cargarDepartamentos() {
     // --- AUTOCOMPLETER: input de búsqueda ---
     const searchInput = document.createElement('input');
     searchInput.type = 'text';
-    searchInput.placeholder = 'Buscar departamento...';
+    searchInput.placeholder = 'Cercar departament...';
     searchInput.className = 'w-full px-3 py-2 mb-2 border border-gray-200 rounded text-sm';
     dropdownMenu.appendChild(searchInput);
     // Contenedor para las opciones filtradas

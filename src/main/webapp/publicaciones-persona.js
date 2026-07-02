@@ -164,7 +164,7 @@ function inicializarTabla() {
         reactiveData: false,
         placeholder: 'No hi ha resultats per als filtres seleccionats.',
         columns: [
-            { title: 'Persona', field: 'persona', sorter: 'string', headerFilter: 'input', headerFilterPlaceholder: 'Buscar persona...' }
+            { title: 'Persona', field: 'persona', sorter: 'string', headerFilter: 'input', headerFilterPlaceholder: 'Cercar persona...' }
         ]
     });
 }
@@ -205,7 +205,7 @@ function construirTablaPivot(data) {
     });
 
     const columns = [
-        { title: 'Persona', field: 'persona', sorter: 'string', headerFilter: 'input', headerFilterPlaceholder: 'Buscar persona...' },
+        { title: 'Persona', field: 'persona', sorter: 'string', headerFilter: 'input', headerFilterPlaceholder: 'Cercar persona...' },
         ...tipos.map(tipo => ({
             title: tipo,
             field: fieldByTipo.get(tipo),

@@ -3,7 +3,16 @@
   "pipeline": [
     {
       "$match": {
-        "workflow.step": "validated"
+        "$or": [
+          {
+            "type.term.ca_ES": "Conveni extern a la UAB",
+            "workflow.step": "approved"
+          },
+          {
+            "type.term.ca_ES": { "$ne": "Conveni extern a la UAB" },
+            "workflow.step": "validated"
+          }
+        ]
       }
     },
     {
@@ -175,6 +184,7 @@
             "default": "$type.term.ca_ES"
           }
         },
+        "type_term": "$type.term.ca_ES",
         "esLider": {
           "$let": {
             "vars": {
@@ -211,6 +221,7 @@
           "awardUuid": "$uuid",
           "anio": "$anio",
           "tipo": "$award_tipo",
+          "type_term": "$type_term",
           "categoria": "$categoria"
         },
         "totalImporte": {
@@ -227,6 +238,7 @@
         "awardUuid": "$_id.awardUuid",
         "anio": "$_id.anio",
         "tipo": "$_id.tipo",
+        "type_term": "$_id.type_term",
         "categoria": {
           "$ifNull": [
             "$_id.categoria",
@@ -242,6 +254,7 @@
         "_id": {
           "anio": "$anio",
           "tipo": "$tipo",
+          "type_term": "$type_term",
           "categoria": "$categoria",
           "esLider": "$esLider"
         },
@@ -259,6 +272,7 @@
         "anio": "$_id.anio",
         "categoria": "$_id.categoria",
         "tipo": "$_id.tipo",
+        "type_term": "$_id.type_term",
         "esLider": "$_id.esLider",
         "ajuts": 1,
         "import": {
