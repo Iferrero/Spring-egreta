@@ -75,6 +75,378 @@ public class AwardController {
                 repository.findValidated(PageRequest.of(page, size)));
     }
 
+    @GetMapping("/detailed-list")
+    public Map<String, Object> getDetailedList(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "15") int size,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String hasConvocatoria,
+            @RequestParam(required = false) String hasNature) {
+
+        List<Document> basePipeline = new ArrayList<>();
+
+        // 1. Initial match query for valid awards
+        Document matchQuery = new Document();
+        List<Document> andConditions = new ArrayList<>();
+
+        andConditions.add(new Document("$or", Arrays.asList(
+            new Document("type.term.ca_ES", "Conveni extern a la UAB").append("workflow.step", "approved"),
+            new Document("type.term.ca_ES", new Document("$ne", "Conveni extern a la UAB")).append("workflow.step", "validated")
+        )));
+
+        // Filter only competitive awards
+        andConditions.add(new Document("categoria", new Document("$regex", "^Ajudes competitives")));
+
+        if (search != null && !search.isBlank()) {
+            String cleanSearch = search.trim();
+            andConditions.add(new Document("$or", Arrays.asList(
+                new Document("title.ca_ES", new Document("$regex", cleanSearch).append("$options", "i")),
+                new Document("title.es_ES", new Document("$regex", cleanSearch).append("$options", "i")),
+                new Document("title.en_GB", new Document("$regex", cleanSearch).append("$options", "i")),
+                new Document("uuid", new Document("$regex", cleanSearch).append("$options", "i")),
+                new Document("pureId", new Document("$regex", cleanSearch).append("$options", "i"))
+            )));
+        }
+
+        if (hasNature != null && !hasNature.isBlank() && !"all".equalsIgnoreCase(hasNature)) {
+            if ("yes".equalsIgnoreCase(hasNature)) {
+                andConditions.add(new Document("natureTypes", new Document("$exists", true).append("$not", new Document("$size", 0))));
+            } else if ("no".equalsIgnoreCase(hasNature)) {
+                andConditions.add(new Document("$or", Arrays.asList(
+                    new Document("natureTypes", new Document("$exists", false)),
+                    new Document("natureTypes", null),
+                    new Document("natureTypes", new Document("$size", 0))
+                )));
+            }
+        }
+
+        matchQuery.put("$and", andConditions);
+        basePipeline.add(new Document("$match", matchQuery));
+
+        // 2. Lookup applications
+        basePipeline.add(new Document("$lookup", new Document()
+            .append("from", "Applications")
+            .append("localField", "applications.uuid")
+            .append("foreignField", "uuid")
+            .append("as", "appDocs")));
+        
+        basePipeline.add(new Document("$unwind", new Document("path", "$appDocs").append("preserveNullAndEmptyArrays", true)));
+
+        // 3. Lookup FundingOpportunities
+        basePipeline.add(new Document("$lookup", new Document()
+            .append("from", "FundingOpportunities")
+            .append("localField", "appDocs.fundingOpportunity.uuid")
+            .append("foreignField", "uuid")
+            .append("as", "fOpp")));
+        
+        basePipeline.add(new Document("$unwind", new Document("path", "$fOpp").append("preserveNullAndEmptyArrays", true)));
+
+        // 4. Filter by convocatoria presence if requested
+        if (hasConvocatoria != null && !hasConvocatoria.isBlank() && !"all".equalsIgnoreCase(hasConvocatoria)) {
+            if ("yes".equalsIgnoreCase(hasConvocatoria)) {
+                basePipeline.add(new Document("$match", new Document("fOpp.uuid", new Document("$ne", null))));
+            } else if ("no".equalsIgnoreCase(hasConvocatoria)) {
+                basePipeline.add(new Document("$match", new Document("fOpp.uuid", null)));
+            }
+        }
+
+        // Count total matching records using aggregation count
+        List<Document> countPipeline = new ArrayList<>(basePipeline);
+        countPipeline.add(new Document("$count", "total"));
+        
+        long totalElements = 0;
+        List<Document> countResults = new ArrayList<>();
+        mongoTemplate.getCollection("Awards")
+                .aggregate(countPipeline)
+                .into(countResults);
+        if (!countResults.isEmpty()) {
+            totalElements = ((Number) countResults.get(0).get("total")).longValue();
+        }
+
+        // Fetch paginated results
+        List<Document> dataPipeline = new ArrayList<>(basePipeline);
+        dataPipeline.add(new Document("$sort", new Document("awardDate", -1).append("uuid", 1)));
+        dataPipeline.add(new Document("$skip", page * size));
+        dataPipeline.add(new Document("$limit", size));
+
+        Document projection = new Document()
+            .append("uuid", 1)
+            .append("pureId", 1)
+            .append("title", 1)
+            .append("awardDate", 1)
+            .append("type", 1)
+            .append("natureTypes", 1)
+            .append("fOppUuid", "$fOpp.uuid")
+            .append("fOppTitle", "$fOpp.title")
+            .append("fOppType", "$fOpp.type");
+        dataPipeline.add(new Document("$project", projection));
+
+        List<Document> data = new ArrayList<>();
+        mongoTemplate.getCollection("Awards")
+                .aggregate(dataPipeline)
+                .into(data);
+
+        // Apply suggestions for awards without nature
+        Map<String, Document> suggestionsMap = getSuggestedNatureMap();
+        for (Document award : data) {
+            Object natureObj = award.get("natureTypes");
+            boolean hasAnyNature = false;
+            if (natureObj instanceof List<?> list && !list.isEmpty()) {
+                hasAnyNature = true;
+            }
+            if (!hasAnyNature) {
+                Document suggested = null;
+                String fOppType = extractCaEsFromType(award.get("fOppType"));
+                if (fOppType != null) {
+                    suggested = suggestionsMap.get(fOppType);
+                }
+                
+                if (suggested == null && award.get("fOppType") instanceof Document fOppTypeDoc) {
+                    String callTypeUri = fOppTypeDoc.getString("uri");
+                    suggested = findNatureByUriSimilarity(callTypeUri);
+                }
+                
+                if (suggested != null) {
+                    award.put("suggestedNature", suggested);
+                }
+            }
+        }
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("content", data);
+        response.put("totalElements", totalElements);
+        response.put("page", page);
+        response.put("size", size);
+        response.put("totalPages", (int) Math.ceil((double) totalElements / size));
+
+        return response;
+    }
+
+    private Map<String, Document> suggestedNatureCache = null;
+
+    private synchronized Map<String, Document> getSuggestedNatureMap() {
+        if (suggestedNatureCache != null) {
+            return suggestedNatureCache;
+        }
+
+        suggestedNatureCache = new HashMap<>();
+        try {
+            List<Document> pipeline = Arrays.asList(
+                new Document("$match", new Document("$or", Arrays.asList(
+                    new Document("type.term.ca_ES", "Conveni extern a la UAB").append("workflow.step", "approved"),
+                    new Document("type.term.ca_ES", new Document("$ne", "Conveni extern a la UAB")).append("workflow.step", "validated")
+                ))),
+                new Document("$match", new Document("categoria", new Document("$regex", "^Ajudes competitives"))),
+                new Document("$lookup", new Document()
+                    .append("from", "Applications")
+                    .append("localField", "applications.uuid")
+                    .append("foreignField", "uuid")
+                    .append("as", "appDocs")),
+                new Document("$unwind", "$appDocs"),
+                new Document("$lookup", new Document()
+                    .append("from", "FundingOpportunities")
+                    .append("localField", "appDocs.fundingOpportunity.uuid")
+                    .append("foreignField", "uuid")
+                    .append("as", "fOpp")),
+                new Document("$unwind", "$fOpp"),
+                new Document("$match", new Document("natureTypes", new Document("$exists", true).append("$not", new Document("$size", 0)))),
+                new Document("$project", new Document()
+                    .append("fOppType", new Document("$ifNull", Arrays.asList(
+                        "$fOpp.type.term.ca_ES",
+                        new Document("$let", new Document()
+                            .append("vars", new Document("caText", new Document("$filter", new Document()
+                                .append("input", new Document("$ifNull", Arrays.asList("$fOpp.type.term.text", Arrays.asList())))
+                                .append("as", "t")
+                                .append("cond", new Document("$eq", Arrays.asList("$$t.locale", "ca_ES"))))))
+                            .append("in", new Document("$cond", Arrays.asList(
+                                new Document("$gt", Arrays.asList(new Document("$size", "$$caText"), 0)),
+                                new Document("$arrayElemAt", Arrays.asList("$$caText.value", 0)),
+                                null
+                            ))))
+                    )))
+                    .append("nature", new Document("$arrayElemAt", Arrays.asList("$natureTypes", 0)))),
+                new Document("$match", new Document("fOppType", new Document("$ne", null)).append("nature", new Document("$ne", null))),
+                new Document("$group", new Document()
+                    .append("_id", new Document("fOppType", "$fOppType").append("natureUri", "$nature.uri"))
+                    .append("count", new Document("$sum", 1))
+                    .append("natureDoc", new Document("$first", "$nature"))),
+                new Document("$sort", new Document("count", -1)),
+                new Document("$group", new Document()
+                    .append("_id", "$_id.fOppType")
+                    .append("suggestedNature", new Document("$first", "$natureDoc")))
+            );
+
+            List<Document> results = new ArrayList<>();
+            mongoTemplate.getCollection("Awards")
+                    .aggregate(pipeline)
+                    .into(results);
+
+            for (Document doc : results) {
+                String fOppType = doc.getString("_id");
+                Document suggested = (Document) doc.get("suggestedNature");
+                if (fOppType != null && suggested != null) {
+                    suggestedNatureCache.put(fOppType, suggested);
+                }
+            }
+        } catch (Exception e) {
+            // Silently catch
+        }
+        return suggestedNatureCache;
+    }
+
+    private String extractCaEsFromType(Object typeObj) {
+        if (!(typeObj instanceof Document typeDoc)) return null;
+        Object termObj = typeDoc.get("term");
+        if (termObj instanceof Document termDoc) {
+            String ca = termDoc.getString("ca_ES");
+            if (ca != null && !ca.isBlank()) return ca;
+            Object textObj = termDoc.get("text");
+            if (textObj instanceof List<?> list) {
+                for (Object o : list) {
+                    if (o instanceof Document td && "ca_ES".equals(td.getString("locale"))) {
+                        return td.getString("value");
+                    }
+                }
+            }
+        } else if (termObj instanceof List<?> list) {
+            for (Object o : list) {
+                if (o instanceof Document td && "ca_ES".equals(td.getString("locale"))) {
+                    return td.getString("value");
+                }
+            }
+        }
+        return null;
+    }
+
+    @PostMapping("/{uuid}/nature")
+    public Map<String, Object> updateAwardNature(
+            @PathVariable String uuid,
+            @RequestParam(defaultValue = "test") String env,
+            @RequestBody Document natureDoc) {
+        
+        boolean egretaSuccess = syncAwardNatureToEgreta(uuid, natureDoc, env);
+        
+        Map<String, Object> resp = new HashMap<>();
+        if (egretaSuccess) {
+            mongoTemplate.getCollection("Awards")
+                    .updateOne(new Document("uuid", uuid),
+                            new Document("$set", new Document("natureTypes", Arrays.asList(natureDoc))));
+
+            suggestedNatureCache = null; // Clear cache on update
+            allNatures = null;
+            resp.put("success", true);
+        } else {
+            resp.put("success", false);
+            resp.put("message", "Error al sincronitzar amb l'API d'Egreta (" + ("prod".equalsIgnoreCase(env) ? "egreta.uab.cat" : "egretat.uab.cat") + "). Comproveu que el registre existeixi en aquest entorn.");
+        }
+        return resp;
+    }
+
+    private boolean syncAwardNatureToEgreta(String uuid, Document natureDoc, String env) {
+        try {
+            org.springframework.web.client.RestTemplate restTemplate = new org.springframework.web.client.RestTemplate();
+            org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
+            headers.set("Content-Type", "application/json;charset=utf-8");
+            headers.set("api-key", "9971c3cc-b3e0-48e3-9ff9-e990c795e92f");
+            headers.set("Accept", "application/json");
+
+            String baseUrl = "prod".equalsIgnoreCase(env) ? "https://egreta.uab.cat/ws/api/" : "https://egretat.uab.cat/ws/api/";
+            String url = baseUrl + "awards/" + uuid;
+
+            // 1. GET current award document
+            org.springframework.http.ResponseEntity<Map> getResp = restTemplate.exchange(
+                    url, org.springframework.http.HttpMethod.GET, new org.springframework.http.HttpEntity<>(headers), Map.class);
+            
+            if (!getResp.getStatusCode().is2xxSuccessful() || getResp.getBody() == null) {
+                System.err.println("GET failed for Egreta award UUID: " + uuid + ", Status: " + getResp.getStatusCode());
+                return false;
+            }
+            
+            @SuppressWarnings("unchecked")
+            Map<String, Object> data = new java.util.LinkedHashMap<>(getResp.getBody());
+            
+            // 2. Modify natureTypes
+            List<Object> natureList = new ArrayList<>();
+            natureList.add(natureDoc);
+            data.put("natureTypes", natureList);
+            
+            // 3. PUT updated award document back
+            org.springframework.http.HttpEntity<Map<String, Object>> putEntity = new org.springframework.http.HttpEntity<>(data, headers);
+            org.springframework.http.ResponseEntity<Map> putResp = restTemplate.exchange(
+                    url, org.springframework.http.HttpMethod.PUT, putEntity, Map.class);
+            
+            return putResp.getStatusCode().is2xxSuccessful();
+        } catch (Exception e) {
+            System.err.println("Error syncing award nature to Egreta: " + e.getMessage());
+            return false;
+        }
+    }
+
+    @GetMapping("/natures")
+    public List<Document> getAvailableNatures() {
+        return getAllNatures();
+    }
+
+    private List<Document> allNatures = null;
+
+    private synchronized List<Document> getAllNatures() {
+        if (allNatures != null) {
+            return allNatures;
+        }
+        allNatures = new ArrayList<>();
+        try {
+            allNatures = mongoTemplate.getCollection("Awards")
+                    .distinct("natureTypes", new Document(), Document.class)
+                    .into(new ArrayList<>());
+        } catch (Exception e) {
+            // Silently catch
+        }
+        return allNatures;
+    }
+
+    private Document findNatureByUriSimilarity(String callTypeUri) {
+        if (callTypeUri == null || callTypeUri.isBlank()) return null;
+        
+        String suffix = "";
+        int idx = callTypeUri.indexOf("externalfundingopportunity/");
+        if (idx >= 0) {
+            suffix = callTypeUri.substring(idx + "externalfundingopportunity/".length());
+        } else {
+            idx = callTypeUri.indexOf("fundingopportunitytypes/");
+            if (idx >= 0) {
+                suffix = callTypeUri.substring(idx + "fundingopportunitytypes/".length());
+            }
+        }
+        
+        if (suffix.isEmpty()) return null;
+        suffix = suffix.replaceAll("^/+", "").replaceAll("/+$", "").toLowerCase();
+        
+        String normSuffixSlash = suffix;
+        String normSuffixUnder = suffix.replace("/", "_").replace("-", "_");
+        
+        List<Document> natures = getAllNatures();
+        for (Document nat : natures) {
+            String nUri = nat.getString("uri");
+            if (nUri == null) continue;
+            
+            String nSuffix = "";
+            int nIdx = nUri.indexOf("nature/");
+            if (nIdx >= 0) {
+                nSuffix = nUri.substring(nIdx + "nature/".length());
+            } else {
+                nSuffix = nUri.substring(nUri.lastIndexOf("/") + 1);
+            }
+            nSuffix = nSuffix.replaceAll("^/+", "").replaceAll("/+$", "").toLowerCase();
+            String nSuffixNorm = nSuffix.replace("/", "_").replace("-", "_");
+            
+            if (nSuffixNorm.equals(normSuffixUnder) || nSuffixNorm.equals(normSuffixSlash)) {
+                return nat;
+            }
+        }
+        return null;
+    }
+
+
     /*
     ===============================
     ESTADÍSTICAS GENERALES
@@ -2175,6 +2547,69 @@ public class AwardController {
     public List<String> getInternationalCallTypes() {
         List<String> appUuids = mongoTemplate.getCollection("Awards")
                 .distinct("applications.uuid", new Document("type.term.ca_ES", "Projectes d'investigació Internacionals")
+                        .append("workflow.step", "validated"), String.class)
+                .into(new ArrayList<>());
+
+        if (appUuids.isEmpty()) {
+            return List.of();
+        }
+
+        List<String> fundingOppUuids = mongoTemplate.getCollection("Applications")
+                .distinct("fundingOpportunity.uuid", new Document("uuid", new Document("$in", appUuids)), String.class)
+                .into(new ArrayList<>());
+
+        if (fundingOppUuids.isEmpty()) {
+            return List.of();
+        }
+
+        List<Document> fOpps = mongoTemplate.getCollection("FundingOpportunities")
+                .find(new Document("uuid", new Document("$in", fundingOppUuids)))
+                .projection(new Document("type", 1))
+                .into(new ArrayList<>());
+
+        Set<String> callTypes = new java.util.TreeSet<>();
+        for (Document doc : fOpps) {
+            Object typeObj = doc.get("type");
+            if (typeObj instanceof Document tDoc) {
+                Object termObj = tDoc.get("term");
+                if (termObj instanceof Document termDoc) {
+                    String caVal = termDoc.getString("ca_ES");
+                    if (caVal != null && !caVal.isBlank()) {
+                        callTypes.add(caVal);
+                        continue;
+                    }
+                    Object textObj = termDoc.get("text");
+                    if (textObj instanceof List<?> list) {
+                        for (Object o : list) {
+                            if (o instanceof Document td && "ca_ES".equals(td.getString("locale"))) {
+                                String val = td.getString("value");
+                                if (val != null && !val.isBlank()) {
+                                    callTypes.add(val);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                } else if (termObj instanceof List<?> list) {
+                    for (Object o : list) {
+                        if (o instanceof Document td && "ca_ES".equals(td.getString("locale"))) {
+                            String val = td.getString("value");
+                            if (val != null && !val.isBlank()) {
+                                callTypes.add(val);
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return new ArrayList<>(callTypes);
+    }
+
+    @GetMapping("/stats/incorporacio-call-types")
+    public List<String> getIncorporacioCallTypes() {
+        List<String> appUuids = mongoTemplate.getCollection("Awards")
+                .distinct("applications.uuid", new Document("type.term.ca_ES", "Incorporació de Personal")
                         .append("workflow.step", "validated"), String.class)
                 .into(new ArrayList<>());
 

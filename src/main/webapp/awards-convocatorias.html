@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ajuts i Convocatòries | Pure</title>
+    <script src="config.js"></script>
+    <script src="uab-brand.js" defer></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="uab-theme.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        /* Modern backdrop blur and gradients */
+        .glass-card {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+        }
+        .gradient-border {
+            position: relative;
+        }
+        .gradient-border::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, #4f46e5, #06b6d4);
+        }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen text-slate-800">
+
+    <!-- Header for uab-brand.js to read -->
+    <header class="hidden">
+        <h1>Ajuts i Convocatòries</h1>
+        <p>Llistat complet de concessions i la seva vinculació amb les convocatòries de recerca</p>
+    </header>
+
+    <main class="mx-auto py-8 px-6 max-w-7xl">
+        
+        <!-- Summary Stats Cards -->
+        <section class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div class="glass-card bg-white rounded-2xl shadow-sm border border-slate-200/60 p-6 transition-all hover:shadow-md">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Total d'Ajuts</span>
+                    <div class="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600">
+                        <i class="fa-solid fa-award"></i>
+                    </div>
+                </div>
+                <div class="flex items-baseline gap-2">
+                    <span id="stats-total" class="text-3xl font-black tracking-tight text-slate-800">-</span>
+                </div>
+                <p class="text-[11px] text-slate-400 mt-2 font-medium">Registrats i validats al sistema</p>
+            </div>
+
+            <div class="glass-card bg-white rounded-2xl shadow-sm border border-slate-200/60 p-6 transition-all hover:shadow-md">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Amb Convocatòria</span>
+                    <div class="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600">
+                        <i class="fa-solid fa-circle-check"></i>
+                    </div>
+                </div>
+                <div class="flex items-baseline gap-2">
+                    <span id="stats-convocatoria" class="text-3xl font-black tracking-tight text-slate-800">-</span>
+                </div>
+                <p class="text-[11px] text-slate-400 mt-2 font-medium">Vinculats a una convocatòria oficial</p>
+            </div>
+
+            <div class="glass-card bg-white rounded-2xl shadow-sm border border-slate-200/60 p-6 transition-all hover:shadow-md">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Sense Convocatòria</span>
+                    <div class="w-8 h-8 rounded-lg bg-amber-50 flex items-center justify-center text-amber-600">
+                        <i class="fa-solid fa-triangle-exclamation"></i>
+                    </div>
+                </div>
+                <div class="flex items-baseline gap-2">
+                    <span id="stats-no-convocatoria" class="text-3xl font-black tracking-tight text-slate-800">-</span>
+                </div>
+                <p class="text-[11px] text-slate-400 mt-2 font-medium">Convenis directes o dotacions especials</p>
+            </div>
+        </section>
+
+        <!-- Filters Section -->
+        <section class="bg-white rounded-2xl border border-slate-200/60 p-6 shadow-sm mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <!-- Search & Env Selector -->
+            <div class="flex flex-col md:flex-row flex-1 max-w-2xl w-full gap-4 items-center">
+                <div class="relative flex-1 w-full font-sans">
+                    <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                        <i class="fa-solid fa-magnifying-glass"></i>
+                    </span>
+                    <input type="text" id="search-input" placeholder="Cerca per títol, UUID o Pure ID..." 
+                           class="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-sm transition-all bg-slate-50/50 hover:bg-slate-50">
+                </div>
+
+                <!-- Environment Selector -->
+                <div class="flex items-center gap-2 w-full md:w-auto">
+                    <label for="selectEntorn" class="text-xs font-bold text-slate-500 uppercase whitespace-nowrap">Entorn Egreta:</label>
+                    <div class="relative w-full md:w-auto">
+                        <select id="selectEntorn" class="w-full pl-3 pr-8 py-2.5 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium text-xs text-slate-700 appearance-none cursor-pointer">
+                            <option value="test" selected>Test (egretat)</option>
+                            <option value="prod">Producció (egreta)</option>
+                        </select>
+                        <span class="absolute inset-y-0 right-0 pr-2.5 flex items-center pointer-events-none text-slate-400">
+                            <i class="fa-solid fa-server text-[10px]"></i>
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex flex-wrap gap-4 items-center">
+                <!-- Convocatoria Filter Toggle -->
+                <div class="flex bg-slate-100 p-1 rounded-xl self-start md:self-auto">
+                    <button onclick="setFilter('all')" id="filter-all" class="px-4 py-2 text-xs font-bold rounded-lg transition-all text-indigo-600 bg-white shadow-sm">Tots els Ajuts</button>
+                    <button onclick="setFilter('yes')" id="filter-yes" class="px-4 py-2 text-xs font-bold rounded-lg transition-all text-slate-500 hover:text-slate-800">Amb Convocatòria</button>
+                    <button onclick="setFilter('no')" id="filter-no" class="px-4 py-2 text-xs font-bold rounded-lg transition-all text-slate-500 hover:text-slate-800">Sense Convocatòria</button>
+                </div>
+
+                <!-- Nature Filter Toggle -->
+                <div class="flex bg-slate-100 p-1 rounded-xl self-start md:self-auto">
+                    <button onclick="setFilterNature('all')" id="filter-nature-all" class="px-4 py-2 text-xs font-bold rounded-lg transition-all text-indigo-600 bg-white shadow-sm">Totes les Natures</button>
+                    <button onclick="setFilterNature('no')" id="filter-nature-no" class="px-4 py-2 text-xs font-bold rounded-lg transition-all text-slate-500 hover:text-slate-800">Només Sense Naturalesa</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Main Data Table Section -->
+        <section class="bg-white rounded-3xl border border-slate-200/60 shadow-sm overflow-hidden mb-6">
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-slate-50/60 border-b border-slate-100 text-[11px] font-bold text-slate-400 uppercase tracking-widest">
+                            <th class="px-8 py-5">Identificador</th>
+                            <th class="px-8 py-5">Títol de l'Ajut i Tipus</th>
+                            <th class="px-8 py-5">Naturalesa (Nature)</th>
+                            <th class="px-8 py-5">Convocatòria Associada</th>
+                            <th class="px-8 py-5">Data Concessió</th>
+                            <th class="px-6 py-5 text-center">Accions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="table-body" class="divide-y divide-slate-100 text-sm">
+                        <!-- Dynamically populated rows -->
+                        <tr>
+                            <td colspan="6" class="px-8 py-20 text-center text-slate-400 italic font-medium">
+                                <div class="flex flex-col items-center justify-center gap-3">
+                                    <div class="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+                                    <span>Carregant ajuts de recerca...</span>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination Bar -->
+            <div class="px-8 py-5 flex justify-between items-center bg-slate-50/40 border-t border-slate-100">
+                <button onclick="cambiarPagina(-1)" id="btn-prev" class="px-4 py-2 rounded-xl border border-slate-200 text-xs font-bold hover:bg-white transition-all disabled:opacity-30 disabled:pointer-events-none text-slate-600">
+                    <i class="fa-solid fa-chevron-left mr-1.5"></i> Anterior
+                </button>
+                <span id="info-pagina" class="text-[11px] font-black text-slate-400 uppercase tracking-widest font-mono">Pàgina 1 de 1</span>
+                <button onclick="cambiarPagina(1)" id="btn-next" class="px-4 py-2 rounded-xl border border-slate-200 text-xs font-bold hover:bg-white transition-all disabled:opacity-30 disabled:pointer-events-none text-slate-600">
+                    Següent <i class="fa-solid fa-chevron-right ml-1.5"></i>
+                </button>
+            </div>
+        </section>
+
+    </main>
+
+    <script>
+        let paginaActual = 0;
+        let filtroConvocatoria = 'all'; // 'all', 'yes', 'no'
+        let filtroNature = 'all'; // 'all', 'no'
+        let inputTimeout = null;
+        window.availableNatures = [];
+
+        // Custom multi-language and structure text normalizer
+        function normalitzarText(value, fallback = 'No informat') {
+            if (value == null) return fallback;
+            if (typeof value === 'string') return value.trim() || fallback;
+            if (Array.isArray(value)) {
+                for (const loc of ['ca_ES', 'es_ES', 'en_GB']) {
+                    const found = value.find(item => item && (item.locale === loc || item.lang === loc));
+                    if (found && found.value) return found.value.trim();
+                }
+                if (value.length > 0 && value[0].value) return value[0].value.trim();
+            }
+            if (typeof value === 'object') {
+                if (value.text) return normalitzarText(value.text, fallback);
+                if (value.term) return normalitzarText(value.term, fallback);
+                if (typeof value.ca_ES === 'string' && value.ca_ES.trim()) return value.ca_ES.trim();
+                if (typeof value.es_ES === 'string' && value.es_ES.trim()) return value.es_ES.trim();
+                if (typeof value.en_GB === 'string' && value.en_GB.trim()) return value.en_GB.trim();
+                const first = Object.values(value).find((v) => typeof v === 'string' && v.trim());
+                return first ? first.trim() : fallback;
+            }
+            return String(value).trim() || fallback;
+        }
+
+        async function fetchStats() {
+            try {
+                // Fetch stats by counting total entries with yes/no filters
+                const pTotal = fetch(apiUrl('/awards/detailed-list?page=0&size=1&hasConvocatoria=all'));
+                const pYes = fetch(apiUrl('/awards/detailed-list?page=0&size=1&hasConvocatoria=yes'));
+                const pNo = fetch(apiUrl('/awards/detailed-list?page=0&size=1&hasConvocatoria=no'));
+                
+                const [rTotal, rYes, rNo] = await Promise.all([pTotal, pYes, pNo]);
+                const dTotal = await rTotal.json();
+                const dYes = await rYes.json();
+                const dNo = await rNo.json();
+                
+                document.getElementById('stats-total').innerText = (dTotal.totalElements ?? 0).toLocaleString('ca-ES');
+                document.getElementById('stats-convocatoria').innerText = (dYes.totalElements ?? 0).toLocaleString('ca-ES');
+                document.getElementById('stats-no-convocatoria').innerText = (dNo.totalElements ?? 0).toLocaleString('ca-ES');
+            } catch (e) {
+                console.error("Error carregar stats:", e);
+            }
+        }
+
+        async function cargarAwards() {
+            const body = document.getElementById('table-body');
+            const search = document.getElementById('search-input').value;
+            
+            try {
+                window.suggestedNaturesMap = {};
+                const res = await fetch(apiUrl(`/awards/detailed-list?page=${paginaActual}&size=15&search=${encodeURIComponent(search)}&hasConvocatoria=${filtroConvocatoria}&hasNature=${filtroNature}`));
+                const data = await res.json();
+                
+                if (!data.content || data.content.length === 0) {
+                    body.innerHTML = `<tr><td colspan="6" class="px-8 py-20 text-center text-slate-400 italic">No s'han trobat ajuts amb els criteris seleccionats</td></tr>`;
+                    document.getElementById('info-pagina').innerText = `Pàgina 1 de 1`;
+                    document.getElementById('btn-prev').disabled = true;
+                    document.getElementById('btn-next').disabled = true;
+                    return;
+                }
+
+                body.innerHTML = data.content.map(a => {
+                    const idText = a.uuid ? a.uuid.substring(0, 8) + '...' : 'Sense ID';
+                    const uuidText = a.uuid || '';
+                    const pureIdText = a.pureId || '';
+                    const titleText = normalitzarText(a.title, 'Sense títol');
+                    const typeText = normalitzarText(a.type, 'Ajut General');
+                    
+                    // Nature Types extraction
+                    let natureText = '';
+                    if (a.natureTypes && Array.isArray(a.natureTypes) && a.natureTypes.length > 0) {
+                        natureText = a.natureTypes.map(nt => {
+                            const name = normalitzarText(nt.term || nt, '');
+                            if (!name) return '';
+                            let cleanedName = name;
+                            if (name.includes('_')) {
+                                const parts = name.split('_');
+                                cleanedName = parts[parts.length - 1];
+                            }
+                            return `<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100 mr-1 mb-1">${cleanedName}</span>`;
+                        }).join('');
+                    } else {
+                        const optionsHtml = (window.availableNatures || []).map((nat, idx) => {
+                            const name = normalitzarText(nat.term || nat, '');
+                            let cleanedName = name;
+                            if (name.includes('_')) {
+                                const parts = name.split('_');
+                                cleanedName = parts[parts.length - 1];
+                            }
+                            return `<option value="${idx}">${cleanedName}</option>`;
+                        }).join('');
+
+                        const selectId = `select-nature-${uuidText}`;
+                        const selectHtml = `
+                            <div class="flex gap-1.5 w-full items-center">
+                                <select id="${selectId}" class="flex-1 min-w-[120px] px-2 py-1 text-[11px] bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 font-medium text-slate-700">
+                                    <option value="">-- Selecciona --</option>
+                                    ${optionsHtml}
+                                </select>
+                                <button type="button" onclick="proponerNaturalezaSeleccionada('${uuidText}', '${selectId}')" class="px-2 py-1 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100 hover:text-indigo-800 text-[10px] font-bold border border-indigo-100 transition-colors cursor-pointer" title="Guardar naturalesa">
+                                    <i class="fa-solid fa-floppy-disk"></i>
+                                </button>
+                            </div>
+                        `;
+
+                        if (a.suggestedNature) {
+                            window.suggestedNaturesMap[a.uuid] = a.suggestedNature;
+                            const name = normalitzarText(a.suggestedNature.term || a.suggestedNature, '');
+                            let cleanedName = name;
+                            if (name.includes('_')) {
+                                const parts = name.split('_');
+                                cleanedName = parts[parts.length - 1];
+                            }
+                            natureText = `
+                                <div id="suggest-container-${uuidText}" class="flex flex-col gap-1.5 items-start">
+                                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Sugerida:</span>
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200/80 mr-1 mb-1">${cleanedName}</span>
+                                    <div class="flex items-center gap-1.5">
+                                        <button type="button" onclick="proponerNaturalezaDesdeMapa('${uuidText}')" class="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 hover:underline inline-flex items-center gap-1 cursor-pointer">
+                                            <i class="fa-solid fa-magic mr-0.5"></i> Proposar
+                                        </button>
+                                        <span class="text-slate-300 text-[10px]">|</span>
+                                        <button type="button" onclick="mostrarSelectorManual('${uuidText}')" class="text-[10px] font-bold text-slate-500 hover:text-slate-800 hover:underline inline-flex items-center gap-1 cursor-pointer">
+                                            Altres...
+                                        </button>
+                                    </div>
+                                </div>
+                                <div id="manual-container-${uuidText}" class="hidden flex flex-col gap-1 items-start w-full">
+                                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Tria una naturalesa:</span>
+                                    <div class="flex gap-1.5 w-full items-center">
+                                        ${selectHtml}
+                                        <button type="button" onclick="ocultarSelectorManual('${uuidText}')" class="text-xs text-slate-400 hover:text-slate-650 cursor-pointer" title="Cancel·lar">
+                                            <i class="fa-solid fa-xmark"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            `;
+                        } else {
+                            natureText = `
+                                <div class="flex flex-col gap-1 items-start w-full">
+                                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Tria una naturalesa:</span>
+                                    ${selectHtml}
+                                </div>
+                            `;
+                        }
+                    }
+
+                    // Convocatoria details
+                    let convocatoriaCol = '';
+                    if (a.fOppUuid) {
+                        const oppTitle = normalitzarText(a.fOppTitle, 'Convocatòria sense títol');
+                        const oppType = normalitzarText(a.fOppType, 'General');
+                        convocatoriaCol = `
+                            <div class="flex flex-col">
+                                <span class="text-xs font-semibold text-slate-700 line-clamp-1" title="${oppTitle}">${oppTitle}</span>
+                                <span class="text-[10px] text-slate-400 font-medium">${oppType}</span>
+                            </div>
+                        `;
+                    } else {
+                        convocatoriaCol = `
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-100">
+                                Conveni direct / No competitiu
+                            </span>
+                        `;
+                    }
+
+                    // Format Date
+                    let dateText = 'No informada';
+                    if (a.awardDate) {
+                        try {
+                            const dateObj = new Date(a.awardDate);
+                            if (!isNaN(dateObj)) {
+                                dateText = dateObj.toLocaleDateString('ca-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
+                            }
+                        } catch (ex) {}
+                    }
+
+                    const pureIdHtml = a.pureId 
+                        ? `<button type="button" data-egreta-id="${pureIdText}" class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold text-indigo-600 bg-indigo-50/50 hover:bg-indigo-100/70 border border-indigo-100 transition-colors" title="Obrir editor a Egreta">
+                            <i class="fa-solid fa-up-right-from-square"></i> Egreta
+                           </button>`
+                        : `<span class="text-slate-300">-</span>`;
+
+                    return `
+                        <tr class="hover:bg-slate-50/60 transition-all">
+                            <td class="px-8 py-4">
+                                <div class="text-[10px] font-bold text-slate-400 uppercase tracking-tighter" title="${uuidText}">UUID: ${idText}</div>
+                                ${pureIdText ? `<div class="text-[10px] font-bold text-indigo-400">Pure ID: ${pureIdText}</div>` : ''}
+                            </td>
+                            <td class="px-8 py-4 max-w-xs md:max-w-md">
+                                <div class="font-bold text-slate-800 text-sm line-clamp-2" title="${titleText}">${titleText}</div>
+                                <div class="text-[10px] text-slate-400 mt-0.5 font-medium">${typeText}</div>
+                            </td>
+                            <td class="px-8 py-4">${natureText}</td>
+                            <td class="px-8 py-4">${convocatoriaCol}</td>
+                            <td class="px-8 py-4 font-medium text-slate-500">${dateText}</td>
+                            <td class="px-6 py-4 text-center">${pureIdHtml}</td>
+                        </tr>
+                    `;
+                }).join('');
+
+                const paginasTotales = data.totalPages || 1;
+                document.getElementById('info-pagina').innerText = `Pàgina ${data.page + 1} de ${paginasTotales}`;
+                document.getElementById('btn-prev').disabled = (data.page === 0);
+                document.getElementById('btn-next').disabled = (data.page >= paginasTotales - 1);
+
+            } catch (err) {
+                console.error("Error al carregar awards:", err);
+                body.innerHTML = `<tr><td colspan="6" class="px-8 py-20 text-center text-red-500 font-semibold">Error al conectar amb el servidor. Comproveu si el backend està actiu.</td></tr>`;
+            }
+        }
+
+        function setFilter(tipo) {
+            filtroConvocatoria = tipo;
+            
+            // Update active states
+            ['all', 'yes', 'no'].forEach(t => {
+                const btn = document.getElementById(`filter-${t}`);
+                if (t === tipo) {
+                    btn.className = "px-4 py-2 text-xs font-bold rounded-lg transition-all text-indigo-600 bg-white shadow-sm";
+                } else {
+                    btn.className = "px-4 py-2 text-xs font-bold rounded-lg transition-all text-slate-500 hover:text-slate-800";
+                }
+            });
+
+            paginaActual = 0;
+            cargarAwards();
+        }
+
+        function setFilterNature(tipo) {
+            filtroNature = tipo;
+            
+            // Update active states
+            ['all', 'no'].forEach(t => {
+                const btn = document.getElementById(`filter-nature-${t}`);
+                if (t === tipo) {
+                    btn.className = "px-4 py-2 text-xs font-bold rounded-lg transition-all text-indigo-600 bg-white shadow-sm";
+                } else {
+                    btn.className = "px-4 py-2 text-xs font-bold rounded-lg transition-all text-slate-500 hover:text-slate-800";
+                }
+            });
+
+            paginaActual = 0;
+            cargarAwards();
+        }
+
+        function cambiarPagina(delta) {
+            paginaActual += delta;
+            cargarAwards();
+        }
+
+        async function proponerNaturalezaDesdeMapa(uuid) {
+            const natureDoc = window.suggestedNaturesMap[uuid];
+            if (!natureDoc) {
+                alert("No s'ha trobat la sugerència.");
+                return;
+            }
+            
+            const envSelect = document.getElementById('selectEntorn');
+            const env = envSelect ? envSelect.value : 'test';
+
+            try {
+                const res = await fetch(apiUrl(`/awards/${uuid}/nature?env=${env}`), {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(natureDoc)
+                });
+                
+                const resData = await res.json();
+                if (res.ok && resData.success) {
+                    cargarAwards();
+                    fetchStats();
+                } else {
+                    alert(resData.message || "Error en desar la naturalesa proposada.");
+                }
+            } catch (err) {
+                console.error("Error proponer naturaleza:", err);
+                alert("Error al connectar amb el servidor o API d'Egreta.");
+            }
+        }
+        window.proponerNaturalezaDesdeMapa = proponerNaturalezaDesdeMapa;
+
+        async function proponerNaturalezaSeleccionada(uuid, selectId) {
+            const selectEl = document.getElementById(selectId);
+            if (!selectEl) return;
+            const selectedIdx = selectEl.value;
+            if (selectedIdx === "") {
+                alert("Si us plau, selecciona una naturalesa.");
+                return;
+            }
+            const natureDoc = window.availableNatures[parseInt(selectedIdx)];
+            if (!natureDoc) return;
+            
+            const envSelect = document.getElementById('selectEntorn');
+            const env = envSelect ? envSelect.value : 'test';
+
+            try {
+                const res = await fetch(apiUrl(`/awards/${uuid}/nature?env=${env}`), {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(natureDoc)
+                });
+                
+                const resData = await res.json();
+                if (res.ok && resData.success) {
+                    cargarAwards();
+                    fetchStats();
+                } else {
+                    alert(resData.message || "Error en desar la naturalesa proposada.");
+                }
+            } catch (err) {
+                console.error("Error proponer naturaleza seleccionada:", err);
+                alert("Error al connectar amb el servidor o API d'Egreta.");
+            }
+        }
+        window.proponerNaturalezaSeleccionada = proponerNaturalezaSeleccionada;
+
+        function mostrarSelectorManual(uuid) {
+            document.getElementById(`suggest-container-${uuid}`).classList.add('hidden');
+            document.getElementById(`manual-container-${uuid}`).classList.remove('hidden');
+        }
+        window.mostrarSelectorManual = mostrarSelectorManual;
+
+        function ocultarSelectorManual(uuid) {
+            document.getElementById(`suggest-container-${uuid}`).classList.remove('hidden');
+            document.getElementById(`manual-container-${uuid}`).classList.add('hidden');
+        }
+        window.ocultarSelectorManual = ocultarSelectorManual;
+
+        async function cargarNatures() {
+            try {
+                const res = await fetch(apiUrl('/awards/natures'));
+                if (res.ok) {
+                    const naturesList = await res.json();
+                    
+                    // Sort alphabetically by their cleaned/normalized catalan name
+                    naturesList.sort((a, b) => {
+                        const nameA = normalitzarText(a.term || a, '');
+                        let cleanedA = nameA;
+                        if (nameA.includes('_')) {
+                            const parts = nameA.split('_');
+                            cleanedA = parts[parts.length - 1];
+                        }
+                        
+                        const nameB = normalitzarText(b.term || b, '');
+                        let cleanedB = nameB;
+                        if (nameB.includes('_')) {
+                            const parts = nameB.split('_');
+                            cleanedB = parts[parts.length - 1];
+                        }
+                        
+                        return cleanedA.localeCompare(cleanedB, 'ca-ES');
+                    });
+
+                    window.availableNatures = naturesList;
+                }
+            } catch (e) {
+                console.error("Error carregar llista de natures:", e);
+            }
+        }
+
+        // Search input with debounce
+        document.getElementById('search-input').addEventListener('input', () => {
+            clearTimeout(inputTimeout);
+            inputTimeout = setTimeout(() => {
+                paginaActual = 0;
+                cargarAwards();
+            }, 350);
+        });
+
+        // Initial loading
+        async function init() {
+            await cargarNatures();
+            fetchStats();
+            cargarAwards();
+        }
+        init();
+    </script>
+    <script src="egreta-modal.js"></script>
+</body>
+</html>

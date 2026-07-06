@@ -53,7 +53,7 @@ for aw in cursor:
         elif cat == "Ajudes competitives internacionals":
             counts[year]["internacionals"] += 1
             
-        if type_term in ["Concessió conveni", "Conveni extern a la UAB"] or cat == "Ajudes no competitives nacionals":
+        if type_term in ["Concessió conveni", "Conveni extern a la UAB"] or cat == "Ajudes no competitives":
             counts[year]["convenis"] += 1
 
 for y in sorted(counts.keys()):

@@ -542,22 +542,31 @@
                 renderTable(targets);
             }
 
-            // Mapear cada org a una promesa individual de fetch
-            const fetchPromises = needsFetch.map(async (org) => {
-                const orgName = getOrgNameLabel(org);
-                if (!orgName) {
-                    if (loadId === currentLoadId) {
-                        uuidsBeingFetched.delete(org.uuid);
-                    }
-                    return;
+            try {
+                const uuidsToFetch = needsFetch.map(org => org.uuid);
+                const res = await apiFetch('/external-organizations/stats/suggest-metadata/batch', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ uuids: uuidsToFetch }),
+                    signal
+                });
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const results = await res.json();
+
+                const resultsByUuid = new Map();
+                if (Array.isArray(results)) {
+                    results.forEach(item => {
+                        if (item && item.uuid) {
+                            resultsByUuid.set(item.uuid, item);
+                        }
+                    });
                 }
 
-                try {
-                    const res = await apiFetch('/external-organizations/stats/suggest-metadata?name=' + encodeURIComponent(orgName), { signal });
-                    if (!res.ok) throw new Error('HTTP ' + res.status);
-                    const data = await res.json();
-
+                needsFetch.forEach(org => {
+                    const data = resultsByUuid.get(org.uuid) || {};
                     const key = getOrgSuggestionKey(org);
+                    if (!key) return;
+
                     const bundle = {
                         country: {
                             country: String(data.suggestedCountry || '').trim(),
@@ -582,14 +591,16 @@
                     countrySuggestionCache.set(key, bundle.country);
                     typeSuggestionCache.set(key, bundle.type);
                     fundingSuggestionCache.set(key, bundle.funding);
-                } catch (err) {
-                    if (err.name === 'AbortError') return;
-                    console.error('Error preloading suggestions for org:', org, err);
-                } finally {
-                    if (loadId === currentLoadId) {
-                        // Quitar este UUID de fetching y actualizar de inmediato el DOM para este registro
-                        uuidsBeingFetched.delete(org.uuid);
+                });
+            } catch (err) {
+                if (err.name === 'AbortError') return;
+                console.error('Error preloading suggestions in batch:', err);
+            } finally {
+                if (loadId === currentLoadId) {
+                    needsFetch.forEach(org => uuidsBeingFetched.delete(org.uuid));
 
+                    // Actualizar de inmediato el DOM para todas las filas
+                    needsFetch.forEach(org => {
                         const rowEl = document.querySelector(`tr[data-uuid="${org.uuid}"]`);
                         if (rowEl) {
                             const typeCell = rowEl.querySelector('td[data-cell="suggested-type"]');
@@ -600,17 +611,11 @@
                             if (fundingCell) fundingCell.innerHTML = getSuggestedFundingHtml(org);
                             if (countryCell) countryCell.innerHTML = getSuggestedCountryHtml(org);
                         }
-                    }
+                    });
+
+                    // Render final completo para garantizar que todos los datos cacheados se muestran
+                    renderTable(targets);
                 }
-            });
-
-            // Esperar a que todas las llamadas concurrentes finalicen
-            await Promise.allSettled(fetchPromises);
-
-            // Render final completo para garantizar que todos los datos cacheados se muestran,
-            // incluso si algún update individual de DOM no encontró la fila a tiempo.
-            if (loadId === currentLoadId) {
-                renderTable(targets);
             }
         }
 

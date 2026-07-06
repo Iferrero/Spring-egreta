@@ -146,7 +146,7 @@ public class AwardService {
         boolean exists = list.stream().anyMatch(d -> "Prestació de Serveis".equals(d.getString("tipus")));
         if (!exists) {
             list.add(new Document()
-                    .append("categoria", "Ajudes no competitives nacionals")
+                    .append("categoria", "Ajudes no competitives")
                     .append("tipus", "Prestació de Serveis"));
         }
         return list;
@@ -283,7 +283,7 @@ public class AwardService {
                         .append("anyo", year)
                         .append("titulo", titol)
                         .append("tipoAward", "Prestació de Serveis")
-                        .append("categoria", "Ajudes no competitives nacionals")
+                        .append("categoria", "Ajudes no competitives")
                         .append("awardHoldersUuids", holdersUuids)
                         .append("institutionalPart", Math.round(importVal * 100.0) / 100.0));
             });
@@ -536,7 +536,7 @@ public class AwardService {
             double totalImport = ids.values().stream().mapToDouble(Double::doubleValue).sum();
             result.add(new Document()
                     .append("anio", year)
-                    .append("categoria", "Ajudes no competitives nacionals")
+                    .append("categoria", "Ajudes no competitives")
                     .append("tipo", "Prestació de Serveis")
                     .append("ajuts", ids.size())
                     .append("import", Math.round(totalImport * 100.0) / 100.0)

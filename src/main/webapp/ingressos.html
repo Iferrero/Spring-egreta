@@ -64,8 +64,8 @@
         }
         .glass-panel {
             background: rgba(255, 255, 255, 0.85);
-            backdrop-filter: blur(12px);
             -webkit-backdrop-filter: blur(12px);
+            backdrop-filter: blur(12px);
         }
         .animate-fade-in {
             animation: fadeIn 0.5s ease-out forwards;
@@ -175,19 +175,17 @@
             <!-- Awards Tipologies Selector -->
             <div class="flex flex-col gap-2 flex-grow border-t lg:border-t-0 lg:border-l border-slate-200 pt-4 lg:pt-0 lg:pl-6">
                 <label class="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
-                    <i class="fa-solid fa-trophy text-amber-500"></i> Tipologies d'Ajuts (Mongo)
+                    <i class="fa-solid fa-trophy text-amber-500"></i> Tipologies d'Ajuts (Egreta)
                 </label>
                 <div class="relative z-30">
                     <button
                         id="tipologiesDropdownBtn"
                         type="button"
-                        class="w-full border border-slate-200 rounded-2xl px-4 py-3 text-sm bg-white text-left flex items-center justify-between font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-amber-400 focus:border-amber-400 transition-all cursor-pointer shadow-sm"
+                        class="w-full min-w-0 max-w-full border border-slate-200 rounded-2xl px-4 py-3 text-sm bg-white text-left flex items-center justify-between font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-amber-400 focus:border-amber-400 transition-all cursor-pointer shadow-sm"
                     >
-                        <span id="tipologiesDropdownLabel" class="w-0 flex-1 truncate text-slate-400 italic">Cap tipologia seleccionada</span>
+                        <span id="tipologiesDropdownLabel" class="w-0 min-w-0 flex-1 truncate text-slate-400 italic">Cap tipologia seleccionada</span>
                         <i class="fa fa-chevron-down ml-2 text-slate-400"></i>
                     </button>
-                    <div id="tipologiesTooltip" class="absolute left-0 top-full mt-1 z-[10000] hidden bg-slate-800 text-white text-[11px] leading-relaxed rounded-xl px-3 py-2 shadow-xl pointer-events-none max-w-xs whitespace-pre-line border border-slate-700"></div>
-
                     <div
                         id="tipologiesDropdownMenu"
                         class="absolute z-[9999] left-0 right-0 mt-2 bg-white border border-slate-200 rounded-2xl shadow-xl max-h-96 overflow-hidden hidden flex flex-col"
@@ -199,7 +197,7 @@
                                 <input
                                     id="tipologiesSearchInput"
                                     type="text"
-                                    placeholder="Cerca tipologies..."
+                                    placeholder="Cerca ..."
                                     class="w-full pl-8 pr-4 py-2 bg-white border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-amber-400 text-xs font-semibold text-slate-700 shadow-inner"
                                 >
                             </div>
@@ -439,6 +437,7 @@
             let fellowshipCallTypes = [];      // available fellowship call types from API
             let selectedCallTypes = {};        // mapping: tipus -> array of selected callType strings
             let internationalCallTypes = [];   // available international call types from API
+            let availableIncorporacioCalls = []; // available incorporacio call types from API
             let selectedProjectPrograms = {};  // mapping: tipus -> array of selected program strings
             let researchProjectPrograms = [];  // available research project programs from API
             let tipologiesData = [];           // raw API: [{categoria, tipus}]
@@ -494,16 +493,6 @@
             const tipologiesSearch = document.getElementById('tipologiesSearchInput');
             const btnDeselectAllTipologies = document.getElementById('btnDeselectAllTipologies');
             const tipologiesChipsContainer = document.getElementById('selectedTipologiesChipsContainer');
-            const tipologiesTooltip = document.getElementById('tipologiesTooltip');
-
-            tipologiesBtn.addEventListener('mouseenter', () => {
-                if (tipologiesTooltip.textContent.trim()) {
-                    tipologiesTooltip.classList.remove('hidden');
-                }
-            });
-            tipologiesBtn.addEventListener('mouseleave', () => {
-                tipologiesTooltip.classList.add('hidden');
-            });
 
 // Initial selected concepts: load the 3 major categories
             const initialConcepts = [
@@ -846,7 +835,7 @@
                     renderTipologiesOptions('');
                     updateTipologiesLabel();
                     renderTipologiesChips();
-                    renderChart();
+                    updateUI();
                 });
 }
 
@@ -878,6 +867,12 @@
                         return researchProjectPrograms.some(prog => 
                             prog.toLowerCase().includes(query) &&
                             awardsImportData.some(d => d.anyo >= start && d.anyo <= end && isResearchProjectes(d.tipus) && d.callType === prog && (d.totalImport > 0 || d.count > 0) && (!excludeDeclined || !d.isDeclined) && (selectedOrgScope === 'all' || d.orgScope === selectedOrgScope))
+                        );
+                    }
+                    if (isIncorporacioTipus(tipus)) {
+                        return availableIncorporacioCalls.some(call => 
+                            call.toLowerCase().includes(query) &&
+                            awardsImportData.some(d => d.anyo >= start && d.anyo <= end && isIncorporacioTipus(d.tipus) && d.callType === call && (d.totalImport > 0 || d.count > 0) && (!excludeDeclined || !d.isDeclined) && (selectedOrgScope === 'all' || d.orgScope === selectedOrgScope))
                         );
                     }
                     return false;
@@ -957,6 +952,10 @@
                     awardsImportData.some(d => d.anyo >= start && d.anyo <= end && isProjectesInternacionals(d.tipus) && d.callType === call && (d.totalImport > 0 || d.count > 0) && (!excludeDeclined || !d.isDeclined) && (selectedOrgScope === 'all' || d.orgScope === selectedOrgScope))
                 );
 
+                const availableIncorporacioCallsFiltered = availableIncorporacioCalls.filter(call =>
+                    awardsImportData.some(d => d.anyo >= start && d.anyo <= end && isIncorporacioTipus(d.tipus) && d.callType === call && (d.totalImport > 0 || d.count > 0) && (!excludeDeclined || !d.isDeclined) && (selectedOrgScope === 'all' || d.orgScope === selectedOrgScope))
+                );
+
                 const availablePrograms = researchProjectPrograms.filter(prog =>
                     awardsImportData.some(d => d.anyo >= start && d.anyo <= end && isResearchProjectes(d.tipus) && d.callType === prog && (d.totalImport > 0 || d.count > 0) && (!excludeDeclined || !d.isDeclined) && (selectedOrgScope === 'all' || d.orgScope === selectedOrgScope))
                 );
@@ -984,6 +983,14 @@
 
                         row.appendChild(checkbox);
                         row.appendChild(textSpan);
+
+                        const has3rdLevel = isBecaTipus(tipus) || isProjectesInternacionals(tipus) || isResearchProjectes(tipus) || isIncorporacioTipus(tipus);
+                        if (has3rdLevel) {
+                            const indicator = document.createElement('i');
+                            indicator.className = `fa-solid ${isChecked ? 'fa-chevron-down' : 'fa-chevron-right'} text-[10px] text-amber-500/70 transition-transform duration-200 ml-1`;
+                            row.appendChild(indicator);
+                        }
+
                         row.addEventListener('click', (e) => {
                             e.stopPropagation();
                             toggleTipologia(tipus);
@@ -996,6 +1003,40 @@
                             subPanel.className = 'pl-10 pr-4 py-1.5 bg-amber-50/20 border-b border-amber-100/40 flex flex-col gap-2';
 
                             const matchedCalls = availableFellowshipCalls.filter(call => !searchFilter || call.toLowerCase().includes(searchFilter));
+
+                            matchedCalls.forEach(call => {
+                                const activeCalls = selectedCallTypes[tipus] || [];
+                                const isCallChecked = activeCalls.includes(call);
+
+                                const callRow = document.createElement('div');
+                                callRow.className = 'flex items-center gap-2.5 py-1 hover:bg-amber-50/40 rounded px-2 cursor-pointer transition-colors';
+
+                                const callCheckbox = document.createElement('input');
+                                callCheckbox.type = 'checkbox';
+                                callCheckbox.checked = isCallChecked;
+                                callCheckbox.className = 'w-3.5 h-3.5 text-amber-500 border-slate-300 rounded focus:ring-amber-400 cursor-pointer';
+
+                                const callText = document.createElement('span');
+                                callText.className = 'text-[11px] leading-none text-slate-500 font-medium';
+                                callText.textContent = call;
+
+                                callRow.appendChild(callCheckbox);
+                                callRow.appendChild(callText);
+                                callRow.addEventListener('click', (e) => {
+                                    e.stopPropagation();
+                                    toggleCallType(tipus, call);
+                                });
+                                subPanel.appendChild(callRow);
+                            });
+                            tipologiesList.appendChild(subPanel);
+                        }
+
+                        // Third-level incorporacio call types: visible only when this is checked
+                        if (isIncorporacioTipus(tipus) && isChecked && availableIncorporacioCallsFiltered.length > 0) {
+                            const subPanel = document.createElement('div');
+                            subPanel.className = 'pl-10 pr-4 py-1.5 bg-amber-50/20 border-b border-amber-100/40 flex flex-col gap-2';
+
+                            const matchedCalls = availableIncorporacioCallsFiltered.filter(call => !searchFilter || call.toLowerCase().includes(searchFilter));
 
                             matchedCalls.forEach(call => {
                                 const activeCalls = selectedCallTypes[tipus] || [];
@@ -1103,6 +1144,14 @@
                 return tipus === "Beques";
             }
 
+            function isIncorporacioTipus(tipus) {
+                return tipus === "Incorporació de Personal";
+            }
+
+            function isLevel3CallTypeTipus(tipus) {
+                return isBecaTipus(tipus) || isProjectesInternacionals(tipus) || isIncorporacioTipus(tipus);
+            }
+
             function isProjectesInternacionals(tipus) {
                 return tipus === "Projectes d'investigació Internacionals";
             }
@@ -1159,7 +1208,7 @@
             function updateTipologiesLabel() {
                 if (selectedTipologies.length === 0) {
                     tipologiesLabel.textContent = 'Cap tipologia seleccionada';
-                    tipologiesLabel.className = 'truncate text-slate-400 italic';
+                    tipologiesLabel.className = 'w-0 min-w-0 flex-1 truncate text-slate-400 italic';
                     return;
                 }
 
@@ -1170,7 +1219,7 @@
 
                 selectedTipologies.forEach(tipus => {
                     const activeCalls = (selectedCallTypes[tipus] || []).filter(call =>
-                        awardsImportData.some(d => d.anyo >= start && d.anyo <= end && (isBecaTipus(d.tipus) || isProjectesInternacionals(d.tipus)) && d.callType === call && (d.totalImport > 0 || d.count > 0) && (!excludeDeclined || !d.isDeclined) && (selectedOrgScope === 'all' || d.orgScope === selectedOrgScope))
+                        awardsImportData.some(d => d.anyo >= start && d.anyo <= end && isLevel3CallTypeTipus(d.tipus) && d.callType === call && (d.totalImport > 0 || d.count > 0) && (!excludeDeclined || !d.isDeclined) && (selectedOrgScope === 'all' || d.orgScope === selectedOrgScope))
                     );
                     const activeProgs = (selectedProjectPrograms[tipus] || []).filter(prog =>
                         awardsImportData.some(d => d.anyo >= start && d.anyo <= end && isResearchProjectes(d.tipus) && d.callType === prog && (d.totalImport > 0 || d.count > 0) && (!excludeDeclined || !d.isDeclined) && (selectedOrgScope === 'all' || d.orgScope === selectedOrgScope))
@@ -1186,19 +1235,11 @@
                     }
                 });
 
-                // Update tooltip content
-                if (totalChips > 1) {
-                    tipologiesTooltip.textContent = chipLabels.join('\n');
-                } else {
-                    tipologiesTooltip.textContent = '';
-                    tipologiesTooltip.classList.add('hidden');
-                }
-
                 if (totalChips === 1) {
                     // Find the single chip label
                     const tipus = selectedTipologies[0];
                     const activeCalls = (selectedCallTypes[tipus] || []).filter(call =>
-                        awardsImportData.some(d => d.anyo >= start && d.anyo <= end && (isBecaTipus(d.tipus) || isProjectesInternacionals(d.tipus)) && d.callType === call && (d.totalImport > 0 || d.count > 0) && (!excludeDeclined || !d.isDeclined) && (selectedOrgScope === 'all' || d.orgScope === selectedOrgScope))
+                        awardsImportData.some(d => d.anyo >= start && d.anyo <= end && isLevel3CallTypeTipus(d.tipus) && d.callType === call && (d.totalImport > 0 || d.count > 0) && (!excludeDeclined || !d.isDeclined) && (selectedOrgScope === 'all' || d.orgScope === selectedOrgScope))
                     );
                     const activeProgs = (selectedProjectPrograms[tipus] || []).filter(prog =>
                         awardsImportData.some(d => d.anyo >= start && d.anyo <= end && isResearchProjectes(d.tipus) && d.callType === prog && (d.totalImport > 0 || d.count > 0) && (!excludeDeclined || !d.isDeclined) && (selectedOrgScope === 'all' || d.orgScope === selectedOrgScope))
@@ -1213,7 +1254,7 @@
                 } else {
                     tipologiesLabel.textContent = `${totalChips} tipologies seleccionades`;
                 }
-                tipologiesLabel.className = 'truncate text-amber-700 font-semibold';
+                tipologiesLabel.className = 'w-0 min-w-0 flex-1 truncate text-amber-700 font-semibold';
             }
 
             // ─── Load awards data from API ─────────────────────────────────────
@@ -1237,6 +1278,12 @@
                     const callRes = await fetch('/api/awards/stats/international-call-types');
                     if (callRes.ok) {
                         internationalCallTypes = await callRes.json();
+                    }
+
+                    // Load incorporacio call types list
+                    const incRes = await fetch('/api/awards/stats/incorporacio-call-types');
+                    if (incRes.ok) {
+                        availableIncorporacioCalls = await incRes.json();
                     }
 
                     // Load research project programs list
@@ -1534,7 +1581,7 @@ function renderDropdownOptions() {
                 selectedTipologies.forEach(tipus => {
                     // Resolve active call types for this tipus
                     let activeCalls = (selectedCallTypes[tipus] || []).filter(call =>
-                        awardsImportData.some(d => d.anyo >= start && d.anyo <= end && (isBecaTipus(d.tipus) || isProjectesInternacionals(d.tipus)) && d.callType === call && (d.totalImport > 0 || d.count > 0) && (!excludeDeclined || !d.isDeclined) && (selectedOrgScope === 'all' || d.orgScope === selectedOrgScope))
+                        awardsImportData.some(d => d.anyo >= start && d.anyo <= end && isLevel3CallTypeTipus(d.tipus) && d.callType === call && (d.totalImport > 0 || d.count > 0) && (!excludeDeclined || !d.isDeclined) && (selectedOrgScope === 'all' || d.orgScope === selectedOrgScope))
                     );
                     let activeProgs = (selectedProjectPrograms[tipus] || []).filter(prog =>
                         awardsImportData.some(d => d.anyo >= start && d.anyo <= end && isResearchProjectes(d.tipus) && d.callType === prog && (d.totalImport > 0 || d.count > 0) && (!excludeDeclined || !d.isDeclined) && (selectedOrgScope === 'all' || d.orgScope === selectedOrgScope))
@@ -1769,7 +1816,7 @@ function formatEuro(val) {
                     // Check if there are active call type filters for this tipus (Beques and International Call Types)
                     const activeCalls = selectedCallTypes[tipus] || [];
                     let filteredCalls = activeCalls.filter(call =>
-                        awardsImportData.some(d => d.anyo >= start && d.anyo <= end && (isBecaTipus(d.tipus) || isProjectesInternacionals(d.tipus)) && d.callType === call && (d.totalImport > 0 || d.count > 0) && (!excludeDeclined || !d.isDeclined) && (selectedOrgScope === 'all' || d.orgScope === selectedOrgScope))
+                        awardsImportData.some(d => d.anyo >= start && d.anyo <= end && isLevel3CallTypeTipus(d.tipus) && d.callType === call && (d.totalImport > 0 || d.count > 0) && (!excludeDeclined || !d.isDeclined) && (selectedOrgScope === 'all' || d.orgScope === selectedOrgScope))
                     );
                     if (filteredCalls.length > 0) {
                         filteredAwards = filteredAwards.filter(d => filteredCalls.includes(d.callType));
@@ -1894,37 +1941,39 @@ function formatEuro(val) {
                     tableBody.appendChild(tr);
                 });
 
-                // Inject footer total row
+                // Inject footer total row only when the table contains only Excel concepts
+                // and does not mix with Mongo/Egreta tipologies.
                 tableFootRow.innerHTML = '';
-                
-                const footLabel = document.createElement('td');
-                footLabel.className = 'px-6 py-4 text-left';
-                footLabel.textContent = 'TOTAL SELECCIONAT';
-                tableFootRow.appendChild(footLabel);
+                if (tipologiesItems.length === 0) {
+                    const footLabel = document.createElement('td');
+                    footLabel.className = 'px-6 py-4 text-left';
+                    footLabel.textContent = 'TOTAL SELECCIONAT';
+                    tableFootRow.appendChild(footLabel);
 
-                for (let y = start; y <= end; y++) {
-                    const totalVal = colTotals[y];
-                    const footVal = document.createElement('td');
-                    footVal.className = 'px-4 py-4 text-right font-mono text-sm';
-                    if (y === 2026) {
-                        footVal.className += ' bg-emerald-50/10 border-r border-slate-100 text-emerald-800';
-                    } else if (y === 2027) {
-                        footVal.className += ' bg-emerald-50/20 border-r border-slate-100 text-emerald-900 font-bold';
+                    for (let y = start; y <= end; y++) {
+                        const totalVal = colTotals[y];
+                        const footVal = document.createElement('td');
+                        footVal.className = 'px-4 py-4 text-right font-mono text-sm';
+                        if (y === 2026) {
+                            footVal.className += ' bg-emerald-50/10 border-r border-slate-100 text-emerald-800';
+                        } else if (y === 2027) {
+                            footVal.className += ' bg-emerald-50/20 border-r border-slate-100 text-emerald-900 font-bold';
+                        }
+                        footVal.textContent = formatEuro(totalVal);
+                        tableFootRow.appendChild(footVal);
                     }
-                    footVal.textContent = formatEuro(totalVal);
-                    tableFootRow.appendChild(footVal);
-                }
 
-                const tStart = colTotals[start];
-                const tEnd = colTotals[end];
-                let totalGrowth = 0;
-                if (tStart > 0) {
-                    totalGrowth = ((tEnd - tStart) / tStart) * 100;
+                    const tStart = colTotals[start];
+                    const tEnd = colTotals[end];
+                    let totalGrowth = 0;
+                    if (tStart > 0) {
+                        totalGrowth = ((tEnd - tStart) / tStart) * 100;
+                    }
+                    const footGrowth = document.createElement('td');
+                    footGrowth.className = `px-6 py-4 text-right font-mono text-sm ${totalGrowth >= 0 ? 'text-emerald-800' : 'text-rose-700'}`;
+                    footGrowth.textContent = tStart > 0 ? `${totalGrowth >= 0 ? '+' : ''}${totalGrowth.toFixed(1)}%` : '-';
+                    tableFootRow.appendChild(footGrowth);
                 }
-                const footGrowth = document.createElement('td');
-                footGrowth.className = `px-6 py-4 text-right font-mono text-sm ${totalGrowth >= 0 ? 'text-emerald-800' : 'text-rose-700'}`;
-                footGrowth.textContent = tStart > 0 ? `${totalGrowth >= 0 ? '+' : ''}${totalGrowth.toFixed(1)}%` : '-';
-                tableFootRow.appendChild(footGrowth);
             }
 
             // Apache ECharts functions
@@ -1941,10 +1990,76 @@ function formatEuro(val) {
             }            function renderChart() {
                 if (!chartInstance) return;
 
-                if (seleccionats.length === 0) {
+                const { start, end } = getSelectedYearRange();
+
+                const selectedItems = INGRESSOS_DATA.filter(item => seleccionats.includes(item.concept));
+                const tipologiesItems = selectedTipologies.map(tipus => {
+                    let filteredAwards = [];
+                    if (tipus === 'Total Ajuts') {
+                        filteredAwards = awardsImportData;
+                    } else if (tipus.startsWith('Total ')) {
+                        const catName = tipus.substring(6);
+                        const tipusInCat = tipologiesData
+                            .filter(d => (d.categoria || 'Sense categoria') === catName)
+                            .map(d => d.tipus);
+                        filteredAwards = awardsImportData.filter(d => tipusInCat.includes(d.tipus));
+                    } else {
+                        filteredAwards = awardsImportData.filter(d => d.tipus === tipus);
+                    }
+
+                    if (excludeDeclined) {
+                        filteredAwards = filteredAwards.filter(d => !d.isDeclined);
+                    }
+
+                    if (selectedOrgScope !== 'all') {
+                        filteredAwards = filteredAwards.filter(d => d.orgScope === selectedOrgScope);
+                    }
+
+                    const activeCalls = selectedCallTypes[tipus] || [];
+                    let filteredCalls = activeCalls.filter(call =>
+                        awardsImportData.some(d => d.anyo >= start && d.anyo <= end && isLevel3CallTypeTipus(d.tipus) && d.callType === call && (d.totalImport > 0 || d.count > 0) && (!excludeDeclined || !d.isDeclined) && (selectedOrgScope === 'all' || d.orgScope === selectedOrgScope))
+                    );
+                    if (filteredCalls.length > 0) {
+                        filteredAwards = filteredAwards.filter(d => filteredCalls.includes(d.callType));
+                    }
+
+                    const activeProgs = selectedProjectPrograms[tipus] || [];
+                    let filteredProgs = activeProgs.filter(prog =>
+                        awardsImportData.some(d => d.anyo >= start && d.anyo <= end && isResearchProjectes(d.tipus) && d.callType === prog && (d.totalImport > 0 || d.count > 0) && (!excludeDeclined || !d.isDeclined) && (selectedOrgScope === 'all' || d.orgScope === selectedOrgScope))
+                    );
+                    if (filteredProgs.length > 0) {
+                        filteredAwards = filteredAwards.filter(d => filteredProgs.includes(d.callType));
+                    }
+
+                    const values = {};
+                    for (let y = 2018; y <= 2025; y++) {
+                        values[y.toString()] = 0;
+                    }
+                    filteredAwards.forEach(d => {
+                        if (d.anyo >= 2018 && d.anyo <= 2025) {
+                            values[d.anyo.toString()] = (values[d.anyo.toString()] || 0) + (d.totalImport || 0);
+                        }
+                    });
+
+                    let label = tipus;
+                    if (filteredCalls.length > 0) {
+                        label = `${tipus} (${filteredCalls.join(', ')})`;
+                    } else if (filteredProgs.length > 0) {
+                        label = `${tipus} (${filteredProgs.join(', ')})`;
+                    }
+
+                    return {
+                        concept: label,
+                        values: values,
+                        isAward: true
+                    };
+                });
+
+                const allItems = [...selectedItems, ...tipologiesItems];
+                if (allItems.length === 0) {
                     chartInstance.clear();
                     chartInstance.showLoading({
-                        text: 'No hi ha cap concepte seleccionat',
+                        text: 'No hi ha cap concepte ni tipologia seleccionada',
                         showSpinner: false,
                         textColor: '#7e8a9a',
                         maskColor: 'rgba(255, 255, 255, 0.8)'
@@ -1952,15 +2067,13 @@ function formatEuro(val) {
                     return;
                 }
 
-                chartInstance.hideLoading();                const { start, end } = getSelectedYearRange();
+                chartInstance.hideLoading();
                 const chartYears = [];
                 for (let y = start; y <= end; y++) {
                     if (y === 2026) chartYears.push('2026 (P)');
                     else if (y === 2027) chartYears.push('2027 (P)');
                     else chartYears.push(y.toString());
                 }
-
-                const selectedItems = INGRESSOS_DATA.filter(item => seleccionats.includes(item.concept));
 
                 // Color Palette mapping
                 const colors = [
@@ -2238,7 +2351,7 @@ function formatEuro(val) {
 
                     const activeCalls = selectedCallTypes[tipus] || [];
                     let filteredCalls = activeCalls.filter(call =>
-                        awardsImportData.some(d => d.anyo >= start && d.anyo <= end && (isBecaTipus(d.tipus) || isProjectesInternacionals(d.tipus)) && d.callType === call && (d.totalImport > 0 || d.count > 0) && (!excludeDeclined || !d.isDeclined) && (selectedOrgScope === 'all' || d.orgScope === selectedOrgScope))
+                        awardsImportData.some(d => d.anyo >= start && d.anyo <= end && isLevel3CallTypeTipus(d.tipus) && d.callType === call && (d.totalImport > 0 || d.count > 0) && (!excludeDeclined || !d.isDeclined) && (selectedOrgScope === 'all' || d.orgScope === selectedOrgScope))
                     );
                     if (filteredCalls.length > 0) {
                         filteredAwards = filteredAwards.filter(d => filteredCalls.includes(d.callType));
@@ -2340,22 +2453,24 @@ function formatEuro(val) {
                     csvContent += `${rowName};${rowValues.join(';')};${varPctStr}\r\n`;
                 });
 
-                // Totals Row
-                const totalRowName = '"TOTAL SELECCIONAT"';
-                const totalRowValues = [];
-                for (let y = start; y <= end; y++) {
-                    totalRowValues.push(colTotals[y].toString().replace('.', ','));
-                }
-                
-                const tStart = colTotals[start];
-                const tEnd = colTotals[end];
-                let totalVarPctStr = '-';
-                if (tStart > 0) {
-                    const totalVarPct = ((tEnd - tStart) / tStart) * 100;
-                    totalVarPctStr = `"${(totalVarPct >= 0 ? '+' : '') + totalVarPct.toFixed(2).replace('.', ',')}%"`;
-                }
+                // Totals Row only when there are no tipologies mixed in
+                if (selectedTipologies.length === 0) {
+                    const totalRowName = '"TOTAL SELECCIONAT"';
+                    const totalRowValues = [];
+                    for (let y = start; y <= end; y++) {
+                        totalRowValues.push(colTotals[y].toString().replace('.', ','));
+                    }
+                    
+                    const tStart = colTotals[start];
+                    const tEnd = colTotals[end];
+                    let totalVarPctStr = '-';
+                    if (tStart > 0) {
+                        const totalVarPct = ((tEnd - tStart) / tStart) * 100;
+                        totalVarPctStr = `"${(totalVarPct >= 0 ? '+' : '') + totalVarPct.toFixed(2).replace('.', ',')}%"`;
+                    }
 
-                csvContent += `${totalRowName};${totalRowValues.join(';')};${totalVarPctStr}\r\n`;
+                    csvContent += `${totalRowName};${totalRowValues.join(';')};${totalVarPctStr}\r\n`;
+                }
 
                 // Trigger file download
                 const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });

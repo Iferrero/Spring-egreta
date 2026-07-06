@@ -275,7 +275,7 @@ public class StrategicIndicatorsController {
         double total = 0;
         for (Document doc : powerTableRows) {
             String cat = doc.getString("categoria");
-            if (cat != null && (cat.startsWith("Prestaci") || cat.equals("Ajudes no competitives nacionals"))) {
+            if (cat != null && (cat.startsWith("Prestaci") || cat.equals("Ajudes no competitives"))) {
                 Object amountObj = doc.get("import");
                 if (amountObj instanceof Number) {
                     total += ((Number) amountObj).doubleValue();

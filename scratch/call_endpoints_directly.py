@@ -35,7 +35,7 @@ for r in powertable_data:
             by_year[y]["estatals"] += imp
         elif "internacionals" in cat:
             by_year[y]["internacionals"] += imp
-    elif cat.startswith("Prestaci") or cat == "Ajudes no competitives nacionals":
+    elif cat.startswith("Prestaci") or cat == "Ajudes no competitives":
         by_year[y]["no_competitiva"] += imp
 
 for y in sorted(by_year.keys()):
