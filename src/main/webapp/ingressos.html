@@ -1264,6 +1264,14 @@
                     const tipRes = await fetch('/api/awards/stats/tipus-per-categoria');
                     if (tipRes.ok) {
                         tipologiesData = await tipRes.json();
+                        // Add virtual prefixed options grouped under 'Específics'
+                        const prefixes = ["PK", "EA", "PO", "PH", "PI", "DR", "BJ", "AG", "AB", "IM", "IB", "YA", "PV", "PZ"];
+                        prefixes.forEach(prefix => {
+                            tipologiesData.push({
+                                categoria: "Específics (Centre de cost)",
+                                tipus: "Ajuts " + prefix
+                            });
+                        });
                     } else {
                         tipologiesList.innerHTML = `<div class="px-4 py-6 text-center text-rose-400 text-xs italic">Error carregant tipologies (${tipRes.status})</div>`;
                     }
@@ -1298,6 +1306,32 @@
                     const impRes = await fetch('/api/awards/stats/import-per-tipus-anio');
                     if (impRes.ok) {
                         awardsImportData = await impRes.json();
+
+                        // Load Prefixed awards from Egreta and push as "Ajuts [Prefix]"
+                        try {
+                            const prefRes = await fetch('/api/awards/stats/prefixed-awards');
+                            if (prefRes.ok) {
+                                const prefAwards = await prefRes.json();
+                                const prefixes = ["PK", "EA", "PO", "PH", "PI", "DR", "BJ", "AG", "AB", "IM", "IB", "YA", "PV", "PZ"];
+                                prefAwards.forEach(award => {
+                                    const code = (award.costCode || "").toUpperCase();
+                                    const matchedPrefix = prefixes.find(p => code.startsWith(p));
+                                    if (matchedPrefix) {
+                                        awardsImportData.push({
+                                            tipus: "Ajuts " + matchedPrefix,
+                                            anyo: award.anyo,
+                                            totalImport: award.totalImport,
+                                            count: 1,
+                                            orgScope: award.orgScope,
+                                            isDeclined: award.isDeclined
+                                        });
+                                    }
+                                });
+                            }
+                        } catch (prefErr) {
+                            console.error('[Awards] Error loading prefixed awards:', prefErr);
+                        }
+
                         awardsDataLoaded = true;
                         updateUI();
                     }

@@ -1,0 +1,1348 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Resum d'Indicadors de Recerca i Transferència | UAB</title>
+    <!-- Google Fonts: Inter & Outfit -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Apache ECharts -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <!-- noUiSlider CSS & JS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.7.1/nouislider.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.7.1/nouislider.min.js"></script>
+    
+    <script src="config.js"></script>
+    <script src="uab-brand.js" defer></script>
+    <link rel="stylesheet" href="uab-theme.css">
+
+    <style>
+        /* Custom noUiSlider Styling to match UAB Emerald theme */
+        .noUi-connect {
+            background: #008037 !important; /* UAB Green */
+        }
+        .noUi-horizontal {
+            height: 6px !important;
+            border-radius: 3px !important;
+            border: none !important;
+            background: #e2e8f0 !important; /* slate-200 */
+            box-shadow: inset 0 1px 2px rgba(0,0,0,0.1) !important;
+        }
+        .noUi-handle {
+            width: 16px !important;
+            height: 16px !important;
+            right: -8px !important;
+            top: -5px !important;
+            border-radius: 50% !important;
+            border: 2px solid #ffffff !important;
+            background: #008037 !important; /* UAB Green */
+            box-shadow: 0 2px 4px rgba(0,0,0,0.15) !important;
+            cursor: pointer !important;
+            transition: transform 0.1s, background-color 0.1s !important;
+        }
+        .noUi-handle:hover {
+            transform: scale(1.15);
+            background: #004d21 !important; /* Darker UAB Green */
+        }
+        .noUi-handle:before, .noUi-handle:after {
+            display: none !important; /* Hide default lines inside handles */
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        h1, h2, h3, .font-display {
+            font-family: 'Outfit', sans-serif;
+        }
+        .premium-shadow {
+            box-shadow: 0 4px 20px -2px rgba(148, 163, 184, 0.12), 0 2px 8px -1px rgba(148, 163, 184, 0.08);
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.85);
+            -webkit-backdrop-filter: blur(12px);
+            backdrop-filter: blur(12px);
+        }
+        .animate-fade-in {
+            animation: fadeIn 0.5s ease-out forwards;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        /* Custom scrollbar for multi-select dropdown */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #f1f2f4;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #c9d1dc;
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #a9b1bc;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen text-slate-800 flex flex-col">
+
+    <!-- Header for uab-brand.js -->
+    <header class="hidden">
+        <h1>Resum d'Indicadors de Recerca i Transferència</h1>
+        <p>Evolució anual d'indicadors de transferència, patents, R&D i noves EBTs (2017-2025)</p>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-grow w-[95%] max-w-[95%] mx-auto py-8 flex flex-col gap-8 animate-fade-in">
+        
+        <!-- Page Title & Navigation -->
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+                <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight font-display">Resum d'Indicadors de Recerca i Transferència</h1>
+                <p class="text-slate-500 mt-1">Dades històriques d'indicadors de transferència, patents, valorització i empreses derivades.</p>
+            </div>
+            <div class="flex items-center gap-2">
+                <a href="index.html" class="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-slate-600 hover:text-emerald-700 bg-white border border-slate-200 rounded-2xl transition-all shadow-sm active:scale-95">
+                    <i class="fa-solid fa-house"></i>
+                    <span>Tornar a l'Inici</span>
+                </a>
+            </div>
+        </div>
+
+        <!-- Filter Panel -->
+        <section class="glass-panel border border-slate-200 rounded-3xl p-6 premium-shadow flex flex-col lg:flex-row gap-6 justify-between items-stretch lg:items-end">
+            <!-- Concept Selector -->
+            <div class="flex flex-col gap-2 flex-grow">
+                <label class="text-xs font-bold text-slate-500 uppercase tracking-wider">Indicadors Clau (Selecció Múltiple)</label>
+                <div class="relative z-30">
+                    <button
+                        id="conceptsDropdownBtn"
+                        type="button"
+                        class="w-full border border-slate-200 rounded-2xl px-4 py-3 text-sm bg-white text-left flex items-center justify-between font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all cursor-pointer shadow-sm"
+                    >
+                        <span id="conceptsDropdownLabel" class="w-0 flex-1 truncate">Carregant indicadors...</span>
+                        <i class="fa fa-chevron-down ml-2 text-slate-400"></i>
+                    </button>
+                    
+                    <div
+                        id="conceptsDropdownMenu"
+                        class="absolute z-[9999] left-0 right-0 mt-2 bg-white border border-slate-200 rounded-2xl shadow-xl max-h-96 overflow-hidden hidden flex flex-col"
+                    >
+                        <!-- Dropdown Search -->
+                        <div class="p-3 border-b border-slate-100 bg-slate-50/50 sticky top-0 z-10 flex gap-2">
+                            <div class="relative flex-grow">
+                                <i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-slate-400 text-xs"></i>
+                                <input
+                                    id="conceptsSearchInput"
+                                    type="text"
+                                    placeholder="Cerca indicadors..."
+                                    class="w-full pl-8 pr-4 py-2 bg-white border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500 text-xs font-semibold text-slate-700 shadow-inner"
+                                >
+                            </div>
+                            <button id="btnDeselectAll" type="button" class="text-[10px] font-bold text-slate-500 hover:text-slate-800 bg-slate-200 hover:bg-slate-300 px-2 py-1 rounded-lg transition-colors border border-slate-300">Buida</button>
+                        </div>
+                        
+                        <!-- Grouped List -->
+                        <div id="conceptsDropdownList" class="overflow-y-auto max-h-64 flex-1 custom-scrollbar text-xs">
+                            <!-- Populated Dynamically -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Filtres Ajuts PK -->
+            <div class="flex flex-col gap-2 border-t lg:border-t-0 lg:border-l border-slate-200 pt-4 lg:pt-0 lg:pl-6 min-w-[200px]">
+                <label class="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                    <i class="fa-solid fa-sliders text-emerald-600"></i> Filtres Ajuts PK
+                </label>
+                <div class="flex flex-col gap-3 mt-1">
+                    <label class="relative inline-flex items-center cursor-pointer select-none">
+                        <input id="chkExcludeDeclined" type="checkbox" class="sr-only peer">
+                        <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+                        <span class="ms-3 text-xs font-bold text-slate-600">Exclou Renunciats</span>
+                    </label>
+
+                    <div class="flex flex-col gap-1">
+                        <span class="text-[10px] font-bold text-slate-400 uppercase">Àmbit Organitzatiu</span>
+                        <select id="selectOrgScope" class="bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all cursor-pointer shadow-sm">
+                            <option value="all" selected>Tots els àmbits</option>
+                            <option value="UAB">Només UAB</option>
+                            <option value="Esfera">Només Esfera</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Presets -->
+            <div class="flex flex-col gap-2 min-w-[280px]">
+                <label class="text-xs font-bold text-slate-500 uppercase tracking-wider">Presets Ràpids</label>
+                <div class="grid grid-cols-2 gap-2">
+                    <button id="presetPatents" type="button" class="px-3 py-2.5 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 border border-slate-200 hover:border-emerald-300 rounded-xl transition-all shadow-sm active:scale-95 text-center">
+                        <i class="fa-solid fa-certificate mr-1"></i> Patents i Invencions
+                    </button>
+                    <button id="presetValoritzacio" type="button" class="px-3 py-2.5 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 border border-slate-200 hover:border-emerald-300 rounded-xl transition-all shadow-sm active:scale-95 text-center">
+                        <i class="fa-solid fa-flask mr-1"></i> Valorització i R&D
+                    </button>
+                    <button id="presetTransferencia" type="button" class="px-3 py-2.5 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 border border-slate-200 hover:border-emerald-300 rounded-xl transition-all shadow-sm active:scale-95 text-center">
+                        <i class="fa-solid fa-handshake-angle mr-1"></i> Transferència i EBTs
+                    </button>
+                    <button id="presetTots" type="button" class="px-3 py-2.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 border border-transparent rounded-xl transition-all shadow-sm active:scale-95 text-center">
+                        <i class="fa-solid fa-check-double mr-1"></i> Selecciona Tot
+                    </button>
+                </div>
+            </div>
+
+            <!-- Forecast Controls -->
+            <div class="flex flex-col gap-2 border-t lg:border-t-0 lg:border-l border-slate-200 pt-4 lg:pt-0 lg:pl-6 min-w-[240px]">
+                <label class="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                    <i class="fa-solid fa-wand-magic-sparkles text-emerald-600"></i> Previsions 2026-2027
+                </label>
+                <div class="flex flex-col gap-3 mt-1">
+                    <label class="relative inline-flex items-center cursor-pointer select-none">
+                        <input id="chkForecast" type="checkbox" class="sr-only peer">
+                        <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+                        <span class="ms-3 text-xs font-bold text-slate-600">Activa Previsions</span>
+                    </label>
+                    
+                    <div class="flex flex-col gap-1">
+                        <span class="text-[10px] font-bold text-slate-400 uppercase">Mètode de Previsió</span>
+                        <select id="selectForecastMethod" class="bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all cursor-pointer shadow-sm" disabled>
+                            <option value="linear" selected>Regressió Lineal (Ols)</option>
+                            <option value="cagr">Creixement Exponencial (CAGR)</option>
+                            <option value="absolute">Increment Lineal Mitjà</option>
+                        </select>
+                    </div>
+
+                    <div id="forecastMethodExplanation" class="text-[10px] text-slate-500 bg-slate-50 border border-slate-200/60 rounded-xl p-2.5 mt-1 hidden leading-relaxed transition-all duration-200 shadow-inner">
+                        <i class="fa-solid fa-circle-info text-emerald-600 mr-1.5 text-[11px]"></i>
+                        <span id="forecastExplanationText"></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Year Range Slider -->
+            <div class="flex flex-col gap-2 border-t lg:border-t-0 lg:border-l border-slate-200 pt-4 lg:pt-0 lg:pl-6 min-w-[260px]">
+                <div class="flex items-center justify-between mb-1">
+                    <label class="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                        <i class="fa-solid fa-calendar-days text-emerald-600"></i> Rang d'Anys
+                    </label>
+                    <span id="valorRango" class="text-xs font-bold text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-100/80">2017 — 2025</span>
+                </div>
+                <div class="px-2 py-4">
+                    <div id="sliderAnios" class="mt-1"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Selected Concept Chips -->
+        <div id="selectedChipsContainer" class="flex flex-wrap gap-2 -mt-4 empty:hidden">
+            <!-- Injected dynamically -->
+        </div>
+
+        <!-- KPI Grid -->
+        <section class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <!-- Card 1: Monetary Indicators Total -->
+            <div class="bg-gradient-to-br from-emerald-600 to-teal-700 rounded-3xl p-6 text-white premium-shadow flex flex-col justify-between h-40 group hover:-translate-y-1 hover:shadow-lg transition-all duration-300">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <span class="text-emerald-100 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
+                            <span id="kpiMonetaryTitle">Indicadors Monetaris (2025)</span>
+                            <i class="fa-solid fa-circle-info text-emerald-200 hover:text-white cursor-help transition-colors text-[10px]" title="Suma dels indicadors de tipus monetari seleccionats per a l'any seleccionat"></i>
+                        </span>
+                        <h2 class="text-3xl font-black mt-2 font-display" id="kpiMonetaryTotal">-</h2>
+                    </div>
+                    <div class="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-lg text-emerald-200 group-hover:bg-white/20 transition-colors">
+                        <i class="fa-solid fa-euro-sign"></i>
+                    </div>
+                </div>
+                <p id="kpiMonetaryDesc" class="text-emerald-100/80 text-[11px] leading-relaxed">Imports agregats de projectes, transferència i pressupostos en R&D actius.</p>
+            </div>
+
+            <!-- Card 2: Count-based Indicators Total -->
+            <div class="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-3xl p-6 text-white premium-shadow flex flex-col justify-between h-40 group hover:-translate-y-1 hover:shadow-lg transition-all duration-300">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <span class="text-blue-100 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
+                            <span id="kpiCountTitle">Patents i Acords (2025)</span>
+                            <i class="fa-solid fa-circle-info text-blue-200 hover:text-white cursor-help transition-colors text-[10px]" title="Suma de patents, invencions, acords i empreses seleccionats per a l'any seleccionat"></i>
+                        </span>
+                        <h2 class="text-3xl font-black mt-2 font-display" id="kpiCountTotal">-</h2>
+                    </div>
+                    <div class="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-lg text-blue-200 group-hover:bg-white/20 transition-colors">
+                        <i class="fa-solid fa-certificate"></i>
+                    </div>
+                </div>
+                <p id="kpiCountDesc" class="text-blue-100/80 text-[11px] leading-relaxed">Suma d'unitats de patents, invencions i acords de transferència actius.</p>
+            </div>
+
+            <!-- Card 3: Growth rate (start vs end) -->
+            <div class="bg-gradient-to-br from-indigo-600 to-violet-700 rounded-3xl p-6 text-white premium-shadow flex flex-col justify-between h-40 group hover:-translate-y-1 hover:shadow-lg transition-all duration-300">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <span class="text-indigo-100 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
+                            <span id="kpiGrowthRateTitle">Evolució Global</span>
+                            <i class="fa-solid fa-circle-info text-indigo-200 hover:text-white cursor-help transition-colors text-[10px]" title="Taxa de variació mitjana d'indicadors seleccionats en el rang d'anys actiu"></i>
+                        </span>
+                        <h2 class="text-3xl font-black mt-2 font-display" id="kpiGrowthRate">+0,0%</h2>
+                    </div>
+                    <div class="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-lg text-indigo-200 group-hover:bg-white/20 transition-colors">
+                        <i class="fa-solid fa-arrow-trend-up" id="kpiGrowthIcon"></i>
+                    </div>
+                </div>
+                <p id="kpiGrowthRateDesc" class="text-indigo-100/80 text-[11px] leading-relaxed">Taxa de creixement mitjà ponderat dels indicadors seleccionats.</p>
+            </div>
+
+            <!-- Card 4: Count of selected items -->
+            <div class="bg-gradient-to-br from-amber-500 to-orange-600 rounded-3xl p-6 text-white premium-shadow flex flex-col justify-between h-40 group hover:-translate-y-1 hover:shadow-lg transition-all duration-300">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <span class="text-amber-100 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
+                            <span>Indicadors Actius</span>
+                        </span>
+                        <h2 class="text-3xl font-black mt-2 font-display" id="kpiSelectedCount">0 / 13</h2>
+                    </div>
+                    <div class="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-lg text-amber-200 group-hover:bg-white/20 transition-colors">
+                        <i class="fa-solid fa-list-check"></i>
+                    </div>
+                </div>
+                <p class="text-amber-100/80 text-[11px] leading-relaxed">Mètriques seleccionades i visualitzades actualment.</p>
+            </div>
+        </section>
+
+        <!-- Chart Section -->
+        <section class="bg-white p-6 rounded-3xl premium-shadow border border-slate-200">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 border-b border-slate-100 pb-4">
+                <div>
+                    <h3 class="text-lg font-bold text-slate-800">Evolució Històrica i Projecció</h3>
+                    <p class="text-xs text-slate-500 mt-1">Valors anuals dels indicadors seleccionats (els valors monetaris es mostren a l'eix esquerre en €, i els recomptes a l'eix dret).</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button id="btnToggleChartType" type="button" class="text-xs font-semibold bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200 px-3 py-1.5 rounded-xl transition-all active:scale-95">
+                        <i class="fa-solid fa-chart-bar mr-1"></i> Canvia a Barres
+                    </button>
+                </div>
+            </div>
+            
+            <div id="chartRevenues" class="w-full h-96 min-h-[350px]"></div>
+        </section>
+
+        <!-- Data Table Section -->
+        <section class="bg-white rounded-3xl premium-shadow border border-slate-200 overflow-hidden flex flex-col">
+            <div class="px-6 py-5 border-b border-slate-100 flex flex-col md:flex-row justify-between items-stretch md:items-center gap-4 bg-slate-50/50">
+                <div>
+                    <h3 class="text-lg font-bold text-slate-800">Detall de les dades històriques</h3>
+                    <p class="text-xs text-slate-500 mt-1">Valors anuals tancats a 31/12. Els valors previnguts (projeccions) es marquen amb (P).</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button id="btnExportCSV" type="button" class="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-emerald-700 hover:text-white bg-emerald-50 hover:bg-emerald-600 border border-emerald-200 hover:border-transparent rounded-xl transition-all shadow-sm active:scale-95 cursor-pointer">
+                        <i class="fa-solid fa-file-csv text-sm"></i> Exporta a CSV
+                    </button>
+                </div>
+            </div>
+            
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse min-w-[900px] text-sm">
+                    <thead>
+                        <tr id="tableHeaderRow" class="bg-slate-50 text-slate-500 border-b border-slate-200 text-xs font-bold uppercase tracking-wider">
+                            <!-- Injected dynamically -->
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody" class="divide-y divide-slate-100 text-slate-700">
+                        <!-- Injected dynamically -->
+                    </tbody>
+                </table>
+            </div>
+            <div class="px-6 py-4 bg-slate-50/70 border-t border-slate-100 flex justify-between items-center text-xs text-slate-400 font-semibold">
+                <span id="footerItemCount">Mostrant 0 indicadors</span>
+                <span>Font: Indicadors resum_2025.xlsx</span>
+            </div>
+        </section>
+    </main>
+
+    <!-- Page Logic -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // Global State
+            let INDICADORS_DATA = [];
+            let seleccionats = [];
+            let chartInstance = null;
+            let currentChartType = 'line'; // 'line' or 'bar'
+            let searchVal = '';
+            let forecastEnabled = false;
+            let forecastMethod = 'linear';
+
+            // Prefixed Awards State
+            let RAW_PREFIXED_AWARDS = [];
+            let excludeDeclined = false;
+            let selectedOrgScope = 'all';
+
+            // Cache DOM Elements
+            const dropdownBtn = document.getElementById('conceptsDropdownBtn');
+            const dropdownMenu = document.getElementById('conceptsDropdownMenu');
+            const dropdownList = document.getElementById('conceptsDropdownList');
+            const dropdownLabel = document.getElementById('conceptsDropdownLabel');
+            const searchInput = document.getElementById('conceptsSearchInput');
+            const btnDeselectAll = document.getElementById('btnDeselectAll');
+            const chipsContainer = document.getElementById('selectedChipsContainer');
+            
+            const chkExcludeDeclined = document.getElementById('chkExcludeDeclined');
+            const selectOrgScope = document.getElementById('selectOrgScope');
+
+            const kpiMonetaryTotal = document.getElementById('kpiMonetaryTotal');
+            const kpiCountTotal = document.getElementById('kpiCountTotal');
+            const kpiGrowthRate = document.getElementById('kpiGrowthRate');
+            const kpiGrowthIcon = document.getElementById('kpiGrowthIcon');
+            const kpiSelectedCount = document.getElementById('kpiSelectedCount');
+            
+            const chkForecast = document.getElementById('chkForecast');
+            const selectForecastMethod = document.getElementById('selectForecastMethod');
+            const forecastMethodExplanation = document.getElementById('forecastMethodExplanation');
+            const forecastExplanationText = document.getElementById('forecastExplanationText');
+
+            const btnToggleChartType = document.getElementById('btnToggleChartType');
+            const btnExportCSV = document.getElementById('btnExportCSV');
+            const tableBody = document.getElementById('tableBody');
+            const footerItemCount = document.getElementById('footerItemCount');
+
+            // Quick Presets elements
+            const presetPatents = document.getElementById('presetPatents');
+            const presetValoritzacio = document.getElementById('presetValoritzacio');
+            const presetTransferencia = document.getElementById('presetTransferencia');
+            const presetTots = document.getElementById('presetTots');
+
+            // Year range slider elements
+            const sliderAnios = document.getElementById('sliderAnios');
+            const valorRango = document.getElementById('valorRango');
+
+            // Initial selected concepts: load a representative set of indicators
+            const initialConcepts = [
+                "Nous resultats de recerca (invention disclosures)",
+                "Noves patents sol·licitades (R100)",
+                "Ingressos per projectes de valorització on s'ha participat en la preparació",
+                "Ingressos per acords de transferència (U) (C) (T)",
+                "Nombre d'empreses participades creades (EBTs)",
+                "Ajuts PK",
+                "Ajuts EA",
+                "Ajuts PO"
+            ];
+
+            // Helper: Check if concept is monetary
+            function isMonetary(concept) {
+                if (concept.startsWith("Ajuts ")) return true;
+                const monetaryKeywords = ['ingrés', 'ingressos', 'pressupost', 'import', 'convenis'];
+                const lower = concept.toLowerCase();
+                return monetaryKeywords.some(keyword => lower.includes(keyword));
+            }
+
+            // Helper: Format value based on concept type
+            function formatValue(concept, val) {
+                if (val === null || val === undefined || isNaN(val)) return 'ND';
+                if (isMonetary(concept)) {
+                    return new Intl.NumberFormat('ca-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(val);
+                } else {
+                    return new Intl.NumberFormat('ca-ES', { maximumFractionDigits: 0 }).format(Math.round(val));
+                }
+            }
+
+            async function initApp() {
+                try {
+                    const response = await fetch('/api/indicadors-resum/data');
+                    if (!response.ok) throw new Error("HTTP " + response.status);
+                    INDICADORS_DATA = await response.json();
+                    
+                    // Fetch prefixed awards
+                    const prefResponse = await fetch('/api/awards/stats/prefixed-awards');
+                    if (prefResponse.ok) {
+                        RAW_PREFIXED_AWARDS = await prefResponse.json();
+                    } else {
+                        console.error("Error fetching prefixed awards:", prefResponse.status);
+                    }
+                    
+                    // Add virtual prefixed indicators to Específics category
+                    const prefixes = ["PK", "EA", "PO", "PH", "PI", "DR", "BJ", "AG", "AB", "IM", "IB", "YA", "PV", "PZ"];
+                    prefixes.forEach(prefix => {
+                        INDICADORS_DATA.push({
+                            concept: "Ajuts " + prefix,
+                            category: "Específics",
+                            values: computePrefixedValues(prefix)
+                        });
+                    });
+
+                    // Filter down to initial concepts that actually exist in the data
+                    seleccionats = INDICADORS_DATA
+                        .filter(item => initialConcepts.includes(item.concept))
+                        .map(item => item.concept);
+
+                    if (seleccionats.length === 0 && INDICADORS_DATA.length > 0) {
+                        seleccionats = [INDICADORS_DATA[0].concept];
+                    }
+
+                    // Initialize Page Components
+                    initDropdown();
+                    initPkFilters();
+                    initChart();
+                    initSlider();
+                    updateUI();
+                } catch (error) {
+                    console.error("Error carregant les dades:", error);
+                    alert("Error en carregar les dades des de l'Excel/API.");
+                }
+            }
+            initApp();
+
+            function computePrefixedValues(prefix) {
+                const values = {
+                    "2017": 0, "2018": 0, "2019": 0, "2020": 0,
+                    "2021": 0, "2022": 0, "2023": 0, "2024": 0, "2025": 0
+                };
+                RAW_PREFIXED_AWARDS.forEach(record => {
+                    if (excludeDeclined && record.isDeclined) return;
+                    if (selectedOrgScope !== 'all' && record.orgScope !== selectedOrgScope) return;
+
+                    const code = (record.costCode || "").toUpperCase();
+                    if (code.startsWith(prefix)) {
+                        const yrStr = record.anyo.toString();
+                        if (values.hasOwnProperty(yrStr)) {
+                            values[yrStr] += record.totalImport;
+                        }
+                    }
+                });
+                return values;
+            }
+
+            function updatePrefixedIndicators() {
+                const prefixes = ["PK", "EA", "PO", "PH", "PI", "DR", "BJ", "AG", "AB", "IM", "IB", "YA", "PV", "PZ"];
+                prefixes.forEach(prefix => {
+                    const item = INDICADORS_DATA.find(d => d.concept === "Ajuts " + prefix);
+                    if (item) {
+                        item.values = computePrefixedValues(prefix);
+                    }
+                });
+            }
+
+            // Initialize Slider
+            function initSlider() {
+                noUiSlider.create(sliderAnios, {
+                    start: [2017, 2025],
+                    connect: true,
+                    step: 1,
+                    range: {
+                        'min': 2017,
+                        'max': 2025
+                    },
+                    format: {
+                        to: v => Math.round(v),
+                        from: v => Number(v)
+                    }
+                });
+
+                // Update range text label
+                sliderAnios.noUiSlider.on('update', (vals) => {
+                    const start = vals[0];
+                    const end = vals[1];
+                    const startLabel = start === '2026' ? '2026 (P)' : start === '2027' ? '2027 (P)' : start;
+                    const endLabel = end === '2026' ? '2026 (P)' : end === '2027' ? '2027 (P)' : end;
+                    valorRango.textContent = `${startLabel} — ${endLabel}`;
+                });
+
+                // Refresh UI on slider change
+                sliderAnios.noUiSlider.on('change', () => {
+                    updateUI();
+                });
+            }
+
+            // Get selected year range from slider
+            function getSelectedYearRange() {
+                if (!sliderAnios || !sliderAnios.noUiSlider) {
+                    return {
+                        start: 2017,
+                        end: forecastEnabled ? 2027 : 2025
+                    };
+                }
+                const vals = sliderAnios.noUiSlider.get().map(v => Math.round(v));
+                return {
+                    start: vals[0],
+                    end: vals[1]
+                };
+            }
+
+            // Forecast Event Listeners
+            chkForecast.addEventListener('change', (e) => {
+                forecastEnabled = e.target.checked;
+                selectForecastMethod.disabled = !forecastEnabled;
+                
+                // Update year range slider max limits
+                const currentVals = sliderAnios.noUiSlider.get().map(v => Math.round(v));
+                const newMax = forecastEnabled ? 2027 : 2025;
+                sliderAnios.noUiSlider.updateOptions({
+                    range: {
+                        'min': 2017,
+                        'max': newMax
+                    }
+                });
+                
+                // Slide end handle to 2027 automatically if enabled
+                let newEnd = currentVals[1];
+                if (forecastEnabled && newEnd === 2025) {
+                    newEnd = 2027;
+                } else if (!forecastEnabled && newEnd > 2025) {
+                    newEnd = 2025;
+                }
+                sliderAnios.noUiSlider.set([currentVals[0], newEnd]);
+                
+                updateUI();
+            });
+
+            selectForecastMethod.addEventListener('change', (e) => {
+                forecastMethod = e.target.value;
+                updateUI();
+            });
+
+            // Toggle Dropdown Visibility
+            dropdownBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const isHidden = dropdownMenu.classList.contains('hidden');
+                if (isHidden) {
+                    openDropdown();
+                } else {
+                    closeDropdown();
+                }
+            });
+
+            // Close dropdown when clicking outside
+            document.addEventListener('click', (e) => {
+                if (!dropdownMenu.contains(e.target) && e.target !== dropdownBtn) {
+                    closeDropdown();
+                }
+            });
+
+            // Handle dropdown search
+            searchInput.addEventListener('input', (e) => {
+                searchVal = e.target.value.toLowerCase().trim();
+                renderDropdownOptions();
+            });
+
+            // Reset Selection (Buida)
+            btnDeselectAll.addEventListener('click', () => {
+                seleccionats = [];
+                searchInput.value = '';
+                searchVal = '';
+                renderDropdownOptions();
+                updateUI();
+            });
+
+            // Toggle Chart Type (line <-> bar)
+            btnToggleChartType.addEventListener('click', () => {
+                currentChartType = currentChartType === 'line' ? 'bar' : 'line';
+                btnToggleChartType.innerHTML = currentChartType === 'line' 
+                    ? '<i class="fa-solid fa-chart-bar mr-1"></i> Canvia a Barres'
+                    : '<i class="fa-solid fa-chart-line mr-1"></i> Canvia a Línies';
+                renderChart();
+            });
+
+            // Preset Buttons handlers
+            presetPatents.addEventListener('click', () => {
+                seleccionats = INDICADORS_DATA
+                    .filter(item => item.category === 'Patents i Invencions')
+                    .map(item => item.concept);
+                renderDropdownOptions();
+                updateUI();
+            });
+
+            presetValoritzacio.addEventListener('click', () => {
+                seleccionats = INDICADORS_DATA
+                    .filter(item => item.category === 'Valorització i R&D')
+                    .map(item => item.concept);
+                renderDropdownOptions();
+                updateUI();
+            });
+
+            presetTransferencia.addEventListener('click', () => {
+                seleccionats = INDICADORS_DATA
+                    .filter(item => item.category === 'Transferència i Convenis' || item.category === 'Empreses i EBTs' || item.category === 'Específics')
+                    .map(item => item.concept);
+                renderDropdownOptions();
+                updateUI();
+            });
+
+            presetTots.addEventListener('click', () => {
+                seleccionats = INDICADORS_DATA.map(item => item.concept);
+                renderDropdownOptions();
+                updateUI();
+            });
+
+            // Export to CSV
+            btnExportCSV.addEventListener('click', () => {
+                exportSelectedToCSV();
+            });
+
+            // Dropdown helper functions
+            function openDropdown() {
+                dropdownMenu.classList.remove('hidden');
+                searchInput.focus();
+                searchVal = '';
+                searchInput.value = '';
+                renderDropdownOptions();
+            }
+
+            function closeDropdown() {
+                dropdownMenu.classList.add('hidden');
+            }
+
+            // Group INDICADORS_DATA by Category for display
+            function renderDropdownOptions() {
+                dropdownList.innerHTML = '';
+                
+                const groups = {
+                    'Patents i Invencions': [],
+                    'Valorització i R&D': [],
+                    'Transferència i Convenis': [],
+                    'Empreses i EBTs': [],
+                    'Específics': []
+                };
+
+                INDICADORS_DATA.forEach(item => {
+                    const matchesSearch = item.concept.toLowerCase().includes(searchVal);
+                    if (!matchesSearch) return;
+
+                    if (groups[item.category]) {
+                        groups[item.category].push(item);
+                    }
+                });
+
+                let hasAnyItems = false;
+
+                Object.keys(groups).forEach(groupName => {
+                    const items = groups[groupName];
+                    if (items.length === 0) return;
+                    hasAnyItems = true;
+
+                    // Render group header
+                    const header = document.createElement('div');
+                    header.className = 'px-4 py-2 bg-slate-50 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-y border-slate-100 sticky top-0';
+                    header.textContent = groupName;
+                    dropdownList.appendChild(header);
+
+                    // Render items
+                    items.forEach(item => {
+                        const isChecked = seleccionats.includes(item.concept);
+                        const optionRow = document.createElement('div');
+                        optionRow.className = `px-4 py-2.5 flex items-center gap-3 hover:bg-slate-50 cursor-pointer transition-colors ${isChecked ? 'bg-emerald-50/40' : ''}`;
+                        
+                        const checkbox = document.createElement('input');
+                        checkbox.type = 'checkbox';
+                        checkbox.checked = isChecked;
+                        checkbox.className = 'w-4 h-4 text-emerald-600 border-slate-300 rounded focus:ring-emerald-500 cursor-pointer';
+                        
+                        const textSpan = document.createElement('span');
+                        textSpan.className = 'text-xs leading-normal text-slate-600 font-medium';
+                        textSpan.textContent = item.concept;
+
+                        optionRow.appendChild(checkbox);
+                        optionRow.appendChild(textSpan);
+
+                        optionRow.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            toggleConcept(item.concept);
+                        });
+
+                        dropdownList.appendChild(optionRow);
+                    });
+                });
+
+                if (!hasAnyItems) {
+                    const noResults = document.createElement('div');
+                    noResults.className = 'px-4 py-6 text-center text-slate-400 italic';
+                    noResults.textContent = 'Cap indicador coincideix amb la cerca';
+                    dropdownList.appendChild(noResults);
+                }
+            }
+
+            function initDropdown() {
+                renderDropdownOptions();
+            }
+
+            // ─── PK, EA, PO & Other Prefixed Awards Filters ──────────────────────────────────────────────
+            function initPkFilters() {
+                chkExcludeDeclined.addEventListener('change', (e) => {
+                    excludeDeclined = e.target.checked;
+                    updatePrefixedIndicators();
+                    updateUI();
+                });
+
+                selectOrgScope.addEventListener('change', (e) => {
+                    selectedOrgScope = e.target.value;
+                    updatePrefixedIndicators();
+                    updateUI();
+                });
+            }
+
+            function toggleConcept(concept) {
+                if (seleccionats.includes(concept)) {
+                    seleccionats = seleccionats.filter(c => c !== concept);
+                } else {
+                    seleccionats.push(concept);
+                }
+                renderDropdownOptions();
+                updateUI();
+            }
+
+            // Update UI State (Label, Chips, KPIs, Table, Chart)
+            function updateUI() {
+                // Update dropdown label text
+                if (seleccionats.length === 0) {
+                    dropdownLabel.textContent = "Cap indicador seleccionat";
+                } else if (seleccionats.length === INDICADORS_DATA.length) {
+                    dropdownLabel.textContent = "Tots els indicadors seleccionats";
+                } else if (seleccionats.length === 1) {
+                    dropdownLabel.textContent = seleccionats[0];
+                } else {
+                    dropdownLabel.textContent = `${seleccionats.length} indicadors seleccionats`;
+                }
+
+                // Render selected chips below dropdown
+                renderChips();
+
+                // Compute KPIs
+                computeKPIs();
+
+                // Render Table
+                renderTable();
+
+                // Render Chart
+                renderChart();
+
+                // Update Forecast Explanation
+                updateForecastExplanation();
+            }
+
+            const EXPLANATIONS = {
+                'linear': '<strong>Regressió Lineal (OLS)</strong>: Projecta una línia de tendència calculada mitjançant mínims quadrats usant tots els punts de dades històriques (2017-2025). Ideal per a tendències continuades.',
+                'cagr': '<strong>Creixement Exponencial (CAGR)</strong>: Calcula la taxa de creixement anual compost (CAGR) des del primer any amb dades fins al 2025 i l\'aplica de forma geomètrica. Capat entre -50% i +100% anual.',
+                'absolute': '<strong>Increment Lineal Mitjà</strong>: Calcula l\'increment o decrement anual mitjà en termes absoluts entre 2017 i 2025, extrapolant aquest valor constant per als propers anys.'
+            };
+
+            function updateForecastExplanation() {
+                if (forecastEnabled) {
+                    forecastExplanationText.innerHTML = EXPLANATIONS[forecastMethod];
+                    forecastMethodExplanation.classList.remove('hidden');
+                } else {
+                    forecastMethodExplanation.classList.add('hidden');
+                }
+            }
+
+            function renderChips() {
+                chipsContainer.innerHTML = '';
+                seleccionats.forEach(concept => {
+                    const isEgretaAward = concept.startsWith("Ajuts ");
+                    const chip = document.createElement('div');
+                    if (isEgretaAward) {
+                        chip.className = 'bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 px-3 py-1 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-sm';
+                    } else {
+                        chip.className = 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 px-3 py-1 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-sm';
+                    }
+                    
+                    if (isEgretaAward) {
+                        const icon = document.createElement('i');
+                        icon.className = 'fa-solid fa-trophy text-amber-400 text-[10px]';
+                        chip.appendChild(icon);
+                    }
+
+                    const textSpan = document.createElement('span');
+                    textSpan.textContent = concept;
+                    
+                    const removeBtn = document.createElement('button');
+                    removeBtn.type = 'button';
+                    if (isEgretaAward) {
+                        removeBtn.className = 'text-amber-500 hover:text-amber-800 transition-colors focus:outline-none';
+                    } else {
+                        removeBtn.className = 'text-emerald-500 hover:text-emerald-800 transition-colors focus:outline-none';
+                    }
+                    removeBtn.innerHTML = '<i class="fa-solid fa-xmark text-[10px]"></i>';
+                    removeBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        toggleConcept(concept);
+                    });
+
+                    chip.appendChild(textSpan);
+                    chip.appendChild(removeBtn);
+                    chipsContainer.appendChild(chip);
+                });
+            }
+
+            // Forecasting Math Functions
+            function calcularPrevisio(concept, values, method) {
+                const yearsArray = ["2017", "2018", "2019", "2020", "2021", "2022", "2023", "2024", "2025"];
+                
+                const validPoints = [];
+                yearsArray.forEach((y, idx) => {
+                    const val = values[y];
+                    if (val !== null && val !== undefined && !isNaN(val)) {
+                        validPoints.push({ x: idx, y: val });
+                    }
+                });
+
+                let val2026 = null;
+                let val2027 = null;
+
+                if (validPoints.length >= 2) {
+                    const n = validPoints.length;
+                    const xSum = validPoints.reduce((sum, p) => sum + p.x, 0);
+                    const ySum = validPoints.reduce((sum, p) => sum + p.y, 0);
+                    const xMean = xSum / n;
+                    const yMean = ySum / n;
+
+                    if (method === 'linear') {
+                        let num = 0;
+                        let den = 0;
+                        validPoints.forEach(p => {
+                            num += (p.x - xMean) * (p.y - yMean);
+                            den += Math.pow(p.x - xMean, 2);
+                        });
+                        const slope = den !== 0 ? num / den : 0;
+                        const intercept = yMean - slope * xMean;
+
+                        val2026 = Math.max(0, slope * 9 + intercept); // 2026 corresponds to index 9
+                        val2027 = Math.max(0, slope * 10 + intercept); // 2027 corresponds to index 10
+                    } else if (method === 'cagr') {
+                        const first = validPoints[0];
+                        const last = validPoints[validPoints.length - 1];
+                        if (first.y > 0 && last.y > 0 && last.x > first.x) {
+                            const yearsDiff = last.x - first.x;
+                            let cagr = Math.pow(last.y / first.y, 1 / yearsDiff) - 1;
+                            cagr = Math.max(-0.5, Math.min(1.0, cagr));
+                            
+                            val2026 = Math.max(0, last.y * Math.pow(1 + cagr, 9 - last.x));
+                            val2027 = Math.max(0, last.y * Math.pow(1 + cagr, 10 - last.x));
+                        } else {
+                            val2026 = last.y;
+                            val2027 = last.y;
+                        }
+                    } else if (method === 'absolute') {
+                        const first = validPoints[0];
+                        const last = validPoints[validPoints.length - 1];
+                        if (last.x > first.x) {
+                            const diffAvg = (last.y - first.y) / (last.x - first.x);
+                            val2026 = Math.max(0, last.y + diffAvg * (9 - last.x));
+                            val2027 = Math.max(0, last.y + diffAvg * (10 - last.x));
+                        } else {
+                            val2026 = last.y;
+                            val2027 = last.y;
+                        }
+                    }
+                } else if (validPoints.length === 1) {
+                    val2026 = validPoints[0].y;
+                    val2027 = validPoints[0].y;
+                }
+
+                return {
+                    '2026': val2026,
+                    '2027': val2027
+                };
+            }
+
+            function getYearValue(item, year) {
+                if (year === 2026 || year === 2027) {
+                    const forecast = calcularPrevisio(item.concept, item.values, forecastMethod);
+                    return forecast[year.toString()];
+                }
+                return item.values[year.toString()];
+            }
+
+            function computeKPIs() {
+                kpiSelectedCount.textContent = `${seleccionats.length} / ${INDICADORS_DATA.length}`;
+
+                const { start, end } = getSelectedYearRange();
+
+                if (seleccionats.length === 0) {
+                    kpiMonetaryTotal.textContent = '-';
+                    kpiCountTotal.textContent = '-';
+                    kpiGrowthRate.textContent = '+0,0%';
+                    kpiGrowthRate.className = 'text-3xl font-black mt-2 font-display text-white';
+                    kpiGrowthIcon.className = 'fa-solid fa-minus';
+                    return;
+                }
+
+                const latestHistYear = Math.min(end, 2025);
+
+                // Update titles dynamically
+                document.getElementById('kpiMonetaryTitle').textContent = `Indicadors Monetaris (${latestHistYear})`;
+                document.getElementById('kpiCountTitle').textContent = `Patents i Acords (${latestHistYear})`;
+                document.getElementById('kpiGrowthRateTitle').textContent = `Evolució Global (${start} vs ${end})`;
+
+                let totalMonetary = 0;
+                let hasMonetary = false;
+                let totalCounts = 0;
+                let hasCounts = false;
+
+                // Growth calculations
+                let growthSum = 0;
+                let growthCount = 0;
+
+                INDICADORS_DATA.forEach(item => {
+                    if (seleccionats.includes(item.concept)) {
+                        const startVal = getYearValue(item, start);
+                        const endVal = getYearValue(item, end);
+                        const latestHistVal = getYearValue(item, latestHistYear);
+
+                        if (isMonetary(item.concept)) {
+                            if (latestHistVal !== null && latestHistVal !== undefined) {
+                                totalMonetary += latestHistVal;
+                                hasMonetary = true;
+                            }
+                        } else {
+                            if (latestHistVal !== null && latestHistVal !== undefined) {
+                                totalCounts += latestHistVal;
+                                hasCounts = true;
+                            }
+                        }
+
+                        // Growth of this specific indicator
+                        if (startVal !== null && startVal !== undefined && endVal !== null && endVal !== undefined && startVal > 0) {
+                            growthSum += ((endVal - startVal) / startVal) * 100;
+                            growthCount++;
+                        }
+                    }
+                });
+
+                kpiMonetaryTotal.textContent = hasMonetary ? new Intl.NumberFormat('ca-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(totalMonetary) : '-';
+                kpiCountTotal.textContent = hasCounts ? new Intl.NumberFormat('ca-ES', { maximumFractionDigits: 0 }).format(totalCounts) : '-';
+
+                const avgGrowth = growthCount > 0 ? (growthSum / growthCount) : 0;
+                const sign = avgGrowth >= 0 ? '+' : '';
+                kpiGrowthRate.textContent = `${sign}${avgGrowth.toFixed(1)}%`;
+                
+                if (avgGrowth >= 0) {
+                    kpiGrowthRate.className = 'text-3xl font-black mt-2 font-display text-white';
+                    kpiGrowthIcon.className = 'fa-solid fa-arrow-trend-up';
+                } else {
+                    kpiGrowthRate.className = 'text-3xl font-black mt-2 font-display text-amber-200';
+                    kpiGrowthIcon.className = 'fa-solid fa-arrow-trend-down';
+                }
+            }
+
+            function renderTableHeader(start, end) {
+                const headerRow = document.getElementById('tableHeaderRow');
+                if (!headerRow) return;
+                
+                let html = '<th class="px-6 py-4">Indicador de Recerca i Transferència</th>';
+                html += '<th class="px-4 py-4 w-32">Categoria</th>';
+                for (let y = start; y <= end; y++) {
+                    if (y === 2026 || y === 2027) {
+                        html += `<th class="px-4 py-4 text-right bg-emerald-50/10 text-emerald-800 border-r border-slate-100 font-semibold">${y} (P)</th>`;
+                    } else {
+                        html += `<th class="px-4 py-4 text-right">${y}</th>`;
+                    }
+                }
+                html += `<th class="px-6 py-4 text-right font-bold text-slate-800 bg-slate-50/50">Var % (${start} vs ${end})</th>`;
+                headerRow.innerHTML = html;
+            }
+
+            function renderTable() {
+                const { start, end } = getSelectedYearRange();
+                renderTableHeader(start, end);
+                tableBody.innerHTML = '';
+                footerItemCount.textContent = `Mostrant ${seleccionats.length} indicadors`;
+
+                if (seleccionats.length === 0) {
+                    const colSpanVal = (end - start + 4);
+                    tableBody.innerHTML = `
+                        <tr>
+                            <td colspan="${colSpanVal}" class="px-6 py-12 text-center text-slate-400 italic">
+                                <i class="fa-solid fa-triangle-exclamation mr-2 text-amber-500 text-lg"></i>
+                                Cap indicador seleccionat. Fes servir els cercadors o els presets per afegir-ne.
+                            </td>
+                        </tr>
+                    `;
+                    return;
+                }
+
+                const itemsToRender = INDICADORS_DATA.filter(item => seleccionats.includes(item.concept));
+
+                itemsToRender.forEach(item => {
+                    const row = document.createElement('tr');
+                    row.className = 'hover:bg-slate-50/80 transition-colors border-b border-slate-100';
+
+                    // Concept Name
+                    const nameCell = document.createElement('td');
+                    nameCell.className = 'px-6 py-3.5 text-xs font-semibold text-slate-800 max-w-sm leading-relaxed';
+                    nameCell.textContent = item.concept;
+                    row.appendChild(nameCell);
+
+                    // Category Tag
+                    const catCell = document.createElement('td');
+                    catCell.className = 'px-4 py-3.5 text-[10px]';
+                    let catColor = 'bg-slate-100 text-slate-700';
+                    let catName = item.category;
+                    if (item.concept.startsWith("Ajuts ")) {
+                        catColor = 'bg-amber-50 text-amber-800 border-amber-200';
+                        catName = item.concept + ' (Egreta)';
+                    } else if (item.category === 'Patents i Invencions') catColor = 'bg-amber-50 text-amber-800 border-amber-200';
+                    else if (item.category === 'Valorització i R&D') catColor = 'bg-emerald-50 text-emerald-800 border-emerald-200';
+                    else if (item.category === 'Transferència i Convenis') catColor = 'bg-indigo-50 text-indigo-800 border-indigo-200';
+                    else if (item.category === 'Empreses i EBTs') catColor = 'bg-rose-50 text-rose-800 border-rose-200';
+                    else if (item.category === 'Específics') catColor = 'bg-purple-50 text-purple-800 border-purple-200';
+                    
+                    catCell.innerHTML = `<span class="px-2 py-1 border rounded-lg font-bold uppercase tracking-wider ${catColor}">${catName}</span>`;
+                    row.appendChild(catCell);
+
+                    // Year columns
+                    for (let y = start; y <= end; y++) {
+                        const cell = document.createElement('td');
+                        const val = getYearValue(item, y);
+                        cell.className = `px-4 py-3.5 text-right font-medium text-xs ${y >= 2026 ? 'bg-emerald-50/5 text-emerald-800 font-semibold' : ''}`;
+                        cell.textContent = formatValue(item.concept, val);
+                        row.appendChild(cell);
+                    }
+
+                    // Variation column
+                    const varCell = document.createElement('td');
+                    varCell.className = 'px-6 py-3.5 text-right font-bold text-xs bg-slate-50/30';
+                    const startVal = getYearValue(item, start);
+                    const endVal = getYearValue(item, end);
+                    if (startVal !== null && startVal !== undefined && endVal !== null && endVal !== undefined && startVal > 0) {
+                        const varPercent = ((endVal - startVal) / startVal) * 100;
+                        const sign = varPercent >= 0 ? '+' : '';
+                        varCell.textContent = `${sign}${varPercent.toFixed(1)}%`;
+                        varCell.className += varPercent >= 0 ? ' text-emerald-700' : ' text-amber-600';
+                    } else {
+                        varCell.textContent = '-';
+                        varCell.className += ' text-slate-400';
+                    }
+                    row.appendChild(varCell);
+
+                    tableBody.appendChild(row);
+                });
+            }
+
+            // ─── ECharts Chart Rendering ──────────────────────────────────────
+            function initChart() {
+                const chartDom = document.getElementById('chartRevenues');
+                chartInstance = echarts.init(chartDom);
+                
+                // Handle responsive resize
+                window.addEventListener('resize', () => {
+                    if (chartInstance) chartInstance.resize();
+                });
+            }
+
+            function renderChart() {
+                if (!chartInstance) return;
+
+                const { start, end } = getSelectedYearRange();
+                
+                // Build years labels array
+                const chartLabels = [];
+                for (let y = start; y <= end; y++) {
+                    if (y === 2026 || y === 2027) {
+                        chartLabels.push(`${y} (P)`);
+                    } else {
+                        chartLabels.push(y.toString());
+                    }
+                }
+
+                const seriesList = [];
+                const colors = [
+                    '#008037', // UAB Green
+                    '#3b82f6', // blue-500
+                    '#f59e0b', // amber-500
+                    '#ef4444', // red-500
+                    '#8b5cf6', // violet-500
+                    '#ec4899', // pink-500
+                    '#14b8a6', // teal-500
+                    '#06b6d4', // cyan-500
+                    '#84cc16', // lime-500
+                    '#f97316', // orange-500
+                    '#004d21', // Dark UAB Green
+                    '#1d4ed8', // Dark blue
+                    '#b45309'  // Dark amber
+                ];
+                let colorIdx = 0;
+
+                const selectedItems = INDICADORS_DATA.filter(item => seleccionats.includes(item.concept));
+
+                selectedItems.forEach(item => {
+                    const color = colors[colorIdx % colors.length];
+                    colorIdx++;
+
+                    const data = chartLabels.map(lbl => {
+                        const yr = parseInt(lbl.replace(' (P)', ''));
+                        return getYearValue(item, yr);
+                    });
+
+                    const useRightYAxis = !isMonetary(item.concept);
+
+                    seriesList.push({
+                        name: item.concept,
+                        type: currentChartType,
+                        yAxisIndex: useRightYAxis ? 1 : 0,
+                        data: data,
+                        smooth: true,
+                        showSymbol: true,
+                        symbolSize: 6,
+                        barMaxWidth: 20,
+                        itemStyle: {
+                            color: color
+                        },
+                        lineStyle: {
+                            width: 3,
+                            type: data.some((v, i) => {
+                                const yr = parseInt(chartLabels[i].replace(' (P)', ''));
+                                return yr >= 2026;
+                            }) ? 'dashed' : 'solid'
+                        },
+                        emphasis: {
+                            focus: 'series'
+                        }
+                    });
+                });
+
+                // Generate Chart Options
+                const option = {
+                    tooltip: {
+                        trigger: 'axis',
+                        backgroundColor: 'rgba(255, 255, 255, 0.98)',
+                        borderColor: '#e2e8f0',
+                        borderWidth: 1,
+                        textStyle: {
+                            color: '#334155',
+                            fontSize: 11
+                        },
+                        padding: [10, 14],
+                        extraCssText: 'box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.05); border-radius: 12px;',
+                        formatter: function(params) {
+                            let html = `<div class="font-bold text-slate-800 mb-1.5">${params[0].axisValue}</div>`;
+                            params.forEach(p => {
+                                const valStr = formatValue(p.seriesName, p.data);
+                                html += `
+                                    <div class="flex items-center justify-between gap-6 py-0.5">
+                                        <div class="flex items-center gap-1.5">
+                                            <span class="w-2.5 h-2.5 rounded-full inline-block" style="background-color: ${p.color}"></span>
+                                            <span class="text-slate-500 font-medium truncate max-w-[240px]">${p.seriesName}</span>
+                                        </div>
+                                        <div class="font-bold text-slate-800">${valStr}</div>
+                                    </div>
+                                `;
+                            });
+                            return html;
+                        }
+                    },
+                    legend: {
+                        type: 'scroll',
+                        bottom: 0,
+                        padding: [15, 0, 0, 0],
+                        textStyle: {
+                            color: '#64748b',
+                            fontSize: 10,
+                            fontFamily: 'Inter'
+                        },
+                        icon: 'circle'
+                    },
+                    grid: {
+                        top: '12%',
+                        left: '4%',
+                        right: '4%',
+                        bottom: '12%',
+                        containLabel: true
+                    },
+                    xAxis: {
+                        type: 'category',
+                        boundaryGap: currentChartType === 'bar',
+                        data: chartLabels,
+                        axisLine: {
+                            lineStyle: { color: '#cbd5e1' }
+                        },
+                        axisLabel: {
+                            textStyle: { color: '#64748b', fontSize: 10, fontFamily: 'Inter' }
+                        }
+                    },
+                    yAxis: [
+                        {
+                            type: 'value',
+                            name: 'Monetari (€)',
+                            nameTextStyle: { color: '#64748b', fontSize: 10, fontFamily: 'Inter', fontWeight: 'bold', padding: [0, 0, 5, 0] },
+                            axisLabel: {
+                                textStyle: { color: '#64748b', fontSize: 10, fontFamily: 'Inter' },
+                                formatter: function(v) {
+                                    if (v >= 1000000) return (v / 1000000).toFixed(0) + ' M€';
+                                    if (v >= 1000) return (v / 1000).toFixed(0) + ' k€';
+                                    return v + ' €';
+                                }
+                            },
+                            splitLine: {
+                                lineStyle: { color: '#f1f5f9' }
+                            }
+                        },
+                        {
+                            type: 'value',
+                            name: 'Recomptes (ut.)',
+                            nameTextStyle: { color: '#64748b', fontSize: 10, fontFamily: 'Inter', fontWeight: 'bold', padding: [0, 0, 5, 0] },
+                            axisLabel: {
+                                textStyle: { color: '#64748b', fontSize: 10, fontFamily: 'Inter' }
+                            },
+                            splitLine: { show: false }
+                        }
+                    ],
+                    series: seriesList
+                };
+
+                chartInstance.setOption(option, true);
+            }
+
+            // Export data to CSV helper
+            function exportSelectedToCSV() {
+                const { start, end } = getSelectedYearRange();
+                const items = INDICADORS_DATA.filter(item => seleccionats.includes(item.concept));
+
+                if (items.length === 0) {
+                    alert("Cap indicador seleccionat per exportar.");
+                    return;
+                }
+
+                // CSV headers
+                let csvContent = "data:text/csv;charset=utf-8,";
+                let headerRow = ["Indicador", "Categoria"];
+                for (let y = start; y <= end; y++) {
+                    headerRow.push(y.toString() + (y >= 2026 ? " (P)" : ""));
+                }
+                headerRow.push("Var %");
+                csvContent += headerRow.map(h => `"${h}"`).join(",") + "\n";
+
+                // CSV rows
+                items.forEach(item => {
+                    let row = [item.concept, item.category];
+                    for (let y = start; y <= end; y++) {
+                        const val = getYearValue(item, y);
+                        row.push(val !== null && val !== undefined ? val.toString() : "ND");
+                    }
+                    const startVal = getYearValue(item, start);
+                    const endVal = getYearValue(item, end);
+                    if (startVal !== null && startVal !== undefined && endVal !== null && endVal !== undefined && startVal > 0) {
+                        const varPercent = ((endVal - startVal) / startVal) * 100;
+                        row.push(varPercent.toFixed(2) + "%");
+                    } else {
+                        row.push("-");
+                    }
+                    csvContent += row.map(r => `"${r}"`).join(",") + "\n";
+                });
+
+                // Download Link
+                const encodedUri = encodeURI(csvContent);
+                const link = document.createElement("a");
+                link.setAttribute("href", encodedUri);
+                link.setAttribute("download", `resum_indicadors_recerca_${start}_${end}.csv`);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+        });
+    </script>
+</body>
+</html>

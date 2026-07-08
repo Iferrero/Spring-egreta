@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Centre de Cost i Convocatòries | Ajuts</title>
+    <script src="config.js"></script>
+    <script src="uab-brand.js" defer></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="uab-theme.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        /* ── Glass card ── */
+        .glass-card {
+            background: rgba(255,255,255,0.88);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+        }
+
+        /* ── Tipologia card ── */
+        .tipo-card {
+            border-radius: 1.25rem;
+            border: 1px solid #e2e8f0;
+            background: #ffffff;
+            box-shadow: 0 1px 4px 0 rgba(148,163,184,.08);
+            transition: box-shadow .2s, transform .2s;
+            overflow: hidden;
+        }
+        .tipo-card:hover {
+            box-shadow: 0 6px 24px -4px rgba(99,102,241,.12);
+            transform: translateY(-1px);
+        }
+        .tipo-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 2.75rem;
+            height: 2.75rem;
+            border-radius: .75rem;
+            font-size: 1rem;
+            font-weight: 900;
+            letter-spacing: -.03em;
+            flex-shrink: 0;
+        }
+        /* Colour palette cycled by index */
+        .tc-0  { background:#eef2ff; color:#4338ca; }
+        .tc-1  { background:#ecfdf5; color:#065f46; }
+        .tc-2  { background:#fff7ed; color:#9a3412; }
+        .tc-3  { background:#fdf2f8; color:#86198f; }
+        .tc-4  { background:#f0fdf4; color:#166534; }
+        .tc-5  { background:#fefce8; color:#854d0e; }
+        .tc-6  { background:#f0f9ff; color:#0c4a6e; }
+        .tc-7  { background:#fef2f2; color:#991b1b; }
+        .tc-8  { background:#f5f3ff; color:#5b21b6; }
+        .tc-9  { background:#f0fdfa; color:#134e4a; }
+
+        /* ── Conv list item ── */
+        .conv-item {
+            display: flex;
+            align-items: flex-start;
+            gap: .625rem;
+            padding: .5rem .625rem;
+            border-radius: .625rem;
+            background: #f8fafc;
+            margin-bottom: .375rem;
+            transition: background .15s;
+        }
+        .conv-item:hover {
+            background: #f1f5f9;
+        }
+        .conv-item.no-conv {
+            background: #fffbeb;
+        }
+        .conv-badge {
+            flex-shrink: 0;
+            width: 1.5rem;
+            height: 1.5rem;
+            border-radius: .375rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: .6rem;
+            font-weight: 700;
+        }
+
+        /* ── Collapsible ── */
+        .collapse-content {
+            overflow: hidden;
+            max-height: 0;
+            transition: max-height .35s cubic-bezier(.4,0,.2,1);
+        }
+        .collapse-content.open {
+            max-height: 9999px;
+        }
+
+        /* ── Search highlight ── */
+        mark {
+            background: #fef08a;
+            border-radius: 2px;
+            padding: 0 2px;
+        }
+
+        /* ── Spinner ── */
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .animate-spin { animation: spin 1s linear infinite; }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen text-slate-800">
+
+    <!-- Header (for uab-brand.js) -->
+    <header class="hidden">
+        <h1>Centre de Cost i Convocatòries</h1>
+        <p>Tipologies de centre de cost dels ajuts i les seves convocatòries associades</p>
+    </header>
+
+    <main class="w-full py-8 px-6">
+
+        <!-- ── Stats KPIs ── -->
+        <section id="kpi-section" class="grid grid-cols-1 sm:grid-cols-3 gap-5 mb-8">
+            <!-- Filled by JS -->
+            <div class="glass-card bg-white rounded-2xl border border-slate-200/60 p-6 shadow-sm">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Tipologies CC</span>
+                    <div class="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600">
+                        <i class="fa-solid fa-tag"></i>
+                    </div>
+                </div>
+                <span id="kpi-tipologies" class="text-3xl font-black tracking-tight text-slate-800">-</span>
+                <p class="text-[11px] text-slate-400 mt-1 font-medium">Tipologies distintes de centre de cost</p>
+            </div>
+
+            <div class="glass-card bg-white rounded-2xl border border-slate-200/60 p-6 shadow-sm">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Ajuts</span>
+                    <div class="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600">
+                        <i class="fa-solid fa-award"></i>
+                    </div>
+                </div>
+                <span id="kpi-awards" class="text-3xl font-black tracking-tight text-slate-800">-</span>
+                <p class="text-[11px] text-slate-400 mt-1 font-medium">Ajuts amb codi comptable</p>
+            </div>
+
+            <div class="glass-card bg-white rounded-2xl border border-slate-200/60 p-6 shadow-sm">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Convocatòries</span>
+                    <div class="w-8 h-8 rounded-lg bg-sky-50 flex items-center justify-center text-sky-600">
+                        <i class="fa-solid fa-scroll"></i>
+                    </div>
+                </div>
+                <span id="kpi-convocatories" class="text-3xl font-black tracking-tight text-slate-800">-</span>
+                <p class="text-[11px] text-slate-400 mt-1 font-medium">Convocatòries distintes vinculades</p>
+            </div>
+        </section>
+
+        <!-- ── Filters ── -->
+        <section class="bg-white rounded-2xl border border-slate-200/60 p-5 shadow-sm mb-6 flex flex-col sm:flex-row gap-4 items-center">
+            <div class="relative flex-1 w-full">
+                <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                    <i class="fa-solid fa-magnifying-glass text-sm"></i>
+                </span>
+                <input
+                    type="text"
+                    id="search-input"
+                    placeholder="Cerca per tipologia, codi o convocatòria..."
+                    class="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                >
+            </div>
+            <div class="flex items-center gap-3">
+                <label class="text-xs font-bold text-slate-500 uppercase whitespace-nowrap">Mostrar:</label>
+                <div class="flex bg-slate-100 p-1 rounded-xl">
+                    <button onclick="setView('grid')" id="btn-view-grid"
+                        class="px-3 py-1.5 text-xs font-bold rounded-lg transition-all text-indigo-600 bg-white shadow-sm">
+                        <i class="fa-solid fa-grip mr-1"></i>Targetes
+                    </button>
+                    <button onclick="setView('list')" id="btn-view-list"
+                        class="px-3 py-1.5 text-xs font-bold rounded-lg transition-all text-slate-500 hover:text-slate-800">
+                        <i class="fa-solid fa-list mr-1"></i>Taula
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- ── Main content ── -->
+        <section id="main-content">
+            <!-- Skeleton / Loading -->
+            <div id="loading-state" class="flex flex-col items-center justify-center py-24 gap-4">
+                <div class="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+                <p class="text-slate-400 italic font-medium">Carregant centres de cost...</p>
+            </div>
+
+            <!-- Grid view -->
+            <div id="grid-view" class="hidden grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5"></div>
+
+            <!-- List / Table view -->
+            <div id="list-view" class="hidden bg-white rounded-2xl border border-slate-200/60 shadow-sm overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-sm">
+                        <thead>
+                            <tr class="bg-slate-50 text-slate-400 text-[11px] uppercase tracking-wider border-b border-slate-100">
+                                <th class="px-6 py-4 font-bold">Tipologia CC</th>
+                                <th class="px-6 py-4 font-bold">Codis comptables</th>
+                                <th class="px-6 py-4 font-bold text-right">Ajuts</th>
+                                <th class="px-6 py-4 font-bold">Convocatòria principal</th>
+                                <th class="px-6 py-4 font-bold text-right"># Conv.</th>
+                            </tr>
+                        </thead>
+                        <tbody id="list-tbody" class="divide-y divide-slate-50"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Empty state -->
+            <div id="empty-state" class="hidden flex flex-col items-center justify-center py-24 gap-3">
+                <i class="fa-solid fa-inbox text-5xl text-slate-200"></i>
+                <p class="text-slate-400 font-medium italic">No s'han trobat resultats amb els criteris de cerca.</p>
+            </div>
+        </section>
+
+    </main>
+
+    <script>
+        /* ─────────────────────────────────────────────
+           State
+        ───────────────────────────────────────────── */
+        let allData = [];
+        let currentView = 'grid';
+
+        /* ─────────────────────────────────────────────
+           Fetch & bootstrap
+        ───────────────────────────────────────────── */
+        async function loadData() {
+            try {
+                const res = await fetch(apiUrl('/awards/stats/cost-center-convocatorias'));
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                allData = await res.json();
+                updateKPIs(allData);
+                renderAll(allData);
+            } catch (err) {
+                console.error('Error carregant dades:', err);
+                document.getElementById('loading-state').innerHTML = `
+                    <div class="flex flex-col items-center gap-3">
+                        <i class="fa-solid fa-triangle-exclamation text-4xl text-red-400"></i>
+                        <p class="text-red-500 font-semibold">Error al connectar amb el servidor.</p>
+                        <p class="text-slate-400 text-sm">Comproveu que el backend estigui actiu.</p>
+                    </div>`;
+            }
+        }
+
+        /* ─────────────────────────────────────────────
+           KPIs
+        ───────────────────────────────────────────── */
+        function updateKPIs(data) {
+            document.getElementById('kpi-tipologies').textContent = data.length.toLocaleString('ca-ES');
+
+            let totalAwards = 0;
+            const convSet = new Set();
+            data.forEach(t => {
+                totalAwards += t.totalAwards || 0;
+                (t.convocatories || []).forEach(c => {
+                    if (c.fOppUuid) convSet.add(c.fOppUuid);
+                });
+            });
+            document.getElementById('kpi-awards').textContent = totalAwards.toLocaleString('ca-ES');
+            document.getElementById('kpi-convocatories').textContent = convSet.size.toLocaleString('ca-ES');
+        }
+
+        /* ─────────────────────────────────────────────
+           View switcher
+        ───────────────────────────────────────────── */
+        function setView(v) {
+            currentView = v;
+            const btnGrid = document.getElementById('btn-view-grid');
+            const btnList = document.getElementById('btn-view-list');
+            if (v === 'grid') {
+                btnGrid.className = 'px-3 py-1.5 text-xs font-bold rounded-lg transition-all text-indigo-600 bg-white shadow-sm';
+                btnList.className = 'px-3 py-1.5 text-xs font-bold rounded-lg transition-all text-slate-500 hover:text-slate-800';
+            } else {
+                btnList.className = 'px-3 py-1.5 text-xs font-bold rounded-lg transition-all text-indigo-600 bg-white shadow-sm';
+                btnGrid.className = 'px-3 py-1.5 text-xs font-bold rounded-lg transition-all text-slate-500 hover:text-slate-800';
+            }
+            renderAll(getFiltered());
+        }
+
+        /* ─────────────────────────────────────────────
+           Filter
+        ───────────────────────────────────────────── */
+        function getFiltered() {
+            const q = (document.getElementById('search-input').value || '').toLowerCase().trim();
+            if (!q) return allData;
+            return allData.filter(t => {
+                if (t.tipologia?.toLowerCase().includes(q)) return true;
+                if ((t.costCodes || []).some(cc => cc.toLowerCase().includes(q))) return true;
+                if ((t.convocatories || []).some(c => {
+                    const title = extractTitle(c.fOppTitle);
+                    return title.toLowerCase().includes(q);
+                })) return true;
+                return false;
+            });
+        }
+
+        /* ─────────────────────────────────────────────
+           Text helpers
+        ───────────────────────────────────────────── */
+        function extractTitle(raw, fallback = 'Sense títol') {
+            if (!raw) return fallback;
+            if (typeof raw === 'string') return raw.trim() || fallback;
+            if (Array.isArray(raw)) {
+                for (const loc of ['ca_ES', 'es_ES', 'en_GB']) {
+                    const found = raw.find(i => i?.locale === loc || i?.lang === loc);
+                    if (found?.value) return found.value.trim();
+                }
+                if (raw[0]?.value) return raw[0].value.trim();
+            }
+            if (typeof raw === 'object') {
+                const v = raw.ca_ES || raw.es_ES || raw.en_GB;
+                if (v) return v.trim();
+                if (raw.text) return extractTitle(raw.text, fallback);
+                if (raw.term) return extractTitle(raw.term, fallback);
+            }
+            return fallback;
+        }
+
+        function extractType(raw) {
+            if (!raw) return '';
+            if (typeof raw === 'string') return raw.trim();
+            if (typeof raw === 'object') {
+                if (raw.term) return extractTitle(raw.term, '');
+                return extractTitle(raw, '');
+            }
+            return '';
+        }
+
+        function highlight(text, q) {
+            if (!q || !text) return text || '';
+            const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            return text.replace(new RegExp(escaped, 'gi'), m => `<mark>${m}</mark>`);
+        }
+
+        /* ─────────────────────────────────────────────
+           Colour helper (index-based cycling)
+        ───────────────────────────────────────────── */
+        const COLOR_CLASSES = ['tc-0','tc-1','tc-2','tc-3','tc-4','tc-5','tc-6','tc-7','tc-8','tc-9'];
+        const COLOR_BORDERS = [
+            'border-indigo-200','border-emerald-200','border-orange-200','border-fuchsia-200',
+            'border-green-200','border-yellow-200','border-sky-200','border-red-200',
+            'border-violet-200','border-teal-200'
+        ];
+
+        /* ─────────────────────────────────────────────
+           Render — Grid
+        ───────────────────────────────────────────── */
+        function renderGrid(data) {
+            const q = (document.getElementById('search-input').value || '').toLowerCase().trim();
+            const container = document.getElementById('grid-view');
+            container.innerHTML = '';
+
+            if (data.length === 0) {
+                document.getElementById('empty-state').classList.remove('hidden');
+                return;
+            }
+            document.getElementById('empty-state').classList.add('hidden');
+
+            data.forEach((t, idx) => {
+                const colorClass = COLOR_CLASSES[idx % COLOR_CLASSES.length];
+                const borderClass = COLOR_BORDERS[idx % COLOR_BORDERS.length];
+                const convs = t.convocatories || [];
+                const withConv = convs.filter(c => c.fOppUuid);
+                const withoutConv = convs.filter(c => !c.fOppUuid);
+                const hasMore = convs.length > 5;
+                const shown = convs.slice(0, 5);
+
+                const convItemsHtml = shown.map(c => {
+                    const title = extractTitle(c.fOppTitle);
+                    const typeStr = extractType(c.fOppType);
+                    const hTitle = highlight(title, q);
+                    if (!c.fOppUuid) {
+                        return `<div class="conv-item no-conv">
+                            <div class="conv-badge bg-amber-100 text-amber-600"><i class="fa-solid fa-circle-xmark text-[8px]"></i></div>
+                            <div class="min-w-0 flex-1">
+                                <span class="text-[11px] text-amber-700 font-semibold">Sense convocatòria vinculada</span>
+                                <span class="ml-2 text-[10px] font-bold text-amber-500 bg-amber-50 px-1.5 py-0.5 rounded-full border border-amber-100">${c.count}</span>
+                            </div>
+                        </div>`;
+                    }
+                    return `<div class="conv-item">
+                        <div class="conv-badge bg-indigo-50 text-indigo-500"><i class="fa-solid fa-scroll text-[8px]"></i></div>
+                        <div class="min-w-0 flex-1">
+                            <div class="text-[11px] font-semibold text-slate-700 leading-snug truncate" title="${title.replace(/"/g,'&quot;')}">${hTitle}</div>
+                            ${typeStr ? `<div class="text-[10px] text-slate-400 truncate">${typeStr}</div>` : ''}
+                        </div>
+                        <span class="flex-shrink-0 text-[10px] font-black text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded-full border border-indigo-100">${c.count}</span>
+                    </div>`;
+                }).join('');
+
+                const moreHtml = hasMore
+                    ? `<button onclick="toggleMore(this)" class="text-[11px] font-bold text-indigo-500 hover:text-indigo-700 mt-1 flex items-center gap-1 cursor-pointer transition-colors">
+                        <i class="fa-solid fa-chevron-down text-[9px]"></i>
+                        Veure ${convs.length - 5} més...
+                       </button>
+                       <div class="more-content hidden mt-1">
+                           ${convs.slice(5).map(c => {
+                               const title = extractTitle(c.fOppTitle);
+                               const typeStr = extractType(c.fOppType);
+                               const hTitle = highlight(title, q);
+                               if (!c.fOppUuid) {
+                                   return `<div class="conv-item no-conv">
+                                       <div class="conv-badge bg-amber-100 text-amber-600"><i class="fa-solid fa-circle-xmark text-[8px]"></i></div>
+                                       <div class="min-w-0 flex-1">
+                                           <span class="text-[11px] text-amber-700 font-semibold">Sense convocatòria vinculada</span>
+                                           <span class="ml-2 text-[10px] font-bold text-amber-500 bg-amber-50 px-1.5 py-0.5 rounded-full border border-amber-100">${c.count}</span>
+                                       </div>
+                                   </div>`;
+                               }
+                               return `<div class="conv-item">
+                                   <div class="conv-badge bg-indigo-50 text-indigo-500"><i class="fa-solid fa-scroll text-[8px]"></i></div>
+                                   <div class="min-w-0 flex-1">
+                                       <div class="text-[11px] font-semibold text-slate-700 leading-snug truncate" title="${title.replace(/"/g,'&quot;')}">${hTitle}</div>
+                                       ${typeStr ? `<div class="text-[10px] text-slate-400 truncate">${typeStr}</div>` : ''}
+                                   </div>
+                                   <span class="flex-shrink-0 text-[10px] font-black text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded-full border border-indigo-100">${c.count}</span>
+                               </div>`;
+                           }).join('')}
+                       </div>`
+                    : '';
+
+                const costCodesHtml = (t.costCodes || []).slice(0, 4).map(cc =>
+                    `<span class="inline-flex px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-slate-100 text-slate-500 border border-slate-200 mr-0.5 mb-0.5">${highlight(cc, q)}</span>`
+                ).join('') + ((t.costCodes || []).length > 4 ? `<span class="text-[9px] text-slate-400 font-semibold">+${t.costCodes.length - 4}</span>` : '');
+
+                const card = document.createElement('div');
+                card.className = `tipo-card ${borderClass}`;
+                card.innerHTML = `
+                    <!-- Card header -->
+                    <div class="flex items-center gap-3 p-5 border-b border-slate-100 cursor-pointer select-none" onclick="toggleCard(this)">
+                        <div class="tipo-badge ${colorClass}">${highlight(t.tipologia, q)}</div>
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-baseline gap-2 flex-wrap">
+                                <h2 class="text-base font-black text-slate-800 tracking-tight">Tipologia <span class="text-indigo-600">${highlight(t.tipologia, q)}</span></h2>
+                                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">${t.totalAwards} ajuts</span>
+                            </div>
+                            <div class="mt-1 flex flex-wrap gap-0.5 items-center">
+                                ${costCodesHtml}
+                            </div>
+                            <div class="mt-1 text-[10px] text-slate-400 font-medium">
+                                ${withConv.length} conv. vinculades${withoutConv.length > 0 ? ` · ${withoutConv.reduce((s,c)=>s+c.count,0)} sense conv.` : ''}
+                            </div>
+                        </div>
+                        <i class="fa-solid fa-chevron-down text-slate-300 text-sm transition-transform duration-300 collapse-icon"></i>
+                    </div>
+                    <!-- Card body (collapsible) -->
+                    <div class="collapse-content open">
+                        <div class="p-4 pt-3">
+                            ${convs.length === 0
+                                ? `<p class="text-xs text-slate-400 italic py-2">Cap convocatòria vinculada.</p>`
+                                : `${convItemsHtml}${moreHtml}`
+                            }
+                        </div>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        /* ─────────────────────────────────────────────
+           Render — List / Table
+        ───────────────────────────────────────────── */
+        function renderList(data) {
+            const q = (document.getElementById('search-input').value || '').toLowerCase().trim();
+            const tbody = document.getElementById('list-tbody');
+            tbody.innerHTML = '';
+
+            if (data.length === 0) {
+                document.getElementById('empty-state').classList.remove('hidden');
+                return;
+            }
+            document.getElementById('empty-state').classList.add('hidden');
+
+            data.forEach((t, idx) => {
+                const colorClass = COLOR_CLASSES[idx % COLOR_CLASSES.length];
+                const convs = t.convocatories || [];
+                const topConv = convs.find(c => c.fOppUuid) || convs[0];
+                const topTitle = topConv ? extractTitle(topConv.fOppTitle) : '—';
+                const hTipologia = highlight(t.tipologia, q);
+                const hTopTitle = highlight(topTitle, q);
+                const costCodesStr = (t.costCodes || []).join(', ');
+                const hCostCodes = highlight(costCodesStr, q);
+
+                // Main row
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-slate-50 transition-colors cursor-pointer';
+                tr.setAttribute('onclick', `toggleTableRow('detail-${idx}')`);
+                tr.innerHTML = `
+                    <td class="px-6 py-4">
+                        <div class="flex items-center gap-3">
+                            <div class="tipo-badge ${colorClass} w-9 h-9 text-sm">${t.tipologia}</div>
+                            <span class="font-bold text-slate-800">${hTipologia}</span>
+                        </div>
+                    </td>
+                    <td class="px-6 py-4">
+                        <div class="text-[11px] font-mono text-slate-500">${hCostCodes || '<em class="text-slate-300">—</em>'}</div>
+                    </td>
+                    <td class="px-6 py-4 text-right">
+                        <span class="text-sm font-black text-indigo-600">${t.totalAwards.toLocaleString('ca-ES')}</span>
+                    </td>
+                    <td class="px-6 py-4">
+                        <span class="text-sm text-slate-700 font-medium">${hTopTitle}</span>
+                    </td>
+                    <td class="px-6 py-4 text-right">
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-600">${convs.filter(c=>c.fOppUuid).length}</span>
+                        <i class="fa-solid fa-chevron-down text-slate-300 text-[10px] ml-2 transition-transform" id="icon-${idx}"></i>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+
+                // Detail row (collapsible)
+                const detailTr = document.createElement('tr');
+                detailTr.id = `detail-${idx}`;
+                detailTr.className = 'hidden bg-indigo-50/20';
+                detailTr.innerHTML = `
+                    <td colspan="5" class="px-8 pb-4 pt-1">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                            ${convs.map(c => {
+                                const title = extractTitle(c.fOppTitle);
+                                const typeStr = extractType(c.fOppType);
+                                if (!c.fOppUuid) {
+                                    return `<div class="flex items-start gap-2 px-3 py-2 rounded-lg bg-amber-50 border border-amber-100">
+                                        <i class="fa-solid fa-circle-xmark text-amber-400 text-xs mt-0.5"></i>
+                                        <div class="min-w-0 flex-1">
+                                            <span class="text-[11px] font-semibold text-amber-700">Sense convocatòria</span>
+                                            <span class="ml-1 text-[10px] text-amber-500 font-bold">(${c.count})</span>
+                                        </div>
+                                    </div>`;
+                                }
+                                return `<div class="flex items-start gap-2 px-3 py-2 rounded-lg bg-white border border-slate-100 shadow-sm">
+                                    <i class="fa-solid fa-scroll text-indigo-300 text-xs mt-0.5"></i>
+                                    <div class="min-w-0 flex-1">
+                                        <div class="text-[11px] font-semibold text-slate-700 leading-snug">${title}</div>
+                                        ${typeStr ? `<div class="text-[10px] text-slate-400">${typeStr}</div>` : ''}
+                                    </div>
+                                    <span class="flex-shrink-0 text-[10px] font-black text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded-full border border-indigo-100">${c.count}</span>
+                                </div>`;
+                            }).join('')}
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(detailTr);
+            });
+        }
+
+        /* ─────────────────────────────────────────────
+           Render dispatcher
+        ───────────────────────────────────────────── */
+        function renderAll(data) {
+            document.getElementById('loading-state').classList.add('hidden');
+            document.getElementById('grid-view').classList.add('hidden');
+            document.getElementById('list-view').classList.add('hidden');
+            document.getElementById('empty-state').classList.add('hidden');
+
+            if (currentView === 'grid') {
+                document.getElementById('grid-view').classList.remove('hidden');
+                renderGrid(data);
+            } else {
+                document.getElementById('list-view').classList.remove('hidden');
+                renderList(data);
+            }
+        }
+
+        /* ─────────────────────────────────────────────
+           Toggle helpers
+        ───────────────────────────────────────────── */
+        function toggleCard(header) {
+            const body = header.nextElementSibling;
+            const icon = header.querySelector('.collapse-icon');
+            body.classList.toggle('open');
+            if (icon) {
+                icon.style.transform = body.classList.contains('open') ? '' : 'rotate(-90deg)';
+            }
+        }
+        window.toggleCard = toggleCard;
+
+        function toggleMore(btn) {
+            const moreContent = btn.nextElementSibling;
+            const isHidden = moreContent.classList.contains('hidden');
+            moreContent.classList.toggle('hidden', !isHidden);
+            btn.innerHTML = isHidden
+                ? `<i class="fa-solid fa-chevron-up text-[9px]"></i> Veure menys`
+                : `<i class="fa-solid fa-chevron-down text-[9px]"></i> Veure ${moreContent.querySelectorAll('.conv-item').length} més...`;
+        }
+        window.toggleMore = toggleMore;
+
+        function toggleTableRow(id) {
+            const detailRow = document.getElementById(id);
+            if (!detailRow) return;
+            detailRow.classList.toggle('hidden');
+            const idx = id.replace('detail-', '');
+            const icon = document.getElementById(`icon-${idx}`);
+            if (icon) {
+                icon.style.transform = detailRow.classList.contains('hidden') ? '' : 'rotate(180deg)';
+            }
+        }
+        window.toggleTableRow = toggleTableRow;
+
+        /* ─────────────────────────────────────────────
+           Search
+        ───────────────────────────────────────────── */
+        let searchTimeout = null;
+        document.getElementById('search-input').addEventListener('input', () => {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                renderAll(getFiltered());
+                updateKPIs(getFiltered());
+            }, 250);
+        });
+
+        /* ─────────────────────────────────────────────
+           Boot
+        ───────────────────────────────────────────── */
+        loadData();
+    </script>
+</body>
+</html>

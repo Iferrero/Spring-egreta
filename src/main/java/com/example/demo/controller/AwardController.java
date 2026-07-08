@@ -81,7 +81,8 @@ public class AwardController {
             @RequestParam(defaultValue = "15") int size,
             @RequestParam(required = false) String search,
             @RequestParam(required = false) String hasConvocatoria,
-            @RequestParam(required = false) String hasNature) {
+            @RequestParam(required = false) String hasNature,
+            @RequestParam(required = false) String fundingType) {
 
         List<Document> basePipeline = new ArrayList<>();
 
@@ -117,6 +118,8 @@ public class AwardController {
                     new Document("natureTypes", null),
                     new Document("natureTypes", new Document("$size", 0))
                 )));
+            } else {
+                andConditions.add(new Document("natureTypes.term.ca_ES", hasNature));
             }
         }
 
@@ -148,6 +151,13 @@ public class AwardController {
             } else if ("no".equalsIgnoreCase(hasConvocatoria)) {
                 basePipeline.add(new Document("$match", new Document("fOpp.uuid", null)));
             }
+        }
+
+        if (fundingType != null && !fundingType.isBlank() && !"all".equalsIgnoreCase(fundingType)) {
+            basePipeline.add(new Document("$match", new Document("$or", Arrays.asList(
+                new Document("fOpp.type.term.ca_ES", fundingType),
+                new Document("fOpp.type.term.text.value", fundingType)
+            ))));
         }
 
         // Count total matching records using aggregation count
@@ -339,6 +349,96 @@ public class AwardController {
             resp.put("success", false);
             resp.put("message", "Error al sincronitzar amb l'API d'Egreta (" + ("prod".equalsIgnoreCase(env) ? "egreta.uab.cat" : "egretat.uab.cat") + "). Comproveu que el registre existeixi en aquest entorn.");
         }
+        return resp;
+    }
+
+    @PostMapping("/batch-update-nature")
+    public Map<String, Object> batchUpdateNature(
+            @RequestParam String fundingType,
+            @RequestParam(defaultValue = "test") String env,
+            @RequestBody Document natureDoc) {
+
+        List<Document> basePipeline = new ArrayList<>();
+        
+        Document matchQuery = new Document();
+        List<Document> andConditions = new ArrayList<>();
+        andConditions.add(new Document("$or", Arrays.asList(
+            new Document("type.term.ca_ES", "Conveni extern a la UAB").append("workflow.step", "approved"),
+            new Document("type.term.ca_ES", new Document("$ne", "Conveni extern a la UAB")).append("workflow.step", "validated")
+        )));
+        andConditions.add(new Document("categoria", new Document("$regex", "^Ajudes competitives")));
+        andConditions.add(new Document("$or", Arrays.asList(
+            new Document("natureTypes", new Document("$exists", false)),
+            new Document("natureTypes", null),
+            new Document("natureTypes", new Document("$size", 0))
+        )));
+        matchQuery.put("$and", andConditions);
+        basePipeline.add(new Document("$match", matchQuery));
+
+        basePipeline.add(new Document("$lookup", new Document()
+            .append("from", "Applications")
+            .append("localField", "applications.uuid")
+            .append("foreignField", "uuid")
+            .append("as", "appDocs")));
+        basePipeline.add(new Document("$unwind", new Document("path", "$appDocs").append("preserveNullAndEmptyArrays", true)));
+
+        basePipeline.add(new Document("$lookup", new Document()
+            .append("from", "FundingOpportunities")
+            .append("localField", "appDocs.fundingOpportunity.uuid")
+            .append("foreignField", "uuid")
+            .append("as", "fOpp")));
+        basePipeline.add(new Document("$unwind", new Document("path", "$fOpp").append("preserveNullAndEmptyArrays", true)));
+
+        basePipeline.add(new Document("$project", new Document("uuid", 1).append("fOppType", "$fOpp.type")));
+
+        List<Document> data = new ArrayList<>();
+        try {
+            mongoTemplate.getCollection("Awards").aggregate(basePipeline).into(data);
+        } catch (Exception e) {
+            // Silently catch
+        }
+
+        List<String> uuidsToUpdate = new ArrayList<>();
+        for (Document d : data) {
+            String fType = extractCaEsFromType(d.get("fOppType"));
+            if (fType == null || fType.isBlank()) {
+                fType = "Sense convocatòria / Conveni direct";
+            }
+            if (fType.equals(fundingType)) {
+                String uuid = d.getString("uuid");
+                if (uuid != null) {
+                    uuidsToUpdate.add(uuid);
+                }
+            }
+        }
+
+        int successCount = 0;
+        int failCount = 0;
+        List<String> failedUuids = new ArrayList<>();
+
+        for (String uuid : uuidsToUpdate) {
+            boolean egretaSuccess = syncAwardNatureToEgreta(uuid, natureDoc, env);
+            if (egretaSuccess) {
+                mongoTemplate.getCollection("Awards")
+                        .updateOne(new Document("uuid", uuid),
+                                new Document("$set", new Document("natureTypes", Arrays.asList(natureDoc))));
+                successCount++;
+            } else {
+                failCount++;
+                failedUuids.add(uuid);
+            }
+        }
+
+        if (successCount > 0) {
+            suggestedNatureCache = null;
+            allNatures = null;
+        }
+
+        Map<String, Object> resp = new HashMap<>();
+        resp.put("success", true);
+        resp.put("successCount", successCount);
+        resp.put("failCount", failCount);
+        resp.put("failedUuids", failedUuids);
         return resp;
     }
 
@@ -2729,6 +2829,109 @@ public class AwardController {
         return new ArrayList<>(programs);
     }
 
+    @GetMapping("/stats/nature-funding-relation")
+    public List<Map<String, Object>> getNatureFundingRelation() {
+        List<Document> basePipeline = new ArrayList<>();
+
+        // Match valid competitive awards
+        Document matchQuery = new Document();
+        List<Document> andConditions = new ArrayList<>();
+        andConditions.add(new Document("$or", Arrays.asList(
+            new Document("type.term.ca_ES", "Conveni extern a la UAB").append("workflow.step", "approved"),
+            new Document("type.term.ca_ES", new Document("$ne", "Conveni extern a la UAB")).append("workflow.step", "validated")
+        )));
+        andConditions.add(new Document("categoria", new Document("$regex", "^Ajudes competitives")));
+        matchQuery.put("$and", andConditions);
+        basePipeline.add(new Document("$match", matchQuery));
+
+        // Lookup applications
+        basePipeline.add(new Document("$lookup", new Document()
+            .append("from", "Applications")
+            .append("localField", "applications.uuid")
+            .append("foreignField", "uuid")
+            .append("as", "appDocs")));
+        basePipeline.add(new Document("$unwind", new Document("path", "$appDocs").append("preserveNullAndEmptyArrays", true)));
+
+        // Lookup FundingOpportunities
+        basePipeline.add(new Document("$lookup", new Document()
+            .append("from", "FundingOpportunities")
+            .append("localField", "appDocs.fundingOpportunity.uuid")
+            .append("foreignField", "uuid")
+            .append("as", "fOpp")));
+        basePipeline.add(new Document("$unwind", new Document("path", "$fOpp").append("preserveNullAndEmptyArrays", true)));
+
+        // Project
+        Document projection = new Document()
+            .append("natureTypes", 1)
+            .append("fOppType", "$fOpp.type");
+        basePipeline.add(new Document("$project", projection));
+
+        List<Document> data = new ArrayList<>();
+        try {
+            mongoTemplate.getCollection("Awards")
+                    .aggregate(basePipeline)
+                    .into(data);
+        } catch (Exception e) {
+            // Silently catch
+        }
+
+        Map<String, Map<String, int[]>> counts = new HashMap<>();
+        Map<String, Document> suggestionsMap = getSuggestedNatureMap();
+
+        for (Document d : data) {
+            String fundingType = extractCaEsFromType(d.get("fOppType"));
+            if (fundingType == null || fundingType.isBlank()) {
+                continue;
+            }
+
+            List<?> natureList = (List<?>) d.get("natureTypes");
+            boolean isConfirmed = (natureList != null && !natureList.isEmpty());
+
+            if (isConfirmed) {
+                for (Object natObj : natureList) {
+                    String natureType = extractCaEsFromType(natObj);
+                    if (natureType == null || natureType.isBlank()) {
+                        continue;
+                    }
+                    counts.computeIfAbsent(fundingType, k -> new HashMap<>())
+                          .computeIfAbsent(natureType, k -> new int[2])[0]++;
+                }
+            } else {
+                Document suggested = null;
+                suggested = suggestionsMap.get(fundingType);
+                if (suggested == null && d.get("fOppType") instanceof Document fOppTypeDoc) {
+                    String callTypeUri = fOppTypeDoc.getString("uri");
+                    suggested = findNatureByUriSimilarity(callTypeUri);
+                }
+
+                if (suggested != null) {
+                    String natureType = extractCaEsFromType(suggested);
+                    if (natureType != null && !natureType.isBlank()) {
+                        counts.computeIfAbsent(fundingType, k -> new HashMap<>())
+                              .computeIfAbsent(natureType, k -> new int[2])[1]++;
+                    }
+                }
+            }
+        }
+
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (Map.Entry<String, Map<String, int[]>> entry : counts.entrySet()) {
+            String fundingType = entry.getKey();
+            for (Map.Entry<String, int[]> subEntry : entry.getValue().entrySet()) {
+                String natureType = subEntry.getKey();
+                int[] val = subEntry.getValue();
+
+                Map<String, Object> row = new HashMap<>();
+                row.put("fundingType", fundingType);
+                row.put("natureType", natureType);
+                row.put("confirmed", val[0]);
+                row.put("suggested", val[1]);
+                result.add(row);
+            }
+        }
+        return result;
+    }
+
     private boolean isBeneficiaryRole(String uri, String ca, String es) {
         List<String> uris = Arrays.asList(
             "/dk/atira/pure/award/roles/award/ben",
@@ -2871,6 +3074,609 @@ public class AwardController {
         return Normalizer.normalize(value, Normalizer.Form.NFD)
             .replaceAll("\\p{M}", "")
             .toLowerCase();
+    }
+
+    /*
+    ===============================
+    COST CODE → CONVOCATÒRIES
+    ===============================
+    */
+
+    /**
+     * Returns a list of { tipologia, costCode, awardCount, convocatories[] } grouped by the
+     * first 2 characters of budgets[].costCode.
+     * Each convocatoria entry includes: { fOppUuid, fOppTitle, fOppType, count }.
+     */
+    @GetMapping("/stats/cost-center-convocatorias")
+    public List<Map<String, Object>> getCostCenterConvocatorias() {
+
+        // Pipeline:
+        // 1. Match valid awards
+        // 2. Unwind budgets → get costCode (first 2 chars = tipologia)
+        // 3. Lookup Applications → FundingOpportunities
+        // 4. Group by (tipologia, costCode, fOppUuid/fOppTitle/fOppType)
+        // 5. Sort
+
+        List<Document> pipeline = new ArrayList<>();
+
+        // Step 1: Match valid awards
+        pipeline.add(new Document("$match", new Document("$or", Arrays.asList(
+            new Document("type.term.ca_ES", "Conveni extern a la UAB").append("workflow.step", "approved"),
+            new Document("type.term.ca_ES", new Document("$ne", "Conveni extern a la UAB")).append("workflow.step", "validated")
+        ))));
+
+        // Step 2: Unwind budgets (keep awards without budgets too)
+        pipeline.add(new Document("$unwind",
+            new Document("path", "$budgets").append("preserveNullAndEmptyArrays", false)));
+
+        // Step 3: Only keep docs where budgets.costCode exists and is non-empty
+        pipeline.add(new Document("$match", new Document("budgets.costCode",
+            new Document("$exists", true).append("$ne", null).append("$ne", ""))));
+
+        // Step 4: Project relevant fields + compute tipologia
+        pipeline.add(new Document("$addFields", new Document()
+            .append("costCode", "$budgets.costCode")
+            .append("tipologia", new Document("$toUpper",
+                new Document("$substrCP", Arrays.asList("$budgets.costCode", 0, 2))))));
+
+        // Step 5: Lookup Applications
+        pipeline.add(new Document("$lookup", new Document()
+            .append("from", "Applications")
+            .append("localField", "applications.uuid")
+            .append("foreignField", "uuid")
+            .append("as", "appDocs")));
+
+        pipeline.add(new Document("$unwind",
+            new Document("path", "$appDocs").append("preserveNullAndEmptyArrays", true)));
+
+        // Step 6: Lookup FundingOpportunities
+        pipeline.add(new Document("$lookup", new Document()
+            .append("from", "FundingOpportunities")
+            .append("localField", "appDocs.fundingOpportunity.uuid")
+            .append("foreignField", "uuid")
+            .append("as", "fOpp")));
+
+        pipeline.add(new Document("$unwind",
+            new Document("path", "$fOpp").append("preserveNullAndEmptyArrays", true)));
+
+        // Step 7: Group by (tipologia, costCode, fOpp identity)
+        pipeline.add(new Document("$group", new Document()
+            .append("_id", new Document()
+                .append("tipologia", "$tipologia")
+                .append("costCode", "$costCode")
+                .append("fOppUuid", "$fOpp.uuid")
+                .append("fOppTitle", "$fOpp.title")
+                .append("fOppType", "$fOpp.type"))
+            .append("awardCount", new Document("$sum", 1))));
+
+        // Step 8: Group by tipologia + costCode to nest the convocatories
+        pipeline.add(new Document("$group", new Document()
+            .append("_id", new Document()
+                .append("tipologia", "$_id.tipologia")
+                .append("costCode", "$_id.costCode"))
+            .append("totalAwards", new Document("$sum", "$awardCount"))
+            .append("convocatories", new Document("$push", new Document()
+                .append("fOppUuid", "$_id.fOppUuid")
+                .append("fOppTitle", "$_id.fOppTitle")
+                .append("fOppType", "$_id.fOppType")
+                .append("count", "$awardCount")))));
+
+        // Step 9: Group by tipologia (could have multiple costCodes per tipologia)
+        pipeline.add(new Document("$group", new Document()
+            .append("_id", "$_id.tipologia")
+            .append("tipologia", new Document("$first", "$_id.tipologia"))
+            .append("totalAwards", new Document("$sum", "$totalAwards"))
+            .append("costCodes", new Document("$addToSet", "$_id.costCode"))
+            .append("convocatoriesRaw", new Document("$push", "$convocatories"))));
+
+        // Step 10: Sort by tipologia
+        pipeline.add(new Document("$sort", new Document("tipologia", 1)));
+
+        List<Document> rawResults = new ArrayList<>();
+        try {
+            mongoTemplate.getCollection("Awards")
+                .aggregate(pipeline)
+                .allowDiskUse(true)
+                .into(rawResults);
+        } catch (Exception e) {
+            return Collections.emptyList();
+        }
+
+        // Post-process: flatten convocatories arrays and deduplicate/merge by fOppUuid
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (Document doc : rawResults) {
+            String tipologia = doc.getString("tipologia");
+            if (tipologia == null || tipologia.isBlank()) continue;
+
+            int totalAwards = ((Number) doc.getOrDefault("totalAwards", 0)).intValue();
+            List<?> costCodesList = (List<?>) doc.get("costCodes");
+            List<String> sortedCostCodes = new ArrayList<>();
+            if (costCodesList != null) {
+                for (Object cc : costCodesList) {
+                    if (cc instanceof String s) sortedCostCodes.add(s);
+                }
+                java.util.Collections.sort(sortedCostCodes);
+            }
+
+            // Flatten and merge convocatories
+            Map<String, Map<String, Object>> convMap = new LinkedHashMap<>();
+            List<?> rawConvOuter = (List<?>) doc.get("convocatoriesRaw");
+            if (rawConvOuter != null) {
+                for (Object outerItem : rawConvOuter) {
+                    if (!(outerItem instanceof List<?> innerList)) continue;
+                    for (Object innerItem : innerList) {
+                        if (!(innerItem instanceof Document convDoc)) continue;
+                        String fOppUuid = convDoc.getString("fOppUuid");
+                        String key = (fOppUuid != null && !fOppUuid.isBlank()) ? fOppUuid : "__no_conv__";
+                        int cnt = ((Number) convDoc.getOrDefault("count", 0)).intValue();
+
+                        if (!convMap.containsKey(key)) {
+                            Map<String, Object> entry = new LinkedHashMap<>();
+                            entry.put("fOppUuid", fOppUuid);
+                            entry.put("fOppTitle", convDoc.get("fOppTitle"));
+                            entry.put("fOppType", convDoc.get("fOppType"));
+                            entry.put("count", cnt);
+                            convMap.put(key, entry);
+                        } else {
+                            Map<String, Object> entry = convMap.get(key);
+                            entry.put("count", ((Number) entry.get("count")).intValue() + cnt);
+                        }
+                    }
+                }
+            }
+
+            // Sort: entries with fOppUuid first, then by count desc
+            List<Map<String, Object>> convList = new ArrayList<>(convMap.values());
+            convList.sort((a, b) -> {
+                boolean aHasConv = a.get("fOppUuid") != null;
+                boolean bHasConv = b.get("fOppUuid") != null;
+                if (aHasConv != bHasConv) return aHasConv ? -1 : 1;
+                int ca = ((Number) a.getOrDefault("count", 0)).intValue();
+                int cb = ((Number) b.getOrDefault("count", 0)).intValue();
+                return Integer.compare(cb, ca);
+            });
+
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("tipologia", tipologia);
+            row.put("totalAwards", totalAwards);
+            row.put("costCodes", sortedCostCodes);
+            row.put("convocatories", convList);
+            result.add(row);
+        }
+
+        return result;
+    }
+
+    @GetMapping("/stats/pk-awards")
+    public List<Document> getPkAwardsStats() {
+        List<Document> pipeline = new ArrayList<>();
+
+        Document matchStage = new Document("$match", new Document("$or", Arrays.asList(
+            new Document("type.term.ca_ES", "Conveni extern a la UAB").append("workflow.step", "approved"),
+            new Document("type.term.ca_ES", new Document("$ne", "Conveni extern a la UAB")).append("workflow.step", "validated")
+        )).append("budgets.costCode", new Document("$regex", "^PK").append("$options", "i")));
+        pipeline.add(matchStage);
+
+        pipeline.add(new Document("$graphLookup", new Document()
+            .append("from", "Organizations")
+            .append("startWith", "$managingOrganization.uuid")
+            .append("connectFromField", "parents.uuid")
+            .append("connectToField", "uuid")
+            .append("as", "orgAncestors")
+        ));
+
+        pipeline.add(new Document("$addFields", new Document()
+            .append("orgScope", new Document("$cond", Arrays.asList(
+                new Document("$or", Arrays.asList(
+                    new Document("$eq", Arrays.asList("$managingOrganization.uuid", "53d7b18a-caf7-4ded-840e-942ff50adc82")),
+                    new Document("$in", Arrays.asList("53d7b18a-caf7-4ded-840e-942ff50adc82", "$orgAncestors.uuid"))
+                )),
+                "Esfera",
+                "UAB"
+            )))
+            .append("awardDateReal", new Document("$convert", new Document()
+                .append("input", "$awardDate")
+                .append("to", "date")
+                .append("onError", null)
+                .append("onNull", null)
+            ))
+            .append("isDeclined", new Document("$cond", Arrays.asList(
+                new Document("$eq", Arrays.asList("$status.typeDiscriminator", "DeclinedAwardStatus")),
+                true,
+                false
+            )))
+            .append("pkBudgets", new Document("$filter", new Document()
+                .append("input", new Document("$ifNull", Arrays.asList("$budgets", Collections.emptyList())))
+                .append("as", "b")
+                .append("cond", new Document("$regexMatch", new Document()
+                    .append("input", new Document("$ifNull", Arrays.asList("$$b.costCode", "")))
+                    .append("regex", "^PK")
+                    .append("options", "i")
+                ))
+            ))
+        ));
+
+        pipeline.add(new Document("$addFields", new Document()
+            .append("anyo", new Document("$cond", Arrays.asList(
+                new Document("$ne", Arrays.asList("$awardDateReal", null)),
+                new Document("$year", "$awardDateReal"),
+                null
+            )))
+            .append("costCode", new Document("$arrayElemAt", Arrays.asList("$pkBudgets.costCode", 0)))
+        ));
+
+        pipeline.add(new Document("$match", new Document("anyo", new Document("$ne", null))));
+
+        pipeline.add(new Document("$unwind", "$fundings"));
+        pipeline.add(new Document("$unwind", "$fundings.fundingCollaborators"));
+        pipeline.add(new Document("$match", new Document("fundings.fundingCollaborators.collaborator.uuid", "84443078-1a60-462d-9d0a-b04312afd9eb")));
+
+        pipeline.add(new Document("$addFields", new Document("importe_partida", new Document("$convert", new Document()
+            .append("input", "$fundings.fundingCollaborators.institutionalPart.value")
+            .append("to", "double")
+            .append("onError", 0.0)
+            .append("onNull", 0.0)
+        ))));
+
+        pipeline.add(new Document("$group", new Document()
+            .append("_id", new Document()
+                .append("uuid", "$uuid")
+                .append("title", "$title.value")
+                .append("costCode", "$costCode")
+                .append("anyo", "$anyo")
+                .append("isDeclined", "$isDeclined")
+                .append("orgScope", "$orgScope")
+            )
+            .append("totalImport", new Document("$sum", "$importe_partida"))
+        ));
+
+        pipeline.add(new Document("$project", new Document()
+            .append("_id", 0)
+            .append("uuid", "$_id.uuid")
+            .append("title", "$_id.title")
+            .append("costCode", "$_id.costCode")
+            .append("anyo", "$_id.anyo")
+            .append("isDeclined", "$_id.isDeclined")
+            .append("orgScope", "$_id.orgScope")
+            .append("totalImport", 1)
+        ));
+
+        pipeline.add(new Document("$sort", new Document("costCode", 1).append("anyo", 1)));
+
+        List<Document> results = new ArrayList<>();
+        try {
+            mongoTemplate.getCollection("Awards")
+                .aggregate(pipeline)
+                .allowDiskUse(true)
+                .into(results);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return results;
+    }
+
+    @GetMapping("/stats/ea-awards")
+    public List<Document> getEaAwardsStats() {
+        List<Document> pipeline = new ArrayList<>();
+
+        Document matchStage = new Document("$match", new Document("$or", Arrays.asList(
+            new Document("type.term.ca_ES", "Conveni extern a la UAB").append("workflow.step", "approved"),
+            new Document("type.term.ca_ES", new Document("$ne", "Conveni extern a la UAB")).append("workflow.step", "validated")
+        )).append("budgets.costCode", new Document("$regex", "^EA").append("$options", "i")));
+        pipeline.add(matchStage);
+
+        pipeline.add(new Document("$graphLookup", new Document()
+            .append("from", "Organizations")
+            .append("startWith", "$managingOrganization.uuid")
+            .append("connectFromField", "parents.uuid")
+            .append("connectToField", "uuid")
+            .append("as", "orgAncestors")
+        ));
+
+        pipeline.add(new Document("$addFields", new Document()
+            .append("orgScope", new Document("$cond", Arrays.asList(
+                new Document("$or", Arrays.asList(
+                    new Document("$eq", Arrays.asList("$managingOrganization.uuid", "53d7b18a-caf7-4ded-840e-942ff50adc82")),
+                    new Document("$in", Arrays.asList("53d7b18a-caf7-4ded-840e-942ff50adc82", "$orgAncestors.uuid"))
+                )),
+                "Esfera",
+                "UAB"
+            )))
+            .append("awardDateReal", new Document("$convert", new Document()
+                .append("input", "$awardDate")
+                .append("to", "date")
+                .append("onError", null)
+                .append("onNull", null)
+            ))
+            .append("isDeclined", new Document("$cond", Arrays.asList(
+                new Document("$eq", Arrays.asList("$status.typeDiscriminator", "DeclinedAwardStatus")),
+                true,
+                false
+            )))
+            .append("eaBudgets", new Document("$filter", new Document()
+                .append("input", new Document("$ifNull", Arrays.asList("$budgets", Collections.emptyList())))
+                .append("as", "b")
+                .append("cond", new Document("$regexMatch", new Document()
+                    .append("input", new Document("$ifNull", Arrays.asList("$$b.costCode", "")))
+                    .append("regex", "^EA")
+                    .append("options", "i")
+                ))
+            ))
+        ));
+
+        pipeline.add(new Document("$addFields", new Document()
+            .append("anyo", new Document("$cond", Arrays.asList(
+                new Document("$ne", Arrays.asList("$awardDateReal", null)),
+                new Document("$year", "$awardDateReal"),
+                null
+            )))
+            .append("costCode", new Document("$arrayElemAt", Arrays.asList("$eaBudgets.costCode", 0)))
+        ));
+
+        pipeline.add(new Document("$match", new Document("anyo", new Document("$ne", null))));
+
+        pipeline.add(new Document("$unwind", "$fundings"));
+        pipeline.add(new Document("$unwind", "$fundings.fundingCollaborators"));
+        pipeline.add(new Document("$match", new Document("fundings.fundingCollaborators.collaborator.uuid", "84443078-1a60-462d-9d0a-b04312afd9eb")));
+
+        pipeline.add(new Document("$addFields", new Document("importe_partida", new Document("$convert", new Document()
+            .append("input", "$fundings.fundingCollaborators.institutionalPart.value")
+            .append("to", "double")
+            .append("onError", 0.0)
+            .append("onNull", 0.0)
+        ))));
+
+        pipeline.add(new Document("$group", new Document()
+            .append("_id", new Document()
+                .append("uuid", "$uuid")
+                .append("title", "$title.value")
+                .append("costCode", "$costCode")
+                .append("anyo", "$anyo")
+                .append("isDeclined", "$isDeclined")
+                .append("orgScope", "$orgScope")
+            )
+            .append("totalImport", new Document("$sum", "$importe_partida"))
+        ));
+
+        pipeline.add(new Document("$project", new Document()
+            .append("_id", 0)
+            .append("uuid", "$_id.uuid")
+            .append("title", "$_id.title")
+            .append("costCode", "$_id.costCode")
+            .append("anyo", "$_id.anyo")
+            .append("isDeclined", "$_id.isDeclined")
+            .append("orgScope", "$_id.orgScope")
+            .append("totalImport", 1)
+        ));
+
+        pipeline.add(new Document("$sort", new Document("costCode", 1).append("anyo", 1)));
+
+        List<Document> results = new ArrayList<>();
+        try {
+            mongoTemplate.getCollection("Awards")
+                .aggregate(pipeline)
+                .allowDiskUse(true)
+                .into(results);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return results;
+    }
+
+    @GetMapping("/stats/po-awards")
+    public List<Document> getPoAwardsStats() {
+        List<Document> pipeline = new ArrayList<>();
+
+        Document matchStage = new Document("$match", new Document("$or", Arrays.asList(
+            new Document("type.term.ca_ES", "Conveni extern a la UAB").append("workflow.step", "approved"),
+            new Document("type.term.ca_ES", new Document("$ne", "Conveni extern a la UAB")).append("workflow.step", "validated")
+        )).append("budgets.costCode", new Document("$regex", "^PO").append("$options", "i")));
+        pipeline.add(matchStage);
+
+        pipeline.add(new Document("$graphLookup", new Document()
+            .append("from", "Organizations")
+            .append("startWith", "$managingOrganization.uuid")
+            .append("connectFromField", "parents.uuid")
+            .append("connectToField", "uuid")
+            .append("as", "orgAncestors")
+        ));
+
+        pipeline.add(new Document("$addFields", new Document()
+            .append("orgScope", new Document("$cond", Arrays.asList(
+                new Document("$or", Arrays.asList(
+                    new Document("$eq", Arrays.asList("$managingOrganization.uuid", "53d7b18a-caf7-4ded-840e-942ff50adc82")),
+                    new Document("$in", Arrays.asList("53d7b18a-caf7-4ded-840e-942ff50adc82", "$orgAncestors.uuid"))
+                )),
+                "Esfera",
+                "UAB"
+            )))
+            .append("awardDateReal", new Document("$convert", new Document()
+                .append("input", "$awardDate")
+                .append("to", "date")
+                .append("onError", null)
+                .append("onNull", null)
+            ))
+            .append("isDeclined", new Document("$cond", Arrays.asList(
+                new Document("$eq", Arrays.asList("$status.typeDiscriminator", "DeclinedAwardStatus")),
+                true,
+                false
+            )))
+            .append("poBudgets", new Document("$filter", new Document()
+                .append("input", new Document("$ifNull", Arrays.asList("$budgets", Collections.emptyList())))
+                .append("as", "b")
+                .append("cond", new Document("$regexMatch", new Document()
+                    .append("input", new Document("$ifNull", Arrays.asList("$$b.costCode", "")))
+                    .append("regex", "^PO")
+                    .append("options", "i")
+                ))
+            ))
+        ));
+
+        pipeline.add(new Document("$addFields", new Document()
+            .append("anyo", new Document("$cond", Arrays.asList(
+                new Document("$ne", Arrays.asList("$awardDateReal", null)),
+                new Document("$year", "$awardDateReal"),
+                null
+            )))
+            .append("costCode", new Document("$arrayElemAt", Arrays.asList("$poBudgets.costCode", 0)))
+        ));
+
+        pipeline.add(new Document("$match", new Document("anyo", new Document("$ne", null))));
+
+        pipeline.add(new Document("$unwind", "$fundings"));
+        pipeline.add(new Document("$unwind", "$fundings.fundingCollaborators"));
+        pipeline.add(new Document("$match", new Document("fundings.fundingCollaborators.collaborator.uuid", "84443078-1a60-462d-9d0a-b04312afd9eb")));
+
+        pipeline.add(new Document("$addFields", new Document("importe_partida", new Document("$convert", new Document()
+            .append("input", "$fundings.fundingCollaborators.institutionalPart.value")
+            .append("to", "double")
+            .append("onError", 0.0)
+            .append("onNull", 0.0)
+        ))));
+
+        pipeline.add(new Document("$group", new Document()
+            .append("_id", new Document()
+                .append("uuid", "$uuid")
+                .append("title", "$title.value")
+                .append("costCode", "$costCode")
+                .append("anyo", "$anyo")
+                .append("isDeclined", "$isDeclined")
+                .append("orgScope", "$orgScope")
+            )
+            .append("totalImport", new Document("$sum", "$importe_partida"))
+        ));
+
+        pipeline.add(new Document("$project", new Document()
+            .append("_id", 0)
+            .append("uuid", "$_id.uuid")
+            .append("title", "$_id.title")
+            .append("costCode", "$_id.costCode")
+            .append("anyo", "$_id.anyo")
+            .append("isDeclined", "$_id.isDeclined")
+            .append("orgScope", "$_id.orgScope")
+            .append("totalImport", 1)
+        ));
+
+        pipeline.add(new Document("$sort", new Document("costCode", 1).append("anyo", 1)));
+
+        List<Document> results = new ArrayList<>();
+        try {
+            mongoTemplate.getCollection("Awards")
+                .aggregate(pipeline)
+                .allowDiskUse(true)
+                .into(results);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return results;
+    }
+
+    @GetMapping("/stats/prefixed-awards")
+    public List<Document> getPrefixedAwardsStats() {
+        List<Document> pipeline = new ArrayList<>();
+
+        Document matchStage = new Document("$match", new Document("$or", Arrays.asList(
+            new Document("type.term.ca_ES", "Conveni extern a la UAB").append("workflow.step", "approved"),
+            new Document("type.term.ca_ES", new Document("$ne", "Conveni extern a la UAB")).append("workflow.step", "validated")
+        )).append("budgets.costCode", new Document("$regex", "^(PK|EA|PO|PH|PI|DR|BJ|AG|AB|IM|IB|YA|PV|PZ)").append("$options", "i")));
+        pipeline.add(matchStage);
+
+        pipeline.add(new Document("$graphLookup", new Document()
+            .append("from", "Organizations")
+            .append("startWith", "$managingOrganization.uuid")
+            .append("connectFromField", "parents.uuid")
+            .append("connectToField", "uuid")
+            .append("as", "orgAncestors")
+        ));
+
+        pipeline.add(new Document("$addFields", new Document()
+            .append("orgScope", new Document("$cond", Arrays.asList(
+                new Document("$or", Arrays.asList(
+                    new Document("$eq", Arrays.asList("$managingOrganization.uuid", "53d7b18a-caf7-4ded-840e-942ff50adc82")),
+                    new Document("$in", Arrays.asList("53d7b18a-caf7-4ded-840e-942ff50adc82", "$orgAncestors.uuid"))
+                )),
+                "Esfera",
+                "UAB"
+            )))
+            .append("awardDateReal", new Document("$convert", new Document()
+                .append("input", "$awardDate")
+                .append("to", "date")
+                .append("onError", null)
+                .append("onNull", null)
+            ))
+            .append("isDeclined", new Document("$cond", Arrays.asList(
+                new Document("$eq", Arrays.asList("$status.typeDiscriminator", "DeclinedAwardStatus")),
+                true,
+                false
+            )))
+            .append("prefixedBudgets", new Document("$filter", new Document()
+                .append("input", new Document("$ifNull", Arrays.asList("$budgets", Collections.emptyList())))
+                .append("as", "b")
+                .append("cond", new Document("$regexMatch", new Document()
+                    .append("input", new Document("$ifNull", Arrays.asList("$$b.costCode", "")))
+                    .append("regex", "^(PK|EA|PO|PH|PI|DR|BJ|AG|AB|IM|IB|YA|PV|PZ)")
+                    .append("options", "i")
+                ))
+            ))
+        ));
+
+        pipeline.add(new Document("$addFields", new Document()
+            .append("anyo", new Document("$cond", Arrays.asList(
+                new Document("$ne", Arrays.asList("$awardDateReal", null)),
+                new Document("$year", "$awardDateReal"),
+                null
+            )))
+            .append("costCode", new Document("$arrayElemAt", Arrays.asList("$prefixedBudgets.costCode", 0)))
+        ));
+
+        pipeline.add(new Document("$match", new Document("anyo", new Document("$ne", null))));
+
+        pipeline.add(new Document("$unwind", "$fundings"));
+        pipeline.add(new Document("$unwind", "$fundings.fundingCollaborators"));
+        pipeline.add(new Document("$match", new Document("fundings.fundingCollaborators.collaborator.uuid", "84443078-1a60-462d-9d0a-b04312afd9eb")));
+
+        pipeline.add(new Document("$addFields", new Document("importe_partida", new Document("$convert", new Document()
+            .append("input", "$fundings.fundingCollaborators.institutionalPart.value")
+            .append("to", "double")
+            .append("onError", 0.0)
+            .append("onNull", 0.0)
+        ))));
+
+        pipeline.add(new Document("$group", new Document()
+            .append("_id", new Document()
+                .append("uuid", "$uuid")
+                .append("title", "$title.value")
+                .append("costCode", "$costCode")
+                .append("anyo", "$anyo")
+                .append("isDeclined", "$isDeclined")
+                .append("orgScope", "$orgScope")
+            )
+            .append("totalImport", new Document("$sum", "$importe_partida"))
+        ));
+
+        pipeline.add(new Document("$project", new Document()
+            .append("_id", 0)
+            .append("uuid", "$_id.uuid")
+            .append("title", "$_id.title")
+            .append("costCode", "$_id.costCode")
+            .append("anyo", "$_id.anyo")
+            .append("isDeclined", "$_id.isDeclined")
+            .append("orgScope", "$_id.orgScope")
+            .append("totalImport", 1)
+        ));
+
+        pipeline.add(new Document("$sort", new Document("costCode", 1).append("anyo", 1)));
+
+        List<Document> results = new ArrayList<>();
+        try {
+            mongoTemplate.getCollection("Awards")
+                .aggregate(pipeline)
+                .allowDiskUse(true)
+                .into(results);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return results;
     }
 
     private Object getByPath(Object root, String path) {
