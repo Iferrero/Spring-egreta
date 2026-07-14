@@ -217,7 +217,7 @@
                 <div class="flex items-center justify-between gap-4 mt-2">
                     <!-- Exclude Declined Switch -->
                     <label class="relative inline-flex items-center cursor-pointer select-none">
-                        <input id="chkExcludeDeclined" type="checkbox" class="sr-only peer">
+                        <input id="chkExcludeDeclined" type="checkbox" class="sr-only peer" checked>
                         <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
                         <span class="ms-3 text-[11px] font-bold text-slate-600">Exclou Renunciats</span>
                     </label>
@@ -226,8 +226,8 @@
                     <div class="flex items-center gap-1.5">
                         <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Àmbit:</span>
                         <select id="selectOrgScope" class="bg-white border border-slate-200 rounded-xl px-2 py-1 text-[11px] font-bold text-slate-700 outline-none focus:ring-2 focus:ring-amber-400 focus:border-amber-400 transition-all cursor-pointer shadow-sm">
-                            <option value="all" selected>Tots</option>
-                            <option value="UAB">UAB</option>
+                            <option value="all">Tots</option>
+                            <option value="UAB" selected>UAB</option>
                             <option value="Esfera">Esfera</option>
                         </select>
                     </div>
@@ -286,8 +286,8 @@
         <div id="selectedTipologiesChipsContainer" class="flex flex-wrap gap-2 -mt-2 empty:hidden">
             <!-- Injected dynamically -->
         </div>
-<!-- KPI Grid -->
-        <section class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <!-- KPI Grid -->
+        <section class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
             <!-- Card 1: Selected Total for latest year -->
             <div class="bg-gradient-to-br from-emerald-600 to-teal-700 rounded-3xl p-6 text-white premium-shadow flex flex-col justify-between h-40 group hover:-translate-y-1 hover:shadow-lg transition-all duration-300">
                 <div class="flex justify-between items-start">
@@ -303,6 +303,40 @@
                     </div>
                 </div>
                 <p id="kpiSelectedTotalDesc" class="text-emerald-100/80 text-xs leading-relaxed">Imports agregats dels conceptes filtrats a data 31/12/2025.</p>
+            </div>
+
+            <!-- Card 2: Captació d'Ingressos (Egreta) -->
+            <div class="bg-gradient-to-br from-cyan-600 to-blue-700 rounded-3xl p-6 text-white premium-shadow flex flex-col justify-between h-40 group hover:-translate-y-1 hover:shadow-lg transition-all duration-300">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <span class="text-cyan-100 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
+                            <span id="kpiCaptacioTitle">Captació d'Ingressos (2025)</span>
+                            <i class="fa-solid fa-circle-info text-cyan-200 hover:text-white cursor-help transition-colors text-[10px]" title="Suma dels imports de projectes i ajuts a data de concessió de les tipologies seleccionades"></i>
+                        </span>
+                        <h2 class="text-3xl font-black mt-2 font-display" id="kpiCaptacioTotal">0,00 €</h2>
+                    </div>
+                    <div class="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-lg text-cyan-200 group-hover:bg-white/20 transition-colors">
+                        <i class="fa-solid fa-trophy"></i>
+                    </div>
+                </div>
+                <p id="kpiCaptacioDesc" class="text-cyan-100/80 text-xs leading-relaxed">Imports de projectes i ajuts (Egreta) per a les tipologies seleccionades.</p>
+            </div>
+
+            <!-- Card 3: Diferència (Captació vs Ingressos) -->
+            <div class="bg-gradient-to-br from-purple-600 to-indigo-700 rounded-3xl p-6 text-white premium-shadow flex flex-col justify-between h-40 group hover:-translate-y-1 hover:shadow-lg transition-all duration-300">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <span class="text-purple-100 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
+                            <span id="kpiDiferenciaTitle">Diferència (2025)</span>
+                            <i class="fa-solid fa-circle-info text-purple-200 hover:text-white cursor-help transition-colors text-[10px]" title="Diferència absoluta i percentual entre la captació d'ajuts (Egreta) i els ingresos (Excel)"></i>
+                        </span>
+                        <h2 class="text-3xl font-black mt-2 font-display" id="kpiDiferenciaTotal">0,00 €</h2>
+                    </div>
+                    <div class="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-lg text-purple-200 group-hover:bg-white/20 transition-colors">
+                        <i class="fa-solid fa-right-left"></i>
+                    </div>
+                </div>
+                <p id="kpiDiferenciaDesc" class="text-purple-100/80 text-xs leading-relaxed">0,0% respecte als ingressos seleccionats.</p>
             </div>
 
             <!-- Card 2: Forecast total for 2027 -->
@@ -339,21 +373,7 @@
                 <p id="kpiGrowthRateDesc" class="text-indigo-100/80 text-xs leading-relaxed">Percentatge de variació en els ingressos de 2018 respecte a 2025.</p>
             </div>
 
-            <!-- Card 4: Count of selected items -->
-            <div class="bg-gradient-to-br from-amber-500 to-orange-600 rounded-3xl p-6 text-white premium-shadow flex flex-col justify-between h-40 group hover:-translate-y-1 hover:shadow-lg transition-all duration-300">
-                <div class="flex justify-between items-start">
-                    <div>
-                        <span class="text-amber-100 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
-                            <span>Conceptes Actius</span>
-                        </span>
-                        <h2 class="text-3xl font-black mt-2 font-display" id="kpiSelectedCount">0 / 0</h2>
-                    </div>
-                    <div class="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-lg text-amber-200 group-hover:bg-white/20 transition-colors">
-                        <i class="fa-solid fa-list-check"></i>
-                    </div>
-                </div>
-                <p class="text-amber-100/80 text-xs leading-relaxed">Nombre de conceptes individuals o agrupats visualitzats simultàniament.</p>
-            </div>
+
         </section>
 
         <!-- Chart Section -->
@@ -433,7 +453,7 @@
             let forecastMethod = 'linear';
 
             // Tipologies state
-            let selectedTipologies = [];       // selected tipus strings
+            let selectedTipologies = ["Total Ajuts"];       // selected tipus strings
             let fellowshipCallTypes = [];      // available fellowship call types from API
             let selectedCallTypes = {};        // mapping: tipus -> array of selected callType strings
             let internationalCallTypes = [];   // available international call types from API
@@ -443,8 +463,9 @@
             let tipologiesData = [];           // raw API: [{categoria, tipus}]
             let awardsImportData = [];         // raw API: [{tipus, anyo, totalImport}]
             let awardsDataLoaded = false;
-            let excludeDeclined = false;       // whether to exclude declined/resigned awards
-            let selectedOrgScope = 'all';      // UAB vs Esfera filter scope
+            let excludeDeclined = true;       // whether to exclude declined/resigned awards
+            let selectedOrgScope = 'UAB';      // UAB vs Esfera filter scope
+            let excludedConvocatories = new Set(); // set of fOppUuid or __no_conv__ that are excluded from PK awards
 
             // Cache DOM Elements
             const dropdownBtn = document.getElementById('conceptsDropdownBtn');
@@ -458,7 +479,12 @@
             const kpiSelectedTotal = document.getElementById('kpiSelectedTotal');
             const kpiGrowthRate = document.getElementById('kpiGrowthRate');
             const kpiGrowthIcon = document.getElementById('kpiGrowthIcon');
-            const kpiSelectedCount = document.getElementById('kpiSelectedCount');
+            const kpiCaptacioTotal = document.getElementById('kpiCaptacioTotal');
+            const kpiCaptacioTitle = document.getElementById('kpiCaptacioTitle');
+            const kpiCaptacioDesc = document.getElementById('kpiCaptacioDesc');
+            const kpiDiferenciaTotal = document.getElementById('kpiDiferenciaTotal');
+            const kpiDiferenciaTitle = document.getElementById('kpiDiferenciaTitle');
+            const kpiDiferenciaDesc = document.getElementById('kpiDiferenciaDesc');
             
             // Forecast DOM elements
             const chkForecast = document.getElementById('chkForecast');
@@ -493,16 +519,20 @@
             const tipologiesSearch = document.getElementById('tipologiesSearchInput');
             const btnDeselectAllTipologies = document.getElementById('btnDeselectAllTipologies');
             const tipologiesChipsContainer = document.getElementById('selectedTipologiesChipsContainer');
+            const chkExcludeDeclined = document.getElementById('chkExcludeDeclined');
+            const selectOrgScope = document.getElementById('selectOrgScope');
 
-// Initial selected concepts: load the 3 major categories
+// Initial selected concepts: load Total general
             const initialConcepts = [
-                "PS Recerca (Cap. 3)  No competitiva",
-                "Personal Investigador",
-                "Projectes (Cap. 4, 7 i 9)"
+                "Total general"
             ];
             
             async function initApp() {
                 try {
+                    // Force default DOM states on load
+                    chkExcludeDeclined.checked = true;
+                    selectOrgScope.value = 'UAB';
+
                     const response = await fetch('/api/ingressos/data');
                     if (!response.ok) throw new Error("HTTP " + response.status);
                     INGRESSOS_DATA = await response.json();
@@ -601,7 +631,6 @@
                 updateUI();
             });
 
-            const chkExcludeDeclined = document.getElementById('chkExcludeDeclined');
             chkExcludeDeclined.addEventListener('change', (e) => {
                 excludeDeclined = e.target.checked;
                 // Redraw third-level options (in case some options are no longer available)
@@ -610,7 +639,6 @@
                 updateUI();
             });
 
-            const selectOrgScope = document.getElementById('selectOrgScope');
             selectOrgScope.addEventListener('change', (e) => {
                 selectedOrgScope = e.target.value;
                 // Redraw third-level options (in case some options are no longer available)
@@ -728,9 +756,66 @@
                 renderDropdownOptions();
             });
 
+            function getPrefixesForConcept(conceptName) {
+                const matched = [];
+                const prefixes = ["AB", "AG", "BA", "BB", "BF", "BJ", "DR", "EA", "IB", "IM", "MH", "MI", "NB", "ND", "NF", "NM", "NN", "PH", "PI", "PK", "PO", "PV", "PZ", "YA"];
+                const match = conceptName.match(/\(([^)]+)\)/);
+                if (match) {
+                    const content = match[1];
+                    const tokens = content.split(/[\s,i\/\-+]+/);
+                    tokens.forEach(tok => {
+                        const cleanTok = tok.trim().toUpperCase();
+                        if (prefixes.includes(cleanTok)) {
+                            matched.push(cleanTok);
+                        }
+                    });
+                }
+                return matched;
+            }
+
+            function syncSpecificsForConcepts(prevSeleccionats, newSeleccionats) {
+                const prevPrefixes = new Set();
+                prevSeleccionats.forEach(c => {
+                    getPrefixesForConcept(c).forEach(p => prevPrefixes.add(p));
+                });
+                const newPrefixes = new Set();
+                newSeleccionats.forEach(c => {
+                    getPrefixesForConcept(c).forEach(p => newPrefixes.add(p));
+                });
+
+                newPrefixes.forEach(prefix => {
+                    if (!prevPrefixes.has(prefix)) {
+                        const specificName = "Ajuts " + prefix;
+                        if (!selectedTipologies.includes(specificName)) {
+                            selectedTipologies.push(specificName);
+                        }
+                    }
+                });
+
+                prevPrefixes.forEach(prefix => {
+                    if (!newPrefixes.has(prefix)) {
+                        const specificName = "Ajuts " + prefix;
+                        const stillNeeded = newSeleccionats.some(c => getPrefixesForConcept(c).includes(prefix));
+                        if (!stillNeeded) {
+                            selectedTipologies = selectedTipologies.filter(t => t !== specificName);
+                            delete selectedCallTypes[specificName];
+                            delete selectedProjectPrograms[specificName];
+                        }
+                    }
+                });
+            }
+
+            function setConcepts(newConcepts) {
+                const prev = [...seleccionats];
+                seleccionats = newConcepts;
+                syncSpecificsForConcepts(prev, newConcepts);
+                updateTipologiesLabel();
+                renderTipologiesChips();
+            }
+
             // Reset Selection (Buida)
             btnDeselectAll.addEventListener('click', () => {
-                seleccionats = [];
+                setConcepts([]);
                 searchInput.value = '';
                 searchVal = '';
                 renderDropdownOptions();
@@ -749,34 +834,34 @@
             // Preset Buttons handlers
             presetTotals.addEventListener('click', () => {
                 // Pre-select group headers and total general
-                seleccionats = INGRESSOS_DATA
+                setConcepts(INGRESSOS_DATA
                     .filter(item => item.isGroupHeader)
-                    .map(item => item.concept);
+                    .map(item => item.concept));
                 renderDropdownOptions();
                 updateUI();
             });
 
             presetPersonal.addEventListener('click', () => {
                 // Pre-select only Personal Investigador subconcepts
-                seleccionats = INGRESSOS_DATA
+                setConcepts(INGRESSOS_DATA
                     .filter(item => item.category === 'Personal Investigador' && !item.isGroupHeader)
-                    .map(item => item.concept);
+                    .map(item => item.concept));
                 renderDropdownOptions();
                 updateUI();
             });
 
             presetProjectes.addEventListener('click', () => {
                 // Pre-select only Projectes subconcepts
-                seleccionats = INGRESSOS_DATA
+                setConcepts(INGRESSOS_DATA
                     .filter(item => item.category === 'Projectes' && !item.isGroupHeader)
-                    .map(item => item.concept);
+                    .map(item => item.concept));
                 renderDropdownOptions();
                 updateUI();
             });
 
             presetTots.addEventListener('click', () => {
                 // Select all concepts
-                seleccionats = INGRESSOS_DATA.map(item => item.concept);
+                setConcepts(INGRESSOS_DATA.map(item => item.concept));
                 renderDropdownOptions();
                 updateUI();
             });
@@ -899,6 +984,7 @@
                 }
                 // Add category-level totals
                 uniqueCategories.forEach(cat => {
+                    if (cat === "Específics (Centre de cost)") return;
                     const label = 'Total ' + cat;
                     if (!searchFilter || label.toLowerCase().includes(searchFilter)) {
                         totalsGroup.push(label);
@@ -1265,7 +1351,7 @@
                     if (tipRes.ok) {
                         tipologiesData = await tipRes.json();
                         // Add virtual prefixed options grouped under 'Específics'
-                        const prefixes = ["PK", "EA", "PO", "PH", "PI", "DR", "BJ", "AG", "AB", "IM", "IB", "YA", "PV", "PZ"];
+                        const prefixes = ["AB", "AG", "BA", "BB", "BF", "BJ", "DR", "EA", "IB", "IM", "MH", "MI", "NB", "ND", "NF", "NM", "NN", "PH", "PI", "PK", "PO", "PV", "PZ", "YA"];
                         prefixes.forEach(prefix => {
                             tipologiesData.push({
                                 categoria: "Específics (Centre de cost)",
@@ -1312,7 +1398,7 @@
                             const prefRes = await fetch('/api/awards/stats/prefixed-awards');
                             if (prefRes.ok) {
                                 const prefAwards = await prefRes.json();
-                                const prefixes = ["PK", "EA", "PO", "PH", "PI", "DR", "BJ", "AG", "AB", "IM", "IB", "YA", "PV", "PZ"];
+                                const prefixes = ["AB", "AG", "BA", "BB", "BF", "BJ", "DR", "EA", "IB", "IM", "MH", "MI", "NB", "ND", "NF", "NM", "NN", "PH", "PI", "PK", "PO", "PV", "PZ", "YA"];
                                 prefAwards.forEach(award => {
                                     const code = (award.costCode || "").toUpperCase();
                                     const matchedPrefix = prefixes.find(p => code.startsWith(p));
@@ -1323,7 +1409,10 @@
                                             totalImport: award.totalImport,
                                             count: 1,
                                             orgScope: award.orgScope,
-                                            isDeclined: award.isDeclined
+                                            isDeclined: award.isDeclined,
+                                            fOppUuid: award.fOppUuid,
+                                            fOppTitle: award.fOppTitle,
+                                            fOppType: award.fOppType
                                         });
                                     }
                                 });
@@ -1333,6 +1422,8 @@
                         }
 
                         awardsDataLoaded = true;
+                        updateTipologiesLabel();
+                        renderTipologiesChips();
                         updateUI();
                     }
                 } catch (err) {
@@ -1390,7 +1481,9 @@
                     // Start with all awards for this tipus
                     let filteredAwards = [];
                     if (tipus === 'Total Ajuts') {
-                        filteredAwards = awardsImportData;
+                        const totalAjutsCats = ['Ajudes competitives estatals', 'Ajudes competitives internacionals', 'Ajudes no competitives', 'Externs UAB'];
+                        const tipusInTotalCats = tipologiesData.filter(d => totalAjutsCats.includes(d.categoria)).map(d => d.tipus).filter(Boolean);
+                        filteredAwards = awardsImportData.filter(d => tipusInTotalCats.includes(d.tipus));
                     } else if (tipus.startsWith('Total ')) {
                         const catName = tipus.substring(6);
                         const tipusInCat = tipologiesData
@@ -1409,6 +1502,14 @@
                     // Filter by orgScope
                     if (selectedOrgScope !== 'all') {
                         filteredAwards = filteredAwards.filter(d => d.orgScope === selectedOrgScope);
+                    }
+
+                    // Filter out excluded convocatories for PK
+                    if (tipus === 'Ajuts PK') {
+                        filteredAwards = filteredAwards.filter(d => {
+                            const key = d.fOppUuid || '__no_conv__';
+                            return !excludedConvocatories.has(key);
+                        });
                     }
 
                     // Apply chip-level sub-filter
@@ -1533,9 +1634,9 @@ function renderDropdownOptions() {
 
             function toggleConcept(concept) {
                 if (seleccionats.includes(concept)) {
-                    seleccionats = seleccionats.filter(c => c !== concept);
+                    setConcepts(seleccionats.filter(c => c !== concept));
                 } else {
-                    seleccionats.push(concept);
+                    setConcepts([...seleccionats, concept]);
                 }
                 renderDropdownOptions();
                 updateUI();
@@ -1661,13 +1762,120 @@ function renderDropdownOptions() {
                 });
             }
 
-function formatEuro(val) {
+            function computeTipologiesTotal(year) {
+                if (!awardsDataLoaded || selectedTipologies.length === 0) return 0;
+
+                const chips = [];
+                selectedTipologies.forEach(tipus => {
+                    const activeCalls = selectedCallTypes[tipus] || [];
+                    const activeProgs = selectedProjectPrograms[tipus] || [];
+
+                    if (activeCalls.length > 0) {
+                        activeCalls.forEach(call => {
+                            chips.push({ tipus, callFilter: call, progFilter: null });
+                        });
+                    } else if (activeProgs.length > 0) {
+                        activeProgs.forEach(prog => {
+                            chips.push({ tipus, callFilter: null, progFilter: prog });
+                        });
+                    } else {
+                        chips.push({ tipus, callFilter: null, progFilter: null });
+                    }
+                });
+
+                let total = 0;
+                chips.forEach(chip => {
+                    const { tipus, callFilter, progFilter } = chip;
+                    let filteredAwards = [];
+                    if (tipus === 'Total Ajuts') {
+                        const totalAjutsCats = ['Ajudes competitives estatals', 'Ajudes competitives internacionals', 'Ajudes no competitives', 'Externs UAB'];
+                        const tipusInTotalCats = tipologiesData.filter(d => totalAjutsCats.includes(d.categoria)).map(d => d.tipus).filter(Boolean);
+                        filteredAwards = awardsImportData.filter(d => tipusInTotalCats.includes(d.tipus));
+                    } else if (tipus.startsWith('Total ')) {
+                        const catName = tipus.substring(6);
+                        const tipusInCat = tipologiesData
+                            .filter(d => (d.categoria || 'Sense categoria') === catName)
+                            .map(d => d.tipus);
+                        filteredAwards = awardsImportData.filter(d => tipusInCat.includes(d.tipus));
+                    } else {
+                        filteredAwards = awardsImportData.filter(d => d.tipus === tipus);
+                    }
+
+                    if (excludeDeclined) {
+                        filteredAwards = filteredAwards.filter(d => !d.isDeclined);
+                    }
+
+                    if (selectedOrgScope !== 'all') {
+                        filteredAwards = filteredAwards.filter(d => d.orgScope === selectedOrgScope);
+                    }
+
+                    if (tipus === 'Ajuts PK') {
+                        filteredAwards = filteredAwards.filter(d => {
+                            const key = d.fOppUuid || '__no_conv__';
+                            return !excludedConvocatories.has(key);
+                        });
+                    }
+
+                    if (callFilter) {
+                        filteredAwards = filteredAwards.filter(d => d.callType === callFilter);
+                    } else if (progFilter) {
+                        filteredAwards = filteredAwards.filter(d => d.callType === progFilter);
+                    }
+
+                    filteredAwards.forEach(d => {
+                        if (d.anyo === year) {
+                            total += d.totalImport || 0;
+                        }
+                    });
+                });
+                return total;
+            }
+
+            function formatEuro(val) {
                 if (val === null || val === undefined) return '-';
                 return new Intl.NumberFormat('ca-ES', { style: 'currency', currency: 'EUR' }).format(val);
-            }            function computeKPIs() {
-                kpiSelectedCount.textContent = `${seleccionats.length} / ${INGRESSOS_DATA.length}`;
+            }
 
+            function getConcepteValueForYear(item, y) {
+                if (y <= 2025) {
+                    return item.values[y.toString()] || 0;
+                } else {
+                    const forecast = calcularPrevisio(item.values, forecastMethod);
+                    return forecast[y.toString()] || 0;
+                }
+            }
+
+            function computeKPIs() {
                 const { start, end } = getSelectedYearRange();
+                const latestHistYear = Math.min(end, 2026);
+
+                // Calculate selected sum for latestHistYear
+                let totalLatestHist = 0;
+                INGRESSOS_DATA.forEach(item => {
+                    if (seleccionats.includes(item.concept)) {
+                        totalLatestHist += getConcepteValueForYear(item, latestHistYear);
+                    }
+                });
+
+                // Update Captació d'Ingressos (Egreta)
+                const captacioTotalVal = computeTipologiesTotal(latestHistYear);
+                kpiCaptacioTotal.textContent = formatEuro(captacioTotalVal);
+                kpiCaptacioTitle.textContent = `Captació d'Ingressos (${latestHistYear === 2026 ? '2026 parcial' : latestHistYear})`;
+                kpiCaptacioDesc.textContent = `Imports de projectes i ajuts (Egreta) a ${latestHistYear === 2026 ? '31/03/2026 (parcial)' : '31/12/' + latestHistYear}.`;
+
+                // Update Diferència (Captació vs Ingressos)
+                const diferenciaTotalVal = captacioTotalVal - totalLatestHist;
+                let diferenciaPercent = 0;
+                if (totalLatestHist > 0) {
+                    diferenciaPercent = (diferenciaTotalVal / totalLatestHist) * 100;
+                } else if (captacioTotalVal > 0) {
+                    diferenciaPercent = 100;
+                }
+                const diffSign = diferenciaTotalVal > 0 ? '+' : '';
+                kpiDiferenciaTotal.textContent = diffSign + formatEuro(diferenciaTotalVal);
+                const percentSign = diferenciaPercent > 0 ? '+' : '';
+                kpiDiferenciaTitle.textContent = `Diferència (${latestHistYear === 2026 ? '2026 parcial' : latestHistYear})`;
+                kpiDiferenciaDesc.textContent = `${percentSign}${diferenciaPercent.toFixed(1)}% respecte als ingressos seleccionats.`;
 
                 if (seleccionats.length === 0) {
                     kpiSelectedTotal.textContent = '0,00 €';
@@ -1682,7 +1890,6 @@ function formatEuro(val) {
                 }
 
                 // Determine latest historical year in range
-                const latestHistYear = Math.min(end, 2026);
                 const startLabel = start === 2026 ? '2026 parcial' : start;
                 const endLabel = end === 2027 ? '2027P' : end === 2026 ? '2026 parcial' : end;
 
@@ -1696,28 +1903,15 @@ function formatEuro(val) {
                     card1Desc.textContent = `Imports agregats dels conceptes filtrats a data tancament ${latestHistYear === 2026 ? '31/03/2026 (parcial)' : '31/12/' + latestHistYear}.`;
                 }
 
-                // Calculate selected sum for start, latestHistYear, and 2027
+                // Calculate selected sum for start and 2027
                 let totalStart = 0;
-                let totalLatestHist = 0;
                 let total2027Forecast = 0;
 
                 INGRESSOS_DATA.forEach(item => {
                     if (seleccionats.includes(item.concept)) {
-                        // start year value
-                        if (start === 2027) {
-                            const forecast = calcularPrevisio(item.values, forecastMethod);
-                            totalStart += forecast['2027'] || 0;
-                        } else {
-                            totalStart += item.values[start.toString()] || 0;
-                        }
-
-                        // latest historical year value
-                        totalLatestHist += item.values[latestHistYear.toString()] || 0;
-
-                        // 2027 forecast value
+                        totalStart += getConcepteValueForYear(item, start);
                         if (forecastEnabled) {
-                            const forecast = calcularPrevisio(item.values, forecastMethod);
-                            total2027Forecast += forecast['2027'] || 0;
+                            total2027Forecast += getConcepteValueForYear(item, 2027);
                         }
                     }
                 });
@@ -1745,16 +1939,11 @@ function formatEuro(val) {
 
                 // Growth rate for the selected range (start vs end)
                 let totalEnd = 0;
-                if (end === 2027) {
-                    totalEnd = total2027Forecast;
-                } else {
-                    totalEnd = INGRESSOS_DATA.reduce((acc, item) => {
-                        if (seleccionats.includes(item.concept)) {
-                            return acc + (item.values[end.toString()] || 0);
-                        }
-                        return acc;
-                    }, 0);
-                }
+                INGRESSOS_DATA.forEach(item => {
+                    if (seleccionats.includes(item.concept)) {
+                        totalEnd += getConcepteValueForYear(item, end);
+                    }
+                });
 
                 let growth = 0;
                 if (totalStart > 0) {
@@ -1801,34 +1990,23 @@ function formatEuro(val) {
                 headerRow.innerHTML = html;
             }
 
-            function renderTable() {
-                const { start, end } = getSelectedYearRange();
-                renderTableHeader(start, end);
-                tableBody.innerHTML = '';
-                footerItemCount.textContent = `Mostrant ${seleccionats.length} conceptes i ${selectedTipologies.length} tipologies`;
-
-                if (seleccionats.length === 0 && selectedTipologies.length === 0) {
-                    const colSpanVal = (end - start + 2); // years + concept + growth
-                    tableBody.innerHTML = `
-                        <tr>
-                            <td colspan="${colSpanVal}" class="px-6 py-12 text-center text-slate-400 italic">
-                                <i class="fa-solid fa-triangle-exclamation mr-2 text-amber-500 text-lg"></i>
-                                Cap concepte ni tipologia seleccionada. Fes servir els cercadors o els presets per afegir-ne.
-                            </td>
-                        </tr>
-                    `;
-                    tableFootRow.innerHTML = '';
-                    return;
+            function toggleConvocatoria(uuid) {
+                if (excludedConvocatories.has(uuid)) {
+                    excludedConvocatories.delete(uuid);
+                } else {
+                    excludedConvocatories.add(uuid);
                 }
+                updateUI();
+            }
 
-                // Selected items details
-                const itemsToRender = INGRESSOS_DATA.filter(item => seleccionats.includes(item.concept));
-
-                // MongoDB Selected Tipologies details
-                const tipologiesItems = selectedTipologies.map(tipus => {
+            function buildTipologiesRenderData(start, end) {
+                const tipologiesItems = [];
+                selectedTipologies.forEach(tipus => {
                     let filteredAwards = [];
                     if (tipus === 'Total Ajuts') {
-                        filteredAwards = awardsImportData;
+                        const totalAjutsCats = ['Ajudes competitives estatals', 'Ajudes competitives internacionals', 'Ajudes no competitives', 'Externs UAB'];
+                        const tipusInTotalCats = tipologiesData.filter(d => totalAjutsCats.includes(d.categoria)).map(d => d.tipus).filter(Boolean);
+                        filteredAwards = awardsImportData.filter(d => tipusInTotalCats.includes(d.tipus));
                     } else if (tipus.startsWith('Total ')) {
                         const catName = tipus.substring(6);
                         const tipusInCat = tipologiesData
@@ -1865,11 +2043,19 @@ function formatEuro(val) {
                         filteredAwards = filteredAwards.filter(d => filteredProgs.includes(d.callType));
                     }
 
+                    let activeAwards = filteredAwards;
+                    if (tipus === 'Ajuts PK') {
+                        activeAwards = filteredAwards.filter(d => {
+                            const key = d.fOppUuid || '__no_conv__';
+                            return !excludedConvocatories.has(key);
+                        });
+                    }
+
                     const values = {};
                     for (let y = 2018; y <= 2025; y++) {
                         values[y.toString()] = 0;
                     }
-                    filteredAwards.forEach(d => {
+                    activeAwards.forEach(d => {
                         if (d.anyo >= 2018 && d.anyo <= 2025) {
                             values[d.anyo.toString()] = (values[d.anyo.toString()] || 0) + (d.totalImport || 0);
                         }
@@ -1882,12 +2068,114 @@ function formatEuro(val) {
                         label = `${tipus} (${filteredProgs.join(', ')})`;
                     }
 
-                    return {
+                    // Push main row
+                    tipologiesItems.push({
                         concept: label,
                         values: values,
-                        isAward: true
-                    };
+                        isAward: true,
+                        rawTipus: tipus
+                    });
+
+                    // Breakdown for Ajuts PK
+                    if (tipus === 'Ajuts PK') {
+                        const convGroups = {};
+                        filteredAwards.forEach(d => {
+                            const key = d.fOppUuid || '__no_conv__';
+                            if (!convGroups[key]) {
+                                convGroups[key] = {
+                                    fOppUuid: d.fOppUuid,
+                                    fOppTitle: d.fOppTitle,
+                                    fOppType: d.fOppType,
+                                    awards: []
+                                };
+                            }
+                            convGroups[key].awards.push(d);
+                        });
+
+                        const sortedKeys = Object.keys(convGroups).sort((a, b) => {
+                            if (a === '__no_conv__') return 1;
+                            if (b === '__no_conv__') return -1;
+                            const titleA = extractTitle(convGroups[a].fOppTitle);
+                            const titleB = extractTitle(convGroups[b].fOppTitle);
+                            return titleA.localeCompare(titleB, 'ca');
+                        });
+
+                        sortedKeys.forEach(key => {
+                            const group = convGroups[key];
+                            const cValues = {};
+                            for (let y = 2018; y <= 2025; y++) {
+                                cValues[y.toString()] = 0;
+                            }
+                            group.awards.forEach(d => {
+                                if (d.anyo >= 2018 && d.anyo <= 2025) {
+                                    cValues[d.anyo.toString()] = (cValues[d.anyo.toString()] || 0) + (d.totalImport || 0);
+                                }
+                            });
+
+                            // Check if this convocatoria has any active awards in the selected year range
+                            let hasDataInSelectedRange = false;
+                            for (let y = start; y <= end; y++) {
+                                let val = 0;
+                                if (y === 2026 || y === 2027) {
+                                    const forecast = calcularPrevisio(cValues, forecastMethod);
+                                    val = forecast[y.toString()];
+                                } else {
+                                    val = cValues[y.toString()] || 0;
+                                }
+                                if (val > 0) {
+                                    hasDataInSelectedRange = true;
+                                    break;
+                                }
+                            }
+                            if (!hasDataInSelectedRange) return;
+
+                            let cLabel = '';
+                            if (key === '__no_conv__') {
+                                cLabel = 'Sense convocatòria vinculada';
+                            } else {
+                                cLabel = extractTitle(group.fOppTitle);
+                            }
+
+                            tipologiesItems.push({
+                                concept: cLabel,
+                                values: cValues,
+                                isAward: true,
+                                isBreakdownSubRow: true,
+                                rawTipus: tipus,
+                                fOppUuid: key,
+                                isExcluded: excludedConvocatories.has(key)
+                            });
+                        });
+                    }
                 });
+                return tipologiesItems;
+            }
+
+            function renderTable() {
+                const { start, end } = getSelectedYearRange();
+                renderTableHeader(start, end);
+                tableBody.innerHTML = '';
+                footerItemCount.textContent = `Mostrant ${seleccionats.length} conceptes i ${selectedTipologies.length} tipologies`;
+
+                if (seleccionats.length === 0 && selectedTipologies.length === 0) {
+                    const colSpanVal = (end - start + 2); // years + concept + growth
+                    tableBody.innerHTML = `
+                        <tr>
+                            <td colspan="${colSpanVal}" class="px-6 py-12 text-center text-slate-400 italic">
+                                <i class="fa-solid fa-triangle-exclamation mr-2 text-amber-500 text-lg"></i>
+                                Cap concepte ni tipologia seleccionada. Fes servir els cercadors o els presets per afegir-ne.
+                            </td>
+                        </tr>
+                    `;
+                    tableFootRow.innerHTML = '';
+                    return;
+                }
+
+                // Selected items details
+                const itemsToRender = INGRESSOS_DATA.filter(item => seleccionats.includes(item.concept));
+
+                // MongoDB Selected Tipologies details
+                const tipologiesItems = buildTipologiesRenderData(start, end);
 
                 // Combine them to render
                 const allItems = [...itemsToRender, ...tipologiesItems];
@@ -1901,7 +2189,15 @@ function formatEuro(val) {
                 allItems.forEach(item => {
                     const tr = document.createElement('tr');
                     if (item.isAward) {
-                        tr.className = 'transition-colors hover:bg-amber-50/20 bg-amber-50/5';
+                        if (item.isBreakdownSubRow) {
+                            if (item.isExcluded) {
+                                tr.className = 'transition-colors hover:bg-slate-50/50 bg-slate-50/20 text-xs text-slate-400 line-through opacity-50';
+                            } else {
+                                tr.className = 'transition-colors hover:bg-slate-50/50 bg-slate-50/20 text-xs text-slate-600';
+                            }
+                        } else {
+                            tr.className = 'transition-colors hover:bg-amber-50/20 bg-amber-50/5';
+                        }
                     } else {
                         tr.className = `transition-colors hover:bg-slate-50/75 ${item.isGroupHeader ? 'bg-slate-50/30 font-semibold' : ''}`;
                     }
@@ -1909,8 +2205,39 @@ function formatEuro(val) {
                     // Concept name cell
                     const conceptTd = document.createElement('td');
                     if (item.isAward) {
-                        conceptTd.className = 'px-6 py-3.5 text-amber-800 pl-6 font-semibold flex items-center gap-1.5';
-                        conceptTd.innerHTML = `<i class="fa-solid fa-trophy text-amber-500 text-[10px]"></i> <span>${item.concept}</span>`;
+                        if (item.isBreakdownSubRow) {
+                            conceptTd.className = 'px-6 py-2.5 pl-12 flex items-center gap-1.5 font-medium';
+                            if (item.isExcluded) {
+                                conceptTd.className += ' text-slate-400';
+                            } else {
+                                conceptTd.className += ' text-slate-500';
+                            }
+
+                            const textSpan = document.createElement('span');
+                            textSpan.textContent = item.concept;
+
+                            const toggleBtn = document.createElement('button');
+                            toggleBtn.type = 'button';
+                            toggleBtn.className = 'ml-auto text-slate-400 transition-colors cursor-pointer mr-2 focus:outline-none';
+                            if (item.isExcluded) {
+                                toggleBtn.className += ' hover:text-emerald-600';
+                                toggleBtn.innerHTML = '<i class="fa-solid fa-circle-plus text-xs" title="Restaurar convocatòria"></i>';
+                            } else {
+                                toggleBtn.className += ' hover:text-rose-500';
+                                toggleBtn.innerHTML = '<i class="fa-solid fa-circle-minus text-xs" title="Excloure convocatòria"></i>';
+                            }
+                            toggleBtn.addEventListener('click', (e) => {
+                                e.stopPropagation();
+                                toggleConvocatoria(item.fOppUuid);
+                            });
+
+                            conceptTd.innerHTML = `<i class="fa-solid fa-scroll text-slate-400 text-[10px]"></i>`;
+                            conceptTd.appendChild(textSpan);
+                            conceptTd.appendChild(toggleBtn);
+                        } else {
+                            conceptTd.className = 'px-6 py-3.5 text-amber-800 pl-6 font-semibold flex items-center gap-1.5';
+                            conceptTd.innerHTML = `<i class="fa-solid fa-trophy text-amber-500 text-[10px]"></i> <span>${item.concept}</span>`;
+                        }
                     } else {
                         conceptTd.className = `px-6 py-3.5 ${item.isGroupHeader ? 'font-bold text-slate-800' : 'text-slate-600 pl-10'}`;
                         conceptTd.textContent = item.concept;
@@ -1934,7 +2261,15 @@ function formatEuro(val) {
                         const valTd = document.createElement('td');
                         valTd.className = 'px-4 py-3.5 text-right font-mono text-xs';
                         if (item.isAward) {
-                            valTd.className += ' text-amber-700/90';
+                            if (item.isBreakdownSubRow) {
+                                if (item.isExcluded) {
+                                    valTd.className += ' text-slate-400/60 line-through';
+                                } else {
+                                    valTd.className += ' text-slate-500/80';
+                                }
+                            } else {
+                                valTd.className += ' text-amber-700/90';
+                            }
                         }
                         if (y === 2026) {
                             valTd.className += ' bg-emerald-50/5 border-r border-slate-100 text-emerald-800/90';
@@ -1968,8 +2303,13 @@ function formatEuro(val) {
                     }
 
                     const growthTd = document.createElement('td');
-                    growthTd.className = `px-6 py-3.5 text-right font-bold text-xs ${varPct >= 0 ? (item.isAward ? 'text-amber-700' : 'text-emerald-700') : 'text-rose-600'}`;
-                    growthTd.textContent = vStart > 0 ? `${varPct >= 0 ? '+' : ''}${varPct.toFixed(1)}%` : '-';
+                    if (item.isBreakdownSubRow) {
+                        growthTd.className = 'px-6 py-3.5 text-right text-xs text-slate-400 font-medium';
+                        growthTd.textContent = '-';
+                    } else {
+                        growthTd.className = `px-6 py-3.5 text-right font-bold text-xs ${varPct >= 0 ? (item.isAward ? 'text-amber-700' : 'text-emerald-700') : 'text-rose-600'}`;
+                        growthTd.textContent = vStart > 0 ? `${varPct >= 0 ? '+' : ''}${varPct.toFixed(1)}%` : '-';
+                    }
                     tr.appendChild(growthTd);
 
                     tableBody.appendChild(tr);
@@ -2027,67 +2367,7 @@ function formatEuro(val) {
                 const { start, end } = getSelectedYearRange();
 
                 const selectedItems = INGRESSOS_DATA.filter(item => seleccionats.includes(item.concept));
-                const tipologiesItems = selectedTipologies.map(tipus => {
-                    let filteredAwards = [];
-                    if (tipus === 'Total Ajuts') {
-                        filteredAwards = awardsImportData;
-                    } else if (tipus.startsWith('Total ')) {
-                        const catName = tipus.substring(6);
-                        const tipusInCat = tipologiesData
-                            .filter(d => (d.categoria || 'Sense categoria') === catName)
-                            .map(d => d.tipus);
-                        filteredAwards = awardsImportData.filter(d => tipusInCat.includes(d.tipus));
-                    } else {
-                        filteredAwards = awardsImportData.filter(d => d.tipus === tipus);
-                    }
-
-                    if (excludeDeclined) {
-                        filteredAwards = filteredAwards.filter(d => !d.isDeclined);
-                    }
-
-                    if (selectedOrgScope !== 'all') {
-                        filteredAwards = filteredAwards.filter(d => d.orgScope === selectedOrgScope);
-                    }
-
-                    const activeCalls = selectedCallTypes[tipus] || [];
-                    let filteredCalls = activeCalls.filter(call =>
-                        awardsImportData.some(d => d.anyo >= start && d.anyo <= end && isLevel3CallTypeTipus(d.tipus) && d.callType === call && (d.totalImport > 0 || d.count > 0) && (!excludeDeclined || !d.isDeclined) && (selectedOrgScope === 'all' || d.orgScope === selectedOrgScope))
-                    );
-                    if (filteredCalls.length > 0) {
-                        filteredAwards = filteredAwards.filter(d => filteredCalls.includes(d.callType));
-                    }
-
-                    const activeProgs = selectedProjectPrograms[tipus] || [];
-                    let filteredProgs = activeProgs.filter(prog =>
-                        awardsImportData.some(d => d.anyo >= start && d.anyo <= end && isResearchProjectes(d.tipus) && d.callType === prog && (d.totalImport > 0 || d.count > 0) && (!excludeDeclined || !d.isDeclined) && (selectedOrgScope === 'all' || d.orgScope === selectedOrgScope))
-                    );
-                    if (filteredProgs.length > 0) {
-                        filteredAwards = filteredAwards.filter(d => filteredProgs.includes(d.callType));
-                    }
-
-                    const values = {};
-                    for (let y = 2018; y <= 2025; y++) {
-                        values[y.toString()] = 0;
-                    }
-                    filteredAwards.forEach(d => {
-                        if (d.anyo >= 2018 && d.anyo <= 2025) {
-                            values[d.anyo.toString()] = (values[d.anyo.toString()] || 0) + (d.totalImport || 0);
-                        }
-                    });
-
-                    let label = tipus;
-                    if (filteredCalls.length > 0) {
-                        label = `${tipus} (${filteredCalls.join(', ')})`;
-                    } else if (filteredProgs.length > 0) {
-                        label = `${tipus} (${filteredProgs.join(', ')})`;
-                    }
-
-                    return {
-                        concept: label,
-                        values: values,
-                        isAward: true
-                    };
-                });
+                const tipologiesItems = buildTipologiesRenderData(start, end).filter(item => !item.isBreakdownSubRow);
 
                 const allItems = [...selectedItems, ...tipologiesItems];
                 if (allItems.length === 0) {
@@ -2361,67 +2641,7 @@ function formatEuro(val) {
                 const selectedItems = INGRESSOS_DATA.filter(item => seleccionats.includes(item.concept));
 
                 // MongoDB Selected Tipologies details
-                const tipologiesItems = selectedTipologies.map(tipus => {
-                    let filteredAwards = [];
-                    if (tipus === 'Total Ajuts') {
-                        filteredAwards = awardsImportData;
-                    } else if (tipus.startsWith('Total ')) {
-                        const catName = tipus.substring(6);
-                        const tipusInCat = tipologiesData
-                            .filter(d => (d.categoria || 'Sense categoria') === catName)
-                            .map(d => d.tipus);
-                        filteredAwards = awardsImportData.filter(d => tipusInCat.includes(d.tipus));
-                    } else {
-                        filteredAwards = awardsImportData.filter(d => d.tipus === tipus);
-                    }
-
-                    if (excludeDeclined) {
-                        filteredAwards = filteredAwards.filter(d => !d.isDeclined);
-                    }
-
-                    if (selectedOrgScope !== 'all') {
-                        filteredAwards = filteredAwards.filter(d => d.orgScope === selectedOrgScope);
-                    }
-
-                    const activeCalls = selectedCallTypes[tipus] || [];
-                    let filteredCalls = activeCalls.filter(call =>
-                        awardsImportData.some(d => d.anyo >= start && d.anyo <= end && isLevel3CallTypeTipus(d.tipus) && d.callType === call && (d.totalImport > 0 || d.count > 0) && (!excludeDeclined || !d.isDeclined) && (selectedOrgScope === 'all' || d.orgScope === selectedOrgScope))
-                    );
-                    if (filteredCalls.length > 0) {
-                        filteredAwards = filteredAwards.filter(d => filteredCalls.includes(d.callType));
-                    }
-
-                    const activeProgs = selectedProjectPrograms[tipus] || [];
-                    let filteredProgs = activeProgs.filter(prog =>
-                        awardsImportData.some(d => d.anyo >= start && d.anyo <= end && isResearchProjectes(d.tipus) && d.callType === prog && (d.totalImport > 0 || d.count > 0) && (!excludeDeclined || !d.isDeclined) && (selectedOrgScope === 'all' || d.orgScope === selectedOrgScope))
-                    );
-                    if (filteredProgs.length > 0) {
-                        filteredAwards = filteredAwards.filter(d => filteredProgs.includes(d.callType));
-                    }
-
-                    const values = {};
-                    for (let y = 2018; y <= 2025; y++) {
-                        values[y.toString()] = 0;
-                    }
-                    filteredAwards.forEach(d => {
-                        if (d.anyo >= 2018 && d.anyo <= 2025) {
-                            values[d.anyo.toString()] = (values[d.anyo.toString()] || 0) + (d.totalImport || 0);
-                        }
-                    });
-
-                    let label = tipus;
-                    if (filteredCalls.length > 0) {
-                        label = `${tipus} (${filteredCalls.join(', ')})`;
-                    } else if (filteredProgs.length > 0) {
-                        label = `${tipus} (${filteredProgs.join(', ')})`;
-                    }
-
-                    return {
-                        concept: label,
-                        values: values,
-                        isAward: true
-                    };
-                });
+                const tipologiesItems = buildTipologiesRenderData(start, end);
 
                 const allItems = [...selectedItems, ...tipologiesItems];
                 let csvContent = '\uFEFF'; // BOM for Excel UTF-8 representation
@@ -2444,7 +2664,7 @@ function formatEuro(val) {
 
                 // CSV Rows
                 allItems.forEach(item => {
-                    const prefix = item.isAward ? '[Tipologia] ' : '';
+                    const prefix = item.isAward ? (item.isBreakdownSubRow ? '  └─ ' : '[Tipologia] ') : '';
                     const rowName = `"${(prefix + item.concept).replace(/"/g, '""')}"`;
                     const rowValues = [];
                     for (let y = start; y <= end; y++) {
@@ -2479,13 +2699,14 @@ function formatEuro(val) {
                     }
 
                     let varPctStr = '-';
-                    if (vStart > 0) {
+                    if (!item.isBreakdownSubRow && vStart > 0) {
                         const varPct = ((vEnd - vStart) / vStart) * 100;
                         varPctStr = `"${(varPct >= 0 ? '+' : '') + varPct.toFixed(2).replace('.', ',')}%"`;
                     }
 
                     csvContent += `${rowName};${rowValues.join(';')};${varPctStr}\r\n`;
                 });
+
 
                 // Totals Row only when there are no tipologies mixed in
                 if (selectedTipologies.length === 0) {
@@ -2516,7 +2737,25 @@ function formatEuro(val) {
                 link.style.visibility = 'hidden';
                 document.body.appendChild(link);
                 link.click();
-                document.body.removeChild(link);
+            }
+
+            function extractTitle(raw, fallback = 'Sense títol') {
+                if (!raw) return fallback;
+                if (typeof raw === 'string') return raw.trim() || fallback;
+                if (Array.isArray(raw)) {
+                    for (const loc of ['ca_ES', 'es_ES', 'en_GB']) {
+                        const found = raw.find(i => i?.locale === loc || i?.lang === loc);
+                        if (found?.value) return found.value.trim();
+                    }
+                    if (raw[0]?.value) return raw[0].value.trim();
+                }
+                if (typeof raw === 'object') {
+                    const v = raw.ca_ES || raw.es_ES || raw.en_GB;
+                    if (v) return v.trim();
+                    if (raw.text) return extractTitle(raw.text, fallback);
+                    if (raw.term) return extractTitle(raw.term, fallback);
+                }
+                return fallback;
             }
         });
     </script>

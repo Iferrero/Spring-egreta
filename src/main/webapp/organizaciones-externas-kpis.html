@@ -552,9 +552,11 @@
             needsFetch.forEach(org => {
                 fetchSuggestionBundle(org, signal)
                     .catch(err => {
-                        if (err.name !== 'AbortError') {
-                            console.error('Error preloading individual suggestions:', err);
+                        if (err.name === 'AbortError') {
+                            // Re-lanzar para que el .finally no actualice el DOM con datos vacíos
+                            throw err;
                         }
+                        console.error('Error preloading individual suggestions:', err);
                     })
                     .finally(() => {
                         uuidsBeingFetched.delete(org.uuid);
@@ -570,7 +572,8 @@
                                 if (countryCell) countryCell.innerHTML = getSuggestedCountryHtml(org);
                             }
                         }
-                    });
+                    })
+                    .catch(() => { /* AbortError silenciado aquí */ });
             });
         }
 

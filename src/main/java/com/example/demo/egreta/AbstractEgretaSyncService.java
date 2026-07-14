@@ -327,9 +327,9 @@ public abstract class AbstractEgretaSyncService {
 
     // Inserta en bulk en la colección indicada
     protected void saveBulkToCollection(List<Map<String, Object>> items, String collectionName) {
+        List<Map<String, Object>> normalizedItems = normalizeBatch(items);
         BulkOperations bulk = mongoTemplate.bulkOps(BulkOperations.BulkMode.UNORDERED, collectionName);
-        for (Map<String, Object> doc : items) {
-            Map<String, Object> normalized = normalize(doc);
+        for (Map<String, Object> normalized : normalizedItems) {
             org.bson.Document bsonDoc = new org.bson.Document(normalized);
             Object id = normalized.get("_id");
             if (id != null) {
@@ -345,6 +345,21 @@ public abstract class AbstractEgretaSyncService {
 
     protected Map<String, Object> normalize(Map<String, Object> doc) {
         return doc;
+    }
+
+    /**
+     * Hook opcional para normalizar un lote (página) completo de golpe.
+     * Útil cuando normalize() necesita hacer I/O adicional (p.ej. llamadas
+     * HTTP por documento) que conviene paralelizar en vez de hacer en serie.
+     * Por defecto aplica normalize() a cada documento secuencialmente
+     * (equivalente al comportamiento por defecto de egreta_sync_base.py).
+     */
+    protected List<Map<String, Object>> normalizeBatch(List<Map<String, Object>> items) {
+        List<Map<String, Object>> result = new ArrayList<>(items.size());
+        for (Map<String, Object> doc : items) {
+            result.add(normalize(doc));
+        }
+        return result;
     }
 
     protected void postProcess() {

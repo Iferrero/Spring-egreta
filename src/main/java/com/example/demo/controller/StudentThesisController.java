@@ -896,6 +896,7 @@ public class StudentThesisController {
         }
         
         List<Map<String, Object>> result = new ArrayList<>();
+        java.util.Set<String> seenLabels = new java.util.HashSet<>();
         for (Document c : contained) {
             Boolean disabled = c.getBoolean("disabled");
             if (disabled != null && disabled) {
@@ -905,6 +906,11 @@ public class StudentThesisController {
             if (uri == null) continue;
             // The language code is the last part of the URI, e.g., "es_ES" or "ar"
             String code = uri.substring(uri.lastIndexOf('/') + 1);
+            
+            // Prefer ca_ES over ca, es_ES over es, en_GB over en to avoid duplicates
+            if (code.length() == 2 && ("ca".equals(code) || "es".equals(code) || "en".equals(code))) {
+                continue;
+            }
             
             Map<String, Object> langMap = new LinkedHashMap<>();
             langMap.put("code", code);
@@ -945,6 +951,13 @@ public class StudentThesisController {
                 label = code;
             }
             langMap.put("label", label);
+            
+            // Filter duplicates by label
+            String normLabel = label.trim().toLowerCase();
+            if (seenLabels.contains(normLabel)) {
+                continue;
+            }
+            seenLabels.add(normLabel);
             
             result.add(langMap);
         }
@@ -1001,9 +1014,33 @@ public class StudentThesisController {
                     response.put("success", true);
                     return response;
                 }
+                
+                // Secondary local fallback: check probabilities list (sorted descending)
+                List<com.optimaize.langdetect.DetectedLanguage> probabilities = detector.getProbabilities(textObject);
+                if (probabilities != null && !probabilities.isEmpty()) {
+                    com.optimaize.langdetect.DetectedLanguage best = probabilities.get(0);
+                    if (best.getProbability() >= 0.10) {
+                        String detectedCode = best.getLocale().getLanguage();
+                        String mappedCode = resolveLanguageCodeFromPure(detectedCode);
+                        response.put("language", mappedCode);
+                        response.put("rawCode", detectedCode);
+                        response.put("success", true);
+                        return response;
+                    }
+                }
             }
         } catch (Exception e) {
             System.err.println("Error detecting language: " + e.getMessage());
+        }
+        
+        // Try fallback via MyMemory autodetect translation API
+        String myMemoryDetected = detectLanguageViaMyMemory(title);
+        if (myMemoryDetected != null && !myMemoryDetected.isBlank()) {
+            String mappedCode = resolveLanguageCodeFromPure(myMemoryDetected);
+            response.put("language", mappedCode);
+            response.put("rawCode", myMemoryDetected);
+            response.put("success", true);
+            return response;
         }
         
         String fallback = fallbackDetectLanguage(title);
@@ -1011,6 +1048,37 @@ public class StudentThesisController {
         response.put("fallback", true);
         response.put("success", true);
         return response;
+    }
+
+    private String detectLanguageViaMyMemory(String title) {
+        try {
+            String cleanTitle = title.replaceAll("<[^>]*>", "").replaceAll("\\s+", " ").trim();
+            String encodedText = java.net.URLEncoder.encode(cleanTitle, java.nio.charset.StandardCharsets.UTF_8);
+            String url = "https://api.mymemory.translated.net/get?q=" + encodedText + "&langpair=autodetect|en";
+            
+            java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
+            java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
+                    .uri(java.net.URI.create(url))
+                    .header("User-Agent", "PortalRecercaUAB/1.0 (mailto:recerca@uab.cat)")
+                    .GET()
+                    .build();
+            
+            java.net.http.HttpResponse<String> response = client.send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() == 200) {
+                com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+                Map<String, Object> data = mapper.readValue(response.body(), Map.class);
+                Map<String, Object> respData = (Map<String, Object>) data.get("responseData");
+                if (respData != null) {
+                    String detectedLanguage = (String) respData.get("detectedLanguage");
+                    if (detectedLanguage != null && !detectedLanguage.isBlank()) {
+                        return detectedLanguage.trim();
+                    }
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("Error detecting language via MyMemory: " + e.getMessage());
+        }
+        return null;
     }
 
     private String resolveLanguageCodeFromPure(String detectedCode) {
@@ -1339,7 +1407,11 @@ public class StudentThesisController {
             Map<String, Object> data = new LinkedHashMap<>(getResp.getBody());
             
             // 2. Modify abstract
-            data.put("abstract", abstracts);
+            Map<String, String> escapedAbstracts = new LinkedHashMap<>();
+            for (Map.Entry<String, String> entry : abstracts.entrySet()) {
+                escapedAbstracts.put(entry.getKey(), escapeXmlExceptEntities(entry.getValue()));
+            }
+            data.put("abstract", escapedAbstracts);
             
             // 3. PUT
             HttpEntity<Map<String, Object>> putEntity = new HttpEntity<>(data, headers);
@@ -3264,5 +3336,12 @@ public class StudentThesisController {
         orList.add(buildStringRegexCond("$$p.sex.term.en_GB", regexPattern));
         orList.add(buildStringRegexCond("$$p.sex", regexPattern));
         return new Document("$or", orList);
+    }
+
+    private String escapeXmlExceptEntities(String text) {
+        if (text == null) return null;
+        text = text.replace("<", "&lt;").replace(">", "&gt;");
+        text = text.replaceAll("&(?![a-zA-Z0-9#]+;)", "&amp;");
+        return text;
     }
 }

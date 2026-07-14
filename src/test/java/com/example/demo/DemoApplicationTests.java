@@ -199,6 +199,95 @@ class DemoApplicationTests {
         }
         System.out.println("Persons scan finished. Success: " + successPersons + ", Failed: " + failedPersons);
     }
+
+    @Test
+    void testPrintVigentesCategorias() {
+        System.out.println("=== PRINTING VIGENTES CATEGORIAS ===");
+        try {
+            List<Document> result = mongoTemplate.aggregate(
+                org.springframework.data.mongodb.core.aggregation.Aggregation.newAggregation(
+                    org.springframework.data.mongodb.core.aggregation.Aggregation.unwind("staffOrganizationAssociations"),
+                    org.springframework.data.mongodb.core.aggregation.Aggregation.group("staffOrganizationAssociations.employmentType.term.ca_ES")
+                        .addToSet("uuid").as("set"),
+                    org.springframework.data.mongodb.core.aggregation.Aggregation.project("_id").and("set").size().as("total")
+                ),
+                "Persons",
+                Document.class
+            ).getMappedResults();
+            for (Document doc : result) {
+                System.out.println("Category: " + doc.get("_id") + " -> Count: " + doc.get("total"));
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    @Autowired
+    private PersonaController personaController;
+
+    @Test
+    void testPrintIcreaControllerStats() {
+        System.out.println("=== PRINTING CONTROLLER ICREA STATS ===");
+        try {
+            System.out.println("CONTROLLER_ACTUAL: " + personaController.getIcreaStats("all", null, null, null));
+            System.out.println("CONTROLLER_2026: " + personaController.getIcreaStats("all", null, 2026, null));
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    @Test
+    void testPrintIcreas2026() {
+        System.out.println("=== PRINTING ICREAS 2026 ===");
+        try {
+            List<Document> result = mongoTemplate.aggregate(
+                org.springframework.data.mongodb.core.aggregation.Aggregation.newAggregation(
+                    org.springframework.data.mongodb.core.aggregation.Aggregation.unwind("visitingScholarOrganizationAssociations"),
+                    org.springframework.data.mongodb.core.aggregation.Aggregation.match(
+                        new org.springframework.data.mongodb.core.query.Criteria().orOperator(
+                            org.springframework.data.mongodb.core.query.Criteria.where("visitingScholarOrganizationAssociations.jobTitle.term.ca_ES").regex("icrea", "i"),
+                            org.springframework.data.mongodb.core.query.Criteria.where("visitingScholarOrganizationAssociations.jobTitle.term.es_ES").regex("icrea", "i"),
+                            org.springframework.data.mongodb.core.query.Criteria.where("visitingScholarOrganizationAssociations.jobTitle.term.en_GB").regex("icrea", "i")
+                        )
+                    ),
+                    ctx -> new Document("$match", new Document("$and", Arrays.asList(
+                        new Document("$or", Arrays.asList(
+                            new Document("visitingScholarOrganizationAssociations.period.startDate", (Object) null),
+                            new Document("visitingScholarOrganizationAssociations.period.startDate", new Document("$exists", false)),
+                            new Document("$expr", new Document("$lte", Arrays.asList(
+                                new Document("$toDate", "$visitingScholarOrganizationAssociations.period.startDate"),
+                                new Document("$toDate", "2026-12-31T23:59:59Z")
+                            )))
+                        )),
+                        new Document("$or", Arrays.asList(
+                            new Document("visitingScholarOrganizationAssociations.period.endDate", (Object) null),
+                            new Document("visitingScholarOrganizationAssociations.period.endDate", new Document("$exists", false)),
+                            new Document("visitingScholarOrganizationAssociations.period", new Document("$exists", false)),
+                            new Document("$expr", new Document("$gte", Arrays.asList(
+                                new Document("$toDate", "$visitingScholarOrganizationAssociations.period.endDate"),
+                                new Document("$toDate", "2026-01-01T00:00:00Z")
+                            )))
+                        ))
+                    )))
+                ),
+                "Persons",
+                Document.class
+            ).getMappedResults();
+            
+            System.out.println("TOTAL ICREA 2026 RETRIEVED: " + result.size());
+            for (Document doc : result) {
+                Document assoc = (Document) doc.get("visitingScholarOrganizationAssociations");
+                Document period = (Document) assoc.get("period");
+                String start = period != null ? period.getString("startDate") : "N/A";
+                String end = period != null ? period.getString("endDate") : "N/A";
+                Object nameObj = doc.get("name");
+                Object namesObj = doc.get("names");
+                System.out.println("ICREA_INFO: Name: " + nameObj + " | Names: " + namesObj + " | UUID: " + doc.get("uuid") + " | EndDate: " + end + " | StartDate: " + start);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
 }
 
 

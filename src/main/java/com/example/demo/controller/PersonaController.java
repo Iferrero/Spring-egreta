@@ -4,6 +4,7 @@ import com.example.demo.model.Organizacion;
 import com.example.demo.model.Persona;
 import com.example.demo.service.AwardService;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.annotation.PostConstruct;
 import org.apache.poi.util.Units;
 import org.apache.poi.xwpf.usermodel.*;
 import org.bson.Document;
@@ -64,11 +65,62 @@ public class PersonaController {
     private final MongoTemplate mongoTemplate;
     private final AwardService awardService;
 
-    // Constructor para inyectar las dependencias (Soluciona el error de inicialización)
     @Autowired
     public PersonaController(MongoTemplate mongoTemplate, AwardService awardService) {
         this.mongoTemplate = mongoTemplate;
         this.awardService = awardService;
+    }
+
+    @PostConstruct
+    public void initIndexes() {
+        try {
+            mongoTemplate.indexOps("Persons").ensureIndex(
+                new org.springframework.data.mongodb.core.index.Index()
+                    .on("staffOrganizationAssociations.organization.uuid", Sort.Direction.ASC)
+            );
+            mongoTemplate.indexOps("Persons").ensureIndex(
+                new org.springframework.data.mongodb.core.index.Index()
+                    .on("staffOrganizationAssociations.period.startDate", Sort.Direction.ASC)
+            );
+            mongoTemplate.indexOps("Persons").ensureIndex(
+                new org.springframework.data.mongodb.core.index.Index()
+                    .on("staffOrganizationAssociations.period.endDate", Sort.Direction.ASC)
+            );
+            mongoTemplate.indexOps("Persons").ensureIndex(
+                new org.springframework.data.mongodb.core.index.Index()
+                    .on("staffOrganizationAssociations.employmentType.term.ca_ES", Sort.Direction.ASC)
+            );
+            // Compound index for active staff by department
+            mongoTemplate.indexOps("Persons").ensureIndex(
+                new org.springframework.data.mongodb.core.index.CompoundIndexDefinition(
+                    new org.bson.Document("staffOrganizationAssociations.organization.uuid", 1)
+                        .append("staffOrganizationAssociations.period.startDate", 1)
+                        .append("staffOrganizationAssociations.period.endDate", 1)
+                )
+            );
+            
+            // Indexes for ICREA (visitingScholarOrganizationAssociations)
+            mongoTemplate.indexOps("Persons").ensureIndex(
+                new org.springframework.data.mongodb.core.index.Index()
+                    .on("visitingScholarOrganizationAssociations.organization.uuid", Sort.Direction.ASC)
+            );
+            mongoTemplate.indexOps("Persons").ensureIndex(
+                new org.springframework.data.mongodb.core.index.Index()
+                    .on("visitingScholarOrganizationAssociations.period.startDate", Sort.Direction.ASC)
+            );
+            mongoTemplate.indexOps("Persons").ensureIndex(
+                new org.springframework.data.mongodb.core.index.Index()
+                    .on("visitingScholarOrganizationAssociations.period.endDate", Sort.Direction.ASC)
+            );
+            mongoTemplate.indexOps("Persons").ensureIndex(
+                new org.springframework.data.mongodb.core.index.Index()
+                    .on("visitingScholarOrganizationAssociations.jobTitle.term.ca_ES", Sort.Direction.ASC)
+            );
+            
+            System.out.println("Persons indexes created/verified successfully.");
+        } catch (Exception e) {
+            System.err.println("Error initializing Persons indexes: " + e.getMessage());
+        }
     }
 
     /** DEBUG TEMPORAL: dump identifiers from Awards (optionally filter by orgUuid) */
@@ -1048,7 +1100,7 @@ public class PersonaController {
         ops.add(context -> new Document("$match", new Document("$or", Arrays.asList(
             new Document("staffOrganizationAssociations.period.endDate", (Object) null),
             new Document("staffOrganizationAssociations.period.endDate", new Document("$exists", false)),
-            new Document("$expr", new Document("$gt", Arrays.asList("$staffOrganizationAssociations.period.endDate", "$$NOW")))
+            new Document("$expr", new Document("$gt", Arrays.asList(new Document("$toDate", "$staffOrganizationAssociations.period.endDate"), "$$NOW")))
         ))));
 
         ops.add(Aggregation.group("_id"));
@@ -1109,36 +1161,13 @@ public class PersonaController {
     @GetMapping("/stats/age-pyramid")
     public List<Map<String, Object>> getAgePyramidStats(
             @RequestParam(required = false) String personalType,
-            @RequestParam(required = false) String deptUuid) {
-        LocalDate hoy = LocalDate.now();
-        String hoyIso = hoy.toString();
-
-        Criteria activeAssociationCriteria = new Criteria().orOperator(
-            Criteria.where("period.endDate").is(null),
-            Criteria.where("period.endDate").exists(false),
-            new Criteria().andOperator(
-                Criteria.where("period.endDate").type(9),
-                Criteria.where("period.endDate").gt(hoy)
-            ),
-            new Criteria().andOperator(
-                Criteria.where("period.endDate").type(2),
-                Criteria.where("period.endDate").gt(hoyIso)
-            )
-        );
+            @RequestParam(required = false) String deptUuid,
+            @RequestParam(required = false) Integer year,
+            @RequestParam(required = false) String categoryPattern) {
+        LocalDate hoy = (year != null) ? LocalDate.of(year, 12, 31) : LocalDate.now();
 
         Query query = new Query();
-        if (deptUuid != null && !deptUuid.isBlank()) {
-            query.addCriteria(Criteria.where("staffOrganizationAssociations").elemMatch(
-                new Criteria().andOperator(
-                    Criteria.where("organization.uuid").is(deptUuid),
-                    activeAssociationCriteria
-                )
-            ));
-        } else {
-            query.addCriteria(Criteria.where("staffOrganizationAssociations").elemMatch(activeAssociationCriteria));
-        }
-
-        addPersonalTypeCriteria(query, personalType);
+        query.addCriteria(buildCombinedAssociationCriteria(personalType, deptUuid, year, categoryPattern));
 
         query.fields()
                 .include("dateOfBirth")
@@ -1190,36 +1219,12 @@ public class PersonaController {
     @GetMapping("/stats/sex-distribution")
     public Map<String, Integer> getSexDistribution(
             @RequestParam(required = false) String personalType,
-            @RequestParam(required = false) String deptUuid) {
-        LocalDate hoy = LocalDate.now();
-        String hoyIso = hoy.toString();
-
-        Criteria activeAssociationCriteria = new Criteria().orOperator(
-            Criteria.where("period.endDate").is(null),
-            Criteria.where("period.endDate").exists(false),
-            new Criteria().andOperator(
-                Criteria.where("period.endDate").type(9),
-                Criteria.where("period.endDate").gt(hoy)
-            ),
-            new Criteria().andOperator(
-                Criteria.where("period.endDate").type(2),
-                Criteria.where("period.endDate").gt(hoyIso)
-            )
-        );
+            @RequestParam(required = false) String deptUuid,
+            @RequestParam(required = false) Integer year,
+            @RequestParam(required = false) String categoryPattern) {
 
         Query query = new Query();
-        if (deptUuid != null && !deptUuid.isBlank()) {
-            query.addCriteria(Criteria.where("staffOrganizationAssociations").elemMatch(
-                new Criteria().andOperator(
-                    Criteria.where("organization.uuid").is(deptUuid),
-                    activeAssociationCriteria
-                )
-            ));
-        } else {
-            query.addCriteria(Criteria.where("staffOrganizationAssociations").elemMatch(activeAssociationCriteria));
-        }
-
-        addPersonalTypeCriteria(query, personalType);
+        query.addCriteria(buildCombinedAssociationCriteria(personalType, deptUuid, year, categoryPattern));
 
         query.fields()
                 .include("gender")
@@ -1335,37 +1340,12 @@ public class PersonaController {
     @GetMapping("/stats/nationality")
     public List<Map<String, Object>> getNationalityStats(
             @RequestParam(required = false) String personalType,
-            @RequestParam(required = false) String deptUuid) {
-
-        LocalDate hoy = LocalDate.now();
-        String hoyIso = hoy.toString();
-
-        Criteria activeAssociationCriteria = new Criteria().orOperator(
-            Criteria.where("period.endDate").is(null),
-            Criteria.where("period.endDate").exists(false),
-            new Criteria().andOperator(
-                Criteria.where("period.endDate").type(9),
-                Criteria.where("period.endDate").gt(hoy)
-            ),
-            new Criteria().andOperator(
-                Criteria.where("period.endDate").type(2),
-                Criteria.where("period.endDate").gt(hoyIso)
-            )
-        );
+            @RequestParam(required = false) String deptUuid,
+            @RequestParam(required = false) Integer year,
+            @RequestParam(required = false) String categoryPattern) {
 
         Query query = new Query();
-        if (deptUuid != null && !deptUuid.isBlank()) {
-            query.addCriteria(Criteria.where("staffOrganizationAssociations").elemMatch(
-                new Criteria().andOperator(
-                    Criteria.where("organization.uuid").is(deptUuid),
-                    activeAssociationCriteria
-                )
-            ));
-        } else {
-            query.addCriteria(Criteria.where("staffOrganizationAssociations").elemMatch(activeAssociationCriteria));
-        }
-
-        addPersonalTypeCriteria(query, personalType);
+        query.addCriteria(buildCombinedAssociationCriteria(personalType, deptUuid, year, categoryPattern));
 
         List<Document> docs = mongoTemplate.find(query, Document.class, "Persons");
 
@@ -1448,11 +1428,21 @@ public class PersonaController {
     @GetMapping("/stats/contract-type")
     public Map<String, Long> getContractTypeStats(
             @RequestParam(required = false) String personalType,
-            @RequestParam(required = false) String deptUuid) {
+            @RequestParam(required = false) String deptUuid,
+            @RequestParam(required = false) Integer year,
+            @RequestParam(required = false) String categoryPattern) {
 
         List<AggregationOperation> ops = new ArrayList<>();
 
         ops.add(Aggregation.unwind("staffOrganizationAssociations"));
+
+        if (categoryPattern != null && !categoryPattern.isBlank()) {
+            ops.add(Aggregation.match(new Criteria().orOperator(
+                Criteria.where("staffOrganizationAssociations.employmentType.term.ca_ES").regex(categoryPattern, "i"),
+                Criteria.where("staffOrganizationAssociations.employmentType.term.es_ES").regex(categoryPattern, "i"),
+                Criteria.where("staffOrganizationAssociations.employmentType.term.en_GB").regex(categoryPattern, "i")
+            )));
+        }
 
         if (deptUuid != null && !deptUuid.isBlank()) {
             ops.add(Aggregation.match(Criteria.where("staffOrganizationAssociations.organization.uuid").is(deptUuid)));
@@ -1473,18 +1463,47 @@ public class PersonaController {
             }
         }
 
-        // Keep only active associations using $toDate + $$NOW
-        ops.add(ctx -> new Document("$addFields", new Document("_endDateReal",
-            new Document("$cond", Arrays.asList(
-                new Document("$ifNull", Arrays.asList("$staffOrganizationAssociations.period.endDate", false)),
-                new Document("$toDate", "$staffOrganizationAssociations.period.endDate"),
-                (Object) null
-            ))
-        )));
-        ops.add(ctx -> new Document("$match", new Document("$or", Arrays.asList(
-            new Document("_endDateReal", null),
-            new Document("$expr", new Document("$gt", Arrays.asList("$_endDateReal", "$$NOW")))
-        ))));
+        if (year != null) {
+            String startYearLimit = year + "-12-31T23:59:59Z";
+            String endYearLimit = year + "-01-01T00:00:00Z";
+            ops.add(ctx -> new Document("$match", new Document("$and", Arrays.asList(
+                new Document("$or", Arrays.asList(
+                    new Document("staffOrganizationAssociations.period.startDate", (Object) null),
+                    new Document("staffOrganizationAssociations.period.startDate", new Document("$exists", false)),
+                    new Document("$expr", new Document("$lte", Arrays.asList(
+                        new Document("$toDate", "$staffOrganizationAssociations.period.startDate"),
+                        new Document("$toDate", startYearLimit)
+                    )))
+                )),
+                new Document("$or", Arrays.asList(
+                    new Document("staffOrganizationAssociations.period.endDate", (Object) null),
+                    new Document("staffOrganizationAssociations.period.endDate", new Document("$exists", false)),
+                    new Document("$expr", new Document("$gte", Arrays.asList(
+                        new Document("$toDate", "$staffOrganizationAssociations.period.endDate"),
+                        new Document("$toDate", endYearLimit)
+                    )))
+                ))
+            ))));
+            ops.add(ctx -> new Document("$addFields", new Document("_endDateReal",
+                new Document("$cond", Arrays.asList(
+                    new Document("$ifNull", Arrays.asList("$staffOrganizationAssociations.period.endDate", false)),
+                    new Document("$toDate", "$staffOrganizationAssociations.period.endDate"),
+                    (Object) null
+                ))
+            )));
+        } else {
+            ops.add(ctx -> new Document("$addFields", new Document("_endDateReal",
+                new Document("$cond", Arrays.asList(
+                    new Document("$ifNull", Arrays.asList("$staffOrganizationAssociations.period.endDate", false)),
+                    new Document("$toDate", "$staffOrganizationAssociations.period.endDate"),
+                    (Object) null
+                ))
+            )));
+            ops.add(ctx -> new Document("$match", new Document("$or", Arrays.asList(
+                new Document("_endDateReal", null),
+                new Document("$expr", new Document("$gt", Arrays.asList("$_endDateReal", "$$NOW")))
+            ))));
+        }
 
         // Classify: permanent = no endDate, noPermament = has future endDate
         ops.add(ctx -> new Document("$addFields", new Document("_tipusContracte",
@@ -1519,11 +1538,21 @@ public class PersonaController {
 
     @GetMapping("/stats/personal-academic")
     public Map<String, Long> getPersonalAcademicStats(
-            @RequestParam(required = false) String deptUuid) {
+            @RequestParam(required = false) String deptUuid,
+            @RequestParam(required = false) Integer year,
+            @RequestParam(required = false) String categoryPattern) {
 
         List<AggregationOperation> ops = new ArrayList<>();
 
         ops.add(Aggregation.unwind("staffOrganizationAssociations"));
+
+        if (categoryPattern != null && !categoryPattern.isBlank()) {
+            ops.add(Aggregation.match(new Criteria().orOperator(
+                Criteria.where("staffOrganizationAssociations.employmentType.term.ca_ES").regex(categoryPattern, "i"),
+                Criteria.where("staffOrganizationAssociations.employmentType.term.es_ES").regex(categoryPattern, "i"),
+                Criteria.where("staffOrganizationAssociations.employmentType.term.en_GB").regex(categoryPattern, "i")
+            )));
+        }
 
         if (deptUuid != null && !deptUuid.isBlank()) {
             ops.add(Aggregation.match(Criteria.where("staffOrganizationAssociations.organization.uuid").is(deptUuid)));
@@ -1535,19 +1564,40 @@ public class PersonaController {
             Criteria.where("staffOrganizationAssociations.staffType.term.en_GB").regex("^academic", "i")
         )));
 
-        // Normalitza endDate a Date real (com $toDate) i filtra actius amb $$NOW
-        ops.add(ctx -> new Document("$addFields", new Document("_endDateReal",
-            new Document("$cond", Arrays.asList(
-                new Document("$ifNull", Arrays.asList("$staffOrganizationAssociations.period.endDate", false)),
-                new Document("$toDate", "$staffOrganizationAssociations.period.endDate"),
-                (Object) null
-            ))
-        )));
-
-        ops.add(ctx -> new Document("$match", new Document("$or", Arrays.asList(
-            new Document("_endDateReal", null),
-            new Document("$expr", new Document("$gt", Arrays.asList("$_endDateReal", "$$NOW")))
-        ))));
+        if (year != null) {
+            String startYearLimit = year + "-12-31T23:59:59Z";
+            String endYearLimit = year + "-01-01T00:00:00Z";
+            ops.add(ctx -> new Document("$match", new Document("$and", Arrays.asList(
+                new Document("$or", Arrays.asList(
+                    new Document("staffOrganizationAssociations.period.startDate", (Object) null),
+                    new Document("staffOrganizationAssociations.period.startDate", new Document("$exists", false)),
+                    new Document("$expr", new Document("$lte", Arrays.asList(
+                        new Document("$toDate", "$staffOrganizationAssociations.period.startDate"),
+                        new Document("$toDate", startYearLimit)
+                    )))
+                )),
+                new Document("$or", Arrays.asList(
+                    new Document("staffOrganizationAssociations.period.endDate", (Object) null),
+                    new Document("staffOrganizationAssociations.period.endDate", new Document("$exists", false)),
+                    new Document("$expr", new Document("$gte", Arrays.asList(
+                        new Document("$toDate", "$staffOrganizationAssociations.period.endDate"),
+                        new Document("$toDate", endYearLimit)
+                    )))
+                ))
+            ))));
+        } else {
+            ops.add(ctx -> new Document("$addFields", new Document("_endDateReal",
+                new Document("$cond", Arrays.asList(
+                    new Document("$ifNull", Arrays.asList("$staffOrganizationAssociations.period.endDate", false)),
+                    new Document("$toDate", "$staffOrganizationAssociations.period.endDate"),
+                    (Object) null
+                ))
+            )));
+            ops.add(ctx -> new Document("$match", new Document("$or", Arrays.asList(
+                new Document("_endDateReal", null),
+                new Document("$expr", new Document("$gt", Arrays.asList("$_endDateReal", "$$NOW")))
+            ))));
+        }
 
         ops.add(Aggregation.group("_id"));
         ops.add(Aggregation.count().as("total"));
@@ -1558,6 +1608,60 @@ public class PersonaController {
         return Map.of("total", total);
     }
 
+    private Criteria buildActiveAssociationCriteria(Integer year) {
+        if (year != null) {
+            java.time.Instant startYearLimitInstant = java.time.Instant.parse(year + "-12-31T23:59:59Z");
+            java.time.Instant endYearLimitInstant = java.time.Instant.parse(year + "-01-01T00:00:00Z");
+            java.util.Date startYearLimitDate = java.util.Date.from(startYearLimitInstant);
+            java.util.Date endYearLimitDate = java.util.Date.from(endYearLimitInstant);
+            String startYearLimitStr = year + "-12-31T23:59:59Z";
+            String endYearLimitStr = year + "-01-01T00:00:00Z";
+
+            Criteria startCriteria = new Criteria().orOperator(
+                Criteria.where("period.startDate").is(null),
+                Criteria.where("period.startDate").exists(false),
+                new Criteria().andOperator(
+                    Criteria.where("period.startDate").type(9),
+                    Criteria.where("period.startDate").lte(startYearLimitDate)
+                ),
+                new Criteria().andOperator(
+                    Criteria.where("period.startDate").type(2),
+                    Criteria.where("period.startDate").lte(startYearLimitStr)
+                )
+            );
+
+            Criteria endCriteria = new Criteria().orOperator(
+                Criteria.where("period.endDate").is(null),
+                Criteria.where("period.endDate").exists(false),
+                new Criteria().andOperator(
+                    Criteria.where("period.endDate").type(9),
+                    Criteria.where("period.endDate").gte(endYearLimitDate)
+                ),
+                new Criteria().andOperator(
+                    Criteria.where("period.endDate").type(2),
+                    Criteria.where("period.endDate").gte(endYearLimitStr)
+                )
+            );
+
+            return new Criteria().andOperator(startCriteria, endCriteria);
+        } else {
+            LocalDate hoy = LocalDate.now();
+            String hoyIso = hoy.toString();
+            return new Criteria().orOperator(
+                Criteria.where("period.endDate").is(null),
+                Criteria.where("period.endDate").exists(false),
+                new Criteria().andOperator(
+                    Criteria.where("period.endDate").type(9),
+                    Criteria.where("period.endDate").gt(hoy)
+                ),
+                new Criteria().andOperator(
+                    Criteria.where("period.endDate").type(2),
+                    Criteria.where("period.endDate").gt(hoyIso)
+                )
+            );
+        }
+    }
+
     /**
      * Total de persones vigents (deduplicades per persona), usant la mateixa lògica
      * d'elemMatch que els gràfics (age-pyramid, sex-distribution, nationality).
@@ -1565,37 +1669,12 @@ public class PersonaController {
     @GetMapping("/stats/vigentes-total")
     public Map<String, Long> getVigentesTotal(
             @RequestParam(required = false) String personalType,
-            @RequestParam(required = false) String deptUuid) {
-
-        LocalDate hoy = LocalDate.now();
-        String hoyIso = hoy.toString();
-
-        Criteria activeAssociationCriteria = new Criteria().orOperator(
-            Criteria.where("period.endDate").is(null),
-            Criteria.where("period.endDate").exists(false),
-            new Criteria().andOperator(
-                Criteria.where("period.endDate").type(9),
-                Criteria.where("period.endDate").gt(hoy)
-            ),
-            new Criteria().andOperator(
-                Criteria.where("period.endDate").type(2),
-                Criteria.where("period.endDate").gt(hoyIso)
-            )
-        );
+            @RequestParam(required = false) String deptUuid,
+            @RequestParam(required = false) Integer year,
+            @RequestParam(required = false) String categoryPattern) {
 
         Query query = new Query();
-        if (deptUuid != null && !deptUuid.isBlank()) {
-            query.addCriteria(Criteria.where("staffOrganizationAssociations").elemMatch(
-                new Criteria().andOperator(
-                    Criteria.where("organization.uuid").is(deptUuid),
-                    activeAssociationCriteria
-                )
-            ));
-        } else {
-            query.addCriteria(Criteria.where("staffOrganizationAssociations").elemMatch(activeAssociationCriteria));
-        }
-
-        addPersonalTypeCriteria(query, personalType);
+        query.addCriteria(buildCombinedAssociationCriteria(personalType, deptUuid, year, categoryPattern));
 
         return Map.of("total", mongoTemplate.count(query, Persona.class));
     }
@@ -1607,74 +1686,202 @@ public class PersonaController {
     @GetMapping("/stats/vigentes-por-categoria")
     public List<Map<String, Object>> getVigentesPorCategoria(
             @RequestParam(required = false) String deptUuid,
-            @RequestParam(required = false) String personalType) {
+            @RequestParam(required = false) String personalType,
+            @RequestParam(required = false) Integer year,
+            @RequestParam(required = false) String categoryPattern) {
+
+        boolean isIcrea = (categoryPattern != null && categoryPattern.toLowerCase().contains("icrea"));
+        String arrayName = isIcrea ? "visitingScholarOrganizationAssociations" : "staffOrganizationAssociations";
+        String termField = isIcrea ? "jobTitle.term" : "employmentType.term";
 
         List<AggregationOperation> ops = new ArrayList<>();
 
-        ops.add(Aggregation.unwind("staffOrganizationAssociations"));
+        // Match first on document level to narrow down from multikey index
+        ops.add(Aggregation.match(buildCombinedAssociationCriteria(personalType, deptUuid, year, categoryPattern)));
+
+        ops.add(Aggregation.unwind(arrayName));
+
+        if (categoryPattern != null && !categoryPattern.isBlank()) {
+            ops.add(Aggregation.match(new Criteria().orOperator(
+                Criteria.where(arrayName + "." + termField + ".ca_ES").regex(categoryPattern, "i"),
+                Criteria.where(arrayName + "." + termField + ".es_ES").regex(categoryPattern, "i"),
+                Criteria.where(arrayName + "." + termField + ".en_GB").regex(categoryPattern, "i")
+            )));
+        }
 
         // Filtre per departament sobre l'associació desplegada
         if (deptUuid != null && !deptUuid.isBlank()) {
             ops.add(Aggregation.match(
-                Criteria.where("staffOrganizationAssociations.organization.uuid").is(deptUuid)));
+                Criteria.where(arrayName + ".organization.uuid").is(deptUuid)));
         }
 
         // Filtre per tipo de personal (acadèmic / no acadèmic)
-        if ("academic".equalsIgnoreCase(personalType)) {
-            ops.add(Aggregation.match(new Criteria().orOperator(
-                Criteria.where("staffOrganizationAssociations.staffType.term.ca_ES").regex("^acadèm", "i"),
-                Criteria.where("staffOrganizationAssociations.staffType.term.es_ES").regex("^académ", "i"),
-                Criteria.where("staffOrganizationAssociations.staffType.term.en_GB").regex("^academic", "i")
-            )));
-        } else if ("nonAcademic".equalsIgnoreCase(personalType)) {
-            ops.add(Aggregation.match(new Criteria().norOperator(
-                Criteria.where("staffOrganizationAssociations.staffType.term.ca_ES").regex("^acadèm", "i"),
-                Criteria.where("staffOrganizationAssociations.staffType.term.es_ES").regex("^académ", "i"),
-                Criteria.where("staffOrganizationAssociations.staffType.term.en_GB").regex("^academic", "i")
-            )));
+        if (!isIcrea) {
+            if ("academic".equalsIgnoreCase(personalType)) {
+                ops.add(Aggregation.match(new Criteria().orOperator(
+                    Criteria.where(arrayName + ".staffType.term.ca_ES").regex("^acadèm", "i"),
+                    Criteria.where(arrayName + ".staffType.term.es_ES").regex("^académ", "i"),
+                    Criteria.where(arrayName + ".staffType.term.en_GB").regex("^academic", "i")
+                )));
+            } else if ("nonAcademic".equalsIgnoreCase(personalType)) {
+                ops.add(Aggregation.match(new Criteria().norOperator(
+                    Criteria.where(arrayName + ".staffType.term.ca_ES").regex("^acadèm", "i"),
+                    Criteria.where(arrayName + ".staffType.term.es_ES").regex("^académ", "i"),
+                    Criteria.where(arrayName + ".staffType.term.en_GB").regex("^academic", "i")
+                )));
+            }
         }
 
-        // Filtre vigència: endDate null, no existeix, o > NOW (amb $toDate per a dates en string)
-        ops.add(ctx -> new Document("$match", new Document("$or", Arrays.asList(
-            new Document("staffOrganizationAssociations.period.endDate", (Object) null),
-            new Document("staffOrganizationAssociations.period.endDate",
-                new Document("$exists", false)),
-            new Document("$expr", new Document("$gt", Arrays.asList(
-                new Document("$toDate", "$staffOrganizationAssociations.period.endDate"),
-                "$$NOW"
-            )))
-        ))));
-
-        // Agrupació per categoria, deduplicant per uuid (fallback ca_ES → es_ES → en_GB)
-        ops.add(ctx -> new Document("$group", new Document("_id",
-            new Document("$ifNull", Arrays.asList(
-                "$staffOrganizationAssociations.employmentType.term.ca_ES",
-                new Document("$ifNull", Arrays.asList(
-                    "$staffOrganizationAssociations.employmentType.term.es_ES",
-                    "$staffOrganizationAssociations.employmentType.term.en_GB"
+        // Filtre vigència per any o per NOW
+        if (year != null) {
+            String startYearLimit = year + "-12-31T23:59:59Z";
+            String endYearLimit = year + "-01-01T00:00:00Z";
+            
+            ops.add(ctx -> new Document("$match", new Document("$and", Arrays.asList(
+                // 1. Contracte iniciat el o abans del 31-12 d'aquell any
+                new Document("$or", Arrays.asList(
+                    new Document(arrayName + ".period.startDate", (Object) null),
+                    new Document(arrayName + ".period.startDate", new Document("$exists", false)),
+                    new Document("$expr", new Document("$lte", Arrays.asList(
+                        new Document("$toDate", "$" + arrayName + ".period.startDate"),
+                        new Document("$toDate", startYearLimit)
+                    )))
+                )),
+                // 2. Sense data de fi de contracte, o acaba durant/després d'aquell any
+                new Document("$or", Arrays.asList(
+                    new Document(arrayName + ".period.endDate", (Object) null),
+                    new Document(arrayName + ".period.endDate", new Document("$exists", false)),
+                    new Document(arrayName + ".period", new Document("$exists", false)),
+                    new Document("$expr", new Document("$gte", Arrays.asList(
+                        new Document("$toDate", "$" + arrayName + ".period.endDate"),
+                        new Document("$toDate", endYearLimit)
+                    )))
                 ))
-            )))
-            .append("total_personas", new Document("$addToSet", "$uuid"))));
+            ))));
+        } else {
+            ops.add(ctx -> new Document("$match", new Document("$or", Arrays.asList(
+                new Document(arrayName + ".period.endDate", (Object) null),
+                new Document(arrayName + ".period.endDate", new Document("$exists", false)),
+                new Document(arrayName + ".period", new Document("$exists", false)),
+                new Document("$expr", new Document("$gt", Arrays.asList(
+                    new Document("$toDate", "$" + arrayName + ".period.endDate"),
+                    "$$NOW"
+                )))
+            ))));
+        }
 
-        // Projecció: nom camp + mida del set
-        ops.add(ctx -> new Document("$project", new Document("_id", 0)
-            .append("categoria_laboral", "$_id")
-            .append("total_personas", new Document("$size", "$total_personas"))));
+        // Projecció: nom camp i uuid + gender per processar en memòria
+        ops.add(ctx -> new Document("$project", new Document("uuid", 1)
+            .append("gender", 1)
+            .append("categoria_laboral", new Document("$ifNull", Arrays.asList(
+                "$" + arrayName + "." + termField + ".ca_ES",
+                new Document("$ifNull", Arrays.asList(
+                    "$" + arrayName + "." + termField + ".es_ES",
+                    "$" + arrayName + "." + termField + ".en_GB"
+                ))
+            )))));
 
-        // Ordre descendent
-        ops.add(ctx -> new Document("$sort", new Document("total_personas", -1)));
-
-        return mongoTemplate
+        List<Document> list = new ArrayList<>(mongoTemplate
             .aggregate(Aggregation.newAggregation(ops), Persona.class, Document.class)
-            .getMappedResults()
-            .stream()
-            .map(d -> {
-                Map<String, Object> m = new LinkedHashMap<>();
-                m.put("categoria_laboral", d.get("categoria_laboral"));
-                m.put("total_personas", ((Number) d.getOrDefault("total_personas", 0)).longValue());
-                return m;
-            })
-            .toList();
+            .getMappedResults());
+
+        // Secondary query for ICREA (from visitingScholarOrganizationAssociations)
+        List<AggregationOperation> opsIcrea = new ArrayList<>();
+        if (deptUuid != null && !deptUuid.isBlank()) {
+            opsIcrea.add(Aggregation.match(
+                Criteria.where("staffOrganizationAssociations.organization.uuid").is(deptUuid)));
+        }
+        opsIcrea.add(Aggregation.unwind("visitingScholarOrganizationAssociations"));
+        opsIcrea.add(Aggregation.match(new Criteria().orOperator(
+            Criteria.where("visitingScholarOrganizationAssociations.jobTitle.term.ca_ES").regex("icrea", "i"),
+            Criteria.where("visitingScholarOrganizationAssociations.jobTitle.term.es_ES").regex("icrea", "i"),
+            Criteria.where("visitingScholarOrganizationAssociations.jobTitle.term.en_GB").regex("icrea", "i")
+        )));
+        if (year != null) {
+            String startYearLimit = year + "-12-31T23:59:59Z";
+            String endYearLimit = year + "-01-01T00:00:00Z";
+            opsIcrea.add(ctx -> new Document("$match", new Document("$and", Arrays.asList(
+                new Document("$or", Arrays.asList(
+                    new Document("visitingScholarOrganizationAssociations.period.startDate", (Object) null),
+                    new Document("visitingScholarOrganizationAssociations.period.startDate", new Document("$exists", false)),
+                    new Document("$expr", new Document("$lte", Arrays.asList(
+                        new Document("$toDate", "$visitingScholarOrganizationAssociations.period.startDate"),
+                        new Document("$toDate", startYearLimit)
+                    )))
+                )),
+                new Document("$or", Arrays.asList(
+                    new Document("visitingScholarOrganizationAssociations.period.endDate", (Object) null),
+                    new Document("visitingScholarOrganizationAssociations.period.endDate", new Document("$exists", false)),
+                    new Document("$expr", new Document("$gte", Arrays.asList(
+                        new Document("$toDate", "$visitingScholarOrganizationAssociations.period.endDate"),
+                        new Document("$toDate", endYearLimit)
+                    )))
+                ))
+            ))));
+        } else {
+            opsIcrea.add(ctx -> new Document("$match", new Document("$or", Arrays.asList(
+                new Document("visitingScholarOrganizationAssociations.period.endDate", (Object) null),
+                new Document("visitingScholarOrganizationAssociations.period.endDate", new Document("$exists", false)),
+                new Document("$expr", new Document("$gt", Arrays.asList(
+                    new Document("$toDate", "$visitingScholarOrganizationAssociations.period.endDate"),
+                    "$$NOW"
+                )))
+            ))));
+        }
+        opsIcrea.add(ctx -> new Document("$project", new Document("uuid", 1)
+            .append("gender", 1)
+            .append("categoria_laboral", new Document("$ifNull", Arrays.asList(
+                "$visitingScholarOrganizationAssociations.jobTitle.term.ca_ES",
+                new Document("$ifNull", Arrays.asList(
+                    "$visitingScholarOrganizationAssociations.jobTitle.term.es_ES",
+                    "$visitingScholarOrganizationAssociations.jobTitle.term.en_GB"
+                ))
+            )))));
+
+        List<Document> listIcrea = mongoTemplate
+            .aggregate(Aggregation.newAggregation(opsIcrea), Persona.class, Document.class)
+            .getMappedResults();
+
+        list.addAll(listIcrea);
+
+        // Agrupació i deduplicació per uuid en memòria
+        Map<String, Set<String>> catToTotal = new LinkedHashMap<>();
+        Map<String, Set<String>> catToHombres = new LinkedHashMap<>();
+        Map<String, Set<String>> catToMujeres = new LinkedHashMap<>();
+
+        for (Document doc : list) {
+            String uuid = doc.getString("uuid");
+            if (uuid == null) continue;
+            
+            String cat = doc.getString("categoria_laboral");
+            if (cat == null || cat.isBlank()) {
+                cat = "Desconegut";
+            }
+            
+            String genderStr = extractGender(doc);
+            
+            catToTotal.computeIfAbsent(cat, k -> new HashSet<>()).add(uuid);
+            if (isMale(genderStr)) {
+                catToHombres.computeIfAbsent(cat, k -> new HashSet<>()).add(uuid);
+            } else if (isFemale(genderStr)) {
+                catToMujeres.computeIfAbsent(cat, k -> new HashSet<>()).add(uuid);
+            }
+        }
+
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (String cat : catToTotal.keySet()) {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("categoria_laboral", cat);
+            m.put("total_personas", (long) catToTotal.get(cat).size());
+            m.put("hombres", (long) (catToHombres.containsKey(cat) ? catToHombres.get(cat).size() : 0));
+            m.put("mujeres", (long) (catToMujeres.containsKey(cat) ? catToMujeres.get(cat).size() : 0));
+            result.add(m);
+        }
+
+        // Ordenar descendent per total_personas
+        result.sort((a, b) -> Long.compare((Long) b.get("total_personas"), (Long) a.get("total_personas")));
+
+        return result;
     }
 
     @GetMapping("/stats/catedraticos")
@@ -1723,7 +1930,7 @@ public class PersonaController {
         ops.add(context -> new Document("$match", new Document("$or", Arrays.asList(
             new Document("staffOrganizationAssociations.period.endDate", (Object) null),
             new Document("staffOrganizationAssociations.period.endDate", new Document("$exists", false)),
-            new Document("$expr", new Document("$gt", Arrays.asList("$staffOrganizationAssociations.period.endDate", "$$NOW")))
+            new Document("$expr", new Document("$gt", Arrays.asList(new Document("$toDate", "$staffOrganizationAssociations.period.endDate"), "$$NOW")))
         ))));
 
         ops.add(Aggregation.group("_id"));
@@ -1765,10 +1972,16 @@ public class PersonaController {
     @GetMapping("/stats/icrea")
     public Map<String, Long> getIcreaStats(
             @RequestParam(required = false) String personalType,
-            @RequestParam(required = false) String deptUuid) {
-        String hoyStr = LocalDate.now().toString();
-
+            @RequestParam(required = false) String deptUuid,
+            @RequestParam(required = false) Integer year,
+            @RequestParam(required = false) String categoryPattern) {
         List<AggregationOperation> ops = new ArrayList<>();
+
+        if (categoryPattern != null && !categoryPattern.isBlank()) {
+            if (!java.util.regex.Pattern.compile(categoryPattern, java.util.regex.Pattern.CASE_INSENSITIVE).matcher("icrea").find()) {
+                ops.add(Aggregation.match(Criteria.where("visitingScholarOrganizationAssociations.jobTitle.term.ca_ES").is("FORCED_EMPTY_RESULT_FOR_MISMATCH")));
+            }
+        }
 
         if (deptUuid != null && !deptUuid.isBlank()) {
             ops.add(Aggregation.match(Criteria.where("staffOrganizationAssociations.organization.uuid").is(deptUuid)));
@@ -1787,12 +2000,36 @@ public class PersonaController {
             Criteria.where("visitingScholarOrganizationAssociations.jobTitle.term.en_GB").regex("icrea", "i")
         )));
 
-        ops.add(context -> new Document("$match", new Document("$or", Arrays.asList(
-            new Document("visitingScholarOrganizationAssociations.period.endDate", (Object) null),
-            new Document("visitingScholarOrganizationAssociations.period.endDate", new Document("$exists", false)),
-            new Document("visitingScholarOrganizationAssociations.period", new Document("$exists", false)),
-            new Document("$expr", new Document("$gt", Arrays.asList("$visitingScholarOrganizationAssociations.period.endDate", "$$NOW")))
-        ))));
+        if (year != null) {
+            String startYearLimit = year + "-12-31T23:59:59Z";
+            String endYearLimit = year + "-01-01T00:00:00Z";
+            ops.add(context -> new Document("$match", new Document("$and", Arrays.asList(
+                new Document("$or", Arrays.asList(
+                    new Document("visitingScholarOrganizationAssociations.period.startDate", (Object) null),
+                    new Document("visitingScholarOrganizationAssociations.period.startDate", new Document("$exists", false)),
+                    new Document("$expr", new Document("$lte", Arrays.asList(
+                        new Document("$toDate", "$visitingScholarOrganizationAssociations.period.startDate"),
+                        new Document("$toDate", startYearLimit)
+                    )))
+                )),
+                new Document("$or", Arrays.asList(
+                    new Document("visitingScholarOrganizationAssociations.period.endDate", (Object) null),
+                    new Document("visitingScholarOrganizationAssociations.period.endDate", new Document("$exists", false)),
+                    new Document("visitingScholarOrganizationAssociations.period", new Document("$exists", false)),
+                    new Document("$expr", new Document("$gte", Arrays.asList(
+                        new Document("$toDate", "$visitingScholarOrganizationAssociations.period.endDate"),
+                        new Document("$toDate", endYearLimit)
+                    )))
+                ))
+            ))));
+        } else {
+            ops.add(context -> new Document("$match", new Document("$or", Arrays.asList(
+                new Document("visitingScholarOrganizationAssociations.period.endDate", (Object) null),
+                new Document("visitingScholarOrganizationAssociations.period.endDate", new Document("$exists", false)),
+                new Document("visitingScholarOrganizationAssociations.period", new Document("$exists", false)),
+                new Document("$expr", new Document("$gt", Arrays.asList(new Document("$toDate", "$visitingScholarOrganizationAssociations.period.endDate"), "$$NOW")))
+            ))));
+        }
 
         ops.add(Aggregation.group("_id"));
         ops.add(Aggregation.count().as("total"));
@@ -1814,7 +2051,7 @@ public class PersonaController {
             context -> new Document("$match", new Document("$or", Arrays.asList(
                 new Document("staffOrganizationAssociations.period.endDate", (Object) null),
                 new Document("staffOrganizationAssociations.period.endDate", new Document("$exists", false)),
-                new Document("$expr", new Document("$gt", Arrays.asList("$staffOrganizationAssociations.period.endDate", "$$NOW")))
+                new Document("$expr", new Document("$gt", Arrays.asList(new Document("$toDate", "$staffOrganizationAssociations.period.endDate"), "$$NOW")))
             ))),
             Aggregation.match(buildUnwoundPersonalTypeCriteria(personalType)),
             Aggregation.group("staffOrganizationAssociations.employmentType.term.ca_ES").count().as("cantidad"),
@@ -1865,7 +2102,7 @@ public class PersonaController {
         ops.add(context -> new Document("$match", new Document("$or", Arrays.asList(
             new Document("staffOrganizationAssociations.period.endDate", (Object) null),
             new Document("staffOrganizationAssociations.period.endDate", new Document("$exists", false)),
-            new Document("$expr", new Document("$gt", Arrays.asList("$staffOrganizationAssociations.period.endDate", "$$NOW")))
+            new Document("$expr", new Document("$gt", Arrays.asList(new Document("$toDate", "$staffOrganizationAssociations.period.endDate"), "$$NOW")))
         ))));
         // Deduplicate: count each person once per term (prefer ca_ES, fallback es_ES, then en_GB)
         ops.add(ctx -> new Document("$group", new Document("_id",
@@ -1918,7 +2155,7 @@ public class PersonaController {
             new Document("visitingScholarOrganizationAssociations.period.endDate", (Object) null),
             new Document("visitingScholarOrganizationAssociations.period.endDate", new Document("$exists", false)),
             new Document("visitingScholarOrganizationAssociations.period", new Document("$exists", false)),
-            new Document("$expr", new Document("$gt", Arrays.asList("$visitingScholarOrganizationAssociations.period.endDate", "$$NOW")))
+            new Document("$expr", new Document("$gt", Arrays.asList(new Document("$toDate", "$visitingScholarOrganizationAssociations.period.endDate"), "$$NOW")))
         ))));
         icreaOps.add(ctx -> new Document("$group",
             new Document("_id", new Document("person", "$_id")
@@ -1974,7 +2211,7 @@ public class PersonaController {
         ops.add(context -> new Document("$match", new Document("$or", Arrays.asList(
             new Document("staffOrganizationAssociations.period.endDate", (Object) null),
             new Document("staffOrganizationAssociations.period.endDate", new Document("$exists", false)),
-            new Document("$expr", new Document("$gt", Arrays.asList("$staffOrganizationAssociations.period.endDate", "$$NOW")))
+            new Document("$expr", new Document("$gt", Arrays.asList(new Document("$toDate", "$staffOrganizationAssociations.period.endDate"), "$$NOW")))
         ))));
         ops.add(ctx -> new Document("$group", new Document("_id", new Document()
             .append("ca_ES", "$staffOrganizationAssociations.employmentType.term.ca_ES")
@@ -2011,7 +2248,7 @@ public class PersonaController {
         ops.add(context -> new Document("$match", new Document("$or", Arrays.asList(
             new Document("staffOrganizationAssociations.period.endDate", (Object) null),
             new Document("staffOrganizationAssociations.period.endDate", new Document("$exists", false)),
-            new Document("$expr", new Document("$gt", Arrays.asList("$staffOrganizationAssociations.period.endDate", "$$NOW")))
+            new Document("$expr", new Document("$gt", Arrays.asList(new Document("$toDate", "$staffOrganizationAssociations.period.endDate"), "$$NOW")))
         ))));
         ops.add(ctx -> new Document("$group", new Document("_id", new Document()
             .append("ca_ES", "$staffOrganizationAssociations.employmentType.term.ca_ES")
@@ -2085,7 +2322,7 @@ public class PersonaController {
         ops.add(context -> new Document("$match", new Document("$or", Arrays.asList(
             new Document("staffOrganizationAssociations.period.endDate", (Object) null),
             new Document("staffOrganizationAssociations.period.endDate", new Document("$exists", false)),
-            new Document("$expr", new Document("$gt", Arrays.asList("$staffOrganizationAssociations.period.endDate", "$$NOW")))
+            new Document("$expr", new Document("$gt", Arrays.asList(new Document("$toDate", "$staffOrganizationAssociations.period.endDate"), "$$NOW")))
         ))));
         ops.add(ctx -> new Document("$group", new Document("_id", new Document()
             .append("ca_ES", "$staffOrganizationAssociations.employmentType.term.ca_ES")
@@ -2345,6 +2582,75 @@ public class PersonaController {
         }
 
         return current;
+    }
+
+    private Criteria buildCombinedAssociationCriteria(String personalType, String deptUuid, Integer year, String categoryPattern) {
+        boolean isIcrea = (categoryPattern != null && categoryPattern.toLowerCase().contains("icrea"));
+        String arrayName = isIcrea ? "visitingScholarOrganizationAssociations" : "staffOrganizationAssociations";
+        
+        List<Criteria> innerList = new ArrayList<>();
+        
+        // 1. Active criteria
+        innerList.add(buildActiveAssociationCriteria(year));
+        
+        // 2. Department
+        if (deptUuid != null && !deptUuid.isBlank()) {
+            innerList.add(Criteria.where("organization.uuid").is(deptUuid));
+        }
+        
+        // 3. Category pattern / Job title pattern
+        if (categoryPattern != null && !categoryPattern.isBlank()) {
+            String termField = isIcrea ? "jobTitle.term" : "employmentType.term";
+            innerList.add(new Criteria().orOperator(
+                Criteria.where(termField + ".ca_ES").regex(categoryPattern, "i"),
+                Criteria.where(termField + ".es_ES").regex(categoryPattern, "i"),
+                Criteria.where(termField + ".en_GB").regex(categoryPattern, "i")
+            ));
+        }
+        
+        // 4. Academic Type
+        if (!isIcrea && "academic".equalsIgnoreCase(personalType)) {
+            innerList.add(new Criteria().orOperator(
+                Criteria.where("staffType.term.ca_ES").regex("acad", "i"),
+                Criteria.where("staffType.term.es_ES").regex("acad", "i"),
+                Criteria.where("staffType.term.en_GB").regex("academic", "i")
+            ));
+        }
+        
+        // Combine all inner conditions with an andOperator
+        Criteria innerCriteria = new Criteria().andOperator(innerList.toArray(new Criteria[0]));
+        
+        // If we also need non-academic filter:
+        if (!isIcrea && "nonAcademic".equalsIgnoreCase(personalType)) {
+            Criteria academicCriteria = new Criteria().orOperator(
+                Criteria.where("staffType.term.ca_ES").regex("acad", "i"),
+                Criteria.where("staffType.term.es_ES").regex("acad", "i"),
+                Criteria.where("staffType.term.en_GB").regex("academic", "i")
+            );
+            Criteria activeAcademic = new Criteria().andOperator(
+                buildActiveAssociationCriteria(year),
+                academicCriteria
+            );
+            return new Criteria().andOperator(
+                Criteria.where("staffOrganizationAssociations").elemMatch(innerCriteria),
+                Criteria.where("staffOrganizationAssociations").not().elemMatch(activeAcademic)
+            );
+        }
+        
+        return Criteria.where(arrayName).elemMatch(innerCriteria);
+    }
+
+    private void addCategoryPatternCriteria(Query query, String categoryPattern) {
+        if (categoryPattern == null || categoryPattern.isBlank()) {
+            return;
+        }
+        query.addCriteria(Criteria.where("staffOrganizationAssociations").elemMatch(
+            new Criteria().orOperator(
+                Criteria.where("employmentType.term.ca_ES").regex(categoryPattern, "i"),
+                Criteria.where("employmentType.term.es_ES").regex(categoryPattern, "i"),
+                Criteria.where("employmentType.term.en_GB").regex(categoryPattern, "i")
+            )
+        ));
     }
 
     private void addPersonalTypeCriteria(Query query, String personalType) {

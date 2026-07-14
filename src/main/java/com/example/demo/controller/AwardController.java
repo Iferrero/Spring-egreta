@@ -3578,7 +3578,7 @@ public class AwardController {
         Document matchStage = new Document("$match", new Document("$or", Arrays.asList(
             new Document("type.term.ca_ES", "Conveni extern a la UAB").append("workflow.step", "approved"),
             new Document("type.term.ca_ES", new Document("$ne", "Conveni extern a la UAB")).append("workflow.step", "validated")
-        )).append("budgets.costCode", new Document("$regex", "^(PK|EA|PO|PH|PI|DR|BJ|AG|AB|IM|IB|YA|PV|PZ)").append("$options", "i")));
+        )).append("budgets.costCode", new Document("$regex", "^(PK|EA|PO|PH|PI|DR|BJ|AG|AB|IM|IB|YA|PV|PZ|BA|BF|BB|NF|ND|NM|MH|NN|MI|NB)").append("$options", "i")));
         pipeline.add(matchStage);
 
         pipeline.add(new Document("$graphLookup", new Document()
@@ -3614,7 +3614,7 @@ public class AwardController {
                 .append("as", "b")
                 .append("cond", new Document("$regexMatch", new Document()
                     .append("input", new Document("$ifNull", Arrays.asList("$$b.costCode", "")))
-                    .append("regex", "^(PK|EA|PO|PH|PI|DR|BJ|AG|AB|IM|IB|YA|PV|PZ)")
+                    .append("regex", "^(PK|EA|PO|PH|PI|DR|BJ|AG|AB|IM|IB|YA|PV|PZ|BA|BF|BB|NF|ND|NM|MH|NN|MI|NB)")
                     .append("options", "i")
                 ))
             ))
@@ -3630,6 +3630,26 @@ public class AwardController {
         ));
 
         pipeline.add(new Document("$match", new Document("anyo", new Document("$ne", null))));
+
+        // Lookup Applications
+        pipeline.add(new Document("$lookup", new Document()
+            .append("from", "Applications")
+            .append("localField", "applications.uuid")
+            .append("foreignField", "uuid")
+            .append("as", "appDocs")));
+
+        pipeline.add(new Document("$unwind",
+            new Document("path", "$appDocs").append("preserveNullAndEmptyArrays", true)));
+
+        // Lookup FundingOpportunities
+        pipeline.add(new Document("$lookup", new Document()
+            .append("from", "FundingOpportunities")
+            .append("localField", "appDocs.fundingOpportunity.uuid")
+            .append("foreignField", "uuid")
+            .append("as", "fOpp")));
+
+        pipeline.add(new Document("$unwind",
+            new Document("path", "$fOpp").append("preserveNullAndEmptyArrays", true)));
 
         pipeline.add(new Document("$unwind", "$fundings"));
         pipeline.add(new Document("$unwind", "$fundings.fundingCollaborators"));
@@ -3650,6 +3670,9 @@ public class AwardController {
                 .append("anyo", "$anyo")
                 .append("isDeclined", "$isDeclined")
                 .append("orgScope", "$orgScope")
+                .append("fOppUuid", "$fOpp.uuid")
+                .append("fOppTitle", "$fOpp.title")
+                .append("fOppType", "$fOpp.type")
             )
             .append("totalImport", new Document("$sum", "$importe_partida"))
         ));
@@ -3663,6 +3686,9 @@ public class AwardController {
             .append("isDeclined", "$_id.isDeclined")
             .append("orgScope", "$_id.orgScope")
             .append("totalImport", 1)
+            .append("fOppUuid", "$_id.fOppUuid")
+            .append("fOppTitle", "$_id.fOppTitle")
+            .append("fOppType", "$_id.fOppType")
         ));
 
         pipeline.add(new Document("$sort", new Document("costCode", 1).append("anyo", 1)));
