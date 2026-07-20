@@ -21,11 +21,16 @@ public class StrategicIndicatorsController {
     private final MongoTemplate mongoTemplate;
     private final AwardService awardService;
     private final ResearchOutputJournalLinkService researchOutputJournalLinkService;
+    private final Map<String, Long> tramsViusCache = new java.util.concurrent.ConcurrentHashMap<>();
+
+    private record StatsCacheEntry(Map<String, Object> data, long expiresAtMs) {}
+    private final Map<String, StatsCacheEntry> statsCache = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final long STATS_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 
     @Autowired
     public StrategicIndicatorsController(MongoTemplate mongoTemplate, 
-                                         AwardService awardService, 
-                                         ResearchOutputJournalLinkService researchOutputJournalLinkService) {
+                                          AwardService awardService, 
+                                          ResearchOutputJournalLinkService researchOutputJournalLinkService) {
         this.mongoTemplate = mongoTemplate;
         this.awardService = awardService;
         this.researchOutputJournalLinkService = researchOutputJournalLinkService;
@@ -35,6 +40,13 @@ public class StrategicIndicatorsController {
     public Map<String, Object> getStats(
             @RequestParam(required = false, defaultValue = "2024") int year,
             @RequestParam(required = false, defaultValue = "all") String dept) {
+
+        String cacheKey = year + "-" + (dept != null ? dept.trim().toLowerCase() : "all");
+        long now = System.currentTimeMillis();
+        StatsCacheEntry cachedEntry = statsCache.get(cacheKey);
+        if (cachedEntry != null && cachedEntry.expiresAtMs() > now) {
+            return cachedEntry.data();
+        }
 
         String collaboratorUuid = "all".equalsIgnoreCase(dept) ? null : dept;
         List<Document> powerTableRows = awardService.getPowerTable(year, year, "awardDate", collaboratorUuid);
@@ -82,6 +94,7 @@ public class StrategicIndicatorsController {
         long tramsVius = getTramsViusCountFromExcel(year, dept);
         response.put("tramsVius", tramsVius);
 
+        statsCache.put(cacheKey, new StatsCacheEntry(response, now + STATS_CACHE_TTL_MS));
         return response;
     }
 
@@ -275,7 +288,7 @@ public class StrategicIndicatorsController {
         double total = 0;
         for (Document doc : powerTableRows) {
             String cat = doc.getString("categoria");
-            if (cat != null && (cat.startsWith("Prestaci") || cat.equals("Ajudes no competitives nacionals"))) {
+            if (cat != null && (cat.startsWith("Prestaci") || cat.equals("Ajudes no competitives"))) {
                 Object amountObj = doc.get("import");
                 if (amountObj instanceof Number) {
                     total += ((Number) amountObj).doubleValue();
@@ -329,6 +342,10 @@ public class StrategicIndicatorsController {
         if (!"all".equalsIgnoreCase(dept)) {
             return 0;
         }
+        String cacheKey = year + "-" + dept;
+        if (tramsViusCache.containsKey(cacheKey)) {
+            return tramsViusCache.get(cacheKey);
+        }
         long count = 0;
         try {
             org.springframework.core.io.ClassPathResource resource = new org.springframework.core.io.ClassPathResource("Trams de recerca vius de la UAB (RC0019).xlsx");
@@ -363,7 +380,7 @@ public class StrategicIndicatorsController {
         } catch (Exception e) {
             System.err.println("Error reading Trams excel: " + e.getMessage());
         }
-        // Return exact Excel value. 0 means no data available for this year.
+        tramsViusCache.put(cacheKey, count);
         return count;
     }
 
@@ -842,6 +859,123 @@ public class StrategicIndicatorsController {
         }
 
         return response;
+    }
+
+    @GetMapping("/ods")
+    public List<Map<String, Object>> getOdsStats(
+            @RequestParam(required = false, defaultValue = "2024") int year,
+            @RequestParam(required = false, defaultValue = "all") String dept) {
+
+        List<Map<String, Object>> result = new ArrayList<>();
+        Map<String, Integer> counts = new LinkedHashMap<>();
+
+        try {
+            // Read all projects from MongoDB
+            List<Document> projects = mongoTemplate.findAll(Document.class, "Projects");
+            
+            for (Document project : projects) {
+                if (!isProjectInDept(project, dept)) continue;
+                if (!isProjectActiveInYear(project, year)) continue;
+                
+                List<?> keywordGroups = project.getList("keywordGroups", Object.class);
+                if (keywordGroups == null) continue;
+                
+                for (Object kg : keywordGroups) {
+                    if (kg instanceof Document group) {
+                        String nameEn = group.getEmbedded(List.of("name", "en_GB"), String.class);
+                        String nameCa = group.getEmbedded(List.of("name", "ca_ES"), String.class);
+                        if ("Sustainable Development Goals".equalsIgnoreCase(nameEn) || "Objectius de Desenvolupament Sostenible".equalsIgnoreCase(nameCa)) {
+                            List<?> classifications = group.getList("classifications", Object.class);
+                            if (classifications != null) {
+                                for (Object c : classifications) {
+                                    if (c instanceof Document classification) {
+                                        String term = classification.getEmbedded(List.of("term", "ca_ES"), String.class);
+                                        if (term == null) {
+                                            term = classification.getEmbedded(List.of("term", "en_GB"), String.class);
+                                        }
+                                        if (term != null) {
+                                            String normalized = term.replace("ODG", "ODS").replace(" - ", ": ").replace(" – ", ": ");
+                                            counts.put(normalized, counts.getOrDefault(normalized, 0) + 1);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Convert to list of maps
+            for (Map.Entry<String, Integer> entry : counts.entrySet()) {
+                Map<String, Object> item = new LinkedHashMap<>();
+                item.put("name", entry.getKey());
+                item.put("value", entry.getValue());
+                result.add(item);
+            }
+            
+            // Sort by value descending
+            result.sort((a, b) -> Integer.compare((Integer) b.get("value"), (Integer) a.get("value")));
+            
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        return result;
+    }
+
+    private boolean isProjectInDept(Document doc, String dept) {
+        if (dept == null || "all".equalsIgnoreCase(dept)) return true;
+        
+        Document managingOrg = doc.get("managingOrganization", Document.class);
+        if (managingOrg != null && dept.equals(managingOrg.getString("uuid"))) {
+            return true;
+        }
+        
+        List<?> orgs = doc.getList("organizations", Object.class);
+        if (orgs != null) {
+            for (Object o : orgs) {
+                if (o instanceof Document org && dept.equals(org.getString("uuid"))) {
+                    return true;
+                }
+            }
+        }
+        
+        List<?> participants = doc.getList("participants", Object.class);
+        if (participants != null) {
+            for (Object p : participants) {
+                if (p instanceof Document participant) {
+                    List<?> pOrgs = participant.getList("organizations", Object.class);
+                    if (pOrgs != null) {
+                        for (Object po : pOrgs) {
+                            if (po instanceof Document pOrg && dept.equals(pOrg.getString("uuid"))) {
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    private boolean isProjectActiveInYear(Document doc, int year) {
+        Document period = doc.get("period", Document.class);
+        if (period == null) return false;
+        
+        String startDate = period.getString("startDate");
+        String endDate = period.getString("endDate");
+        
+        if (startDate == null) return false;
+        try {
+            int startYear = Integer.parseInt(startDate.substring(0, 4));
+            int endYear = 9999;
+            if (endDate != null && endDate.length() >= 4) {
+                endYear = Integer.parseInt(endDate.substring(0, 4));
+            }
+            return year >= startYear && year <= endYear;
+        } catch (Exception e) {
+            return false;
+        }
     }
 }
 

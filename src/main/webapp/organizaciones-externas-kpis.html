@@ -460,7 +460,7 @@
             return bundle.type;
         }
 
-        async function fetchSuggestionBundle(org) {
+        async function fetchSuggestionBundle(org, signal) {
             const key = getOrgSuggestionKey(org);
             if (!key) {
                 return {
@@ -490,8 +490,9 @@
                 type: { type: '', confidence: 0, reason: '' },
                 funding: { funding: '', confidence: 0, reason: '' }
             };
+            let success = false;
             try {
-                const res = await apiFetch('/external-organizations/stats/suggest-metadata?name=' + encodeURIComponent(orgName));
+                const res = await apiFetch('/external-organizations/stats/suggest-metadata?name=' + encodeURIComponent(orgName), { signal });
                 if (res.ok) {
                     const data = await res.json();
                     bundle = {
@@ -513,13 +514,18 @@
                             reason: String((data && data.fundingReason) || '').trim()
                         }
                     };
+                    success = true;
                 }
-            } catch (_) { }
+            } catch (err) {
+                if (err.name === 'AbortError') throw err;
+            }
 
-            suggestionBundleCache.set(key, bundle);
-            countrySuggestionCache.set(key, bundle.country);
-            typeSuggestionCache.set(key, bundle.type);
-            fundingSuggestionCache.set(key, bundle.funding);
+            if (success) {
+                suggestionBundleCache.set(key, bundle);
+                countrySuggestionCache.set(key, bundle.country);
+                typeSuggestionCache.set(key, bundle.type);
+                fundingSuggestionCache.set(key, bundle.funding);
+            }
             return bundle;
         }
 
@@ -542,76 +548,33 @@
                 renderTable(targets);
             }
 
-            // Mapear cada org a una promesa individual de fetch
-            const fetchPromises = needsFetch.map(async (org) => {
-                const orgName = getOrgNameLabel(org);
-                if (!orgName) {
-                    if (loadId === currentLoadId) {
-                        uuidsBeingFetched.delete(org.uuid);
-                    }
-                    return;
-                }
-
-                try {
-                    const res = await apiFetch('/external-organizations/stats/suggest-metadata?name=' + encodeURIComponent(orgName), { signal });
-                    if (!res.ok) throw new Error('HTTP ' + res.status);
-                    const data = await res.json();
-
-                    const key = getOrgSuggestionKey(org);
-                    const bundle = {
-                        country: {
-                            country: String(data.suggestedCountry || '').trim(),
-                            uri: String(data.suggestedCountryUri || '').trim(),
-                            confidence: Number(data.countryConfidence || 0),
-                            reason: String(data.countryReason || '').trim()
-                        },
-                        type: {
-                            type: String(data.suggestedType || '').trim(),
-                            confidence: Number(data.typeConfidence || 0),
-                            reason: String(data.typeReason || '').trim()
-                        },
-                        funding: {
-                            funding: String(data.suggestedFunding || '').trim(),
-                            uri: String(data.suggestedFundingUri || '').trim(),
-                            confidence: Number(data.fundingConfidence || 0),
-                            reason: String(data.fundingReason || '').trim()
+            // Cargar cada organización individualmente en paralelo, actualizando a medida que terminan
+            needsFetch.forEach(org => {
+                fetchSuggestionBundle(org, signal)
+                    .catch(err => {
+                        if (err.name === 'AbortError') {
+                            // Re-lanzar para que el .finally no actualice el DOM con datos vacíos
+                            throw err;
                         }
-                    };
-
-                    suggestionBundleCache.set(key, bundle);
-                    countrySuggestionCache.set(key, bundle.country);
-                    typeSuggestionCache.set(key, bundle.type);
-                    fundingSuggestionCache.set(key, bundle.funding);
-                } catch (err) {
-                    if (err.name === 'AbortError') return;
-                    console.error('Error preloading suggestions for org:', org, err);
-                } finally {
-                    if (loadId === currentLoadId) {
-                        // Quitar este UUID de fetching y actualizar de inmediato el DOM para este registro
+                        console.error('Error preloading individual suggestions:', err);
+                    })
+                    .finally(() => {
                         uuidsBeingFetched.delete(org.uuid);
+                        if (loadId === currentLoadId) {
+                            const rowEl = document.querySelector(`tr[data-uuid="${org.uuid}"]`);
+                            if (rowEl) {
+                                const typeCell = rowEl.querySelector('td[data-cell="suggested-type"]');
+                                const fundingCell = rowEl.querySelector('td[data-cell="suggested-funding"]');
+                                const countryCell = rowEl.querySelector('td[data-cell="suggested-country"]');
 
-                        const rowEl = document.querySelector(`tr[data-uuid="${org.uuid}"]`);
-                        if (rowEl) {
-                            const typeCell = rowEl.querySelector('td[data-cell="suggested-type"]');
-                            const fundingCell = rowEl.querySelector('td[data-cell="suggested-funding"]');
-                            const countryCell = rowEl.querySelector('td[data-cell="suggested-country"]');
-
-                            if (typeCell) typeCell.innerHTML = getSuggestedTypeHtml(org);
-                            if (fundingCell) fundingCell.innerHTML = getSuggestedFundingHtml(org);
-                            if (countryCell) countryCell.innerHTML = getSuggestedCountryHtml(org);
+                                if (typeCell) typeCell.innerHTML = getSuggestedTypeHtml(org);
+                                if (fundingCell) fundingCell.innerHTML = getSuggestedFundingHtml(org);
+                                if (countryCell) countryCell.innerHTML = getSuggestedCountryHtml(org);
+                            }
                         }
-                    }
-                }
+                    })
+                    .catch(() => { /* AbortError silenciado aquí */ });
             });
-
-            // Esperar a que todas las llamadas concurrentes finalicen
-            await Promise.allSettled(fetchPromises);
-
-            // Render final completo para garantizar que todos los datos cacheados se muestran,
-            // incluso si algún update individual de DOM no encontró la fila a tiempo.
-            if (loadId === currentLoadId) {
-                renderTable(targets);
-            }
         }
 
         async function preloadCountrySuggestions(rows, loadId, signal) {
@@ -772,26 +735,10 @@
 
         async function loadKpis() {
             const grid = document.getElementById('kpiGrid');
-            if (!grid.innerHTML || grid.innerHTML.includes('Carregant')) {
-                grid.innerHTML = '<div class="col-span-full text-sm text-slate-400">Carregant KPIs...</div>';
-            }
+            const kpiList = Object.values(KPI_DEFS);
 
             try {
-                const promises = Object.values(KPI_DEFS).map(async (kpi) => {
-                    let count = 0;
-                    try {
-                        const res = await apiFetch(kpi.countEndpoint);
-                        if (res.ok) {
-                            const data = await res.json();
-                            count = Number(data[kpi.countKey] || 0);
-                        }
-                    } catch (_) { }
-                    return { ...kpi, count };
-                });
-
-                const cards = await Promise.all(promises);
-
-                grid.innerHTML = cards.map(kpi => {
+                grid.innerHTML = kpiList.map(kpi => {
                     const c = colorClasses(kpi.color);
                     const active = kpi.id === activeKpi;
                     return `
@@ -801,7 +748,9 @@
                 </div>
                 <div class="min-w-0">
                     <p class="text-xs text-slate-400 uppercase font-bold truncate">${esc(kpi.label)}</p>
-                    <p class="text-xl font-black text-slate-700 leading-tight">${Number(kpi.count).toLocaleString('ca-ES')}</p>
+                    <p id="kpi-count-${esc(kpi.id)}" class="text-xl font-black text-slate-700 leading-tight">
+                        <i class="fa-solid fa-spinner fa-spin text-slate-400 text-xs"></i>
+                    </p>
                 </div>
             </button>`;
                 }).join('');
@@ -850,6 +799,29 @@
                     loadKpis();
                     loadTable();
                 });
+            });
+
+            // Fetch counts individually and update the UI as each one loads
+            kpiList.forEach(kpi => {
+                apiFetch(kpi.countEndpoint)
+                    .then(async (res) => {
+                        if (res.ok) {
+                            const data = await res.json();
+                            const count = Number(data[kpi.countKey] || 0);
+                            const countEl = document.getElementById(`kpi-count-${kpi.id}`);
+                            if (countEl) {
+                                countEl.textContent = count.toLocaleString('ca-ES');
+                            }
+                        } else {
+                            throw new Error('Response not OK');
+                        }
+                    })
+                    .catch(() => {
+                        const countEl = document.getElementById(`kpi-count-${kpi.id}`);
+                        if (countEl) {
+                            countEl.textContent = '—';
+                        }
+                    });
             });
         }
 

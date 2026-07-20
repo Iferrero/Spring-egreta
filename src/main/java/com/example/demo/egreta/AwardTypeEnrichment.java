@@ -18,7 +18,7 @@ public enum AwardTypeEnrichment {
     STAFF_TO_INCORPORATE("/dk/atira/pure/award/awardtypes/award/staff_to_incorporate/award", "Incorporació de Personal", "Incorporación de Personal", "Staff to incorporate", "Ajudes competitives nacionals"),
     UAB_EXTERNAL("/dk/atira/pure/award/awardtypes/award/uab_external_research_projects_and_other_external_grants_subtypes/external_award", "Projectes de Recerca i altres tipus d'ajuts Externs a la UAB", "Proyectos de Investigación y otros tipos de ayudas Externas a la UAB", "UAB External Research Projects and Other External Grants subtypes", "Externs UAB"),
     UAB_RESEARCH_GROUP("/dk/atira/pure/award/awardtypes/award/uab_research_group/award_renovation", "Grups i Xarxes de Recerca", "Grupos y Redes de Investigación", "Research Group and Networks", "Ajudes competitives nacionals"),
-    AGREEMENT("/dk/atira/pure/award/awardtypes/award/agreement/award_agreement", null, null, null, "Ajudes no competitives nacionals");
+    AGREEMENT("/dk/atira/pure/award/awardtypes/award/agreement/award_agreement", null, null, null, "Ajudes no competitives");
 
     public final String uri;
     public final String ca;

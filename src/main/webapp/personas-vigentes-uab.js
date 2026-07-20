@@ -3,9 +3,24 @@ let chartSexo = null;
 let chartContractType = null;
 let chartNacionalitat = null;
 let chartCatedraticosBreakdown = null;
+let chartEvolucion = null;
+let chartModalBreakdown = null;
 let _worldGeoJson = null;
 const selectorPersonalType = document.getElementById('selectorPersonalType');
 const selectorDepartamento = document.getElementById('selectorDepartamento');
+const selectorAny = document.getElementById('selectorAny');
+const selectorTypology = document.getElementById('selectorTypology');
+
+const TYPOLOGY_PATTERNS = {
+    catedraticos: 'catedr|chair|full professor',
+    titulares: 'titular|tenured|tenure',
+    agregados: 'agregat|agregado|associate professor',
+    lectores: 'lector|lectura|reader',
+    icrea: 'icrea',
+    predoctorals: 'predoctoral|en formaci|FPI|FI-JOAN|FI-SDUR|novell|La Caixa|pre-doctoral|research training|novel research',
+    postdoctorals: 'ordinari|postdoctoral|Cajal|Beatriu|Cierva|doctor distingit|director investigaci|regular researcher|post-doctoral|distinguished research|research director',
+    total_vigentes: 'catedr|chair|full professor|titular|tenured|tenure|agregat|agregado|associate professor|lector|lectura|reader|predoctoral|en formaci|FPI|FI-JOAN|FI-SDUR|novell|La Caixa|pre-doctoral|research training|novel research|ordinari|postdoctoral|Cajal|Beatriu|Cierva|doctor distingit|director investigaci|regular researcher|post-doctoral|distinguished research|research director'
+};
 
 function getPersonalTypeParam() {
     return encodeURIComponent(selectorPersonalType?.value || 'all');
@@ -15,7 +30,12 @@ function getDeptParam() {
     return selectorDepartamento?.value || '';
 }
 
-function buildUrl(path, includePersonalType = true) {
+function getCategoryPatternParam() {
+    const val = selectorTypology?.value;
+    return val ? (TYPOLOGY_PATTERNS[val] || '') : '';
+}
+
+function buildUrl(path, includePersonalType = true, includeCategoryPattern = true) {
     const params = new URLSearchParams();
     if (includePersonalType) {
         params.set('personalType', selectorPersonalType?.value || 'all');
@@ -23,6 +43,16 @@ function buildUrl(path, includePersonalType = true) {
     const dept = getDeptParam();
     if (dept) {
         params.set('deptUuid', dept);
+    }
+    const yearVal = selectorAny?.value;
+    if (yearVal) {
+        params.set('year', yearVal);
+    }
+    if (includeCategoryPattern) {
+        const pattern = getCategoryPatternParam();
+        if (pattern) {
+            params.set('categoryPattern', pattern);
+        }
     }
     const query = params.toString();
     return query ? `${path}?${query}` : path;
@@ -77,11 +107,17 @@ async function cargarPersonasVigentes() {
     const valor = document.getElementById('valorVigentes');
     estado.textContent = 'Carregant dades...';
     try {
-        const url = buildUrl('/persons/stats/vigentes-total', true);
-        const res = await fetch(apiUrl(url));
-        if (!res.ok) throw new Error();
-        const data = await res.json();
-        valor.textContent = formatearNumero(Number(data?.total ?? 0));
+        const results = await Promise.all([
+            cargarCatedraticos(),
+            cargarTitulares(),
+            cargarAgregados(),
+            cargarLectores(),
+            cargarIcrea(),
+            cargarPredoctorals(),
+            cargarPostdoctorals()
+        ]);
+        const sum = results.reduce((a, b) => a + b, 0);
+        valor.textContent = formatearNumero(sum);
         estado.textContent = '';
     } catch (e) {
         valor.textContent = '--';
@@ -115,11 +151,14 @@ async function cargarCatedraticos() {
     estado.textContent = 'Carregant dades...';
     try {
         const cats = await _fetchVigentesCats();
-        valor.textContent = formatearNumero(_sumCatsByRegex(cats, 'catedr|chair|full professor'));
+        const total = _sumCatsByRegex(cats, 'catedr|chair|full professor');
+        valor.textContent = formatearNumero(total);
         estado.textContent = '';
+        return total;
     } catch (e) {
         valor.textContent = '--';
         estado.textContent = 'No s\'han pogut carregar les dades.';
+        return 0;
     }
 }
 
@@ -129,11 +168,14 @@ async function cargarTitulares() {
     estado.textContent = 'Carregant dades...';
     try {
         const cats = await _fetchVigentesCats();
-        valor.textContent = formatearNumero(_sumCatsByRegex(cats, 'titular|tenured|tenure'));
+        const total = _sumCatsByRegex(cats, 'titular|tenured|tenure');
+        valor.textContent = formatearNumero(total);
         estado.textContent = '';
+        return total;
     } catch (e) {
         valor.textContent = '--';
         estado.textContent = 'No s\'han pogut carregar les dades.';
+        return 0;
     }
 }
 
@@ -143,11 +185,14 @@ async function cargarAgregados() {
     estado.textContent = 'Carregant dades...';
     try {
         const cats = await _fetchVigentesCats();
-        valor.textContent = formatearNumero(_sumCatsByRegex(cats, 'agregat|agregado|associate professor'));
+        const total = _sumCatsByRegex(cats, 'agregat|agregado|associate professor');
+        valor.textContent = formatearNumero(total);
         estado.textContent = '';
+        return total;
     } catch (e) {
         valor.textContent = '--';
         estado.textContent = 'No s\'han pogut carregar les dades.';
+        return 0;
     }
 }
 
@@ -157,39 +202,14 @@ async function cargarLectores() {
     estado.textContent = 'Carregant dades...';
     try {
         const cats = await _fetchVigentesCats();
-        valor.textContent = formatearNumero(_sumCatsByRegex(cats, 'lector|lectura|reader'));
+        const total = _sumCatsByRegex(cats, 'lector|lectura|reader');
+        valor.textContent = formatearNumero(total);
         estado.textContent = '';
+        return total;
     } catch (e) {
         valor.textContent = '--';
         estado.textContent = 'No s\'han pogut carregar les dades.';
-    }
-}
-
-async function cargarAsociados() {
-    const estado = document.getElementById('estadoAsociados');
-    const valor = document.getElementById('valorAsociados');
-    estado.textContent = 'Carregant dades...';
-    try {
-        const cats = await _fetchVigentesCats();
-        valor.textContent = formatearNumero(_sumCatsByRegex(cats, 'associat|asociad|adjunct'));
-        estado.textContent = '';
-    } catch (e) {
-        valor.textContent = '--';
-        estado.textContent = 'No s\'han pogut carregar les dades.';
-    }
-}
-
-async function cargarSubstituts() {
-    const estado = document.getElementById('estadoSubstituts');
-    const valor = document.getElementById('valorSubstituts');
-    estado.textContent = 'Carregant dades...';
-    try {
-        const cats = await _fetchVigentesCats();
-        valor.textContent = formatearNumero(_sumCatsByRegex(cats, 'substitu|sustitu'));
-        estado.textContent = '';
-    } catch (e) {
-        valor.textContent = '--';
-        estado.textContent = 'No s\'han pogut carregar les dades.';
+        return 0;
     }
 }
 
@@ -208,9 +228,17 @@ async function cargarIcrea() {
 
         valor.textContent = formatearNumero(total);
         estado.textContent = '';
+
+        const el = document.getElementById('tooltipIcrea');
+        if (el) {
+            el.innerHTML = `Personal investigador ICREA <span class="opacity-60">(${total})</span>`;
+        }
+
+        return total;
     } catch (e) {
         valor.textContent = '--';
         estado.textContent = 'No s\'han pogut carregar les dades.';
+        return 0;
     }
 }
 
@@ -342,45 +370,22 @@ function renderPastelSexo(hombres, mujeres, otros) {
     estado.textContent = '';
 }
 
-selectorPersonalType.addEventListener('change', () => {
+function recargarTodo() {
     cargarPersonasVigentes();
     cargarPersonalAcademic();
-    cargarCatedraticos();
-    cargarTitulares();
-    cargarAgregados();
-    cargarLectores();
-    cargarAsociados();
-    cargarSubstituts();
-    cargarIcrea();
-    cargarPredoctorals();
-    cargarPostdoctorals();
     cargarPiramideEdad();
     cargarSexDistribution();
     cargarContractType();
     cargarNacionalitat();
     cargarTooltipSummary();
     cargarCatedraticosBreakdown();
-});
+    cargarEvolucion();
+}
 
-selectorDepartamento.addEventListener('change', () => {
-    cargarPersonasVigentes();
-    cargarPersonalAcademic();
-    cargarCatedraticos();
-    cargarTitulares();
-    cargarAgregados();
-    cargarLectores();
-    cargarAsociados();
-    cargarSubstituts();
-    cargarIcrea();
-    cargarPredoctorals();
-    cargarPostdoctorals();
-    cargarPiramideEdad();
-    cargarSexDistribution();
-    cargarContractType();
-    cargarNacionalitat();
-    cargarTooltipSummary();
-    cargarCatedraticosBreakdown();
-});
+selectorPersonalType?.addEventListener('change', recargarTodo);
+selectorDepartamento?.addEventListener('change', recargarTodo);
+selectorAny?.addEventListener('change', recargarTodo);
+selectorTypology?.addEventListener('change', recargarTodo);
 
 window.addEventListener('resize', () => {
     if (chartPiramide) chartPiramide.resize();
@@ -388,6 +393,8 @@ window.addEventListener('resize', () => {
     if (chartContractType) chartContractType.resize();
     if (chartNacionalitat) chartNacionalitat.resize();
     if (chartCatedraticosBreakdown) chartCatedraticosBreakdown.resize();
+    if (chartEvolucion) chartEvolucion.resize();
+    if (chartModalBreakdown) chartModalBreakdown.resize();
 });
 
 async function cargarCatedraticosBreakdown() {
@@ -478,11 +485,14 @@ async function cargarPredoctorals() {
     estado.textContent = 'Carregant dades...';
     try {
         const cats = await _fetchVigentesCats();
-        valor.textContent = formatearNumero(_sumCatsByRegex(cats, 'predoctoral|en formaci|FPI|FI-JOAN|FI-SDUR|novell|La Caixa|pre-doctoral|research training|novel research'));
+        const total = _sumCatsByRegex(cats, 'predoctoral|en formaci|FPI|FI-JOAN|FI-SDUR|novell|La Caixa|pre-doctoral|research training|novel research');
+        valor.textContent = formatearNumero(total);
         estado.textContent = '';
+        return total;
     } catch (e) {
         valor.textContent = '--';
         estado.textContent = 'No s\'han pogut carregar les dades.';
+        return 0;
     }
 }
 
@@ -492,32 +502,39 @@ async function cargarPostdoctorals() {
     estado.textContent = 'Carregant dades...';
     try {
         const cats = await _fetchVigentesCats();
-        valor.textContent = formatearNumero(_sumCatsByRegex(cats, 'ordinari|postdoctoral|Cajal|Beatriu|Cierva|doctor distingit|director investigaci|regular researcher|post-doctoral|distinguished research|research director'));
+        const total = _sumCatsByRegex(cats, 'ordinari|postdoctoral|Cajal|Beatriu|Cierva|doctor distingit|director investigaci|regular researcher|post-doctoral|distinguished research|research director');
+        valor.textContent = formatearNumero(total);
         estado.textContent = '';
+        return total;
     } catch (e) {
         valor.textContent = '--';
         estado.textContent = 'No s\'han pogut carregar les dades.';
+        return 0;
     }
 }
 
+function inicializarSelectorAny() {
+    if (!selectorAny) return;
+    const startYear = 2018;
+    const currentYear = new Date().getFullYear();
+    selectorAny.innerHTML = '';
+    
+    const optionActual = document.createElement('option');
+    optionActual.value = '';
+    optionActual.textContent = 'Actual';
+    selectorAny.appendChild(optionActual);
+    
+    for (let y = currentYear; y >= startYear; y--) {
+        const option = document.createElement('option');
+        option.value = String(y);
+        option.textContent = String(y);
+        selectorAny.appendChild(option);
+    }
+}
+
+inicializarSelectorAny();
 cargarDepartamentos().finally(() => {
-    cargarPersonasVigentes();
-    cargarPersonalAcademic();
-    cargarCatedraticos();
-    cargarTitulares();
-    cargarAgregados();
-    cargarLectores();
-    cargarAsociados();
-    cargarSubstituts();
-    cargarIcrea();
-    cargarPredoctorals();
-    cargarPostdoctorals();
-    cargarPiramideEdad();
-    cargarSexDistribution();
-    cargarContractType();
-    cargarNacionalitat();
-    cargarTooltipSummary();
-    cargarCatedraticosBreakdown();
+    recargarTodo();
 });
 
 async function cargarContractType() {
@@ -713,3 +730,525 @@ async function cargarNacionalitat() {
         if (contenedor) contenedor.innerHTML = '<div class="h-full flex items-center justify-center text-sm text-rose-500">Error carregant les dades de nacionalitat</div>';
     }
 }
+
+function buildUrlForYear(path, year, includePersonalType = true, includeCategoryPattern = true) {
+    const params = new URLSearchParams();
+    if (includePersonalType) {
+        params.set('personalType', selectorPersonalType?.value || 'all');
+    }
+    const dept = getDeptParam();
+    if (dept) {
+        params.set('deptUuid', dept);
+    }
+    if (year) {
+        params.set('year', year);
+    }
+    if (includeCategoryPattern) {
+        const pattern = getCategoryPatternParam();
+        if (pattern) {
+            params.set('categoryPattern', pattern);
+        }
+    }
+    const query = params.toString();
+    return query ? `${path}?${query}` : path;
+}
+
+async function cargarEvolucion() {
+    const estado = document.getElementById('estadoEvolucion');
+    const contenedor = document.getElementById('chartEvolucion');
+    if (!estado || !contenedor) return;
+    estado.textContent = 'Carregant...';
+
+    try {
+        const startYear = 2018;
+        const currentYear = new Date().getFullYear();
+        const years = [];
+        for (let y = startYear; y <= currentYear; y++) {
+            years.push(y);
+        }
+
+        const promises = years.map(async (year) => {
+            const isCurrentYear = (year === currentYear);
+            const urlCats = isCurrentYear
+                ? buildUrlForYear('/persons/stats/vigentes-por-categoria', undefined, true, true)
+                : buildUrlForYear('/persons/stats/vigentes-por-categoria', year, true, true);
+            const urlIcrea = isCurrentYear
+                ? buildUrlForYear('/persons/stats/icrea', undefined, true, true)
+                : buildUrlForYear('/persons/stats/icrea', year, true, true);
+
+            const [resCats, resIcrea] = await Promise.all([
+                fetch(apiUrl(urlCats)).then(r => r.ok ? r.json() : []),
+                fetch(apiUrl(urlIcrea)).then(r => r.ok ? r.json() : { total: 0 })
+            ]);
+
+            const cats = Array.isArray(resCats) ? resCats : [];
+            const icreaTotal = Number(resIcrea?.total ?? resIcrea?.value?.total ?? 0);
+
+            return {
+                year,
+                catedraticos: _sumCatsByRegex(cats, 'catedr|chair|full professor'),
+                titulares: _sumCatsByRegex(cats, 'titular|tenured|tenure'),
+                agregados: _sumCatsByRegex(cats, 'agregat|agregado|associate professor'),
+                lectores: _sumCatsByRegex(cats, 'lector|lectura|reader'),
+                predoctorals: _sumCatsByRegex(cats, 'predoctoral|en formaci|FPI|FI-JOAN|FI-SDUR|novell|La Caixa|pre-doctoral|research training|novel research'),
+                postdoctorals: _sumCatsByRegex(cats, 'ordinari|postdoctoral|Cajal|Beatriu|Cierva|doctor distingit|director investigaci|regular researcher|post-doctoral|distinguished research|research director'),
+                icrea: icreaTotal
+            };
+        });
+
+        const dataPoints = await Promise.all(promises);
+
+        renderLineaEvolucion(dataPoints, years);
+        estado.textContent = '';
+    } catch (e) {
+        estado.textContent = 'Error';
+        contenedor.innerHTML = '<div class="h-full flex items-center justify-center text-sm text-rose-500">Error carregant el gràfic d\'evolució</div>';
+    }
+}
+
+function renderLineaEvolucion(dataPoints, years) {
+    const startYear = years[0];
+    const endYear = years[years.length - 1];
+    const isCurrentYear = (endYear === new Date().getFullYear());
+    const endText = isCurrentYear ? 'actualitat' : String(endYear);
+    const tituloEl = document.getElementById('tituloEvolucion');
+    if (tituloEl) {
+        tituloEl.textContent = `Evolució de personal (${startYear} - ${endText})`;
+    }
+
+    const contenedor = document.getElementById('chartEvolucion');
+    if (!chartEvolucion) {
+        chartEvolucion = echarts.init(contenedor);
+        chartEvolucion.on('datazoom', function () {
+            const option = chartEvolucion.getOption();
+            if (!option || !option.dataZoom || !option.dataZoom[0]) return;
+            const dataZoom = option.dataZoom[0];
+            const categoryData = option.xAxis[0].data;
+            if (!categoryData) return;
+
+            let start = dataZoom.startValue;
+            let end = dataZoom.endValue;
+
+            if (start === undefined || start === null) {
+                const startPercent = dataZoom.start ?? 0;
+                start = Math.round((startPercent / 100) * (categoryData.length - 1));
+            }
+            if (end === undefined || end === null) {
+                const endPercent = dataZoom.end ?? 100;
+                end = Math.round((endPercent / 100) * (categoryData.length - 1));
+            }
+
+            const startLabel = categoryData[start];
+            const endLabel = categoryData[end];
+
+            if (startLabel && endLabel) {
+                const cleanYear = (label) => label ? label.replace(' (actual)', '') : '';
+                const startYearStr = cleanYear(startLabel);
+                const endYearStr = cleanYear(endLabel);
+
+                const isCurrent = endLabel.includes('(actual)');
+                const finalEndText = isCurrent ? 'actualitat' : endYearStr;
+
+                const tEl = document.getElementById('tituloEvolucion');
+                if (tEl) {
+                    tEl.textContent = `Evolució de personal (${startYearStr} - ${finalEndText})`;
+                }
+            }
+        });
+    }
+
+    const allSeries = [
+        {
+            name: 'Total',
+            type: 'line',
+            data: dataPoints.map(d => d.catedraticos + d.titulares + d.agregados + d.lectores + d.predoctorals + d.postdoctorals + d.icrea),
+            itemStyle: { color: '#008037' },
+            lineStyle: { width: 3, type: 'dashed' },
+            smooth: true
+        },
+        {
+            name: 'Catedràtics',
+            type: 'line',
+            data: dataPoints.map(d => d.catedraticos),
+            itemStyle: { color: '#004D5E' },
+            smooth: true
+        },
+        {
+            name: 'Titulars',
+            type: 'line',
+            data: dataPoints.map(d => d.titulares),
+            itemStyle: { color: '#73a437' },
+            smooth: true
+        },
+        {
+            name: 'Agregats',
+            type: 'line',
+            data: dataPoints.map(d => d.agregados),
+            itemStyle: { color: '#F88C12' },
+            smooth: true
+        },
+        {
+            name: 'Lectors',
+            type: 'line',
+            data: dataPoints.map(d => d.lectores),
+            itemStyle: { color: '#004D21' },
+            smooth: true
+        },
+        {
+            name: 'Predoctorals',
+            type: 'line',
+            data: dataPoints.map(d => d.predoctorals),
+            itemStyle: { color: '#1a6b1a' },
+            smooth: true
+        },
+        {
+            name: 'Postdoctorals',
+            type: 'line',
+            data: dataPoints.map(d => d.postdoctorals),
+            itemStyle: { color: '#5a1a8b' },
+            smooth: true
+        },
+        {
+            name: 'ICREA',
+            type: 'line',
+            data: dataPoints.map(d => d.icrea),
+            itemStyle: { color: '#003a47' },
+            smooth: true
+        }
+    ];
+
+    const typ = selectorTypology?.value || 'all';
+    let filteredSeries = allSeries;
+    let legendData = ['Total', 'Catedràtics', 'Titulars', 'Agregats', 'Lectors', 'Predoctorals', 'Postdoctorals', 'ICREA'];
+
+    if (typ !== 'all') {
+        const typMap = {
+            catedraticos: 'Catedràtics',
+            titulares: 'Titulars',
+            agregados: 'Agregats',
+            lectores: 'Lectors',
+            predoctorals: 'Predoctorals',
+            postdoctorals: 'Postdoctorals',
+            icrea: 'ICREA',
+            total_vigentes: 'Total'
+        };
+        const targetName = typMap[typ];
+        if (targetName) {
+            filteredSeries = allSeries.filter(s => s.name === targetName);
+            legendData = [targetName];
+        }
+    }
+
+    chartEvolucion.setOption({
+        tooltip: {
+            trigger: 'axis',
+            axisPointer: { type: 'line' }
+        },
+        legend: {
+            data: legendData,
+            bottom: 5
+        },
+        grid: {
+            left: '3%',
+            right: '4%',
+            top: '8%',
+            bottom: 90,
+            containLabel: true
+        },
+        dataZoom: [
+            {
+                type: 'slider',
+                show: true,
+                xAxisIndex: [0],
+                start: 0,
+                end: 100,
+                bottom: 35,
+                height: 20,
+                borderColor: 'transparent',
+                backgroundColor: '#f1f5f9',
+                fillerColor: 'rgba(0, 128, 55, 0.15)',
+                handleIcon: 'path://M10.7,11.9v-1.3H9.3v1.3c-4.9,0.3-8.8,4.4-8.8,9.4c0,5,3.9,9.1,8.8,9.4v1.3h1.3v-1.3c4.9-0.3,8.8-4.4,8.8-9.4C19.5,16.3,15.6,12.2,10.7,11.9z M13.3,24.4H6.7V23h6.6V24.4z M13.3,19.6H6.7v-1.4h6.6V19.6z',
+                handleSize: '80%',
+                handleStyle: {
+                    color: '#008037',
+                    shadowBlur: 3,
+                    shadowColor: 'rgba(0, 0, 0, 0.3)',
+                    shadowOffsetX: 2,
+                    shadowOffsetY: 2
+                },
+                textStyle: {
+                    color: '#434b56'
+                }
+            }
+        ],
+        xAxis: {
+            type: 'category',
+            boundaryGap: false,
+            data: years.map(y => y === new Date().getFullYear() ? `${y} (actual)` : String(y)),
+            axisLine: { lineStyle: { color: '#d4d8de' } },
+            axisLabel: { color: '#434b56' }
+        },
+        yAxis: {
+            type: 'value',
+            axisLine: { show: false },
+            splitLine: { lineStyle: { color: '#edf0f4' } },
+            axisLabel: { color: '#434b56' }
+        },
+        series: filteredSeries
+    }, true);
+}
+
+function abrirModalBreakdown(tipo) {
+    const namesMap = {
+        catedraticos: { title: 'Catedràtics', regex: 'catedr|chair|full professor', color: '#004D5E' },
+        titulares: { title: 'Professors titulars', regex: 'titular|tenured|tenure', color: '#73a437' },
+        agregados: { title: 'Agregats', regex: 'agregat|agregado|associate professor', color: '#F88C12' },
+        lectores: { title: 'Lectors', regex: 'lector|lectura|reader', color: '#004D21' },
+        icrea: { title: 'Personal investigador ICREA', regex: 'icrea', color: '#003a47' },
+        predoctorals: { title: 'Inv. Predoctorals', regex: 'predoctoral|en formaci|FPI|FI-JOAN|FI-SDUR|novell|La Caixa|pre-doctoral|research training|novel research', color: '#1a6b1a' },
+        postdoctorals: { title: 'Inv. Postdoctorals', regex: 'ordinari|postdoctoral|Cajal|Beatriu|Cierva|doctor distingit|director investigaci|regular researcher|post-doctoral|distinguished research|research director', color: '#5a1a8b' }
+    };
+
+    const info = namesMap[tipo];
+    if (!info) return;
+
+    document.getElementById('modalTitle').textContent = `Detall de la Categoria: ${info.title}`;
+    
+    const selectedYear = selectorAny?.value || 'Actual';
+    document.getElementById('modalSelectedYearBadge').textContent = `Any: ${selectedYear}`;
+    
+    document.getElementById('modalBreakdown').classList.remove('hidden');
+    
+    // Set loading state in table
+    const tableBody = document.getElementById('modalTableBody');
+    tableBody.innerHTML = '<tr><td colspan="2" class="px-4 py-4 text-center text-xs text-[#596473]">Carregant dades...</td></tr>';
+    
+    // Clear/show loading state in chart
+    const chartCont = document.getElementById('modalChart');
+    if (chartModalBreakdown) {
+        chartModalBreakdown.clear();
+    } else {
+        chartModalBreakdown = echarts.init(chartCont);
+    }
+    chartModalBreakdown.showLoading({ text: 'Carregant evolució...' });
+
+    // Load table data and evolution data
+    const activeCatsPromise = (tipo === 'icrea')
+        ? fetch(apiUrl(buildUrl('/persons/stats/icrea', true, true)))
+            .then(r => r.ok ? r.json() : { total: 0 })
+            .then(res => {
+                const total = Number(res?.total ?? res?.value?.total ?? 0);
+                return [{ categoria_laboral: 'Personal investigador ICREA', total_personas: total }];
+            })
+        : _fetchVigentesCats();
+
+    Promise.all([
+        activeCatsPromise,
+        _cargarEvolucionModal(info, tipo)
+    ]).then(([activeCats, evolutionData]) => {
+        // 1. Populate Table
+        const re = new RegExp(info.regex, 'i');
+        let filtered = activeCats.filter(d => d.categoria_laboral && re.test(d.categoria_laboral));
+        
+        if (tipo === 'icrea') {
+            const sum = filtered.reduce((acc, d) => acc + (d.total_personas ?? 0), 0);
+            filtered = sum > 0 ? [{ categoria_laboral: 'Personal investigador ICREA', total_personas: sum }] : [];
+        } else {
+            filtered.sort((a, b) => (b.total_personas ?? 0) - (a.total_personas ?? 0));
+        }
+        
+        if (filtered.length === 0) {
+            tableBody.innerHTML = '<tr><td colspan="2" class="px-4 py-4 text-center text-xs text-[#596473]">No hi ha dades disponibles</td></tr>';
+        } else {
+            tableBody.innerHTML = filtered.map(d => `
+                <tr class="hover:bg-slate-50/80 transition-colors">
+                    <td class="px-4 py-3 text-[#2a3037] font-medium">${d.categoria_laboral}</td>
+                    <td class="px-4 py-3 text-right font-semibold text-[#111111]">${formatearNumero(d.total_personas)}</td>
+                </tr>
+            `).join('');
+        }
+
+        // 2. Adjust Modal Layout to be identical across all categories
+        const gridEl = document.getElementById('modalGrid');
+        const tableColEl = document.getElementById('modalTableCol');
+        const chartColEl = document.getElementById('modalChartCol');
+        const chartContEl = document.getElementById('modalChartContainer');
+        const modalCardEl = document.getElementById('modalCard');
+
+        if (gridEl && tableColEl && chartColEl && chartContEl) {
+            if (modalCardEl) {
+                modalCardEl.className = 'bg-white rounded-3xl shadow-2xl border border-[#d4d8de] w-full max-w-7xl h-[85vh] flex flex-col overflow-hidden';
+            }
+            gridEl.className = 'flex-grow p-6 overflow-y-auto grid grid-cols-1 lg:grid-cols-3 gap-6 bg-slate-50/50';
+            tableColEl.className = 'flex flex-col gap-4 lg:col-span-1';
+            chartColEl.className = 'flex flex-col gap-4 lg:col-span-2';
+            chartContEl.className = 'border border-[#d4d8de] rounded-2xl p-4 flex-grow h-[60vh] bg-white shadow-sm relative';
+            setTimeout(() => {
+                chartModalBreakdown.resize();
+            }, 50);
+        }
+
+        // 3. Render Modal Chart
+        chartModalBreakdown.hideLoading();
+        chartModalBreakdown.setOption({
+            tooltip: {
+                trigger: 'axis',
+                axisPointer: { type: 'line' }
+            },
+            legend: {
+                type: 'scroll',
+                orient: 'vertical',
+                right: 5,
+                top: 20,
+                textStyle: { fontSize: 11 }
+            },
+            grid: {
+                left: '3%',
+                right: 320,
+                top: '10%',
+                bottom: 90,
+                containLabel: true
+            },
+            dataZoom: [
+                {
+                    type: 'slider',
+                    show: true,
+                    xAxisIndex: [0],
+                    bottom: 15,
+                    start: 0,
+                    end: 100,
+                    height: 20,
+                    borderColor: 'transparent',
+                    backgroundColor: '#f1f5f9',
+                    fillerColor: 'rgba(0, 128, 55, 0.15)',
+                    handleIcon: 'path://M30.9,43.2H12.2c-1,0-1.8-0.8-1.8-1.8V18.6c0-1,0.8-1.8,1.8-1.8h18.7c1,0,1.8,0.8,1.8,1.8v22.8C32.7,42.4,31.9,43.2,30.9,43.2z M17.5,23.4v14.4 M25.4,23.4v14.4',
+                    handleSize: '80%',
+                    handleStyle: {
+                        color: '#008037',
+                        shadowBlur: 3,
+                        shadowColor: 'rgba(0, 0, 0, 0.6)',
+                        shadowOffsetX: 2,
+                        shadowOffsetY: 2
+                    },
+                    textStyle: { color: '#596473', fontSize: 10 },
+                    brushSelect: false
+                }
+            ],
+            xAxis: {
+                type: 'category',
+                boundaryGap: false,
+                data: evolutionData.years.map(y => y === new Date().getFullYear() ? `${y} (actual)` : String(y)),
+                axisLine: { lineStyle: { color: '#d4d8de' } },
+                axisLabel: { color: '#434b56' }
+            },
+            yAxis: {
+                type: 'value',
+                axisLine: { show: false },
+                splitLine: { lineStyle: { color: '#edf0f4' } },
+                axisLabel: { color: '#434b56' }
+            },
+            series: evolutionData.series
+        }, true);
+
+        // Reset title of modal chart to initial state
+        const titleEl = document.getElementById('modalTituloEvolucion');
+        if (titleEl) {
+            titleEl.textContent = `Evolució de Subcategories (2018 - actualitat)`;
+        }
+
+        // Add dynamic zoom title event listener
+        chartModalBreakdown.off('datazoom');
+        chartModalBreakdown.on('datazoom', function () {
+            const option = chartModalBreakdown.getOption();
+            const xAxis = option.xAxis[0];
+            const dataZoom = option.dataZoom[0];
+            
+            const startValue = dataZoom.startValue;
+            const endValue = dataZoom.endValue;
+            
+            const visibleYears = xAxis.data.slice(Math.round(startValue), Math.round(endValue) + 1);
+            
+            if (titleEl && visibleYears.length > 0) {
+                const firstYear = visibleYears[0];
+                const lastYear = visibleYears[visibleYears.length - 1];
+                titleEl.textContent = `Evolució de Subcategories (${firstYear} - ${lastYear})`;
+            }
+        });
+    }).catch(err => {
+        tableBody.innerHTML = '<tr><td colspan="2" class="px-4 py-4 text-center text-xs text-rose-500">Error carregant les dades</td></tr>';
+        chartModalBreakdown.hideLoading();
+    });
+}
+
+async function _cargarEvolucionModal(info, tipo) {
+    const startYear = 2018;
+    const currentYear = new Date().getFullYear();
+    const years = [];
+    for (let y = startYear; y <= currentYear; y++) {
+        years.push(y);
+    }
+    
+    const promises = years.map(async (year) => {
+        const isCurrentYear = (year === currentYear);
+        
+        if (tipo === 'icrea') {
+            const urlIcrea = isCurrentYear
+                ? buildUrlForYear('/persons/stats/icrea', undefined, true, true)
+                : buildUrlForYear('/persons/stats/icrea', year, true, true);
+            const resIcrea = await fetch(apiUrl(urlIcrea)).then(r => r.ok ? r.json() : { total: 0 });
+            const total = Number(resIcrea?.total ?? resIcrea?.value?.total ?? 0);
+            return {
+                year,
+                cats: total > 0 ? [{ categoria_laboral: 'Personal investigador ICREA', total_personas: total }] : []
+            };
+        }
+
+        const urlCats = isCurrentYear
+            ? buildUrlForYear('/persons/stats/vigentes-por-categoria', undefined, true)
+            : buildUrlForYear('/persons/stats/vigentes-por-categoria', year, true);
+        
+        const resCats = await fetch(apiUrl(urlCats)).then(r => r.ok ? r.json() : []);
+        const cats = Array.isArray(resCats) ? resCats : [];
+        
+        const re = new RegExp(info.regex, 'i');
+        const matched = cats.filter(d => d.categoria_laboral && re.test(d.categoria_laboral));
+        
+        return {
+            year,
+            cats: matched
+        };
+    });
+    
+    const historicalData = await Promise.all(promises);
+    
+    // Extract unique subcategory names
+    const subCatNamesSet = new Set();
+    historicalData.forEach(d => {
+        d.cats.forEach(c => {
+            subCatNamesSet.add(c.categoria_laboral);
+        });
+    });
+    const subCatNames = Array.from(subCatNamesSet);
+    
+    const series = subCatNames.map(name => {
+        const data = historicalData.map(d => {
+            const match = d.cats.find(c => c.categoria_laboral === name);
+            return match ? (match.total_personas ?? 0) : 0;
+        });
+        return {
+            name: name,
+            type: 'line',
+            data: data,
+            smooth: true
+        };
+    });
+    
+    return { years, series };
+}
+
+function cerrarModalBreakdown() {
+    document.getElementById('modalBreakdown').classList.add('hidden');
+}
+
+window.abrirModalBreakdown = abrirModalBreakdown;
+window.cerrarModalBreakdown = cerrarModalBreakdown;

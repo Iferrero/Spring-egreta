@@ -709,6 +709,8 @@ public class ExternalOrganizationController {
         TypeInferenceResult typeResult = null;
         FundingInferenceResult fundingResult = null;
 
+        boolean aiCallFailed = (aiResult == null);
+
         if (aiResult != null) {
             countryResult = aiResult.country();
             typeResult = aiResult.type();
@@ -725,7 +727,9 @@ public class ExternalOrganizationController {
 
         // Fallbacks for type
         if (typeResult == null || typeResult.typeLabel.isBlank()) {
-            typeResult = inferTypeWithLocalAi(orgName, typeCatalog);
+            if (!aiCallFailed) {
+                typeResult = inferTypeWithLocalAi(orgName, typeCatalog);
+            }
             if (typeResult == null || typeResult.typeLabel.isBlank()) {
                 typeResult = inferTypeFromName(orgName, typeCatalog);
             }
@@ -3265,6 +3269,7 @@ public class ExternalOrganizationController {
             ));
             payload.put("response_format", Map.of("type", "json_object"));
             payload.put("max_tokens", 800);
+            payload.put("user", "sess-" + java.util.UUID.randomUUID().toString().substring(0, 8));
 
             HttpRequest.Builder builder = HttpRequest.newBuilder()
                 .uri(URI.create(aiCountrySuggestUrl))
@@ -3303,19 +3308,21 @@ public class ExternalOrganizationController {
             return null;
         }
 
-       String systemPrompt =
+        String systemPrompt =
         "You are a data quality assistant specialized in research organizations. "
-        + "Given an organization name, first evaluate your internal confidence in inferring its country. "
-        + "CRITICAL RULE: you MUST use the web-search tool to research the organization and improve your confidence before generating the final answer. "
-         + "Return strict JSON with exactly these keys: \"suggestedCountry\", \"confidence\", \"reason\". "
-        + "confidence must be a number between 0 and 1. "
+        + "Given an organization name, infer its country using your training knowledge. "
+        + "You may perform web searches or use browser tools ONLY if uncertain, and you MUST limit your search to a maximum of 2 or 3 sources/webpages to keep it fast. "
+        + "If you cannot find reliable evidence, return a LOW confidence value (below 0.5) rather than guessing based on the name alone. "
+        + "Return strict JSON with exactly these keys: \"suggestedCountry\", \"confidence\", \"reason\". "
+        + "confidence must be a number between 0 and 1, and must honestly reflect how much evidence you actually have. "
+        + "The \"reason\" field must only describe evidence you actually observed and must be extremely brief (at most 10-15 words). "
         + "CRITICAL: Output ONLY the raw JSON object. Do NOT wrap the response in markdown blocks like ```json ... ```. "
         + "Your response must start with '{' and end with '}'.\n\n"
         + "Example Output:\n"
         + "{\n"
         + "  \"suggestedCountry\": \"Spain\",\n"
         + "  \"confidence\": 0.95,\n"
-        + "  \"reason\": \"Web search confirms the organization is located in Barcelona or associated with UAB.\"\n"
+        + "  \"reason\": \"Name references Barcelona/UAB.\"\n"
         + "}";
 
         String userPrompt = "Organization: '" + orgName + "'";
@@ -3357,14 +3364,15 @@ public class ExternalOrganizationController {
 
         String systemPrompt =
         "You are a data quality assistant for research organization metadata. "
-        + "Based solely on your training knowledge, infer the country, organization type, and funding profile. "
-         + "CRITICAL RULE: you MUST use the web-search tool to research the organization and improve your confidence before generating the final answer. "
+        + "Based on your training knowledge, infer the country, organization type, and funding profile. "
+        + "You may perform web searches or use browser tools ONLY if uncertain, and you MUST limit your search to a maximum of 2 or 3 sources/webpages to keep it fast. "
         + "Return ONLY a raw JSON object with exactly these keys: "
         + "\"suggestedCountry\", \"countryConfidence\", \"countryReason\", "
         + "\"suggestedType\", \"typeConfidence\", \"typeReason\", "
         + "\"suggestedFunding\", \"fundingConfidence\", \"fundingReason\". "
-        + "Confidence values must be numbers between 0 and 1. "
-        + "If uncertain, return empty string and confidence 0. "
+        + "Confidence values must be numbers between 0 and 1, and must honestly reflect the evidence you actually have. "
+        + "If uncertain or if no evidence was found, return LOW confidence (below 0.5) instead of guessing from the name alone. "
+        + "Reason fields must only describe evidence observed and must be extremely brief (at most 10-15 words). "
         + "No markdown. Start with '{' and end with '}'.";
 
         String userPrompt = "Organization: '" + orgName + "'. Candidate types: " + typeCatalogText;
@@ -3457,13 +3465,15 @@ public class ExternalOrganizationController {
         String catalogText = catalog.stream().limit(20).map(t -> t.label).collect(Collectors.joining(", "));
 
         String systemPrompt =
-                "You are a data quality assistant specialized in research organizations. "
-                + "Given an organization name, first evaluate your internal confidence in inferring its organization type. "
-               + "CRITICAL RULE: you MUST use the web-search tool to research the organization and improve your confidence before generating the final answer. "
-                + "Return strict JSON with exactly these keys: \"suggestedType\", \"confidence\", \"reason\". "
-                + "confidence must be a number between 0 and 1. "
-                + "CRITICAL: Output ONLY the raw JSON object. Do NOT wrap the response in markdown blocks like ```json ... ```. "
-                + "Your final response must start with '{' and end with '}'.";
+        "You are a data quality assistant specialized in research organizations. "
+        + "Given an organization name, infer its organization type using your training knowledge. "
+        + "You may perform web searches or use browser tools ONLY if uncertain, and you MUST limit your search to a maximum of 2 or 3 sources/webpages to keep it fast. "
+        + "If you cannot find reliable evidence, return a LOW confidence value (below 0.5) rather than guessing. "
+        + "Return strict JSON with exactly these keys: \"suggestedType\", \"confidence\", \"reason\". "
+        + "confidence must be a number between 0 and 1, honestly reflecting the evidence actually found. "
+        + "The reason must only describe evidence observed and must be extremely brief (at most 10-15 words). "
+        + "CRITICAL: Output ONLY the raw JSON object. Do NOT wrap the response in markdown blocks like ```json ... ```. "
+        + "Your final response must start with '{' and end with '}'.";
 
         String userPrompt = "Organization: '" + orgName + "'. Candidate types: " + catalogText;
 
@@ -3504,12 +3514,13 @@ public class ExternalOrganizationController {
         String systemPrompt =
                 "You are a data quality assistant specialized in research organizations. "
                 + "Given an organization name, first evaluate your internal confidence for its country, organization type, and funding profile (Publica or Privada). "
-                
+                + "You may perform web searches or use browser tools ONLY if uncertain, and you MUST limit your search to a maximum of 2 or 3 sources/webpages to keep it fast. "
                 + "Return strict JSON with exactly these keys: "
                 + "\"suggestedCountry\", \"countryConfidence\", \"countryReason\", "
                 + "\"suggestedType\", \"typeConfidence\", \"typeReason\", "
                 + "\"suggestedFunding\", \"fundingConfidence\", \"fundingReason\". "
                 + "Confidence values must be numbers between 0 and 1. "
+                + "Reason fields must be extremely brief (at most 10-15 words). "
                 
                 + "CRITICAL: Output ONLY the raw JSON object. Do NOT wrap the response in markdown blocks like ```json ... ```. "
                 + "Your final response must start with '{' and end with '}'.";

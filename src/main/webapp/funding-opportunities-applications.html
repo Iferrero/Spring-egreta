@@ -31,11 +31,20 @@
             <input id="inputBuscar" type="text" placeholder="Filtrar per títol o tipus de convocatòria..."
                    class="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm">
             </div>
-            <div class="lg:col-span-3">
-                <label for="selectTipo" class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Tipus de Convocatòria</label>
-                <select id="selectTipo" class="w-full border border-slate-200 bg-slate-50 rounded-xl px-3 py-2 text-sm cursor-pointer outline-none focus:ring-2 focus:ring-indigo-500">
-                    <option value="all">Tots els tipus de convocatòria</option>
-                </select>
+            <div class="lg:col-span-3 relative">
+                <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Tipus de Convocatòria</label>
+                <div class="relative font-sans">
+                    <button id="btnMultiSelect" onclick="toggleMultiSelect(event)" type="button" class="w-full h-[38px] flex items-center justify-between border border-slate-200 bg-slate-50 rounded-xl px-3 py-2 text-sm cursor-pointer outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-left">
+                        <span id="multiSelectText" class="text-slate-400 text-xs">Tots els tipus de convocatòria</span>
+                        <i class="fa-solid fa-chevron-down text-xs text-slate-400 ml-2"></i>
+                    </button>
+                    <div id="panelMultiSelect" class="hidden absolute left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg z-30 max-h-60 overflow-y-auto p-2 divide-y divide-slate-50">
+                        <!-- Checkboxes will be dynamically populated -->
+                    </div>
+                </div>
+                <div id="chipsContainer" class="flex flex-wrap gap-1 items-center mt-2 hidden">
+                    <!-- Selected chips go here -->
+                </div>
             </div>
             <div class="lg:col-span-2 flex items-center h-full pb-2">
                 <label class="inline-flex items-center cursor-pointer select-none">
@@ -55,7 +64,7 @@
         </div>
     </div>
 
-    <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-y-auto max-h-[700px]">
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-x-auto overflow-y-auto max-h-[700px]">
         <table class="w-full text-left border-collapse">
             <thead>
             <tr class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider">
@@ -64,18 +73,20 @@
                 <th class="sticky top-0 bg-slate-50 z-10 px-6 py-4 font-bold text-right">Any</th>
                 <th class="sticky top-0 bg-slate-50 z-10 px-6 py-4 font-bold text-right">Enviades</th>
                 <th class="sticky top-0 bg-slate-50 z-10 px-6 py-4 font-bold text-right text-emerald-700">Concedides</th>
-                <th class="sticky top-0 bg-slate-50 z-10 px-6 py-4 font-bold text-right text-emerald-700">Concedides (Dones)</th>
-                <th class="sticky top-0 bg-slate-50 z-10 px-6 py-4 font-bold text-right text-emerald-700">Concedides (Homes)</th>
-                <th class="sticky top-0 bg-slate-50 z-10 px-6 py-4 font-bold text-right text-rose-700">Rebutjades</th>
-                <th class="sticky top-0 bg-slate-50 z-10 px-6 py-4 font-bold text-right text-rose-700">Rebutjades (Dones)</th>
-                <th class="sticky top-0 bg-slate-50 z-10 px-6 py-4 font-bold text-right text-rose-700">Rebutjades (Homes)</th>
+                <th class="sticky top-0 bg-slate-50 z-10 px-6 py-4 font-bold text-right text-teal-700">Vigents</th>
                 <th id="th-renunciades" class="sticky top-0 bg-slate-50 z-10 px-6 py-4 font-bold text-right text-slate-600">Renunciades</th>
+                <th class="sticky top-0 bg-slate-50 z-10 px-6 py-4 font-bold text-right text-emerald-700">Concedides IP (Dones)</th>
+                <th class="sticky top-0 bg-slate-50 z-10 px-6 py-4 font-bold text-right text-emerald-700">Concedides IP (Homes)</th>
+                <th class="sticky top-0 bg-slate-50 z-10 px-6 py-4 font-bold text-right text-emerald-700">Concedides beneficiari (dones)</th>
+                <th class="sticky top-0 bg-slate-50 z-10 px-6 py-4 font-bold text-right text-rose-700">Rebutjades</th>
+                <th class="sticky top-0 bg-slate-50 z-10 px-6 py-4 font-bold text-right text-rose-700">Rebutjades IP (Dones)</th>
+                <th class="sticky top-0 bg-slate-50 z-10 px-6 py-4 font-bold text-right text-rose-700">Rebutjades IP (Homes)</th>
                 <th class="sticky top-0 bg-slate-50 z-10 px-6 py-4 font-bold text-right text-amber-700">Pendents</th>
             </tr>
             </thead>
             <tbody id="tabla-body" class="divide-y divide-slate-50">
                 <tr>
-                    <td colspan="12" class="px-6 py-12 text-center text-slate-500 italic">
+                    <td colspan="14" class="px-6 py-12 text-center text-slate-500 italic">
                         <i class="fa-solid fa-spinner animate-spin mr-2"></i> Carregant dades...
                     </td>
                 </tr>
@@ -87,6 +98,80 @@
 <script>
     let datos = [];
     let rangoAnios = null;
+    let tiposSeleccionados = new Set();
+
+    function toggleMultiSelect(event) {
+        event.stopPropagation();
+        const panel = document.getElementById('panelMultiSelect');
+        panel.classList.toggle('hidden');
+    }
+
+    document.addEventListener('click', (e) => {
+        const panel = document.getElementById('panelMultiSelect');
+        const trigger = document.getElementById('btnMultiSelect');
+        if (panel && !panel.classList.contains('hidden') && !panel.contains(e.target) && !trigger.contains(e.target)) {
+            panel.classList.add('hidden');
+        }
+    });
+
+    function toggleTipoSelection(type, isChecked) {
+        if (isChecked) {
+            tiposSeleccionados.add(type);
+        } else {
+            tiposSeleccionados.delete(type);
+        }
+        actualizarChipsYFiltro();
+    }
+
+    function removeTipo(type) {
+        tiposSeleccionados.delete(type);
+        actualizarChipsYFiltro();
+        
+        // Update checkbox status in panel
+        const panel = document.getElementById('panelMultiSelect');
+        if (panel) {
+            const checkboxes = panel.querySelectorAll('input[type="checkbox"]');
+            checkboxes.forEach(cb => {
+                const labelText = cb.nextSibling.textContent;
+                if (labelText === type) {
+                    cb.checked = false;
+                }
+            });
+        }
+    }
+
+    function actualizarChipsYFiltro() {
+        const container = document.getElementById('chipsContainer');
+        const textEl = document.getElementById('multiSelectText');
+        
+        // Remove any existing chips
+        const chips = container.querySelectorAll('.chip-item');
+        chips.forEach(c => c.remove());
+        
+        if (tiposSeleccionados.size === 0) {
+            textEl.textContent = "Tots els tipus de convocatòria";
+            textEl.className = "text-slate-400 text-xs";
+            container.classList.add('hidden');
+        } else {
+            textEl.textContent = `${tiposSeleccionados.size} seleccionat` + (tiposSeleccionados.size > 1 ? 's' : '');
+            textEl.className = "text-slate-700 text-xs font-semibold";
+            container.classList.remove('hidden');
+            
+            tiposSeleccionados.forEach(t => {
+                const chip = document.createElement('span');
+                chip.className = 'chip-item inline-flex items-center gap-1 bg-indigo-50 text-indigo-700 text-[10px] font-bold px-2 py-0.5 rounded-lg border border-indigo-150/50';
+                
+                const displayName = t.length > 30 ? t.substring(0, 27) + '...' : t;
+                chip.innerHTML = `
+                    <span>${displayName}</span>
+                    <button type="button" onclick="event.stopPropagation(); removeTipo('${t.replace(/'/g, "\\'")}')" class="text-indigo-400 hover:text-indigo-800 font-black ml-0.5 text-[9px] cursor-pointer">&times;</button>
+                `;
+                container.appendChild(chip);
+            });
+        }
+        
+        aplicarFiltro();
+    }
 
     function obtenerAnio(item) {
         const anio = Number(item.fundingYear);
@@ -176,7 +261,7 @@
             thRenunciades.style.display = '';
         }
 
-        const colSpanCount = excl ? 11 : 12;
+        const colSpanCount = excl ? 13 : 14;
 
         if (!lista || lista.length === 0) {
             body.innerHTML = `<tr><td colspan="${colSpanCount}" class="px-6 py-12 text-center text-slate-400 italic">No hi ha resultats</td></tr>`;
@@ -187,6 +272,7 @@
             const accTotal = item.accepted ?? 0;
             const accFemPct = accTotal > 0 ? Math.round((item.acceptedFemale ?? 0) / accTotal * 100) : 0;
             const accMalePct = accTotal > 0 ? Math.round((item.acceptedMale ?? 0) / accTotal * 100) : 0;
+            const accBenFemPct = accTotal > 0 ? Math.round((item.acceptedFemaleBeneficiary ?? 0) / accTotal * 100) : 0;
 
             const rejTotal = item.rejected ?? 0;
             const rejFemPct = rejTotal > 0 ? Math.round((item.rejectedFemale ?? 0) / rejTotal * 100) : 0;
@@ -210,12 +296,14 @@
                 <td class="px-6 py-4 text-right font-semibold text-slate-700">${obtenerAnio(item) ?? '-'}</td>
                 <td class="px-6 py-4 text-right font-semibold text-slate-700">${item.sent ?? 0}</td>
                 <td class="px-6 py-4 text-right font-bold text-emerald-700">${accTotal}</td>
+                <td class="px-6 py-4 text-right font-bold text-teal-700">${accTotal - (item.resigned ?? 0)}</td>
+                ${!excl ? `<td class="px-6 py-4 text-right font-bold text-slate-500">${item.resigned ?? 0}</td>` : ''}
                 <td class="px-6 py-4 text-right font-bold text-emerald-700">${item.acceptedFemale ?? 0} (${accFemPct}%)</td>
                 <td class="px-6 py-4 text-right font-bold text-emerald-700">${item.acceptedMale ?? 0} (${accMalePct}%)</td>
+                <td class="px-6 py-4 text-right font-bold text-emerald-700">${item.acceptedFemaleBeneficiary ?? 0} (${accBenFemPct}%)</td>
                 <td class="px-6 py-4 text-right font-bold text-rose-700">${rejTotal}</td>
                 <td class="px-6 py-4 text-right font-bold text-rose-700">${item.rejectedFemale ?? 0} (${rejFemPct}%)</td>
                 <td class="px-6 py-4 text-right font-bold text-rose-700">${item.rejectedMale ?? 0} (${rejMalePct}%)</td>
-                ${!excl ? `<td class="px-6 py-4 text-right font-bold text-slate-500">${item.resigned ?? 0}</td>` : ''}
                 <td class="px-6 py-4 text-right font-bold text-amber-700">${item.pending ?? 0}</td>
             </tr>
             `;
@@ -223,31 +311,45 @@
     }
 
     function populateTipos(lista) {
-        const select = document.getElementById('selectTipo');
-        select.innerHTML = '<option value="all">Tots els tipus de convocatòria</option>';
+        const panel = document.getElementById('panelMultiSelect');
+        panel.innerHTML = '';
         
         const tipos = [...new Set((lista || []).map(item => item.fundingType || 'Desconocido'))]
             .filter(Boolean)
             .sort();
             
         tipos.forEach(t => {
-            const opt = document.createElement('option');
-            opt.value = t;
-            opt.textContent = t;
-            select.appendChild(opt);
+            const label = document.createElement('label');
+            label.className = 'flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg hover:bg-slate-50 cursor-pointer select-none text-xs text-slate-700 font-medium transition-colors w-full';
+            
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.className = 'rounded border-slate-300 text-indigo-650 focus:ring-indigo-500 h-3.5 w-3.5';
+            checkbox.checked = tiposSeleccionados.has(t);
+            
+            checkbox.addEventListener('change', (e) => {
+                toggleTipoSelection(t, e.target.checked);
+            });
+            
+            label.appendChild(checkbox);
+            
+            const span = document.createElement('span');
+            span.textContent = t;
+            label.appendChild(span);
+            
+            panel.appendChild(label);
         });
     }
 
     function aplicarFiltro() {
         const txt = document.getElementById('inputBuscar').value.trim().toLowerCase();
-        const tipoSeleccionado = document.getElementById('selectTipo').value;
         const filtrados = datos.filter(item => {
             const titulo = (item.fundingTitle || '').toLowerCase();
             const tipo = (item.fundingType || '').toLowerCase();
             const coincideTexto = !txt || titulo.includes(txt) || tipo.includes(txt);
 
-            const coincideTipoSelect = tipoSeleccionado === 'all' 
-                || (item.fundingType || 'Desconocido') === tipoSeleccionado;
+            const coincideTipoSelect = tiposSeleccionados.size === 0 
+                || tiposSeleccionados.has(item.fundingType || 'Desconocido');
 
             const anio = obtenerAnio(item);
             const coincideAnio = !rangoAnios
@@ -273,7 +375,7 @@
     async function cargarDatos() {
         const body = document.getElementById('tabla-body');
         const excl = document.getElementById('checkExcloureRenunciats').checked;
-        const colSpanCount = excl ? 11 : 12;
+        const colSpanCount = excl ? 13 : 14;
         body.innerHTML = `
             <tr>
                 <td colspan="${colSpanCount}" class="px-6 py-12 text-center text-slate-500 italic">
@@ -294,8 +396,9 @@
     }
 
     document.getElementById('inputBuscar').addEventListener('input', aplicarFiltro);
-    document.getElementById('selectTipo').addEventListener('change', aplicarFiltro);
     document.getElementById('checkExcloureRenunciats').addEventListener('change', cargarDatos);
+    window.toggleMultiSelect = toggleMultiSelect;
+    window.removeTipo = removeTipo;
     cargarDatos();
 </script>
 </body>

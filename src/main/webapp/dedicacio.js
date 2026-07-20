@@ -581,14 +581,14 @@ function renderAjutsTable(data) {
 
     const normalized = data.map(d => ({
         categoria: d.categoria || 'Sense categoria',
-        tipo: d.tipo || '(Sense tipus)',
+        type: d.type_term || d.tipo || '(Sense tipus)',
         anio: String(Number(d.anio || 0)),
         ajuts: Number(d.ajuts || 0),
         import: Number(d.import || 0)
     }));
 
     $('#ajuts-pivot-container').pivot(normalized, {
-        rows: ['tipo'],
+        rows: ['type'],
         cols: ['anio'],
         vals: ['import'],
         renderer: renderers['Heatmap'],

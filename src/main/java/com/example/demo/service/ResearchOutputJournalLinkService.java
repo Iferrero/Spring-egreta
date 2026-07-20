@@ -1109,15 +1109,6 @@ public class ResearchOutputJournalLinkService {
             return publicationUuidsByPerson(personUuid.trim(), desde, hasta);
         }
 
-        // Step 1: resolve matching person UUIDs from the Persons collection (one fast query).
-        // This avoids the former $unwind+$lookup-per-contributor chain that hit MongoDB
-        // O(publications × contributors) times.
-        List<String> personUuids = personUuidsByDepartment(deptUuid, desde, hasta, filtrePersonal);
-        if (personUuids.isEmpty()) {
-            return List.of();
-        }
-
-        // Step 2: find publications where any contributor matches via $in (index-friendly).
         List<Document> matchClauses = new ArrayList<>();
         matchClauses.add(new Document("workflow.step", "approved"));
 
@@ -1129,10 +1120,17 @@ public class ResearchOutputJournalLinkService {
             matchClauses.add(yearCriteria);
         }
 
-        matchClauses.add(new Document("$or", List.of(
-            new Document("contributors.person.uuid", new Document("$in", personUuids)),
-            new Document("contributors.externalPerson.uuid", new Document("$in", personUuids))
-        )));
+        // If filtering by a specific department, resolve and filter by its staff members.
+        if (deptUuid != null && !deptUuid.isBlank() && !"all".equalsIgnoreCase(deptUuid)) {
+            List<String> personUuids = personUuidsByDepartment(deptUuid, desde, hasta, filtrePersonal);
+            if (personUuids.isEmpty()) {
+                return List.of();
+            }
+            matchClauses.add(new Document("$or", List.of(
+                new Document("contributors.person.uuid", new Document("$in", personUuids)),
+                new Document("contributors.externalPerson.uuid", new Document("$in", personUuids))
+            )));
+        }
 
         Document filter = new Document("$and", matchClauses);
         Document projection = new Document("uuid", 1).append("_id", 0);

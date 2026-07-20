@@ -1,0 +1,1846 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Correccions de Publicacions | Portal de Recerca UAB</title>
+    <script src="config.js"></script>
+    <script src="uab-brand.js" defer></script>
+    <script src="egreta-modal.js" defer></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="uab-theme.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .premium-shadow {
+            box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05), 0 2px 8px -1px rgba(0, 0, 0, 0.03);
+        }
+        .pub-row:hover {
+            background-color: var(--uab-boira, #f1f5f9);
+        }
+        .card-kpi {
+            transition: all 0.3s ease;
+        }
+        .card-kpi:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+        .kpi-border-accent {
+            border-top-width: 6px;
+        }
+        details summary::-webkit-details-marker {
+            display: none;
+        }
+        details summary {
+            list-style: none;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen font-sans">
+
+    <div class="mx-auto py-8 px-6 w-[95%] max-w-[95%]">
+        
+        <header class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
+            <div>
+                <h1 class="text-3xl font-black text-slate-800">Correccions de Publicacions</h1>
+                <p class="text-slate-500 text-sm mt-1">Control de qualitat de metadades, enllaços i accés obert per a producció científica</p>
+            </div>
+            <div class="flex items-center gap-3">
+                <a href="index.html" class="px-5 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-all active:scale-95 flex items-center gap-2 premium-shadow">
+                    <i class="fa-solid fa-arrow-left"></i>
+                    <span>Tornar a l'inici</span>
+                </a>
+            </div>
+        </header>
+
+        <!-- KPI Cards Summary -->
+        <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
+            <!-- KPI 1: Title/Translation Issues -->
+
+
+            <!-- KPI 2: Missing Abstract -->
+            <div class="bg-white border border-slate-200 rounded-2xl p-5 flex flex-col justify-between card-kpi premium-shadow relative overflow-hidden">
+                <div class="absolute top-0 left-0 h-1.5 w-full bg-amber-500"></div>
+                <div class="flex items-center justify-between mb-3">
+                    <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Sense resum</span>
+                    <div class="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600">
+                        <i class="fa-solid fa-align-left text-xl"></i>
+                    </div>
+                </div>
+                <div>
+                    <h3 id="kpiMissingAbstract" class="text-2xl font-black text-slate-800">0</h3>
+                    <p class="text-slate-400 text-xs mt-1 leading-relaxed">Publicacions aprovades que no tenen registrat cap resum o descripció.</p>
+                </div>
+            </div>
+
+            <!-- KPI 3: Undefined Language -->
+            <div class="bg-white border border-slate-200 rounded-2xl p-5 flex flex-col justify-between card-kpi premium-shadow relative overflow-hidden">
+                <div class="absolute top-0 left-0 h-1.5 w-full bg-indigo-500"></div>
+                <div class="flex items-center justify-between mb-3">
+                    <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Idioma Indefinit</span>
+                    <div class="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
+                        <i class="fa-solid fa-flag text-xl"></i>
+                    </div>
+                </div>
+                <div>
+                    <h3 id="kpiUndefinedLanguage" class="text-2xl font-black text-slate-800">0</h3>
+                    <p class="text-slate-400 text-xs mt-1 leading-relaxed">Publicacions registrades amb idioma desconegut ("und") o sense idioma especificat.</p>
+                </div>
+            </div>
+
+            <!-- KPI 4: Missing DOI/URL -->
+            <div class="bg-white border border-slate-200 rounded-2xl p-5 flex flex-col justify-between card-kpi premium-shadow relative overflow-hidden">
+                <div class="absolute top-0 left-0 h-1.5 w-full bg-violet-500"></div>
+                <div class="flex items-center justify-between mb-3">
+                    <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Manca DOI/URL</span>
+                    <div class="w-10 h-10 rounded-xl bg-violet-50 flex items-center justify-center text-violet-600">
+                        <i class="fa-solid fa-circle-exclamation text-xl"></i>
+                    </div>
+                </div>
+                <div>
+                    <h3 id="kpiMissingDoiUrl" class="text-2xl font-black text-slate-800">0</h3>
+                    <p class="text-slate-400 text-xs mt-1 leading-relaxed">Publicacions científiques sense identificador DOI ni cap enllaç URL associat.</p>
+                </div>
+            </div>
+
+            <!-- KPI 5: Duplicates -->
+            <div class="bg-white border border-slate-200 rounded-2xl p-5 flex flex-col justify-between card-kpi premium-shadow relative overflow-hidden">
+                <div class="absolute top-0 left-0 h-1.5 w-full bg-teal-500"></div>
+                <div class="flex items-center justify-between mb-3">
+                    <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Duplicats</span>
+                    <div class="w-10 h-10 rounded-xl bg-teal-50 flex items-center justify-center text-teal-600">
+                        <i class="fa-solid fa-clone text-xl"></i>
+                    </div>
+                </div>
+                <div>
+                    <h3 id="kpiDuplicates" class="text-2xl font-black text-slate-800">0</h3>
+                    <p class="text-slate-400 text-xs mt-1 leading-relaxed">Identificadors, títols o enllaços compartits, o registres potencialment repetits.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Filters Box -->
+        <section class="bg-white border border-slate-200 rounded-2xl p-5 mb-6 premium-shadow">
+            <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
+                <!-- Search input -->
+                <div class="md:col-span-2">
+                    <label for="buscarTexto" class="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">Cercar</label>
+                    <div class="relative">
+                        <input id="buscarTexto" type="text" placeholder="Títol, autors, tipus, UUID..." class="w-full border border-slate-300 rounded-xl pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#008037]/20 focus:border-[#008037] transition-all font-medium text-slate-700">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                            <i class="fa-solid fa-magnifying-glass text-sm"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Year Selector -->
+                <div class="md:col-span-2">
+                    <label for="selectAny" class="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">Any de publicació</label>
+                    <div class="relative">
+                        <select id="selectAny" class="w-full pl-3 pr-8 py-2.5 bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#008037]/20 focus:border-[#008037] transition-all font-medium text-sm text-slate-700 appearance-none cursor-pointer">
+                            <!-- Injected dynamically, default current year -->
+                        </select>
+                        <span class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-slate-400">
+                            <i class="fa-solid fa-calendar-days text-xs"></i>
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Error type filter -->
+                <div class="md:col-span-2">
+                    <label for="filtroError" class="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">Tipus d'error</label>
+                    <div class="relative">
+                        <select id="filtroError" class="w-full pl-3 pr-8 py-2.5 bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#008037]/20 focus:border-[#008037] transition-all font-medium text-sm text-slate-700 appearance-none cursor-pointer">
+                            <option value="all">Tots els errors</option>
+                            <option value="MISSING_ABSTRACT">Sense resum / abstract</option>
+                            <option value="UNDEFINED_LANGUAGE">Idioma indefinit</option>
+                            <option value="MISSING_DOI">Sense DOI</option>
+                            <option value="MISSING_URL">Sense URL</option>
+                            <option value="DUPLICATE_TITLE">Títol duplicat</option>
+                            <option value="DUPLICATE_DOI">DOI duplicat</option>
+                            <option value="DUPLICATE_URL">URL duplicada</option>
+                            <option value="DUPLICATE_IDENTIFIER">Identificador duplicat</option>
+                            <option value="POTENTIAL_DUPLICATE">Potencial duplicate record</option>
+                            <option value="TEXT_QUALITY">Qualitat de text (accents, majúscules)</option>
+                            <option value="LINK_QUALITY">Qualitat d'enllaços (academia.edu, etc)</option>
+                            <option value="INVALID_ISBN">ISBN incorrecte o absent</option>
+                            <option value="INVALID_ISSN">ISSN incorrecte o absent</option>
+                        </select>
+                        <span class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-slate-400">
+                            <i class="fa-solid fa-chevron-down text-xs"></i>
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Status filter -->
+                <div class="md:col-span-2">
+                    <label for="filtroEstado" class="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">Estat de resolució</label>
+                    <div class="relative">
+                        <select id="filtroEstado" class="w-full pl-3 pr-8 py-2.5 bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#008037]/20 focus:border-[#008037] transition-all font-medium text-sm text-slate-700 appearance-none cursor-pointer">
+                            <option value="pendientes" selected>Pendents</option>
+                            <option value="corregidas">Revisades</option>
+                            <option value="all">Totes</option>
+                        </select>
+                        <span class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-slate-400">
+                            <i class="fa-solid fa-chevron-down text-xs"></i>
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Environment Selector -->
+                <div class="md:col-span-2">
+                    <label for="selectEntorn" class="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">Entorn Egreta</label>
+                    <div class="relative">
+                        <select id="selectEntorn" class="w-full pl-3 pr-8 py-2.5 bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#008037]/20 focus:border-[#008037] transition-all font-medium text-sm text-slate-700 appearance-none cursor-pointer">
+                            <option value="test" selected>Test (egretat)</option>
+                            <option value="prod">Producció (egreta)</option>
+                        </select>
+                        <span class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-slate-400">
+                            <i class="fa-solid fa-server text-xs"></i>
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Export / Summary Status info -->
+                <div class="md:col-span-2 flex items-center justify-center">
+                    <div class="text-center font-bold text-sm text-[#008037] bg-emerald-50 border border-emerald-100 rounded-xl w-full py-2.5 shadow-sm">
+                        <span id="contadorMostrados">0</span> / <span id="contadorTotal">0</span> pub.
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Collapsible Methodology Panel -->
+        <details class="bg-white border border-slate-200 rounded-2xl p-4 mb-6 premium-shadow group transition-all duration-300">
+            <summary class="flex items-center justify-between font-bold text-sm text-[#008037] cursor-pointer select-none outline-none list-none">
+                <div class="flex items-center gap-2">
+                    <i class="fa-solid fa-circle-info text-emerald-600 text-base"></i>
+                    <span>Metodologia i Fonts de Cerca (Com funcionen els botons de cerca?)</span>
+                </div>
+                <span class="transition-transform duration-300 group-open:rotate-180 text-emerald-600">
+                    <i class="fa-solid fa-chevron-down"></i>
+                </span>
+            </summary>
+            <div class="mt-4 pt-3 border-t border-slate-100 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-xs text-slate-600 leading-relaxed">
+                <!-- DOI -->
+                <div class="bg-slate-50 p-3.5 rounded-xl border border-slate-100 flex flex-col gap-1.5">
+                    <span class="font-bold text-[#008037] flex items-center gap-1.5">
+                        <i class="fa-solid fa-magnifying-glass text-[10px]"></i> Cercar DOI
+                    </span>
+                    <p>
+                        Si a l'article li manca el DOI, es fa una consulta a l'API de <strong>CrossRef</strong> utilitzant el paràmetre <code>query</code> per cercar conjuntament pel <strong>títol + subtítol, autors i any de publicació originals</strong> (sense traduccions automàtiques). Es realitza una comparació de textos (algorisme de Levenshtein) exigint un mínim del <strong>85% de similitud</strong> per acceptar la suggestió.
+                    </p>
+                </div>
+                <!-- ISBN -->
+                <div class="bg-slate-50 p-3.5 rounded-xl border border-slate-100 flex flex-col gap-1.5">
+                    <span class="font-bold text-[#008037] flex items-center gap-1.5">
+                        <i class="fa-solid fa-book text-[10px]"></i> Cercar ISBN
+                    </span>
+                    <p>
+                        Per als llibres sense ISBN, es fan cerques concurrents a <strong>Crossref</strong>, <strong>Google Books</strong> i <strong>Open Library</strong>. 
+                        Els resultats es classifiquen a la taula diferenciant clarament entre <strong>Imprès</strong> i <strong>Electrònic</strong>.
+                    </p>
+                </div>
+                <!-- ISSN -->
+                <div class="bg-slate-50 p-3.5 rounded-xl border border-slate-100 flex flex-col gap-1.5">
+                    <span class="font-bold text-[#008037] flex items-center gap-1.5">
+                        <i class="fa-solid fa-book-open text-[10px]"></i> Cercar ISSN
+                    </span>
+                    <p>
+                        <strong>1. Suggeriment Local</strong>: Mostra per defecte els ISSNs de la revista si ja està vinculada a la base de dades local.<br>
+                        <strong>2. Cerca en línia</strong>: Al clicar "Cercar ISSN", consulta l'API externa de <strong>CrossRef</strong> pel títol de l'article per trobar l'ISSN oficial de la revista. Al desar, actualitza primer la revista a Egreta per evitar errors de validació.
+                    </p>
+                </div>
+                <!-- Abstract -->
+                <div class="bg-slate-50 p-3.5 rounded-xl border border-slate-100 flex flex-col gap-1.5">
+                    <span class="font-bold text-[#008037] flex items-center gap-1.5">
+                        <i class="fa-solid fa-align-left text-[10px]"></i> Cercar resum (Abstract)
+                    </span>
+                    <p>
+                        <strong>1. DDD UAB</strong>: Si té enllaç al DDD, descarrega la fitxa i llegeix metadades Dublin Core.<br>
+                        <strong>2. Dialnet</strong>: Si té enllaç a Dialnet, extreu tots els resums llistats a <code>ul#resumen</code>.<br>
+                        <strong>3. APIs</strong>: Si no té enllaços, consulta <strong>Semantic Scholar</strong> i <strong>OpenAlex</strong> (reconstruint l'índex invertit si cal).
+                    </p>
+                </div>
+                <!-- Language -->
+                <div class="bg-slate-50 p-3.5 rounded-xl border border-slate-100 flex flex-col gap-1.5">
+                    <span class="font-bold text-[#008037] flex items-center gap-1.5">
+                        <i class="fa-solid fa-language text-[10px]"></i> Detectar idioma
+                    </span>
+                    <p>
+                        Analitza el títol del document. Si la probabilitat és baixa, utilitza una heurística tolerant local (admetent $\ge 10\%$ de confiança). 
+                        Com a última instància, fa una consulta de traducció automàtica a <strong>MyMemory</strong> per verificar l'idioma original real.
+                    </p>
+                </div>
+                <!-- Unpaywall -->
+                <div class="bg-slate-50 p-3.5 rounded-xl border border-slate-100 flex flex-col gap-1.5">
+                    <span class="font-bold text-[#008037] flex items-center gap-1.5">
+                        <i class="fa-solid fa-lock-open text-[10px]"></i> Unpaywall (Accés Obert)
+                    </span>
+                    <p>
+                        Consulta en temps real l'API d'<strong>Unpaywall</strong> mitjançant el DOI per detectar versions lliures de pagament (ruta verda, daurada o híbrida) i enllaça el PDF original, canviant l'estat del document a <strong>Local OA</strong>.
+                    </p>
+                </div>
+            </div>
+        </details>
+
+        <!-- Loader Spinner -->
+        <div id="loader" class="flex flex-col items-center justify-center py-20 gap-4">
+            <div class="w-12 h-12 border-4 border-emerald-100 border-t-[#008037] rounded-full animate-spin"></div>
+            <p class="text-slate-500 font-medium">Analitzant qualitat de les publicacions científiques...</p>
+        </div>
+
+        <!-- Table Container -->
+        <div id="tableContainer" class="hidden bg-white rounded-2xl border border-slate-200 premium-shadow overflow-hidden mb-6">
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-slate-50 text-slate-500 border-b border-slate-200 text-xs font-bold uppercase tracking-wider">
+                            <th class="px-5 py-4 w-12 text-center">Any</th>
+                            <th class="px-5 py-4 w-24">Tipus</th>
+                            <th class="px-5 py-4 w-1/3">Títol i Autors</th>
+                            <th class="px-5 py-4 w-1/5">Errors Detectats</th>
+                            <th class="px-5 py-4 w-36">DOI i URLs</th>
+                            <th class="px-5 py-4 w-32">ISBN</th>
+                            <th class="px-5 py-4 w-32">ISSN</th>
+                            <th class="px-5 py-4 w-28 text-center">Accés Obert</th>
+                            <th class="px-5 py-4 w-40">Observacions</th>
+                            <th class="px-2 py-4 w-12 text-center" title="Revisat"><i class="fa-solid fa-circle-check text-slate-400"></i></th>
+                        </tr>
+                    </thead>
+                    <tbody id="tablaBody" class="divide-y divide-slate-100 text-slate-700 text-sm">
+                        <!-- Content injected via JS -->
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Zero State -->
+            <div id="zeroState" class="hidden p-16 text-center">
+                <div class="w-16 h-16 bg-emerald-50 text-[#008037] rounded-full flex items-center justify-center mx-auto mb-4">
+                    <i class="fa-solid fa-circle-check text-2xl"></i>
+                </div>
+                <p class="text-slate-700 font-bold text-lg">No s'han trobat publicacions amb problemes</p>
+                <p class="text-slate-400 text-sm mt-1">Magnífic! Totes les publicacions compleixen els estàndards de qualitat o s'han revisat totes.</p>
+            </div>
+
+            <!-- Pagination Controls Container -->
+            <div id="paginationContainer" class="border-t border-slate-100 bg-slate-50/50 px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-4 select-none">
+                <div class="text-xs text-slate-500 font-medium">
+                    Mostrant <span id="pagStart" class="font-bold text-slate-700">0</span> a <span id="pagEnd" class="font-bold text-slate-700">0</span> de <span id="pagTotal" class="font-bold text-slate-700">0</span> registres
+                </div>
+                <div class="flex items-center gap-1" id="pagButtons">
+                    <!-- Page buttons injected via JS -->
+                </div>
+                <div class="flex items-center gap-2">
+                    <label for="pagSize" class="text-xs font-bold text-slate-400 uppercase tracking-wider">Mida pàgina</label>
+                    <select id="pagSize" onchange="changePageSize(this.value)" class="pl-2 pr-6 py-1 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-600 focus:outline-none focus:ring-1 focus:ring-[#008037] cursor-pointer">
+                        <option value="25">25</option>
+                        <option value="50" selected>50</option>
+                        <option value="100">100</option>
+                        <option value="200">200</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        let rawData = { kpis: {}, publications: [] };
+        let filteredPubs = [];
+        let currentPage = 1;
+        let pageSize = 50;
+        let languagesList = [];
+
+        // Initialize Years Select Box
+        function initYearsFilter() {
+            const selectAny = document.getElementById('selectAny');
+            const currentYear = new Date().getFullYear();
+            
+            let html = '';
+            // Option for Tots
+            html += `<option value="-1">Tots els anys (darrers 10)</option>`;
+            
+            for (let y = currentYear; y >= 2016; y--) {
+                html += `<option value="${y}" ${y === currentYear - 1 ? 'selected' : ''}>${y}</option>`;
+            }
+            selectAny.innerHTML = html;
+
+            // Trigger fetch when year changes
+            selectAny.addEventListener('change', fetchCorrections);
+        }
+
+        function abrirEgreta(event, pureId, typeDiscriminator) {
+            event.preventDefault();
+            
+            const selectEntorn = document.getElementById('selectEntorn');
+            const env = selectEntorn ? selectEntorn.value : 'test';
+            const host = (env === 'prod') ? 'egreta.uab.cat' : 'egretat.uab.cat';
+            
+            const typeLower = (typeDiscriminator || 'ContributionToJournal').toLowerCase();
+            const path = `dk/atira/pure/api/shared/model/researchoutput/editor/${typeLower}editor.xhtml`;
+            
+            const url = `https://${host}/admin/editor/${path}?scheme=&type=&id=${pureId}`;
+            if (window.abrirEgretaModal) {
+                window.abrirEgretaModal(url);
+            } else {
+                window.open(url, '_blank');
+            }
+        }
+
+        function escapeHtml(value) {
+            return String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/\"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        async function fetchCorrections() {
+            const loader = document.getElementById('loader');
+            const tableContainer = document.getElementById('tableContainer');
+            const selectAny = document.getElementById('selectAny');
+            const anio = selectAny.value;
+
+            loader.classList.remove('hidden');
+            tableContainer.classList.add('hidden');
+
+            try {
+                const response = await apiFetch(`/pure/stats/corrections?anio=${anio}`);
+                if (!response.ok) throw new Error("Error carregant correccions");
+
+                rawData = await response.json();
+                
+                // Apply filters (which will also recalculate KPIs dynamically)
+                applyFilters();
+
+            } catch (err) {
+                console.error("Error al carregar les publicacions:", err);
+                alert("S'ha produït un error en recuperar la informació de qualitat.");
+                loader.classList.add('hidden');
+            }
+        }
+
+        function recalculateKpiStats() {
+            if (!rawData || !rawData.publications) return;
+
+            let missingAbstract = 0;
+            let undefinedLanguage = 0;
+            let missingDoi = 0;
+            let duplicates = 0;
+
+            rawData.publications.forEach(p => {
+                if (p.reviewed) return;
+
+                if (p.errors) {
+                    if (p.errors.includes("MISSING_ABSTRACT")) {
+                        missingAbstract++;
+                    }
+                    if (p.errors.includes("UNDEFINED_LANGUAGE")) {
+                        undefinedLanguage++;
+                    }
+                    if (p.errors.includes("MISSING_DOI") || p.errors.includes("MISSING_DOI_AND_LINK")) {
+                        missingDoi++;
+                    }
+                    if (p.errors.includes("DUPLICATE_TITLE") || p.errors.includes("DUPLICATE_DOI") || 
+                        p.errors.includes("DUPLICATE_URL") || p.errors.includes("DUPLICATE_IDENTIFIER") || 
+                        p.errors.includes("POTENTIAL_DUPLICATE")) {
+                        duplicates++;
+                    }
+                }
+            });
+
+            document.getElementById('kpiMissingAbstract').textContent = missingAbstract;
+            document.getElementById('kpiUndefinedLanguage').textContent = undefinedLanguage;
+            document.getElementById('kpiMissingDoiUrl').textContent = missingDoi;
+            document.getElementById('kpiDuplicates').textContent = duplicates;
+        }
+
+        function applyFilters() {
+            recalculateKpiStats();
+            const buscar = document.getElementById('buscarTexto').value.toLowerCase().trim();
+            const errorFiltro = document.getElementById('filtroError').value;
+            const estadoFiltro = document.getElementById('filtroEstado').value;
+
+            let filtered = rawData.publications || [];
+
+            // Filter by search text
+            if (buscar) {
+                filtered = filtered.filter(p => {
+                    const title = (p.titulo || '').toLowerCase();
+                    const author = (p.autor || '').toLowerCase();
+                    const uuid = (p.uuid || '').toLowerCase();
+                    const type = (p.tipo || '').toLowerCase();
+                    return title.includes(buscar) || author.includes(buscar) || uuid.includes(buscar) || type.includes(buscar);
+                });
+            }
+
+            // Filter by error type
+            if (errorFiltro && errorFiltro !== 'all') {
+                filtered = filtered.filter(p => p.errors && p.errors.includes(errorFiltro));
+            }
+
+            // Filter by resolution status
+            if (estadoFiltro === 'pendientes') {
+                filtered = filtered.filter(p => !p.reviewed);
+            } else if (estadoFiltro === 'corregidas') {
+                filtered = filtered.filter(p => p.reviewed);
+            }
+
+            filteredPubs = filtered;
+            currentPage = 1;
+            renderTable();
+        }
+
+        function renderTable() {
+            const tablaBody = document.getElementById('tablaBody');
+            const zeroState = document.getElementById('zeroState');
+            const loader = document.getElementById('loader');
+            const tableContainer = document.getElementById('tableContainer');
+
+            loader.classList.add('hidden');
+            tableContainer.classList.remove('hidden');
+
+            document.getElementById('contadorTotal').textContent = rawData.publications ? rawData.publications.length : 0;
+            document.getElementById('contadorMostrados').textContent = filteredPubs.length;
+
+            if (filteredPubs.length === 0) {
+                tablaBody.innerHTML = '';
+                zeroState.classList.remove('hidden');
+                renderPagination();
+                return;
+            }
+
+            zeroState.classList.add('hidden');
+
+            // Paginated slice
+            const totalPages = Math.ceil(filteredPubs.length / pageSize);
+            if (currentPage > totalPages) {
+                currentPage = Math.max(1, totalPages);
+            }
+
+            const startIndex = (currentPage - 1) * pageSize;
+            const endIndex = startIndex + pageSize;
+            const pagePubs = filteredPubs.slice(startIndex, endIndex);
+
+            tablaBody.innerHTML = pagePubs.map(p => {
+                const pYear = p.anio || '-';
+                const pAuthor = p.autor || 'Sense autors';
+                const pTitle = p.titulo || 'Sense títol';
+                const pType = p.tipo || 'Desconegut';
+
+                // Badges for errors
+                const badges = (p.errors || []).map(err => {
+                    let colorClass = 'bg-slate-100 text-slate-700 ring-slate-600/10';
+                    let label = err;
+                    let icon = 'fa-circle-exclamation';
+
+                    if (err === 'MISSING_TITLE_TRANSLATION') {
+                        colorClass = 'bg-rose-50 text-rose-800 ring-rose-600/20';
+                        label = 'Manca traducció';
+                        icon = 'fa-language';
+                    } else if (err === 'MISSING_ABSTRACT') {
+                        colorClass = 'bg-amber-50 text-amber-800 ring-amber-600/20';
+                        label = 'Sense resum';
+                        icon = 'fa-align-left';
+                    } else if (err === 'UNDEFINED_LANGUAGE') {
+                        colorClass = 'bg-indigo-50 text-indigo-800 ring-indigo-600/20';
+                        label = 'Idioma indefinit';
+                        icon = 'fa-flag';
+                    } else if (err === 'MISSING_DOI') {
+                        colorClass = 'bg-violet-50 text-violet-800 ring-violet-600/20';
+                        label = 'Sense DOI';
+                        icon = 'fa-circle-question';
+                    } else if (err === 'MISSING_URL') {
+                        colorClass = 'bg-purple-50 text-purple-800 ring-purple-600/20';
+                        label = 'Sense URL';
+                        icon = 'fa-link-slash';
+                    } else if (err.startsWith('DUPLICATE_') || err === 'POTENTIAL_DUPLICATE') {
+                        colorClass = 'bg-teal-50 text-teal-800 ring-teal-600/20';
+                        label = err.replace('DUPLICATE_', 'Duplicat ').replace('POTENTIAL_DUPLICATE', 'Potencial duplicat');
+                        icon = 'fa-clone';
+                    } else if (err === 'TEXT_QUALITY') {
+                        colorClass = 'bg-pink-50 text-pink-800 ring-pink-600/20';
+                        label = 'Qualitat text';
+                        icon = 'fa-font';
+                    } else if (err === 'LINK_QUALITY') {
+                        colorClass = 'bg-red-50 text-red-800 ring-red-600/20';
+                        label = 'Qualitat enllaç';
+                        icon = 'fa-arrow-up-right-from-square';
+                    } else if (err === 'INVALID_ISBN') {
+                        colorClass = 'bg-orange-50 text-orange-800 ring-orange-600/20';
+                        label = 'ISBN incorrecte';
+                        icon = 'fa-book';
+                    } else if (err === 'INVALID_ISSN') {
+                        colorClass = 'bg-yellow-50 text-yellow-800 ring-yellow-600/20';
+                        label = 'ISSN incorrecte';
+                        icon = 'fa-file-lines';
+                    }
+
+                    return `<span class="inline-flex items-center rounded-md px-2 py-1 text-xs font-bold ring-1 ring-inset ${colorClass} mr-1 mb-1 shadow-sm"><i class="fa-solid ${icon} mr-1"></i>${label}</span>`;
+                }).join('');
+
+                // Render DOI and URLs
+                let doiUrlHtml = '';
+                const hasDoi = p.dois && p.dois.length > 0;
+                if (hasDoi) {
+                    doiUrlHtml += p.dois.map(doi => `
+                        <div class="flex items-center gap-1.5 py-0.5 text-xs">
+                            <span class="font-bold text-slate-400 uppercase tracking-wider text-[9px] bg-slate-100 px-1 rounded">DOI</span>
+                            <a href="https://doi.org/${escapeHtml(doi)}" target="_blank" class="text-indigo-600 hover:text-indigo-800 transition-colors font-medium hover:underline text-[11px] truncate max-w-[160px]" title="${escapeHtml(doi)}">${escapeHtml(doi)}</a>
+                        </div>
+                    `).join('');
+                }
+                if (p.urls && p.urls.length > 0) {
+                    const uniqueUrls = Array.from(new Set(p.urls));
+                    doiUrlHtml += uniqueUrls.map((url, idx) => {
+                        let linkLabel = `Enllaç ${idx+1}`;
+                        if (url.toLowerCase().includes("ddd.uab.cat")) linkLabel = `DDD ${idx+1}`;
+                        else if (url.toLowerCase().includes("scopus.com")) linkLabel = "Scopus Link";
+                        else if (url.toLowerCase().includes("mendeley.com")) linkLabel = "Mendeley Link";
+
+                        return `
+                            <div class="flex items-center gap-1.5 py-0.5 text-xs">
+                                <span class="font-bold text-emerald-500 uppercase tracking-wider text-[9px] bg-emerald-50 px-1 rounded">URL</span>
+                                <a href="${escapeHtml(url)}" target="_blank" class="text-emerald-600 hover:text-emerald-800 transition-colors font-medium hover:underline text-[11px] truncate max-w-[160px]" title="${escapeHtml(url)}">${linkLabel}</a>
+                            </div>
+                        `;
+                    }).join('');
+                }
+
+                if (!hasDoi) {
+                    doiUrlHtml += `
+                        <div id="doi-search-container-${p.uuid}" class="mt-1.5">
+                            <button onclick="cercarDoiWeb(event, '${p.uuid}')" class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-indigo-50 border border-indigo-200 text-[10px] font-semibold text-indigo-700 hover:bg-indigo-100 transition-all active:scale-95 shadow-sm">
+                                <i class="fa-solid fa-magnifying-glass text-[8px]"></i>
+                                <span>Cercar DOI</span>
+                            </button>
+                        </div>
+                    `;
+                }
+
+                if (!doiUrlHtml) {
+                    doiUrlHtml = `<span class="text-slate-400 italic text-[11px]">Sense enllaços</span>`;
+                }
+
+                // Render ISBN
+                let isbnHtml = '';
+                let hasPrintIsbn = p.printISBNs && p.printISBNs.length > 0;
+                let hasElecIsbn = p.electronicISBNs && p.electronicISBNs.length > 0;
+
+                if (hasPrintIsbn || hasElecIsbn) {
+                    if (hasPrintIsbn) {
+                        isbnHtml += p.printISBNs.map(isbn => `
+                            <div class="flex items-center gap-1.5 py-0.5 text-xs">
+                                <span class="font-bold text-orange-600 uppercase tracking-wider text-[9px] bg-orange-50 px-1 rounded border border-orange-200">Imprès</span>
+                                <span class="text-slate-600 font-mono text-[11px] select-all">${escapeHtml(isbn)}</span>
+                            </div>
+                        `).join('');
+                    }
+                    if (hasElecIsbn) {
+                        isbnHtml += p.electronicISBNs.map(isbn => `
+                            <div class="flex items-center gap-1.5 py-0.5 text-xs">
+                                <span class="font-bold text-orange-700 uppercase tracking-wider text-[9px] bg-orange-100 px-1 rounded border border-orange-300">Electrònic</span>
+                                <span class="text-slate-600 font-mono text-[11px] select-all">${escapeHtml(isbn)}</span>
+                            </div>
+                        `).join('');
+                    }
+                } else if (p.isBookOrChapter) {
+                    isbnHtml = `
+                        <div id="isbn-search-container-${p.uuid}" class="mt-1">
+                            <button onclick="cercarIsbnWeb(event, '${p.uuid}')" class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-orange-50 border border-orange-200 text-[10px] font-semibold text-orange-700 hover:bg-orange-100 transition-all active:scale-95 shadow-sm">
+                                <i class="fa-solid fa-magnifying-glass text-[8px]"></i>
+                                <span>Cercar ISBN</span>
+                            </button>
+                        </div>
+                    `;
+                } else {
+                    isbnHtml = `<span class="text-slate-300 italic text-xs">-</span>`;
+                }
+
+                // Render ISSN
+                let issnHtml = '';
+                if (p.issns && p.issns.length > 0) {
+                    issnHtml += p.issns.map(issn => `
+                        <div class="flex items-center gap-1.5 py-0.5 text-xs">
+                            <span class="font-bold text-yellow-600 uppercase tracking-wider text-[9px] bg-yellow-50 px-1 rounded">ISSN</span>
+                            <span class="text-slate-600 font-mono text-[11px] select-all">${escapeHtml(issn)}</span>
+                        </div>
+                    `).join('');
+                } else if (p.isArticle) {
+                    if (p.issnsSugeridosRevista && p.issnsSugeridosRevista.length > 0) {
+                        const escapedIssns = p.issnsSugeridosRevista.map(i => escapeHtml(i));
+                        issnHtml = `
+                            <div class="flex flex-col gap-0.5">
+                                <span class="text-[9px] font-bold text-yellow-700 uppercase tracking-wider"><i class="fa-solid fa-book-open text-[8px]"></i> Revista:</span>
+                                ${p.issnsSugeridosRevista.map((issn, idx) => `
+                                    <div class="flex items-center gap-1">
+                                        <span class="font-bold text-yellow-600 uppercase tracking-wider text-[9px] bg-yellow-50 px-1 rounded">ISSN</span>
+                                        <span class="font-mono text-[11px] text-slate-600 select-all">${escapedIssns[idx]}</span>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        `;
+                    } else {
+                        issnHtml = `
+                            <div id="issn-search-container-${p.uuid}" class="mt-1">
+                                <button onclick="cercarIssnWeb(event, '${p.uuid}')" class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-yellow-50 border border-yellow-200 text-[10px] font-semibold text-yellow-700 hover:bg-yellow-100 transition-all active:scale-95 shadow-sm">
+                                    <i class="fa-solid fa-magnifying-glass text-[8px]"></i>
+                                    <span>Cercar ISSN</span>
+                                </button>
+                            </div>
+                        `;
+                    }
+                } else {
+                    issnHtml = `<span class="text-slate-300 italic text-xs">-</span>`;
+                }
+
+                // Render Open Access status
+                let oaHtml = '';
+                if (p.localOa) {
+                    oaHtml = `
+                        <div class="flex flex-col items-center">
+                            <span class="inline-flex items-center gap-1 bg-emerald-50 text-emerald-800 text-xs font-bold px-2 py-1 rounded-full ring-1 ring-emerald-600/10">
+                                <i class="fa-solid fa-lock-open text-[10px]"></i> Local OA
+                            </span>
+                        </div>
+                    `;
+                } else if (p.dois && p.dois.length > 0) {
+                    // Render button to check unpaywall
+                    const primaryDoi = p.dois[0];
+                    oaHtml = `
+                        <div id="oa-container-${p.uuid}" class="flex flex-col items-center">
+                            <button onclick="comprovarUnpaywall(event, '${p.uuid}', '${escapeHtml(primaryDoi)}')" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-50 border border-indigo-100 text-[10px] font-bold text-indigo-700 hover:bg-indigo-100 transition-all active:scale-95 shadow-sm">
+                                <i class="fa-solid fa-cloud-arrow-down text-[10px]"></i>
+                                <span>Unpaywall</span>
+                            </button>
+                        </div>
+                    `;
+                } else {
+                    oaHtml = `
+                        <div class="flex flex-col items-center text-slate-400 italic text-xs">
+                            <i class="fa-solid fa-lock text-[10px] mb-0.5"></i> Tancat / No DOI
+                        </div>
+                    `;
+                }
+
+                let langHtml = '';
+                if (p.errors && p.errors.includes("UNDEFINED_LANGUAGE")) {
+                    langHtml = `
+                        <div id="lang-detect-${p.uuid}" class="mt-1">
+                            <button onclick="detectarIdiomaPub(event, '${p.uuid}', \`${escapeHtml(pTitle).replace(/`/g, '\\`').replace(/\$/g, '\\$')}\`)" class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-teal-50 border border-teal-200 text-[10px] font-semibold text-teal-700 hover:bg-teal-100 transition-all active:scale-95 shadow-sm">
+                                <i class="fa-solid fa-language text-[8px]"></i>
+                                <span>Detectar idioma</span>
+                            </button>
+                        </div>
+                    `;
+                }
+
+                let abstractHtml = '';
+                if (p.errors && p.errors.includes("MISSING_ABSTRACT")) {
+                    abstractHtml = `
+                        <div id="abstract-container-${p.uuid}" class="mt-1">
+                            <button onclick="cercarAbstractWeb(event, '${p.uuid}')" class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-50 border border-amber-200 text-[10px] font-semibold text-amber-700 hover:bg-amber-100 transition-all active:scale-95 shadow-sm">
+                                <i class="fa-solid fa-align-left text-[8px]"></i>
+                                <span>Cercar resum</span>
+                            </button>
+                        </div>
+                    `;
+                }
+
+                return `
+                    <tr class="pub-row transition-colors align-top ${p.reviewed ? 'bg-emerald-50/20' : ''}" data-uuid="${escapeHtml(p.uuid)}">
+                        <td class="px-5 py-4 text-center font-bold text-slate-500">${pYear}</td>
+                        <td class="px-5 py-4">
+                            <span class="text-[11px] font-bold text-slate-500 uppercase bg-slate-100/80 px-2 py-0.5 rounded-full border border-slate-200/50">${escapeHtml(pType)}</span>
+                        </td>
+                        <td class="px-5 py-4">
+                            <p class="font-medium text-slate-800 leading-relaxed text-sm">
+                                ${p.pureId
+                                    ? `<a href="#" onclick="abrirEgreta(event, '${p.pureId}', '${escapeHtml(p.typeDiscriminator || '')}')" class="text-[#008037] hover:text-emerald-800 hover:underline font-semibold transition-colors" title="Obrir editor a Egreta">${escapeHtml(pTitle)}</a>`
+                                    : `<span class="font-semibold text-slate-800">${escapeHtml(pTitle)}</span>`}
+                            </p>
+                            <p class="text-xs text-slate-400 mt-1 italic">${escapeHtml(pAuthor)}</p>
+                            <div class="flex items-center gap-3 mt-1 flex-wrap">
+                                <span class="text-[10px] text-slate-300 font-mono">${escapeHtml(p.uuid)}</span>
+                                ${langHtml}
+                                ${abstractHtml}
+                            </div>
+                        </td>
+                        <td class="px-5 py-4">${badges}</td>
+                        <td class="px-5 py-4 text-xs whitespace-nowrap">${doiUrlHtml}</td>
+                        <td class="px-5 py-4 text-xs whitespace-nowrap">${isbnHtml}</td>
+                        <td class="px-5 py-4 text-xs whitespace-nowrap">${issnHtml}</td>
+                        <td class="px-5 py-4 text-center whitespace-nowrap">${oaHtml}</td>
+                        <td class="px-5 py-4">
+                            <textarea 
+                                class="obs-field w-full p-2 border border-slate-200 rounded-lg text-xs leading-normal font-sans focus:outline-none focus:ring-1 focus:ring-[#008037] focus:border-[#008037] bg-white resize-y" 
+                                rows="2" 
+                                placeholder="Afegeix notes de correcció..." 
+                                data-uuid="${escapeHtml(p.uuid)}">${escapeHtml(p.observations)}</textarea>
+                        </td>
+                        <td class="px-2 py-4 text-center">
+                            <input
+                                type="checkbox"
+                                class="marcar-revisada h-5 w-5 rounded-lg border-slate-300 text-[#008037] focus:ring-[#008037] accent-[#008037] cursor-pointer transition-all"
+                                data-uuid="${escapeHtml(p.uuid)}"
+                                ${p.reviewed ? 'checked' : ''}
+                                title="Marcar com a revisat"
+                            />
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+
+            // Add event listeners to checkboxes and textareas
+            tablaBody.querySelectorAll('.marcar-revisada').forEach(checkbox => {
+                checkbox.addEventListener('change', async (e) => {
+                    const uuid = e.target.getAttribute('data-uuid');
+                    const checked = e.target.checked;
+                    const row = e.target.closest('tr');
+                    const obsField = row ? row.querySelector('.obs-field') : null;
+                    const observations = obsField ? obsField.value : '';
+
+                    if (row) {
+                        if (checked) {
+                            row.classList.add('bg-emerald-50/20');
+                        } else {
+                            row.classList.remove('bg-emerald-50/20');
+                        }
+                    }
+
+                    // Save to backend
+                    await guardarRevisio(uuid, checked, observations);
+
+                    // Update data model
+                    const pub = rawData.publications.find(p => p.uuid === uuid);
+                    if (pub) {
+                        pub.reviewed = checked;
+                    }
+
+                    // Fades out/refilters if resolution filter is active
+                    const estadoFiltro = document.getElementById('filtroEstado').value;
+                    if (estadoFiltro !== 'all') {
+                        setTimeout(() => {
+                            applyFilters();
+                        }, 400);
+                    }
+                });
+            });
+
+            tablaBody.querySelectorAll('.obs-field').forEach(textarea => {
+                textarea.addEventListener('blur', async (e) => {
+                    const uuid = e.target.getAttribute('data-uuid');
+                    const observations = e.target.value;
+                    const row = e.target.closest('tr');
+                    const checkbox = row ? row.querySelector('.marcar-revisada') : null;
+                    const checked = checkbox ? checkbox.checked : false;
+
+                    // Update data model observations
+                    const pub = rawData.publications.find(p => p.uuid === uuid);
+                    if (pub) {
+                        pub.observations = observations;
+                    }
+
+                    // Save to backend on blur (autosave)
+                    await guardarRevisio(uuid, checked, observations);
+                    
+                    // Show a tiny success border blink
+                    textarea.classList.add('border-emerald-400');
+                    setTimeout(() => {
+                        textarea.classList.remove('border-emerald-400');
+                    }, 800);
+                });
+            });
+
+            renderPagination();
+        }
+
+        async function guardarRevisio(uuid, reviewed, observations) {
+            try {
+                const response = await apiFetch(`/pure/corrections/${uuid}/review`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ reviewed, observations })
+                });
+                if (!response.ok) throw new Error("Error saving review");
+            } catch (err) {
+                console.error("Error saving review state:", err);
+            }
+        }
+
+        function obrirDoiFlotant(event, doi) {
+            event.preventDefault();
+            const width = 1000;
+            const height = 700;
+            const left = (screen.width - width) / 2;
+            const top = (screen.height - height) / 2;
+            window.open(
+                `https://doi.org/${doi}`, 
+                `doi_preview_${doi.replace(/[^a-zA-Z0-9]/g, '_')}`, 
+                `width=${width},height=${height},top=${top},left=${left},resizable=yes,scrollbars=yes,status=yes`
+            );
+        }
+
+        async function cercarDoiWeb(event, uuid) {
+            event.preventDefault();
+            const container = document.getElementById(`doi-search-container-${uuid}`);
+            if (!container) return;
+
+            const originalContent = container.innerHTML;
+            container.originalHtml = originalContent; // Save to avoid escaping quotes
+            container.innerHTML = `
+                <span class="inline-flex items-center gap-1 text-[10px] text-slate-500 font-medium">
+                    <i class="fa-solid fa-spinner fa-spin text-indigo-600 mr-1"></i>Cercant DOI...
+                </span>
+            `;
+
+            try {
+                const response = await apiFetch(`/pure/corrections/${uuid}/suggest-doi`);
+                if (!response.ok) throw new Error("Search failed");
+                const data = await response.json();
+
+                if (data.success && data.suggestions && data.suggestions.length > 0) {
+                    let suggestionsHtml = data.suggestions.map((sug, idx) => {
+                        const escapedDoi = escapeHtml(sug.doi);
+                        return `
+                            <div class="border-b border-slate-100 last:border-0 py-1.5 flex flex-col gap-1">
+                                <div class="font-bold text-[10px] text-slate-700 leading-tight text-left" title="${escapeHtml(sug.title)}">
+                                    ${idx+1}. ${escapeHtml(sug.title.substring(0, 50))}${sug.title.length > 50 ? '...' : ''}
+                                </div>
+                                <div class="text-[9px] text-slate-400 text-left">
+                                    ${escapeHtml(sug.authors)} (${escapeHtml(sug.year)})
+                                </div>
+                                <div class="flex items-center justify-between gap-1 mt-0.5 w-full">
+                                    <a href="#" onclick="obrirDoiFlotant(event, '${escapedDoi}')" class="text-[9px] font-mono text-indigo-600 hover:text-indigo-800 hover:underline truncate max-w-[100px] flex items-center gap-0.5" title="Veure DOI en finestra flotant">
+                                        <i class="fa-solid fa-window-restore text-[8px]"></i>
+                                        <span>${escapedDoi}</span>
+                                    </a>
+                                    <button onclick="afegirDoiSuggerit(event, '${uuid}', '${escapedDoi}')" class="inline-flex items-center gap-0.5 px-1 py-0.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-[9px] font-bold transition-all active:scale-95 shadow-sm">
+                                        <i class="fa-solid fa-plus text-[7px]"></i> Afegir
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+
+                    container.innerHTML = `
+                        <div class="bg-indigo-50/50 border border-indigo-100 p-2 rounded-xl max-w-[200px] mt-1 text-left premium-shadow">
+                            <div class="flex items-center justify-between mb-1">
+                                <span class="text-[9px] font-bold text-indigo-800 uppercase tracking-wider"><i class="fa-solid fa-circle-info"></i> Crossref:</span>
+                                <button onclick="cancelarDoiWeb(event, '${uuid}')" class="text-slate-400 hover:text-slate-600 transition-colors">
+                                    <i class="fa-solid fa-xmark text-[10px]"></i>
+                                </button>
+                            </div>
+                            <div class="flex flex-col">
+                                ${suggestionsHtml}
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    container.innerHTML = `
+                        <div class="text-rose-600 text-[10px] font-semibold flex items-center gap-1">
+                            <i class="fa-solid fa-triangle-exclamation"></i> No s'han trobat suggeriments
+                        </div>
+                    `;
+                    setTimeout(() => {
+                        container.innerHTML = container.originalHtml;
+                    }, 3000);
+                }
+            } catch (err) {
+                console.error("Error searching DOI:", err);
+                container.innerHTML = `
+                    <div class="text-rose-600 text-[10px] font-semibold flex items-center gap-1">
+                        <i class="fa-solid fa-triangle-exclamation"></i> Error de cerca
+                    </div>
+                `;
+                setTimeout(() => {
+                    container.innerHTML = container.originalHtml;
+                }, 3000);
+            }
+        }
+
+        function cancelarDoiWeb(event, uuid) {
+            event.preventDefault();
+            const container = document.getElementById(`doi-search-container-${uuid}`);
+            if (container && container.originalHtml) {
+                container.innerHTML = container.originalHtml;
+            }
+        }
+
+        async function afegirDoiSuggerit(event, uuid, doi) {
+            event.preventDefault();
+            const container = document.getElementById(`doi-search-container-${uuid}`);
+            if (!container) return;
+
+            const selectEntorn = document.getElementById('selectEntorn');
+            const env = selectEntorn ? selectEntorn.value : 'test';
+
+            container.innerHTML = `
+                <span class="inline-flex items-center gap-1 text-[10px] text-slate-500 font-medium">
+                    <i class="fa-solid fa-spinner fa-spin text-emerald-600 mr-1"></i>Afegint...
+                </span>
+            `;
+
+            try {
+                const response = await apiFetch(`/pure/corrections/${uuid}/doi`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ doi, env })
+                });
+
+                if (!response.ok) {
+                    let errMsg = "API error";
+                    try {
+                        const errData = await response.json();
+                        if (errData && errData.message) errMsg = errData.message;
+                    } catch (e) {}
+                    throw new Error(errMsg);
+                }
+                const resData = await response.json();
+
+                if (resData.success) {
+                    container.innerHTML = `<span class="text-[10px] text-emerald-600 font-bold"><i class="fa-solid fa-circle-check"></i> DOI afegit!</span>`;
+                    const pub = rawData.publications.find(p => p.uuid === uuid);
+                    if (pub) {
+                        pub.doi = doi;
+                        if (!pub.electronicVersions) pub.electronicVersions = [];
+                        pub.electronicVersions.push({ doi: doi });
+                        if (pub.errors) {
+                            pub.errors = pub.errors.filter(e => e !== "MISSING_DOI" && e !== "MISSING_DOI_AND_LINK");
+                        }
+                        pub.reviewed = true;
+                        guardarRevisio(uuid, true, pub.observations || '');
+                    }
+                    setTimeout(() => {
+                        applyFilters();
+                    }, 600);
+                } else {
+                    alert("Error: " + (resData.message || "No s'ha pogut afegir el DOI."));
+                    container.innerHTML = container.originalHtml;
+                }
+            } catch (err) {
+                console.error("Error adding DOI:", err);
+                alert("Error al afegir el DOI: " + err.message);
+                container.innerHTML = container.originalHtml;
+            }
+        }
+
+        async function cercarIsbnWeb(event, uuid) {
+            event.preventDefault();
+            const container = document.getElementById(`isbn-search-container-${uuid}`);
+            if (!container) return;
+
+            const originalContent = container.innerHTML;
+            container.originalHtml = originalContent;
+            container.innerHTML = `
+                <span class="inline-flex items-center gap-1 text-[10px] text-slate-500 font-medium">
+                    <i class="fa-solid fa-spinner fa-spin text-orange-500 mr-1"></i>Cercant ISBN...
+                </span>
+            `;
+
+            try {
+                const response = await apiFetch(`/pure/corrections/${uuid}/suggest-doi`);
+                if (!response.ok) throw new Error("Search failed");
+                const data = await response.json();
+
+                if (data.success && data.suggestions && data.suggestions.length > 0) {
+                    const validSuggs = data.suggestions.filter(sug => sug.isbn && sug.isbn.trim() !== "");
+                    
+                    if (validSuggs.length > 0) {
+                        let suggestionsHtml = validSuggs.map((sug, idx) => {
+                            const escapedIsbn = escapeHtml(sug.isbn);
+                            return `
+                                <div class="border-b border-slate-100 last:border-0 py-1.5 flex flex-col gap-1">
+                                    <div class="font-bold text-[10px] text-slate-700 leading-tight text-left" title="${escapeHtml(sug.title)}">
+                                        ${idx+1}. ${escapeHtml(sug.title.substring(0, 50))}${sug.title.length > 50 ? '...' : ''}
+                                    </div>
+                                    <div class="text-[9px] text-slate-400 text-left">
+                                        ${escapeHtml(sug.authors)} (${escapeHtml(sug.year)})
+                                    </div>
+                                    <div class="flex items-center justify-between gap-1 mt-0.5 w-full">
+                                        <div class="flex items-center gap-1 overflow-hidden max-w-[110px]">
+                                            <span class="text-[9px] font-mono text-orange-700 truncate" title="${escapedIsbn}">${escapedIsbn}</span>
+                                            ${sug.doi ? `
+                                                <a href="#" onclick="obrirDoiFlotant(event, '${escapeHtml(sug.doi)}')" class="text-indigo-600 hover:text-indigo-800 flex items-center" title="Veure DOI en finestra flotant">
+                                                    <i class="fa-solid fa-window-restore text-[8px]"></i>
+                                                </a>
+                                            ` : ''}
+                                        </div>
+                                        <button onclick="afegirIsbnSuggerit(event, '${uuid}', '${escapedIsbn}')" class="inline-flex items-center gap-0.5 px-1 py-0.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-[9px] font-bold transition-all active:scale-95 shadow-sm">
+                                            <i class="fa-solid fa-plus text-[7px]"></i> Afegir
+                                        </button>
+                                    </div>
+                                </div>
+                            `;
+                        }).join('');
+
+                        container.innerHTML = `
+                            <div class="bg-orange-50/50 border border-orange-100 p-2 rounded-xl max-w-[200px] mt-1 text-left premium-shadow">
+                                <div class="flex items-center justify-between mb-1">
+                                    <span class="text-[9px] font-bold text-orange-800 uppercase tracking-wider"><i class="fa-solid fa-circle-info"></i> ISBNs:</span>
+                                    <button onclick="cancelarIsbnWeb(event, '${uuid}')" class="text-slate-400 hover:text-slate-600 transition-colors">
+                                        <i class="fa-solid fa-xmark text-[10px]"></i>
+                                    </button>
+                                </div>
+                                <div class="flex flex-col">
+                                    ${suggestionsHtml}
+                                </div>
+                            </div>
+                        `;
+                    } else {
+                        container.innerHTML = `
+                            <div class="text-rose-600 text-[10px] font-semibold flex items-center gap-1">
+                                <i class="fa-solid fa-triangle-exclamation"></i> Cap suggeriment té ISBN
+                            </div>
+                        `;
+                        setTimeout(() => { container.innerHTML = container.originalHtml; }, 3000);
+                    }
+                } else {
+                    container.innerHTML = `
+                        <div class="text-rose-600 text-[10px] font-semibold flex items-center gap-1">
+                            <i class="fa-solid fa-triangle-exclamation"></i> No s'han trobat suggeriments
+                        </div>
+                    `;
+                    setTimeout(() => { container.innerHTML = container.originalHtml; }, 3000);
+                }
+            } catch (err) {
+                console.error("Error searching ISBN:", err);
+                container.innerHTML = `
+                    <div class="text-rose-600 text-[10px] font-semibold flex items-center gap-1">
+                        <i class="fa-solid fa-triangle-exclamation"></i> Error de cerca
+                    </div>
+                `;
+                setTimeout(() => { container.innerHTML = container.originalHtml; }, 3000);
+            }
+        }
+
+        function generateLanguageSelectOptions(selectedLang) {
+            const langs = {
+                'en_GB': 'Anglès (en_GB)',
+                'ca_ES': 'Català (ca_ES)',
+                'es_ES': 'Castellà (es_ES)'
+            };
+            let html = '';
+            for (const [code, name] of Object.entries(langs)) {
+                html += `<option value="${code}" ${code === selectedLang ? 'selected' : ''}>${name}</option>`;
+            }
+            return html;
+        }
+
+        function afegirFilaAbstract(event, uuid, defaultLang = 'en_GB', text = '') {
+            if (event) event.preventDefault();
+            const list = document.getElementById(`abstracts-list-${uuid}`);
+            if (!list) return;
+
+            const usedLangs = Array.from(list.querySelectorAll('.abstract-lang')).map(sel => sel.value);
+            if (usedLangs.includes('en_GB')) {
+                if (!usedLangs.includes('ca_ES')) defaultLang = 'ca_ES';
+                else if (!usedLangs.includes('es_ES')) defaultLang = 'es_ES';
+            }
+
+            const row = document.createElement('div');
+            row.className = "abstract-row border border-slate-200 rounded-lg p-2 bg-white relative shadow-sm mt-2";
+            row.innerHTML = `
+                <div class="flex items-center justify-between mb-1">
+                    <select class="abstract-lang pl-1 pr-6 py-0.5 bg-slate-50 border border-slate-300 rounded text-[9px] font-bold text-slate-700 focus:outline-none focus:ring-1 focus:ring-amber-500 cursor-pointer">
+                        ${generateLanguageSelectOptions(defaultLang)}
+                    </select>
+                    <button onclick="eliminarFilaAbstract(this)" class="text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded p-1 transition-all active:scale-95 shadow-sm" title="Eliminar aquest abstract">
+                        <i class="fa-solid fa-trash-can text-[10px]"></i>
+                    </button>
+                </div>
+                <textarea class="abstract-text w-full p-1.5 border border-slate-200 rounded text-[10px] leading-normal font-sans focus:outline-none focus:ring-1 focus:ring-amber-500" rows="3" placeholder="Escriu el resum aquí...">${escapeHtml(text)}</textarea>
+            `;
+            list.appendChild(row);
+        }
+
+        function eliminarFilaAbstract(btn) {
+            const row = btn.closest('.abstract-row');
+            if (row) {
+                row.remove();
+            }
+        }
+
+        async function cercarAbstractWeb(event, uuid) {
+            event.preventDefault();
+            const container = document.getElementById(`abstract-container-${uuid}`);
+            if (!container) return;
+
+            const originalContent = container.innerHTML;
+            container.originalHtml = originalContent;
+            container.innerHTML = `
+                <span class="inline-flex items-center gap-1 text-[10px] text-slate-500 font-medium">
+                    <i class="fa-solid fa-spinner fa-spin text-amber-500 mr-1"></i>Cercant resum...
+                </span>
+            `;
+
+            try {
+                const response = await apiFetch(`/pure/corrections/${uuid}/suggest-abstract`);
+                if (!response.ok) throw new Error("Search failed");
+                const data = await response.json();
+
+                if (data.success && data.abstracts && Object.keys(data.abstracts).length > 0) {
+                    let abstractsRowsHtml = '';
+                    let idx = 0;
+                    for (const [lang, text] of Object.entries(data.abstracts)) {
+                        abstractsRowsHtml += `
+                            <div class="abstract-row border border-slate-200 rounded-lg p-2 bg-white relative shadow-sm" data-index="${idx}">
+                                <div class="flex items-center justify-between mb-1">
+                                    <select class="abstract-lang pl-1 pr-6 py-0.5 bg-slate-50 border border-slate-300 rounded text-[9px] font-bold text-slate-700 focus:outline-none focus:ring-1 focus:ring-amber-500 cursor-pointer">
+                                        ${generateLanguageSelectOptions(lang)}
+                                    </select>
+                                    <button onclick="eliminarFilaAbstract(this)" class="text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded p-1 transition-all active:scale-95 shadow-sm" title="Eliminar aquest abstract">
+                                        <i class="fa-solid fa-trash-can text-[10px]"></i>
+                                    </button>
+                                </div>
+                                <textarea class="abstract-text w-full p-1.5 border border-slate-200 rounded text-[10px] leading-normal font-sans focus:outline-none focus:ring-1 focus:ring-amber-500" rows="3">${escapeHtml(text)}</textarea>
+                            </div>
+                        `;
+                        idx++;
+                    }
+
+                    container.innerHTML = `
+                        <div class="border border-amber-200 rounded-lg p-2.5 bg-amber-50/50 mt-2 flex flex-col gap-1.5 w-[250px] md:w-[350px] text-left">
+                            <span class="text-[9px] font-bold text-amber-800 uppercase tracking-wider"><i class="fa-solid fa-align-left text-[8px]"></i> Resums trobats:</span>
+                            <div id="abstracts-list-${uuid}" class="space-y-2">
+                                ${abstractsRowsHtml}
+                            </div>
+                            <div class="mt-1">
+                                <button onclick="afegirFilaAbstract(event, '${uuid}')" class="w-full py-1 rounded border border-dashed border-amber-300 hover:border-amber-500 bg-white hover:bg-amber-50 text-[9px] font-semibold text-amber-700 transition-all flex items-center justify-center gap-1">
+                                    <i class="fa-solid fa-plus text-[8px]"></i> Afegir un altre idioma
+                                </button>
+                            </div>
+                            <div class="flex items-center gap-1.5 mt-2 justify-end">
+                                <button onclick="cancelarAbstractWeb(event, '${uuid}')" class="px-2 py-0.5 rounded border border-slate-200 text-[9px] font-bold bg-white text-slate-600 hover:bg-slate-50">Cancel·lar</button>
+                                <button onclick="desarAbstractSuggerit(event, '${uuid}')" class="px-2 py-0.5 rounded bg-[#008037] text-white text-[9px] font-bold hover:bg-emerald-700">Desar</button>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    const errMsg = data.message || "No s'ha trobat resum";
+                    container.innerHTML = `
+                        <div class="text-rose-600 text-[10px] font-semibold flex items-center gap-1">
+                            <i class="fa-solid fa-triangle-exclamation"></i> ${escapeHtml(errMsg)}
+                        </div>
+                    `;
+                    setTimeout(() => { container.innerHTML = container.originalHtml; }, 3000);
+                }
+            } catch (err) {
+                console.error("Error searching abstract:", err);
+                container.innerHTML = `
+                    <div class="text-rose-600 text-[10px] font-semibold flex items-center gap-1">
+                        <i class="fa-solid fa-triangle-exclamation"></i> Error de cerca
+                    </div>
+                `;
+                setTimeout(() => { container.innerHTML = container.originalHtml; }, 3000);
+            }
+        }
+
+        function cancelarAbstractWeb(event, uuid) {
+            event.preventDefault();
+            const container = document.getElementById(`abstract-container-${uuid}`);
+            if (container && container.originalHtml) {
+                container.innerHTML = container.originalHtml;
+            }
+        }
+
+        async function desarAbstractSuggerit(event, uuid) {
+            event.preventDefault();
+            const container = document.getElementById(`abstract-container-${uuid}`);
+            if (!container) return;
+
+            const list = document.getElementById(`abstracts-list-${uuid}`);
+            if (!list) return;
+
+            const rows = list.querySelectorAll('.abstract-row');
+            const abstracts = {};
+            
+            rows.forEach(row => {
+                const langSel = row.querySelector('.abstract-lang');
+                const textArea = row.querySelector('.abstract-text');
+                if (langSel && textArea) {
+                    const lang = langSel.value;
+                    const text = textArea.value.trim();
+                    if (lang && text) {
+                        abstracts[lang] = text;
+                    }
+                }
+            });
+
+            if (Object.keys(abstracts).length === 0) {
+                alert("Has de tenir com a mínim un abstract amb text abans de desar.");
+                return;
+            }
+
+            const selectEntorn = document.getElementById('selectEntorn');
+            const env = selectEntorn ? selectEntorn.value : 'test';
+
+            container.innerHTML = `
+                <span class="inline-flex items-center gap-1 text-[10px] text-slate-500 font-medium">
+                    <i class="fa-solid fa-spinner fa-spin text-emerald-600 mr-1"></i>Sincronitzant...
+                </span>
+            `;
+
+            try {
+                const response = await apiFetch(`/pure/corrections/${uuid}/abstract`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ abstracts: abstracts, env: env })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    container.innerHTML = `
+                        <span class="inline-flex items-center gap-0.5 text-[10px] text-emerald-700 font-bold bg-emerald-50 border border-emerald-200 px-1 rounded">
+                            <i class="fa-solid fa-circle-check"></i> Resum guardat i sincronitzat
+                        </span>
+                    `;
+                    const pub = rawData.publications.find(p => p.uuid === uuid);
+                    if (pub) {
+                        if (pub.errors) {
+                            pub.errors = pub.errors.filter(e => e !== "MISSING_ABSTRACT");
+                        }
+                        pub.reviewed = true;
+                        guardarRevisio(uuid, true, pub.observations || '');
+                    }
+                    setTimeout(() => { applyFilters(); }, 600);
+                } else {
+                    container.innerHTML = `
+                        <div class="text-rose-600 text-[10px] font-semibold flex flex-col gap-0.5 items-start">
+                            <span class="flex items-center gap-1"><i class="fa-solid fa-triangle-exclamation"></i> Error al guardar</span>
+                            <span class="text-[9px] font-normal leading-normal whitespace-pre-wrap">${escapeHtml(data.message)}</span>
+                            <button onclick="cancelarAbstractWeb(event, '${uuid}')" class="mt-1 px-1 py-0.5 rounded border border-slate-200 text-[8px] bg-white text-slate-600">Torna-ho a provar</button>
+                        </div>
+                    `;
+                }
+            } catch (err) {
+                console.error("Error saving abstract:", err);
+                container.innerHTML = `
+                    <div class="text-rose-600 text-[10px] font-semibold flex flex-col gap-0.5 items-start">
+                        <span class="flex items-center gap-1"><i class="fa-solid fa-triangle-exclamation"></i> Error de xarxa</span>
+                        <span class="text-[9px] font-normal leading-normal whitespace-pre-wrap">${escapeHtml(err.message)}</span>
+                        <button onclick="cancelarAbstractWeb(event, '${uuid}')" class="mt-1 px-1 py-0.5 rounded border border-slate-200 text-[8px] bg-white text-slate-600">Torna-ho a provar</button>
+                    </div>
+                `;
+            }
+        }
+
+        function cancelarIsbnWeb(event, uuid) {
+            event.preventDefault();
+            const container = document.getElementById(`isbn-search-container-${uuid}`);
+            if (container && container.originalHtml) {
+                container.innerHTML = container.originalHtml;
+            }
+        }
+
+        async function afegirIsbnSuggerit(event, uuid, isbn) {
+            event.preventDefault();
+            const container = document.getElementById(`isbn-search-container-${uuid}`);
+            if (!container) return;
+
+            const selectEntorn = document.getElementById('selectEntorn');
+            const env = selectEntorn ? selectEntorn.value : 'test';
+
+            container.innerHTML = `
+                <span class="inline-flex items-center gap-1 text-[10px] text-slate-500 font-medium">
+                    <i class="fa-solid fa-spinner fa-spin text-emerald-600 mr-1"></i>Afegint...
+                </span>
+            `;
+
+            try {
+                const response = await apiFetch(`/pure/corrections/${uuid}/isbn`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ isbn, env })
+                });
+
+                if (!response.ok) {
+                    let errMsg = "API error";
+                    try {
+                        const errData = await response.json();
+                        if (errData && errData.message) errMsg = errData.message;
+                    } catch (e) {}
+                    throw new Error(errMsg);
+                }
+                const resData = await response.json();
+
+                if (resData.success) {
+                    container.innerHTML = `<span class="text-[10px] text-emerald-600 font-bold"><i class="fa-solid fa-circle-check"></i> ISBN afegit!</span>`;
+                    const pub = rawData.publications.find(p => p.uuid === uuid);
+                    if (pub) {
+                        if (!pub.printISBNs) pub.printISBNs = [];
+                        pub.printISBNs.push(isbn);
+                        if (pub.errors) {
+                            pub.errors = pub.errors.filter(e => e !== "INVALID_ISBN" && e !== "MISSING_ISBN");
+                        }
+                        pub.reviewed = true;
+                        guardarRevisio(uuid, true, pub.observations || '');
+                    }
+                    setTimeout(() => { applyFilters(); }, 600);
+                } else {
+                    alert("Error: " + (resData.message || "No s'ha pogut afegir l'ISBN."));
+                    container.innerHTML = container.originalHtml;
+                }
+            } catch (err) {
+                console.error("Error adding ISBN:", err);
+                alert("Error al afegir l'ISBN: " + err.message);
+                container.innerHTML = container.originalHtml;
+            }
+        }
+
+        async function cercarIssnWeb(event, uuid) {
+            event.preventDefault();
+            const container = document.getElementById(`issn-search-container-${uuid}`);
+            if (!container) return;
+
+            const originalContent = container.innerHTML;
+            container.originalHtml = originalContent;
+            container.innerHTML = `
+                <span class="inline-flex items-center gap-1 text-[10px] text-slate-500 font-medium">
+                    <i class="fa-solid fa-spinner fa-spin text-yellow-500 mr-1"></i>Cercant ISSN...
+                </span>
+            `;
+
+            try {
+                const response = await apiFetch(`/pure/corrections/${uuid}/suggest-doi`);
+                if (!response.ok) throw new Error("Search failed");
+                const data = await response.json();
+
+                if (data.success && data.suggestions && data.suggestions.length > 0) {
+                    const validSuggs = data.suggestions.filter(sug => sug.issn && sug.issn.trim() !== "");
+                    
+                    if (validSuggs.length > 0) {
+                        let suggestionsHtml = validSuggs.map((sug, idx) => {
+                            const escapedIssn = escapeHtml(sug.issn);
+                            return `
+                                <div class="border-b border-slate-100 last:border-0 py-1.5 flex flex-col gap-1">
+                                    <div class="font-bold text-[10px] text-slate-700 leading-tight text-left" title="${escapeHtml(sug.title)}">
+                                        ${idx+1}. ${escapeHtml(sug.title.substring(0, 50))}${sug.title.length > 50 ? '...' : ''}
+                                    </div>
+                                    <div class="text-[9px] text-slate-400 text-left">
+                                        ${escapeHtml(sug.authors)} (${escapeHtml(sug.year)})
+                                    </div>
+                                    <div class="flex items-center justify-between gap-1 mt-0.5 w-full">
+                                        <div class="flex items-center gap-1 overflow-hidden max-w-[110px]">
+                                            <span class="text-[9px] font-mono text-yellow-700 truncate" title="${escapedIssn}">${escapedIssn}</span>
+                                            ${sug.doi ? `
+                                                <a href="#" onclick="obrirDoiFlotant(event, '${escapeHtml(sug.doi)}')" class="text-indigo-600 hover:text-indigo-800 flex items-center" title="Veure DOI en finestra flotant">
+                                                    <i class="fa-solid fa-window-restore text-[8px]"></i>
+                                                </a>
+                                            ` : ''}
+                                        </div>
+                                        <button onclick="afegirIssnSuggerit(event, '${uuid}', '${escapedIssn}')" class="inline-flex items-center gap-0.5 px-1 py-0.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-[9px] font-bold transition-all active:scale-95 shadow-sm">
+                                            <i class="fa-solid fa-plus text-[7px]"></i> Afegir
+                                        </button>
+                                    </div>
+                                </div>
+                            `;
+                        }).join('');
+
+                        container.innerHTML = `
+                            <div class="bg-yellow-50/50 border border-yellow-100 p-2 rounded-xl max-w-[200px] mt-1 text-left premium-shadow">
+                                <div class="flex items-center justify-between mb-1">
+                                    <span class="text-[9px] font-bold text-yellow-800 uppercase tracking-wider"><i class="fa-solid fa-circle-info"></i> ISSNs:</span>
+                                    <button onclick="cancelarIssnWeb(event, '${uuid}')" class="text-slate-400 hover:text-slate-600 transition-colors">
+                                        <i class="fa-solid fa-xmark text-[10px]"></i>
+                                    </button>
+                                </div>
+                                <div class="flex flex-col">
+                                    ${suggestionsHtml}
+                                </div>
+                            </div>
+                        `;
+                    } else {
+                        container.innerHTML = `
+                            <div class="text-rose-600 text-[10px] font-semibold flex items-center gap-1">
+                                <i class="fa-solid fa-triangle-exclamation"></i> Cap suggeriment té ISSN
+                            </div>
+                        `;
+                        setTimeout(() => { container.innerHTML = container.originalHtml; }, 3000);
+                    }
+                } else {
+                    container.innerHTML = `
+                        <div class="text-rose-600 text-[10px] font-semibold flex items-center gap-1">
+                            <i class="fa-solid fa-triangle-exclamation"></i> No s'han trobat suggeriments
+                        </div>
+                    `;
+                    setTimeout(() => { container.innerHTML = container.originalHtml; }, 3000);
+                }
+            } catch (err) {
+                console.error("Error searching ISSN:", err);
+                container.innerHTML = `
+                    <div class="text-rose-600 text-[10px] font-semibold flex items-center gap-1">
+                        <i class="fa-solid fa-triangle-exclamation"></i> Error de cerca
+                    </div>
+                `;
+                setTimeout(() => { container.innerHTML = container.originalHtml; }, 3000);
+            }
+        }
+
+        function cancelarIssnWeb(event, uuid) {
+            event.preventDefault();
+            const container = document.getElementById(`issn-search-container-${uuid}`);
+            if (container && container.originalHtml) {
+                container.innerHTML = container.originalHtml;
+            }
+        }
+
+        async function afegirIssnSuggerit(event, uuid, issn) {
+            event.preventDefault();
+            const container = document.getElementById(`issn-search-container-${uuid}`);
+            if (!container) return;
+
+            const selectEntorn = document.getElementById('selectEntorn');
+            const env = selectEntorn ? selectEntorn.value : 'test';
+
+            container.innerHTML = `
+                <span class="inline-flex items-center gap-1 text-[10px] text-slate-500 font-medium">
+                    <i class="fa-solid fa-spinner fa-spin text-emerald-600 mr-1"></i>Afegint...
+                </span>
+            `;
+
+            try {
+                const response = await apiFetch(`/pure/corrections/${uuid}/issn`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ issn, env })
+                });
+
+                if (!response.ok) {
+                    let errMsg = "API error";
+                    try {
+                        const errData = await response.json();
+                        if (errData && errData.message) errMsg = errData.message;
+                    } catch (e) {}
+                    throw new Error(errMsg);
+                }
+                const resData = await response.json();
+
+                if (resData.success) {
+                    container.innerHTML = `<span class="text-[10px] text-emerald-600 font-bold"><i class="fa-solid fa-circle-check"></i> ISSN afegit!</span>`;
+                    const pub = rawData.publications.find(p => p.uuid === uuid);
+                    if (pub) {
+                        if (!pub.issns) pub.issns = [];
+                        pub.issns.push(issn);
+                        if (pub.errors) {
+                            pub.errors = pub.errors.filter(e => e !== "INVALID_ISSN" && e !== "MISSING_ISSN");
+                        }
+                        pub.reviewed = true;
+                        guardarRevisio(uuid, true, pub.observations || '');
+                    }
+                    setTimeout(() => { applyFilters(); }, 600);
+                } else {
+                    alert("Error: " + (resData.message || "No s'ha pogut afegir l'ISSN."));
+                    container.innerHTML = container.originalHtml;
+                }
+            } catch (err) {
+                console.error("Error adding ISSN:", err);
+                alert("Error al afegir l'ISSN: " + err.message);
+                container.innerHTML = container.originalHtml;
+            }
+        }
+
+        async function comprovarUnpaywall(event, uuid, doi) {
+            event.preventDefault();
+            const container = document.getElementById(`oa-container-${uuid}`);
+            if (!container) return;
+
+            container.innerHTML = `
+                <span class="inline-flex items-center gap-1 text-[10px] text-slate-500">
+                    <i class="fa-solid fa-spinner fa-spin text-indigo-600"></i> Cercant...
+                </span>
+            `;
+
+            try {
+                const response = await apiFetch(`/pure/corrections/unpaywall?doi=${encodeURIComponent(doi)}`);
+                if (!response.ok) throw new Error("Unpaywall query failed");
+                const data = await response.json();
+
+                if (data.success) {
+                    if (data.isOa) {
+                        const statusLabel = data.oaStatus ? data.oaStatus.toUpperCase() : 'OA';
+                        let linkHtml = '';
+                        if (data.url) {
+                            linkHtml = `
+                                <a href="${escapeHtml(data.url)}" target="_blank" class="text-[9px] text-indigo-600 hover:text-indigo-800 underline font-semibold mt-0.5" title="Enllaç a versió OA">
+                                    Enllaç OA
+                                </a>
+                            `;
+                        }
+                        container.innerHTML = `
+                            <div class="flex flex-col items-center">
+                                <span class="inline-flex items-center gap-1 bg-indigo-50 text-indigo-800 text-[10px] font-bold px-2 py-0.5 rounded-full ring-1 ring-indigo-600/10">
+                                    <i class="fa-solid fa-unlock text-[8px]"></i> Unpay: ${statusLabel}
+                                </span>
+                                ${linkHtml}
+                            </div>
+                        `;
+                    } else {
+                        container.innerHTML = `
+                            <span class="inline-flex items-center gap-1 bg-slate-100 text-slate-500 text-[10px] font-bold px-2 py-0.5 rounded-full ring-1 ring-slate-600/10">
+                                <i class="fa-solid fa-lock text-[8px]"></i> Unpay: Tancat
+                            </span>
+                        `;
+                    }
+                } else {
+                    container.innerHTML = `<span class="text-rose-500 text-[9px] font-bold"><i class="fa-solid fa-triangle-exclamation"></i> Error</span>`;
+                    setTimeout(() => resetUnpaywallButton(uuid, doi), 3000);
+                }
+            } catch (err) {
+                console.error("Error fetching unpaywall data:", err);
+                container.innerHTML = `<span class="text-rose-500 text-[9px] font-bold"><i class="fa-solid fa-triangle-exclamation"></i> Error</span>`;
+                setTimeout(() => resetUnpaywallButton(uuid, doi), 3000);
+            }
+        }
+
+        function resetUnpaywallButton(uuid, doi) {
+            const container = document.getElementById(`oa-container-${uuid}`);
+            if (!container) return;
+            container.innerHTML = `
+                <button onclick="comprovarUnpaywall(event, '${uuid}', '${escapeHtml(doi)}')" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-50 border border-indigo-100 text-[10px] font-bold text-indigo-700 hover:bg-indigo-100 transition-all active:scale-95 shadow-sm">
+                    <i class="fa-solid fa-cloud-arrow-down text-[10px]"></i>
+                    <span>Unpaywall</span>
+                </button>
+            `;
+        }
+
+        function renderPagination() {
+            const pagButtons = document.getElementById('pagButtons');
+            const pagStart = document.getElementById('pagStart');
+            const pagEnd = document.getElementById('pagEnd');
+            const pagTotal = document.getElementById('pagTotal');
+
+            const total = filteredPubs.length;
+            pagTotal.textContent = total;
+
+            if (total === 0) {
+                pagStart.textContent = 0;
+                pagEnd.textContent = 0;
+                pagButtons.innerHTML = '';
+                document.getElementById('paginationContainer').classList.add('hidden');
+                return;
+            }
+
+            document.getElementById('paginationContainer').classList.remove('hidden');
+
+            const totalPages = Math.ceil(total / pageSize);
+            const startIdx = (currentPage - 1) * pageSize + 1;
+            const endIdx = Math.min(currentPage * pageSize, total);
+
+            pagStart.textContent = startIdx;
+            pagEnd.textContent = endIdx;
+
+            let buttonsHtml = '';
+            
+            // Prev button
+            buttonsHtml += `
+                <button onclick="changePage(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''} class="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50 transition-all">
+                    <i class="fa-solid fa-chevron-left"></i>
+                </button>
+            `;
+
+            // Core page numbers (limit shown pages for clean UX)
+            let startPage = Math.max(1, currentPage - 2);
+            let endPage = Math.min(totalPages, startPage + 4);
+            if (endPage - startPage < 4) {
+                startPage = Math.max(1, endPage - 4);
+            }
+
+            if (startPage > 1) {
+                buttonsHtml += `<button onclick="changePage(1)" class="px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-all">1</button>`;
+                if (startPage > 2) {
+                    buttonsHtml += `<span class="px-1 text-slate-400 text-xs">...</span>`;
+                }
+            }
+
+            for (let p = startPage; p <= endPage; p++) {
+                const isActive = p === currentPage;
+                const activeClasses = isActive 
+                    ? 'bg-[#008037] text-white border-[#008037] hover:bg-emerald-800' 
+                    : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50';
+                buttonsHtml += `<button onclick="changePage(${p})" class="px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ${activeClasses}">${p}</button>`;
+            }
+
+            if (endPage < totalPages) {
+                if (endPage < totalPages - 1) {
+                    buttonsHtml += `<span class="px-1 text-slate-400 text-xs">...</span>`;
+                }
+                buttonsHtml += `<button onclick="changePage(${totalPages})" class="px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-all">${totalPages}</button>`;
+            }
+
+            // Next button
+            buttonsHtml += `
+                <button onclick="changePage(${currentPage + 1})" ${currentPage === totalPages ? 'disabled' : ''} class="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50 transition-all">
+                    <i class="fa-solid fa-chevron-right"></i>
+                </button>
+            `;
+
+            pagButtons.innerHTML = buttonsHtml;
+        }
+
+        function changePage(p) {
+            currentPage = p;
+            renderTable();
+        }
+
+        function changePageSize(size) {
+            pageSize = parseInt(size, 10);
+            currentPage = 1;
+            renderTable();
+        }
+
+        document.getElementById('buscarTexto').addEventListener('input', applyFilters);
+        document.getElementById('filtroError').addEventListener('change', applyFilters);
+        document.getElementById('filtroEstado').addEventListener('change', applyFilters);
+
+        async function fetchLanguages() {
+            try {
+                const response = await apiFetch('/student-theses/languages');
+                if (!response.ok) throw new Error("Error loading languages");
+                languagesList = await response.json();
+            } catch (err) {
+                console.error("Error fetching languages:", err);
+                languagesList = [
+                    { code: "ca_ES", label: "Català" },
+                    { code: "es_ES", label: "Espanyol" },
+                    { code: "en_GB", label: "Anglès" }
+                ];
+            }
+        }
+
+        async function detectarIdiomaPub(event, uuid, title) {
+            event.preventDefault();
+            const container = document.getElementById(`lang-detect-${uuid}`);
+            if (!container) return;
+
+            container.innerHTML = `
+                <span class="inline-flex items-center gap-1 text-[10px] text-slate-500 font-medium">
+                    <i class="fa-solid fa-spinner fa-spin text-teal-600 mr-1"></i>Detectant...
+                </span>
+            `;
+
+            let detected = 'ca_ES';
+            try {
+                const response = await apiFetch(`/student-theses/detect-language?title=${encodeURIComponent(title)}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data && data.language) {
+                        detected = data.language;
+                    }
+                }
+            } catch (err) {
+                console.error("Error detecting language:", err);
+            }
+            
+            const list = languagesList && languagesList.length > 0 ? languagesList : [
+                { code: "ca_ES", label: "Català" },
+                { code: "es_ES", label: "Espanyol" },
+                { code: "en_GB", label: "Anglès" }
+            ];
+
+            const optionsHtml = list.map(lang => {
+                return `<option value="${escapeHtml(lang.code)}" ${detected === lang.code ? 'selected' : ''}>${escapeHtml(lang.label)}</option>`;
+            }).join('');
+            
+            container.innerHTML = `
+                <div class="flex items-center gap-1.5 bg-teal-50/50 border border-teal-100 rounded-lg p-1 shadow-sm flex-wrap text-left mt-1 max-w-[220px] premium-shadow">
+                    <span class="text-[9px] text-teal-800 font-bold">Detectat:</span>
+                    <select id="lang-select-${uuid}" class="pl-1 pr-4 py-0.5 bg-white border border-teal-300 rounded text-[9px] font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-teal-500 cursor-pointer">
+                        ${optionsHtml}
+                    </select>
+                    <button onclick="guardarIdiomaPub(event, '${uuid}')" class="inline-flex items-center gap-0.5 px-1 py-0.5 rounded bg-teal-600 hover:bg-teal-700 text-white text-[9px] font-bold transition-all active:scale-95 shadow-sm">
+                        Desar
+                    </button>
+                    <button onclick="cancelarDetectarIdiomaPub(event, '${uuid}', \`${escapeHtml(title).replace(/`/g, '\\`').replace(/\$/g, '\\$')}\`)" class="text-slate-400 hover:text-slate-600 px-1" title="Cancel·lar">
+                        <i class="fa-solid fa-xmark text-[9px]"></i>
+                    </button>
+                </div>
+            `;
+        }
+
+        function cancelarDetectarIdiomaPub(event, uuid, title) {
+            event.preventDefault();
+            const container = document.getElementById(`lang-detect-${uuid}`);
+            if (!container) return;
+            
+            container.innerHTML = `
+                <button onclick="detectarIdiomaPub(event, '${uuid}', \`${escapeHtml(title).replace(/`/g, '\\`').replace(/\$/g, '\\$')}\`)" class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-teal-50 border border-teal-200 text-[10px] font-semibold text-teal-700 hover:bg-teal-100 transition-all active:scale-95 shadow-sm">
+                    <i class="fa-solid fa-language text-[8px]"></i>
+                    <span>Detectar idioma</span>
+                </button>
+            `;
+        }
+
+        async function guardarIdiomaPub(event, uuid) {
+            event.preventDefault();
+            const select = document.getElementById(`lang-select-${uuid}`);
+            if (!select) return;
+            const selectedLang = select.value;
+            
+            const selectEntorn = document.getElementById('selectEntorn');
+            const env = selectEntorn ? selectEntorn.value : 'test';
+            
+            const container = document.getElementById(`lang-detect-${uuid}`);
+            if (container) {
+                container.innerHTML = `
+                    <span class="inline-flex items-center gap-1 text-[10px] text-slate-500 font-medium">
+                        <i class="fa-solid fa-spinner fa-spin text-teal-600 mr-1"></i>Desant...
+                    </span>
+                `;
+            }
+
+            try {
+                const response = await apiFetch(`/pure/corrections/${uuid}/language`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ language: selectedLang, env: env })
+                });
+
+                if (!response.ok) {
+                    let errMsg = "API error";
+                    try {
+                        const errData = await response.json();
+                        if (errData && errData.message) errMsg = errData.message;
+                    } catch (e) {}
+                    throw new Error(errMsg);
+                }
+
+                const resData = await response.json();
+                if (resData.success) {
+                    if (container) {
+                        container.innerHTML = `<span class="text-[10px] text-emerald-600 font-bold"><i class="fa-solid fa-circle-check"></i> Desat!</span>`;
+                    }
+                    const pub = rawData.publications.find(p => p.uuid === uuid);
+                    if (pub) {
+                        pub.idioma = selectedLang;
+                        if (pub.errors) {
+                            pub.errors = pub.errors.filter(e => e !== "UNDEFINED_LANGUAGE");
+                        }
+                        pub.reviewed = true;
+                        guardarRevisio(uuid, true, pub.observations || '');
+                    }
+                    setTimeout(() => {
+                        applyFilters();
+                    }, 600);
+                } else {
+                    alert("Error: " + (resData.message || "No s'ha pogut desar l'idioma."));
+                    renderTable();
+                }
+            } catch (err) {
+                console.error("Error saving language:", err);
+                alert("Error al desar l'idioma: " + err.message);
+                renderTable();
+            }
+        }
+
+        async function init() {
+            initYearsFilter();
+            await fetchCorrections();
+            await fetchLanguages();
+        }
+
+        init();
+    </script>
+</body>
+</html>
