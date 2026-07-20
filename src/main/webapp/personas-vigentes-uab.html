@@ -148,7 +148,7 @@
     </div>
     <section class="bg-white border border-[#d4d8de] rounded-2xl shadow-sm p-6 mt-6">
         <div class="flex items-center justify-between mb-3">
-            <h2 class="text-sm font-bold text-[#2a3037] uppercase tracking-wider">Evolució de personal (2018 - actualitat)</h2>
+            <h2 id="tituloEvolucion" class="text-sm font-bold text-[#2a3037] uppercase tracking-wider">Evolució de personal (2018 - actualitat)</h2>
             <span id="estadoEvolucion" class="text-xs text-[#596473]">Carregant...</span>
         </div>
         <div id="chartEvolucion" class="w-full h-[450px]"></div>
@@ -193,7 +193,7 @@
 
 <!-- Modal de desglossament detallat -->
 <div id="modalBreakdown" class="fixed inset-0 z-50 hidden bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-    <div class="bg-white rounded-3xl shadow-2xl border border-[#d4d8de] w-full max-w-5xl h-[85vh] flex flex-col overflow-hidden">
+    <div id="modalCard" class="bg-white rounded-3xl shadow-2xl border border-[#d4d8de] w-full max-w-5xl h-[85vh] flex flex-col overflow-hidden">
         <!-- Header -->
         <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
             <div>
@@ -205,9 +205,9 @@
             </button>
         </div>
         <!-- Content Body -->
-        <div class="flex-grow p-6 overflow-y-auto grid grid-cols-1 lg:grid-cols-2 gap-6 bg-slate-50/50">
+        <div id="modalGrid" class="flex-grow p-6 overflow-y-auto grid grid-cols-1 lg:grid-cols-2 gap-6 bg-slate-50/50">
             <!-- Table Column -->
-            <div class="flex flex-col gap-4">
+            <div id="modalTableCol" class="flex flex-col gap-4">
                 <div class="flex justify-between items-center">
                     <span class="text-xs font-bold text-[#596473] uppercase tracking-wider">Subcategories (Any seleccionat)</span>
                     <span id="modalSelectedYearBadge" class="text-xs font-bold bg-[#d8f3e3] text-[#008037] border border-[#a3e2bc] px-2.5 py-1 rounded-lg">Any: Actual</span>
@@ -227,8 +227,8 @@
                 </div>
             </div>
             <!-- Chart Column -->
-            <div class="flex flex-col gap-4">
-                <span class="text-xs font-bold text-[#596473] uppercase tracking-wider">Evolució de Subcategories (2018 - actualitat)</span>
+            <div id="modalChartCol" class="flex flex-col gap-4">
+                <span id="modalTituloEvolucion" class="text-xs font-bold text-[#596473] uppercase tracking-wider">Evolució de Subcategories (2018 - actualitat)</span>
                 <div id="modalChartContainer" class="border border-[#d4d8de] rounded-2xl p-4 flex-grow h-[45vh] bg-white shadow-sm relative">
                     <div id="modalChart" class="w-full h-full"></div>
                 </div>

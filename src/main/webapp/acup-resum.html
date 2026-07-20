@@ -1,0 +1,991 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Resum ACUP - Convocatòries PID 2025 | UAB</title>
+    <meta name="description" content="Anàlisi comparatiu de projectes sol·licitats i concedits per les universitats catalanes de l'ACUP en la convocatòria PID 2025.">
+    <!-- Google Fonts: Inter & Outfit -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <script src="config.js"></script>
+    <script src="uab-brand.js" defer></script>
+    <link rel="stylesheet" href="uab-theme.css">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        h1, h2, h3, .font-display { font-family: 'Outfit', sans-serif; }
+        .premium-shadow { box-shadow: 0 4px 20px -2px rgba(148,163,184,.12), 0 2px 8px -1px rgba(148,163,184,.08); }
+        .animate-fade-in { animation: fadeIn .5s ease-out forwards; }
+        @keyframes fadeIn { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+
+        /* Tab system */
+        .tab-btn { transition: all .2s; }
+        .tab-btn.active {
+            background: #10b981;
+            color: #fff;
+            box-shadow: 0 4px 12px rgba(16,185,129,.3);
+        }
+        .tab-panel-fade { animation: fadeIn .3s ease-out; }
+
+        /* UAB table search highlight */
+        mark.hl { background: #d1fae5; color: inherit; border-radius: 2px; }
+
+        /* Sticky header for UAB table */
+        #uabTable thead th { position: sticky; top: 0; z-index: 10; background: #f8fafc; }
+
+        /* Sortable column indicator */
+        th[data-sort]:hover { background: #f1f5f9 !important; cursor: pointer; }
+        th.sort-asc .sort-icon::after  { content: ' ↑'; color: #10b981; font-weight: 700; }
+        th.sort-desc .sort-icon::after { content: ' ↓'; color: #10b981; font-weight: 700; }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen text-slate-800 flex flex-col">
+
+    <!-- Header for uab-brand.js -->
+    <header class="hidden">
+        <h1>Resum ACUP - PID 2025</h1>
+        <p>Anàlisi comparatiu de projectes sol·licitats i concedits en la convocatòria de Projectes de Generació de Coneixement (PID) 2025.</p>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-grow w-[95%] mx-auto py-8 flex flex-col gap-8 animate-fade-in">
+        
+        <!-- Page Title & Navigation -->
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+                <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight font-display flex items-center gap-3">
+                    <span class="p-2 rounded-2xl bg-emerald-50 text-emerald-700 flex items-center justify-center">
+                        <i class="fa-solid fa-building-columns text-2xl"></i>
+                    </span>
+                    <span>Resum ACUP - PID 2025</span>
+                </h1>
+                <p class="text-slate-500 mt-1">Anàlisi d'indicadors de concessions de Projectes d'R+D+i per a les universitats catalanes de l'ACUP.</p>
+            </div>
+            <div class="flex items-center gap-3">
+                <a href="index.html" class="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-slate-600 hover:text-emerald-700 bg-white border border-slate-200 rounded-2xl transition-all shadow-sm active:scale-95 hover:border-emerald-500">
+                    <i class="fa-solid fa-house"></i>
+                    <span>Inici</span>
+                </a>
+                <button id="btnDownloadExcel" class="flex items-center gap-2 px-5 py-2.5 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-2xl transition-all shadow-md hover:shadow-lg active:scale-95">
+                    <i class="fa-solid fa-file-excel text-lg"></i>
+                    <span>Descarrega Excel</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- KPI Cards Grid -->
+        <section id="kpisSection" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <!-- Projectes Sol·licitats -->
+            <div class="bg-white border border-slate-200 rounded-3xl p-6 premium-shadow flex items-center gap-5 hover:border-slate-300 transition-colors">
+                <div class="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center text-xl shrink-0">
+                    <i class="fa-solid fa-file-signature"></i>
+                </div>
+                <div>
+                    <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Projectes Sol·licitats</span>
+                    <h3 id="kpiSol" class="text-2xl font-black text-slate-800 mt-0.5">-</h3>
+                    <p class="text-xs text-slate-500 mt-0.5">Total de propostes enviades</p>
+                </div>
+            </div>
+            <!-- Projectes Concedits -->
+            <div class="bg-white border border-slate-200 rounded-3xl p-6 premium-shadow flex items-center gap-5 hover:border-slate-300 transition-colors">
+                <div class="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl shrink-0">
+                    <i class="fa-solid fa-circle-check"></i>
+                </div>
+                <div>
+                    <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Projectes Concedits</span>
+                    <h3 id="kpiCon" class="text-2xl font-black text-slate-800 mt-0.5">-</h3>
+                    <p id="kpiExitRate" class="text-xs text-emerald-600 font-semibold mt-0.5">-</p>
+                </div>
+            </div>
+            <!-- Finançament Concedit -->
+            <div class="bg-white border border-slate-200 rounded-3xl p-6 premium-shadow flex items-center gap-5 hover:border-slate-300 transition-colors">
+                <div class="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center text-xl shrink-0">
+                    <i class="fa-solid fa-coins"></i>
+                </div>
+                <div>
+                    <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Finançament Concedit</span>
+                    <h3 id="kpiTotalEur" class="text-2xl font-black text-slate-800 mt-0.5">-</h3>
+                    <p class="text-xs text-slate-500 mt-0.5">Pressupost total captat</p>
+                </div>
+            </div>
+            <!-- Mitjana per Projecte -->
+            <div class="bg-white border border-slate-200 rounded-3xl p-6 premium-shadow flex items-center gap-5 hover:border-slate-300 transition-colors">
+                <div class="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center text-xl shrink-0">
+                    <i class="fa-solid fa-chart-pie"></i>
+                </div>
+                <div>
+                    <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Mitjana per Projecte</span>
+                    <h3 id="kpiMitja" class="text-2xl font-black text-slate-800 mt-0.5">-</h3>
+                    <p class="text-xs text-slate-500 mt-0.5">Per proposta finançada</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ── TAB BAR ───────────────────────────────────────────────── -->
+        <div class="flex items-center gap-2 flex-wrap">
+            <button id="tab-resum" class="tab-btn active flex items-center gap-2 px-5 py-2.5 text-sm font-bold rounded-2xl border border-transparent bg-emerald-500 text-white" onclick="switchTab('resum')">
+                <i class="fa-solid fa-table-list"></i>
+                <span>Resum ACUP</span>
+            </button>
+            <button id="tab-uab" class="tab-btn flex items-center gap-2 px-5 py-2.5 text-sm font-bold rounded-2xl border border-emerald-200 text-emerald-700 bg-white hover:bg-emerald-50" onclick="switchTab('uab')">
+                <i class="fa-solid fa-microscope"></i>
+                <span>Projectes UAB</span>
+                <span id="uabBadge" class="ml-1 px-2 py-0.5 text-xs rounded-full bg-emerald-100 text-emerald-700">–</span>
+            </button>
+        </div>
+
+        <!-- ══ TAB: RESUM ════════════════════════════════════════════════ -->
+        <div id="panel-resum" class="flex flex-col gap-8 tab-panel-fade">
+
+            <!-- Main Data Table Panel -->
+            <section class="bg-white border border-slate-200 rounded-3xl premium-shadow overflow-hidden flex flex-col">
+                <div class="p-6 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-50/50">
+                    <div>
+                        <h2 class="text-lg font-bold text-slate-800">Taula Resum de Captació per Universitat</h2>
+                        <p class="text-xs text-slate-500 mt-0.5">Fes clic als encapçalaments de les columnes per a ordenar les dades.</p>
+                    </div>
+                    <span class="px-3 py-1 text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full flex items-center gap-1.5 self-start">
+                        <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                        <span>Dades actualitzades (2025)</span>
+                    </span>
+                </div>
+                
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-50 border-b border-slate-200">
+                                <th data-sort="code" class="px-5 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100 transition-colors select-none">
+                                    <div class="flex items-center gap-1.5"><span>Uni</span><i class="fa-solid fa-sort text-slate-300 text-[10px]"></i></div>
+                                </th>
+                                <th data-sort="pctAcup" class="px-5 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100 transition-colors select-none text-center">
+                                    <div class="flex items-center justify-center gap-1.5"><span>% ACUP</span><i class="fa-solid fa-sort text-slate-300 text-[10px]"></i></div>
+                                </th>
+                                <th data-sort="sol" class="px-5 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100 transition-colors select-none text-center">
+                                    <div class="flex items-center justify-center gap-1.5"><span>Projectes Sol·licitats</span><i class="fa-solid fa-sort text-slate-300 text-[10px]"></i></div>
+                                </th>
+                                <th data-sort="pctSol" class="px-5 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100 transition-colors select-none text-center">
+                                    <div class="flex items-center justify-center gap-1.5"><span>% Sol·licitats respecte ACUP</span><i class="fa-solid fa-sort text-slate-300 text-[10px]"></i></div>
+                                </th>
+                                <th data-sort="con" class="px-5 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100 transition-colors select-none text-center">
+                                    <div class="flex items-center justify-center gap-1.5"><span>Projectes Concedits</span><i class="fa-solid fa-sort text-slate-300 text-[10px]"></i></div>
+                                </th>
+                                <th data-sort="pctCon" class="px-5 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100 transition-colors select-none text-center">
+                                    <div class="flex items-center justify-center gap-1.5"><span>% Concedits respecte ACUP</span><i class="fa-solid fa-sort text-slate-300 text-[10px]"></i></div>
+                                </th>
+                                <th data-sort="pctExit" class="px-5 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100 transition-colors select-none text-center">
+                                    <div class="flex items-center justify-center gap-1.5"><span>% Exit</span><i class="fa-solid fa-sort text-slate-300 text-[10px]"></i></div>
+                                </th>
+                                <th data-sort="totalMEur" class="px-5 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100 transition-colors select-none text-center">
+                                    <div class="flex items-center justify-center gap-1.5"><span>Total (M€)</span><i class="fa-solid fa-sort text-slate-300 text-[10px]"></i></div>
+                                </th>
+                                <th data-sort="pctAcupMEur" class="px-5 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100 transition-colors select-none text-center">
+                                    <div class="flex items-center justify-center gap-1.5"><span>% ACUP M€</span><i class="fa-solid fa-sort text-slate-300 text-[10px]"></i></div>
+                                </th>
+                                <th data-sort="mitjaEurProj" class="px-5 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100 transition-colors select-none text-right">
+                                    <div class="flex items-center justify-end gap-1.5"><span>Mitja € Proj.</span><i class="fa-solid fa-sort text-slate-300 text-[10px]"></i></div>
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody id="tableBody">
+                            <tr>
+                                <td colspan="10" class="px-6 py-12 text-center text-slate-400">
+                                    <i class="fa-solid fa-spinner fa-spin text-2xl mb-2"></i>
+                                    <p class="text-sm font-semibold">Carregant dades...</p>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Charts Section -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Chart 1: Projects Volume -->
+                <div class="bg-white border border-slate-200 rounded-3xl p-6 premium-shadow flex flex-col gap-4">
+                    <div>
+                        <h3 class="text-lg font-bold text-slate-800">Volum de Projectes per Universitat</h3>
+                        <p class="text-xs text-slate-500 mt-0.5">Comparativa entre propostes sol·licitades i concessions.</p>
+                    </div>
+                    <div class="relative w-full h-[320px]">
+                        <canvas id="chartProjects"></canvas>
+                    </div>
+                </div>
+
+                <!-- Chart 2: Funding Distribution -->
+                <div class="bg-white border border-slate-200 rounded-3xl p-6 premium-shadow flex flex-col gap-4">
+                    <div>
+                        <h3 class="text-lg font-bold text-slate-800">Distribució del Finançament Concedit</h3>
+                        <p class="text-xs text-slate-500 mt-0.5">Repartiment del pressupost total captat per les universitats (M€).</p>
+                    </div>
+                    <div class="relative w-full h-[320px] flex items-center justify-center">
+                        <canvas id="chartFunding"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Documentation Card -->
+            <section class="bg-white border border-slate-200 rounded-3xl p-6 premium-shadow">
+                <div class="flex items-start gap-4">
+                    <div class="w-10 h-10 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center text-lg shrink-0 mt-0.5">
+                        <i class="fa-solid fa-circle-info"></i>
+                    </div>
+                    <div class="flex flex-col gap-2">
+                        <h4 class="text-base font-bold text-slate-800">Metodologia de càlcul</h4>
+                        <ul id="notesList" class="text-sm text-slate-500 space-y-1.5 list-disc pl-5">
+                            <!-- Loaded dynamically -->
+                        </ul>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- ══ TAB: UAB PROJECTS ════════════════════════════════════════ -->
+        <div id="panel-uab" class="hidden flex-col gap-6">
+
+
+
+            <!-- Search + filter bar -->
+            <div class="bg-white border border-slate-200 rounded-3xl premium-shadow overflow-hidden">
+                <div class="p-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center gap-4 bg-slate-50/50">
+                    <div>
+                        <h2 class="text-lg font-bold text-slate-800">Projectes Concedits UAB — PID 2025</h2>
+                        <p class="text-xs text-slate-500 mt-0.5">87 projectes. Fes clic als encapçalaments per ordenar, o utilitza el cercador.</p>
+                    </div>
+                    <div class="ml-auto flex items-center gap-3 flex-wrap">
+                        <!-- Duration filter -->
+                        <select id="filterDuracio" class="text-sm border border-slate-200 rounded-xl px-3 py-2 bg-white text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-400">
+                            <option value="">Totes les durades</option>
+                            <option value="3">3 anys</option>
+                            <option value="4">4 anys</option>
+                        </select>
+                        <!-- Predoc filter -->
+                        <select id="filterPredoc" class="text-sm border border-slate-200 rounded-xl px-3 py-2 bg-white text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-400">
+                            <option value="">Tots (predocs)</option>
+                            <option value="1">Amb predoc</option>
+                            <option value="0">Sense predoc</option>
+                        </select>
+                        <!-- Search -->
+                        <div class="relative">
+                            <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                            <input id="uabSearch" type="text" placeholder="Cercar referència o departament…"
+                                   class="pl-8 pr-4 py-2 text-sm border border-slate-200 rounded-xl bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-400 w-64">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto max-h-[600px] overflow-y-auto">
+                    <table id="uabTable" class="w-full text-left border-collapse text-sm">
+                        <thead>
+                            <tr class="bg-slate-50 border-b border-slate-200">
+                                <th data-col="referencia"  class="sort-col px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider select-none">
+                                    <span class="sort-icon">Referència</span>
+                                </th>
+                                <th data-col="subArea"    class="sort-col px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider select-none text-center">
+                                    <span class="sort-icon">Àrea</span>
+                                </th>
+                                <th data-col="centro"     class="sort-col px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider select-none">
+                                    <span class="sort-icon">Departament / Centre</span>
+                                </th>
+                                <th data-col="duracion"   class="sort-col px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider select-none text-center">
+                                    <span class="sort-icon">Anys</span>
+                                </th>
+                                <th data-col="predocs"    class="sort-col px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider select-none text-center">
+                                    <span class="sort-icon">Predocs</span>
+                                </th>
+                                <th data-col="cdEur"      class="sort-col px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider select-none text-right">
+                                    <span class="sort-icon">Costos Directes</span>
+                                </th>
+                                <th data-col="ciEur"      class="sort-col px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider select-none text-right">
+                                    <span class="sort-icon">Costos Indirectes</span>
+                                </th>
+                                <th data-col="totalEur"   class="sort-col px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider select-none text-right">
+                                    <span class="sort-icon">Total (€)</span>
+                                </th>
+                                <th data-col="eur2026"    class="sort-col px-4 py-3 text-xs font-bold text-indigo-400 uppercase tracking-wider select-none text-right bg-indigo-50/40">
+                                    <span class="sort-icon">2026</span>
+                                </th>
+                                <th data-col="eur2027"    class="sort-col px-4 py-3 text-xs font-bold text-indigo-400 uppercase tracking-wider select-none text-right bg-indigo-50/40">
+                                    <span class="sort-icon">2027</span>
+                                </th>
+                                <th data-col="eur2028"    class="sort-col px-4 py-3 text-xs font-bold text-indigo-400 uppercase tracking-wider select-none text-right bg-indigo-50/40">
+                                    <span class="sort-icon">2028</span>
+                                </th>
+                                <th data-col="eur2029"    class="sort-col px-4 py-3 text-xs font-bold text-indigo-400 uppercase tracking-wider select-none text-right bg-indigo-50/40">
+                                    <span class="sort-icon">2029</span>
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody id="uabTableBody">
+                            <tr>
+                                <td colspan="12" class="px-6 py-12 text-center text-slate-400">
+                                    <i class="fa-solid fa-spinner fa-spin text-2xl mb-2"></i>
+                                    <p class="text-sm font-semibold">Carregant projectes UAB...</p>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Table footer: row count -->
+                <div class="px-5 py-3 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between text-xs text-slate-400 font-semibold">
+                    <span id="uabRowCount">–</span>
+                    <span>Universitat Autònoma de Barcelona · PID 2025</span>
+                </div>
+            </div>
+
+            <!-- UAB Charts Section -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- UAB Chart 1: Yearly Budget Evolution -->
+                <div class="bg-white border border-slate-200 rounded-3xl p-6 premium-shadow flex flex-col gap-4">
+                    <div>
+                        <h3 class="text-lg font-bold text-slate-800">Evolució Anual del Pressupost (2026-2029)</h3>
+                        <p class="text-xs text-slate-500 mt-0.5">Distribució temporal del finançament total concedit de la UAB (en milions d'euros).</p>
+                    </div>
+                    <div class="relative w-full h-[300px]">
+                        <canvas id="chartUabYearly"></canvas>
+                    </div>
+                </div>
+
+                <!-- UAB Chart 2: Projects by Sub-area -->
+                <div class="bg-white border border-slate-200 rounded-3xl p-6 premium-shadow flex flex-col gap-4">
+                    <div>
+                        <h3 class="text-lg font-bold text-slate-800">Propostes Concedides per Àrea Temàtica</h3>
+                        <p class="text-xs text-slate-500 mt-0.5">Nombre de projectes UAB finançats per subàrea de recerca (Top 10).</p>
+                    </div>
+                    <div class="relative w-full h-[300px]">
+                        <canvas id="chartUabSubareas"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="py-6 border-t border-slate-200 bg-white mt-12 text-center text-xs text-slate-400 font-semibold">
+        Universitat Autònoma de Barcelona &copy; 2026
+    </footer>
+
+    <!-- Frontend logic -->
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+
+        // ── Endpoints ────────────────────────────────────────────────
+        const dataUrl     = window.apiUrl ? window.apiUrl('/acup-resum/data')         : '/api/acup-resum/data';
+        const downloadUrl = window.apiUrl ? window.apiUrl('/acup-resum/download')      : '/api/acup-resum/download';
+        const uabUrl      = window.apiUrl ? window.apiUrl('/acup-resum/uab-projects')  : '/api/acup-resum/uab-projects';
+
+        // ── Shared state ──────────────────────────────────────────────
+        let serverData   = null;
+        let uabData      = [];
+        let uabFiltered  = [];
+        let sortCol      = null;
+        let sortDir      = 'asc';
+        let uabSortCol   = 'totalEur';
+        let uabSortDir   = 'desc';
+        let currentSortColumn = null;
+        let currentSortOrder  = 'asc';
+
+        // ── DOM refs ──────────────────────────────────────────────────
+        const kpiSol      = document.getElementById('kpiSol');
+        const kpiCon      = document.getElementById('kpiCon');
+        const kpiExitRate = document.getElementById('kpiExitRate');
+        const kpiTotalEur = document.getElementById('kpiTotalEur');
+        const kpiMitja    = document.getElementById('kpiMitja');
+        const tableBody   = document.getElementById('tableBody');
+        const notesList   = document.getElementById('notesList');
+        const btnDownload = document.getElementById('btnDownloadExcel');
+
+        const uabBody      = document.getElementById('uabTableBody');
+        const uabSearch    = document.getElementById('uabSearch');
+        const filterDur    = document.getElementById('filterDuracio');
+        const filterPre    = document.getElementById('filterPredoc');
+        const uabRowCount  = document.getElementById('uabRowCount');
+        const uabBadge     = document.getElementById('uabBadge');
+
+        const downloadUabUrl = window.apiUrl ? window.apiUrl('/acup-resum/download-uab') : '/api/acup-resum/download-uab';
+
+        // Keep track of active tab
+        let activeTab = 'resum';
+
+        btnDownload.addEventListener('click', () => {
+            if (activeTab === 'uab') {
+                const q = (uabSearch.value || '').trim();
+                const duracio = filterDur.value;
+                const predoc = filterPre.value;
+                
+                const params = new URLSearchParams();
+                if (q) params.append('q', q);
+                if (duracio) params.append('duracio', duracio);
+                if (predoc) params.append('predoc', predoc);
+                
+                const queryString = params.toString();
+                const url = downloadUabUrl + (queryString ? '?' + queryString : '');
+                window.location.href = url;
+            } else {
+                window.location.href = downloadUrl;
+            }
+        });
+
+        // ── Tab switching ─────────────────────────────────────────────
+        const PANELS = ['resum', 'uab'];
+        window.switchTab = function(name) {
+            activeTab = name;
+            // Hide all panels
+            PANELS.forEach(id => {
+                const el = document.getElementById('panel-' + id);
+                el.classList.add('hidden');
+                el.classList.remove('flex', 'tab-panel-fade');
+            });
+            // Show selected panel
+            const active = document.getElementById('panel-' + name);
+            active.classList.remove('hidden');
+            active.classList.add('flex', 'tab-panel-fade');
+            // Update tab buttons
+            document.querySelectorAll('.tab-btn').forEach(b => {
+                b.classList.remove('active','bg-emerald-500','text-white','shadow-md');
+                b.classList.add('border-emerald-200','text-emerald-700','bg-white');
+            });
+            const btn = document.getElementById('tab-' + name);
+            btn.classList.add('active','bg-emerald-500','text-white');
+            btn.classList.remove('border-emerald-200','text-emerald-700','bg-white');
+
+            // Dynamically update the main KPIs based on current tab
+            if (serverData) {
+                if (name === 'resum') {
+                    renderKPIs(serverData.totalRow);
+                } else if (name === 'uab') {
+                    const uabRow = serverData.rows.find(r => r.code === 'UAB');
+                    renderKPIs(uabRow);
+                }
+            }
+
+            // Load UAB data lazily on first open
+            if (name === 'uab' && uabData.length === 0) loadUabData();
+        };
+
+        // ── RESUM data ────────────────────────────────────────────────
+        async function loadData() {
+            try {
+                const res = await fetch(dataUrl);
+                if (!res.ok) throw new Error('Error de servidor en carregar dades.');
+                serverData = await res.json();
+                renderKPIs(serverData.totalRow);
+                renderTable(serverData.rows, serverData.totalRow);
+                renderCharts(serverData.rows);
+                renderNotes(serverData.notes);
+                setupSorting();
+            } catch (error) {
+                console.error(error);
+                tableBody.innerHTML = `<tr><td colspan="10" class="px-6 py-12 text-center text-red-500 font-bold">
+                    <i class="fa-solid fa-triangle-exclamation text-3xl mb-2"></i>
+                    <p>S'ha produït un error al carregar les dades: ${error.message}</p></td></tr>`;
+            }
+        }
+
+        function renderKPIs(totalRow) {
+            if (!totalRow) return;
+            kpiSol.textContent     = formatInt(totalRow.sol);
+            kpiCon.textContent     = formatInt(totalRow.con);
+            kpiExitRate.textContent = `Taxa d'èxit del ${formatPercent(totalRow.pctExit)}`;
+            kpiTotalEur.textContent = `${formatDec(totalRow.totalMEur)} M€`;
+            kpiMitja.textContent    = formatCurrency(totalRow.mitjaEurProj);
+        }
+
+        function renderTable(rows, totalRow) {
+            if (!rows) return;
+            let html = '';
+            rows.forEach(r => {
+                const isUAB   = r.code === 'UAB';
+                const trClass = isUAB
+                    ? 'bg-emerald-50/70 hover:bg-emerald-100/70 border-l-4 border-emerald-500 transition-colors font-medium text-emerald-900'
+                    : 'hover:bg-slate-50 transition-colors border-b border-slate-100';
+                const codeClass = isUAB ? 'text-emerald-700 font-bold' : 'text-slate-900 font-bold';
+                html += `<tr class="${trClass}">
+                    <td class="px-5 py-4">
+                        <div class="flex flex-col">
+                            <span class="${codeClass}">${r.code}</span>
+                            <span class="text-[10px] text-slate-400 font-normal truncate max-w-xs" title="${r.name}">${r.name}</span>
+                        </div>
+                    </td>
+                    <td class="px-5 py-4 text-center text-slate-600 font-mono text-xs">${formatPercent(r.pctAcup)}</td>
+                    <td class="px-5 py-4 text-center text-slate-700">${formatInt(r.sol)}</td>
+                    <td class="px-5 py-4 text-center text-slate-600 font-mono text-xs">${formatPercent(r.pctSol)}</td>
+                    <td class="px-5 py-4 text-center text-slate-700">${formatInt(r.con)}</td>
+                    <td class="px-5 py-4 text-center text-slate-600 font-mono text-xs">${formatPercent(r.pctCon)}</td>
+                    <td class="px-5 py-4 text-center font-bold text-xs">
+                        <span class="px-2 py-0.5 rounded-lg ${getExitRateClass(r.pctExit)}">${formatPercent(r.pctExit)}</span>
+                    </td>
+                    <td class="px-5 py-4 text-center text-slate-800 font-semibold">${formatDec(r.totalMEur)}</td>
+                    <td class="px-5 py-4 text-center text-slate-600 font-mono text-xs">${formatPercent(r.pctAcupMEur)}</td>
+                    <td class="px-5 py-4 text-right text-slate-800 font-semibold">${formatCurrency(r.mitjaEurProj)}</td>
+                </tr>`;
+            });
+            if (totalRow) {
+                html += `<tr class="bg-slate-100 hover:bg-slate-200 transition-colors font-extrabold text-slate-900 border-t-2 border-slate-300">
+                    <td class="px-5 py-4">${totalRow.code}</td>
+                    <td class="px-5 py-4 text-center font-mono text-xs">${formatPercent(totalRow.pctAcup)}</td>
+                    <td class="px-5 py-4 text-center">${formatInt(totalRow.sol)}</td>
+                    <td class="px-5 py-4 text-center font-mono text-xs">${formatPercent(totalRow.pctSol)}</td>
+                    <td class="px-5 py-4 text-center">${formatInt(totalRow.con)}</td>
+                    <td class="px-5 py-4 text-center font-mono text-xs">${formatPercent(totalRow.pctCon)}</td>
+                    <td class="px-5 py-4 text-center font-bold text-xs">
+                        <span class="px-2 py-0.5 bg-slate-200 text-slate-800 rounded-lg">${formatPercent(totalRow.pctExit)}</span>
+                    </td>
+                    <td class="px-5 py-4 text-center font-bold">${formatDec(totalRow.totalMEur)}</td>
+                    <td class="px-5 py-4 text-center font-mono text-xs">${formatPercent(totalRow.pctAcupMEur)}</td>
+                    <td class="px-5 py-4 text-right font-bold">${formatCurrency(totalRow.mitjaEurProj)}</td>
+                </tr>`;
+            }
+            tableBody.innerHTML = html;
+        }
+
+        function renderNotes(notes) {
+            if (!notes) return;
+            notesList.innerHTML = notes.filter(n => n && n.trim() !== '').map(n => `<li>${n}</li>`).join('');
+        }
+
+        function setupSorting() {
+            const headers = document.querySelectorAll('thead th[data-sort]');
+            headers.forEach(th => {
+                th.addEventListener('click', () => {
+                    const col = th.getAttribute('data-sort');
+                    if (currentSortColumn === col) {
+                        currentSortOrder = currentSortOrder === 'asc' ? 'desc' : 'asc';
+                    } else {
+                        currentSortColumn = col;
+                        currentSortOrder  = 'desc';
+                    }
+                    headers.forEach(h => {
+                        const icon = h.querySelector('i');
+                        if (h === th) {
+                            icon.className = currentSortOrder === 'asc'
+                                ? 'fa-solid fa-sort-up text-emerald-600 text-[10px]'
+                                : 'fa-solid fa-sort-down text-emerald-600 text-[10px]';
+                            h.classList.add('bg-slate-100');
+                        } else {
+                            icon.className = 'fa-solid fa-sort text-slate-300 text-[10px]';
+                            h.classList.remove('bg-slate-100');
+                        }
+                    });
+                    const sortedRows = [...serverData.rows].sort((a, b) => {
+                        let valA = a[col], valB = b[col];
+                        if (typeof valA === 'string') return currentSortOrder === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+                        return currentSortOrder === 'asc' ? valA - valB : valB - valA;
+                    });
+                    renderTable(sortedRows, serverData.totalRow);
+                });
+            });
+        }
+
+        // ── UAB projects ──────────────────────────────────────────────
+        async function loadUabData() {
+            try {
+                const res = await fetch(uabUrl);
+                if (!res.ok) throw new Error('Error carregant projectes UAB.');
+                uabData     = await res.json();
+                uabFiltered = [...uabData];
+                uabBadge.textContent = uabData.length;
+
+
+
+                applyUabFilters();
+            } catch(e) {
+                uabBody.innerHTML = `<tr><td colspan="8" class="px-6 py-10 text-center text-red-500 font-bold">${e.message}</td></tr>`;
+            }
+        }
+
+        function applyUabFilters() {
+            const q       = (uabSearch.value || '').toLowerCase().trim();
+            const durVal  = filterDur.value;
+            const preVal  = filterPre.value;
+            uabFiltered = uabData.filter(r => {
+                if (durVal && String(r.duracion) !== durVal) return false;
+                if (preVal === '1' && r.predocs < 1) return false;
+                if (preVal === '0' && r.predocs > 0) return false;
+                if (q && !r.referencia.toLowerCase().includes(q) && !r.centro.toLowerCase().includes(q) && !r.subArea.toLowerCase().includes(q)) return false;
+                return true;
+            });
+            sortAndRenderUab();
+        }
+
+        function sortAndRenderUab() {
+            const col = uabSortCol, dir = uabSortDir;
+            uabFiltered.sort((a, b) => {
+                let va = a[col], vb = b[col];
+                if (typeof va === 'string') return dir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+                return dir === 'asc' ? va - vb : vb - va;
+            });
+            renderUabTable();
+        }
+
+        function renderUabTable() {
+            const q = (uabSearch.value || '').toLowerCase().trim();
+            if (uabFiltered.length === 0) {
+                uabBody.innerHTML = `<tr><td colspan="12" class="px-6 py-10 text-center text-slate-400 font-semibold">Cap projecte no coincideix amb el filtre.</td></tr>`;
+                uabRowCount.textContent = '0 projectes';
+                return;
+            }
+            const hl = (txt) => {
+                if (!q) return escHtml(txt);
+                const idx = txt.toLowerCase().indexOf(q);
+                if (idx < 0) return escHtml(txt);
+                return escHtml(txt.slice(0, idx)) + `<mark class="hl">${escHtml(txt.slice(idx, idx+q.length))}</mark>` + escHtml(txt.slice(idx+q.length));
+            };
+            const yr = (v) => v > 0 ? formatCurrencyCompact(v) : `<span class="text-slate-300">–</span>`;
+            let html = '';
+            uabFiltered.forEach((r, i) => {
+                const bg = i % 2 === 0 ? '' : 'bg-slate-50/60';
+                html += `<tr class="${bg} hover:bg-emerald-50/40 transition-colors border-b border-slate-100">
+                    <td class="px-4 py-3 font-mono text-xs text-emerald-700 font-semibold whitespace-nowrap">${hl(r.referencia)}</td>
+                    <td class="px-4 py-3 text-center">
+                        <span class="px-2 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-600">${hl(r.subArea)}</span>
+                    </td>
+                    <td class="px-4 py-3 text-slate-700 text-xs max-w-xs truncate" title="${escHtml(r.centro)}">${hl(r.centro)}</td>
+                    <td class="px-4 py-3 text-center">
+                        <span class="px-2 py-0.5 rounded-full text-xs font-bold ${r.duracion===4?'bg-indigo-100 text-indigo-700':'bg-sky-100 text-sky-700'}">${r.duracion}a</span>
+                    </td>
+                    <td class="px-4 py-3 text-center">
+                        ${r.predocs>0
+                            ? `<span class="px-2 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-700"><i class="fa-solid fa-user-graduate mr-1"></i>${r.predocs}</span>`
+                            : `<span class="text-slate-300 text-xs">–</span>`}
+                    </td>
+                    <td class="px-4 py-3 text-right font-semibold text-slate-700 tabular-nums">${formatCurrencyCompact(r.cdEur)}</td>
+                    <td class="px-4 py-3 text-right text-slate-500 tabular-nums text-xs">${formatCurrencyCompact(r.ciEur)}</td>
+                    <td class="px-4 py-3 text-right font-bold text-slate-800 tabular-nums border-r border-slate-200">${formatCurrencyCompact(r.totalEur)}</td>
+                    <td class="px-4 py-3 text-right tabular-nums text-xs text-indigo-600 bg-indigo-50/30">${yr(r.eur2026)}</td>
+                    <td class="px-4 py-3 text-right tabular-nums text-xs text-indigo-600 bg-indigo-50/30">${yr(r.eur2027)}</td>
+                    <td class="px-4 py-3 text-right tabular-nums text-xs text-indigo-600 bg-indigo-50/30">${yr(r.eur2028)}</td>
+                    <td class="px-4 py-3 text-right tabular-nums text-xs text-indigo-600 bg-indigo-50/30">${yr(r.eur2029)}</td>
+                </tr>`;
+            });
+            uabBody.innerHTML = html;
+            uabRowCount.textContent = `${uabFiltered.length} de ${uabData.length} projectes`;
+            renderUabCharts(uabFiltered);
+        }
+
+        // UAB table sort
+        document.querySelectorAll('#uabTable th.sort-col').forEach(th => {
+            th.style.cursor = 'pointer';
+            th.addEventListener('click', () => {
+                const col = th.getAttribute('data-col');
+                if (uabSortCol === col) {
+                    uabSortDir = uabSortDir === 'asc' ? 'desc' : 'asc';
+                } else {
+                    uabSortCol = col;
+                    uabSortDir = col === 'referencia' || col === 'subArea' || col === 'centro' ? 'asc' : 'desc';
+                }
+                document.querySelectorAll('#uabTable th.sort-col').forEach(h => {
+                    h.classList.remove('sort-asc','sort-desc');
+                });
+                th.classList.add(uabSortDir === 'asc' ? 'sort-asc' : 'sort-desc');
+                sortAndRenderUab();
+            });
+        });
+
+        // UAB search & filters
+        uabSearch.addEventListener('input',  applyUabFilters);
+        filterDur.addEventListener('change', applyUabFilters);
+        filterPre.addEventListener('change', applyUabFilters);
+
+        // ── Formatters ────────────────────────────────────────────────
+        function formatPercent(val)  { return val==null?'-':`${(val*100).toFixed(0)}%`; }
+        function formatInt(val)      { return val==null?'-':new Intl.NumberFormat('ca-ES',{maximumFractionDigits:0}).format(val); }
+        function formatDec(val)      { return val==null?'-':new Intl.NumberFormat('ca-ES',{minimumFractionDigits:1,maximumFractionDigits:1}).format(val); }
+        function formatCurrency(val) { return val==null?'-':new Intl.NumberFormat('ca-ES',{style:'currency',currency:'EUR',maximumFractionDigits:0}).format(val); }
+        function formatCurrencyK(val){ return val==null?'-':`${new Intl.NumberFormat('ca-ES',{minimumFractionDigits:1,maximumFractionDigits:1}).format(val/1e6)} M€`; }
+        function formatCurrencyCompact(val) {
+            return new Intl.NumberFormat('ca-ES',{style:'currency',currency:'EUR',maximumFractionDigits:0}).format(val);
+        }
+        function escHtml(s) { return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+        function getExitRateClass(val) {
+            if (val>=0.40) return 'bg-emerald-100 text-emerald-800';
+            if (val>=0.25) return 'bg-sky-100 text-sky-800';
+            if (val>=0.15) return 'bg-amber-100 text-amber-800';
+            return 'bg-rose-100 text-rose-800';
+        }
+
+        // ── Charts ───────────────────────────────────────────────────
+        let projectsChartInstance = null;
+        let fundingChartInstance = null;
+
+        function renderCharts(rows) {
+            if (projectsChartInstance) projectsChartInstance.destroy();
+            if (fundingChartInstance) fundingChartInstance.destroy();
+
+            // Exclude TOTAL row
+            const activeRows = rows.filter(r => r.code !== 'TOTAL');
+            
+            // Sort active rows by funding (descending) for cleaner layout in doughnut
+            const sortedByFunding = [...activeRows].sort((a, b) => b.totalMEur - a.totalMEur);
+            
+            const labels = activeRows.map(r => r.code);
+            const solData = activeRows.map(r => r.sol);
+            const conData = activeRows.map(r => r.con);
+
+            // Chart 1: Sol·licitats vs Concedits
+            const ctxProjects = document.getElementById('chartProjects').getContext('2d');
+            projectsChartInstance = new Chart(ctxProjects, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Sol·licitats',
+                            data: solData,
+                            backgroundColor: '#94a3b8', // slate-400
+                            borderRadius: 6,
+                            borderSkipped: false
+                        },
+                        {
+                            label: 'Concedits',
+                            data: conData,
+                            backgroundColor: '#10b981', // emerald-500
+                            borderRadius: 6,
+                            borderSkipped: false
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                            labels: {
+                                boxWidth: 10,
+                                usePointStyle: true,
+                                pointStyle: 'circle',
+                                font: { family: 'Inter', size: 11, weight: 600 }
+                            }
+                        },
+                        tooltip: {
+                            backgroundColor: '#1e293b',
+                            titleFont: { family: 'Outfit', size: 12, weight: 700 },
+                            bodyFont: { family: 'Inter', size: 12 },
+                            padding: 10,
+                            cornerRadius: 8
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { display: false },
+                            ticks: { font: { family: 'Inter', size: 11, weight: 600 } }
+                        },
+                        y: {
+                            grid: { color: '#f1f5f9' },
+                            ticks: { font: { family: 'Inter', size: 11 } }
+                        }
+                    }
+                }
+            });
+
+            // Map standard colors to universities
+            const uniColors = {
+                'UB':  '#3b82f6', // blue
+                'UAB': '#008357', // UAB corporate green
+                'UPC': '#06b6d4', // cyan
+                'UPF': '#ec4899', // pink
+                'UdL': '#f59e0b', // amber
+                'UdG': '#8b5cf6', // violet
+                'URV': '#f43f5e'  // rose
+            };
+
+            const doughnutLabels = sortedByFunding.map(r => r.code);
+            const doughnutData = sortedByFunding.map(r => r.totalMEur);
+            const doughnutColors = sortedByFunding.map(r => uniColors[r.code] || '#cbd5e1');
+
+            // Chart 2: Funding Distribution
+            const ctxFunding = document.getElementById('chartFunding').getContext('2d');
+            fundingChartInstance = new Chart(ctxFunding, {
+                type: 'doughnut',
+                data: {
+                    labels: doughnutLabels,
+                    datasets: [{
+                        data: doughnutData,
+                        backgroundColor: doughnutColors,
+                        borderWidth: 2,
+                        borderColor: '#ffffff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'right',
+                            labels: {
+                                boxWidth: 10,
+                                usePointStyle: true,
+                                pointStyle: 'circle',
+                                font: { family: 'Inter', size: 11, weight: 600 }
+                            }
+                        },
+                        tooltip: {
+                            backgroundColor: '#1e293b',
+                            titleFont: { family: 'Outfit', size: 12, weight: 700 },
+                            bodyFont: { family: 'Inter', size: 12 },
+                            padding: 10,
+                            cornerRadius: 8,
+                            callbacks: {
+                                label: function(context) {
+                                    const val = context.raw;
+                                    const total = context.dataset.data.reduce((a,b)=>a+b, 0);
+                                    const pct = ((val/total)*100).toFixed(1);
+                                    return ` ${context.label}: ${val.toFixed(1)} M€ (${pct}%)`;
+                                }
+                            }
+                        }
+                    },
+                    cutout: '65%'
+                }
+            });
+        }
+
+        // ── UAB Charts ────────────────────────────────────────────────
+        let uabYearlyChartInstance = null;
+        let uabSubareasChartInstance = null;
+
+        function renderUabCharts(filteredData) {
+            if (uabYearlyChartInstance) uabYearlyChartInstance.destroy();
+            if (uabSubareasChartInstance) uabSubareasChartInstance.destroy();
+
+            // 1. Calculate yearly totals (2026-2029)
+            let sum2026 = 0, sum2027 = 0, sum2028 = 0, sum2029 = 0;
+            filteredData.forEach(p => {
+                sum2026 += p.eur2026 || 0;
+                sum2027 += p.eur2027 || 0;
+                sum2028 += p.eur2028 || 0;
+                sum2029 += p.eur2029 || 0;
+            });
+
+            const yearlyData = [sum2026 / 1e6, sum2027 / 1e6, sum2028 / 1e6, sum2029 / 1e6];
+
+            const ctxYearly = document.getElementById('chartUabYearly').getContext('2d');
+            uabYearlyChartInstance = new Chart(ctxYearly, {
+                type: 'line',
+                data: {
+                    labels: ['2026', '2027', '2028', '2029'],
+                    labelsExtra: ['2026 (EUR)', '2027 (EUR)', '2028 (EUR)', '2029 (EUR)'],
+                    datasets: [{
+                        label: 'Finançament (M€)',
+                        data: yearlyData,
+                        borderColor: '#008357', // UAB Green
+                        backgroundColor: 'rgba(0, 131, 87, 0.1)', // UAB green translucent fill
+                        borderWidth: 3,
+                        fill: true,
+                        tension: 0.3,
+                        pointBackgroundColor: '#008357',
+                        pointBorderColor: '#ffffff',
+                        pointBorderWidth: 2,
+                        pointRadius: 5
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: '#1e293b',
+                            titleFont: { family: 'Outfit', size: 12, weight: 700 },
+                            bodyFont: { family: 'Inter', size: 12 },
+                            padding: 10,
+                            cornerRadius: 8,
+                            callbacks: {
+                                label: function(context) {
+                                    return ` ${context.raw.toFixed(3)} M€`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { display: false },
+                            ticks: { font: { family: 'Inter', size: 11, weight: 600 } }
+                        },
+                        y: {
+                            grid: { color: '#f1f5f9' },
+                            ticks: { 
+                                font: { family: 'Inter', size: 11 },
+                                callback: function(value) { return value + ' M€'; }
+                            }
+                        }
+                    }
+                }
+            });
+
+            // 2. Calculate project counts per subArea
+            const subAreaCounts = {};
+            filteredData.forEach(p => {
+                const sub = p.subArea || 'Altres';
+                subAreaCounts[sub] = (subAreaCounts[sub] || 0) + 1;
+            });
+
+            // Sort subareas by project count descending
+            const sortedSubareas = Object.entries(subAreaCounts)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 10); // Show top 10
+
+            const subareaLabels = sortedSubareas.map(entry => entry[0]);
+            const subareaCountsData = sortedSubareas.map(entry => entry[1]);
+
+            const ctxSubareas = document.getElementById('chartUabSubareas').getContext('2d');
+            uabSubareasChartInstance = new Chart(ctxSubareas, {
+                type: 'bar',
+                data: {
+                    labels: subareaLabels,
+                    datasets: [{
+                        label: 'Projectes',
+                        data: subareaCountsData,
+                        backgroundColor: '#10b981', // emerald-500
+                        borderRadius: 6,
+                        borderSkipped: false
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    indexAxis: 'y', // Horizontal bars!
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: '#1e293b',
+                            titleFont: { family: 'Outfit', size: 12, weight: 700 },
+                            bodyFont: { family: 'Inter', size: 12 },
+                            padding: 10,
+                            cornerRadius: 8
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { color: '#f1f5f9' },
+                            ticks: { 
+                                font: { family: 'Inter', size: 11 },
+                                stepSize: 1
+                            }
+                        },
+                        y: {
+                            grid: { display: false },
+                            ticks: { font: { family: 'Inter', size: 11, weight: 600 } }
+                        }
+                    }
+                }
+            });
+        }
+
+        // ── Boot ──────────────────────────────────────────────────────
+        loadData();
+    });
+    </script>
+</body>
+</html>

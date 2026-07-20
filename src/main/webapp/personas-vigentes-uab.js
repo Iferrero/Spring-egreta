@@ -770,10 +770,10 @@ async function cargarEvolucion() {
         const promises = years.map(async (year) => {
             const isCurrentYear = (year === currentYear);
             const urlCats = isCurrentYear
-                ? buildUrl('/persons/stats/vigentes-por-categoria', true, true)
+                ? buildUrlForYear('/persons/stats/vigentes-por-categoria', undefined, true, true)
                 : buildUrlForYear('/persons/stats/vigentes-por-categoria', year, true, true);
             const urlIcrea = isCurrentYear
-                ? buildUrl('/persons/stats/icrea', true, true)
+                ? buildUrlForYear('/persons/stats/icrea', undefined, true, true)
                 : buildUrlForYear('/persons/stats/icrea', year, true, true);
 
             const [resCats, resIcrea] = await Promise.all([
@@ -807,9 +807,54 @@ async function cargarEvolucion() {
 }
 
 function renderLineaEvolucion(dataPoints, years) {
+    const startYear = years[0];
+    const endYear = years[years.length - 1];
+    const isCurrentYear = (endYear === new Date().getFullYear());
+    const endText = isCurrentYear ? 'actualitat' : String(endYear);
+    const tituloEl = document.getElementById('tituloEvolucion');
+    if (tituloEl) {
+        tituloEl.textContent = `Evolució de personal (${startYear} - ${endText})`;
+    }
+
     const contenedor = document.getElementById('chartEvolucion');
     if (!chartEvolucion) {
         chartEvolucion = echarts.init(contenedor);
+        chartEvolucion.on('datazoom', function () {
+            const option = chartEvolucion.getOption();
+            if (!option || !option.dataZoom || !option.dataZoom[0]) return;
+            const dataZoom = option.dataZoom[0];
+            const categoryData = option.xAxis[0].data;
+            if (!categoryData) return;
+
+            let start = dataZoom.startValue;
+            let end = dataZoom.endValue;
+
+            if (start === undefined || start === null) {
+                const startPercent = dataZoom.start ?? 0;
+                start = Math.round((startPercent / 100) * (categoryData.length - 1));
+            }
+            if (end === undefined || end === null) {
+                const endPercent = dataZoom.end ?? 100;
+                end = Math.round((endPercent / 100) * (categoryData.length - 1));
+            }
+
+            const startLabel = categoryData[start];
+            const endLabel = categoryData[end];
+
+            if (startLabel && endLabel) {
+                const cleanYear = (label) => label ? label.replace(' (actual)', '') : '';
+                const startYearStr = cleanYear(startLabel);
+                const endYearStr = cleanYear(endLabel);
+
+                const isCurrent = endLabel.includes('(actual)');
+                const finalEndText = isCurrent ? 'actualitat' : endYearStr;
+
+                const tEl = document.getElementById('tituloEvolucion');
+                if (tEl) {
+                    tEl.textContent = `Evolució de personal (${startYearStr} - ${finalEndText})`;
+                }
+            }
+        });
     }
 
     const allSeries = [
@@ -901,15 +946,41 @@ function renderLineaEvolucion(dataPoints, years) {
         },
         legend: {
             data: legendData,
-            bottom: 0
+            bottom: 5
         },
         grid: {
             left: '3%',
             right: '4%',
             top: '8%',
-            bottom: '12%',
+            bottom: 90,
             containLabel: true
         },
+        dataZoom: [
+            {
+                type: 'slider',
+                show: true,
+                xAxisIndex: [0],
+                start: 0,
+                end: 100,
+                bottom: 35,
+                height: 20,
+                borderColor: 'transparent',
+                backgroundColor: '#f1f5f9',
+                fillerColor: 'rgba(0, 128, 55, 0.15)',
+                handleIcon: 'path://M10.7,11.9v-1.3H9.3v1.3c-4.9,0.3-8.8,4.4-8.8,9.4c0,5,3.9,9.1,8.8,9.4v1.3h1.3v-1.3c4.9-0.3,8.8-4.4,8.8-9.4C19.5,16.3,15.6,12.2,10.7,11.9z M13.3,24.4H6.7V23h6.6V24.4z M13.3,19.6H6.7v-1.4h6.6V19.6z',
+                handleSize: '80%',
+                handleStyle: {
+                    color: '#008037',
+                    shadowBlur: 3,
+                    shadowColor: 'rgba(0, 0, 0, 0.3)',
+                    shadowOffsetX: 2,
+                    shadowOffsetY: 2
+                },
+                textStyle: {
+                    color: '#434b56'
+                }
+            }
+        ],
         xAxis: {
             type: 'category',
             boundaryGap: false,
@@ -962,8 +1033,17 @@ function abrirModalBreakdown(tipo) {
     chartModalBreakdown.showLoading({ text: 'Carregant evolució...' });
 
     // Load table data and evolution data
+    const activeCatsPromise = (tipo === 'icrea')
+        ? fetch(apiUrl(buildUrl('/persons/stats/icrea', true, true)))
+            .then(r => r.ok ? r.json() : { total: 0 })
+            .then(res => {
+                const total = Number(res?.total ?? res?.value?.total ?? 0);
+                return [{ categoria_laboral: 'Personal investigador ICREA', total_personas: total }];
+            })
+        : _fetchVigentesCats();
+
     Promise.all([
-        _fetchVigentesCats(),
+        activeCatsPromise,
         _cargarEvolucionModal(info, tipo)
     ]).then(([activeCats, evolutionData]) => {
         // 1. Populate Table
@@ -988,7 +1068,27 @@ function abrirModalBreakdown(tipo) {
             `).join('');
         }
 
-        // 2. Render Modal Chart
+        // 2. Adjust Modal Layout to be identical across all categories
+        const gridEl = document.getElementById('modalGrid');
+        const tableColEl = document.getElementById('modalTableCol');
+        const chartColEl = document.getElementById('modalChartCol');
+        const chartContEl = document.getElementById('modalChartContainer');
+        const modalCardEl = document.getElementById('modalCard');
+
+        if (gridEl && tableColEl && chartColEl && chartContEl) {
+            if (modalCardEl) {
+                modalCardEl.className = 'bg-white rounded-3xl shadow-2xl border border-[#d4d8de] w-full max-w-7xl h-[85vh] flex flex-col overflow-hidden';
+            }
+            gridEl.className = 'flex-grow p-6 overflow-y-auto grid grid-cols-1 lg:grid-cols-3 gap-6 bg-slate-50/50';
+            tableColEl.className = 'flex flex-col gap-4 lg:col-span-1';
+            chartColEl.className = 'flex flex-col gap-4 lg:col-span-2';
+            chartContEl.className = 'border border-[#d4d8de] rounded-2xl p-4 flex-grow h-[60vh] bg-white shadow-sm relative';
+            setTimeout(() => {
+                chartModalBreakdown.resize();
+            }, 50);
+        }
+
+        // 3. Render Modal Chart
         chartModalBreakdown.hideLoading();
         chartModalBreakdown.setOption({
             tooltip: {
@@ -997,15 +1097,43 @@ function abrirModalBreakdown(tipo) {
             },
             legend: {
                 type: 'scroll',
-                bottom: 0
+                orient: 'vertical',
+                right: 5,
+                top: 20,
+                textStyle: { fontSize: 11 }
             },
             grid: {
                 left: '3%',
-                right: '4%',
+                right: 320,
                 top: '10%',
-                bottom: '15%',
+                bottom: 90,
                 containLabel: true
             },
+            dataZoom: [
+                {
+                    type: 'slider',
+                    show: true,
+                    xAxisIndex: [0],
+                    bottom: 15,
+                    start: 0,
+                    end: 100,
+                    height: 20,
+                    borderColor: 'transparent',
+                    backgroundColor: '#f1f5f9',
+                    fillerColor: 'rgba(0, 128, 55, 0.15)',
+                    handleIcon: 'path://M30.9,43.2H12.2c-1,0-1.8-0.8-1.8-1.8V18.6c0-1,0.8-1.8,1.8-1.8h18.7c1,0,1.8,0.8,1.8,1.8v22.8C32.7,42.4,31.9,43.2,30.9,43.2z M17.5,23.4v14.4 M25.4,23.4v14.4',
+                    handleSize: '80%',
+                    handleStyle: {
+                        color: '#008037',
+                        shadowBlur: 3,
+                        shadowColor: 'rgba(0, 0, 0, 0.6)',
+                        shadowOffsetX: 2,
+                        shadowOffsetY: 2
+                    },
+                    textStyle: { color: '#596473', fontSize: 10 },
+                    brushSelect: false
+                }
+            ],
             xAxis: {
                 type: 'category',
                 boundaryGap: false,
@@ -1021,6 +1149,31 @@ function abrirModalBreakdown(tipo) {
             },
             series: evolutionData.series
         }, true);
+
+        // Reset title of modal chart to initial state
+        const titleEl = document.getElementById('modalTituloEvolucion');
+        if (titleEl) {
+            titleEl.textContent = `Evolució de Subcategories (2018 - actualitat)`;
+        }
+
+        // Add dynamic zoom title event listener
+        chartModalBreakdown.off('datazoom');
+        chartModalBreakdown.on('datazoom', function () {
+            const option = chartModalBreakdown.getOption();
+            const xAxis = option.xAxis[0];
+            const dataZoom = option.dataZoom[0];
+            
+            const startValue = dataZoom.startValue;
+            const endValue = dataZoom.endValue;
+            
+            const visibleYears = xAxis.data.slice(Math.round(startValue), Math.round(endValue) + 1);
+            
+            if (titleEl && visibleYears.length > 0) {
+                const firstYear = visibleYears[0];
+                const lastYear = visibleYears[visibleYears.length - 1];
+                titleEl.textContent = `Evolució de Subcategories (${firstYear} - ${lastYear})`;
+            }
+        });
     }).catch(err => {
         tableBody.innerHTML = '<tr><td colspan="2" class="px-4 py-4 text-center text-xs text-rose-500">Error carregant les dades</td></tr>';
         chartModalBreakdown.hideLoading();
@@ -1037,8 +1190,21 @@ async function _cargarEvolucionModal(info, tipo) {
     
     const promises = years.map(async (year) => {
         const isCurrentYear = (year === currentYear);
+        
+        if (tipo === 'icrea') {
+            const urlIcrea = isCurrentYear
+                ? buildUrlForYear('/persons/stats/icrea', undefined, true, true)
+                : buildUrlForYear('/persons/stats/icrea', year, true, true);
+            const resIcrea = await fetch(apiUrl(urlIcrea)).then(r => r.ok ? r.json() : { total: 0 });
+            const total = Number(resIcrea?.total ?? resIcrea?.value?.total ?? 0);
+            return {
+                year,
+                cats: total > 0 ? [{ categoria_laboral: 'Personal investigador ICREA', total_personas: total }] : []
+            };
+        }
+
         const urlCats = isCurrentYear
-            ? buildUrl('/persons/stats/vigentes-por-categoria', true)
+            ? buildUrlForYear('/persons/stats/vigentes-por-categoria', undefined, true)
             : buildUrlForYear('/persons/stats/vigentes-por-categoria', year, true);
         
         const resCats = await fetch(apiUrl(urlCats)).then(r => r.ok ? r.json() : []);
@@ -1047,18 +1213,10 @@ async function _cargarEvolucionModal(info, tipo) {
         const re = new RegExp(info.regex, 'i');
         const matched = cats.filter(d => d.categoria_laboral && re.test(d.categoria_laboral));
         
-        if (tipo === 'icrea') {
-            const sum = matched.reduce((acc, d) => acc + (d.total_personas ?? 0), 0);
-            return {
-                year,
-                cats: sum > 0 ? [{ categoria_laboral: 'Personal investigador ICREA', total_personas: sum }] : []
-            };
-        } else {
-            return {
-                year,
-                cats: matched
-            };
-        }
+        return {
+            year,
+            cats: matched
+        };
     });
     
     const historicalData = await Promise.all(promises);

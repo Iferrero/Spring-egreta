@@ -164,27 +164,33 @@
             </div>
         </section>
 
-        <!-- Relació entre Convocatòria i Nature -->
+        <!-- Propostes de Relació i Actualització en Batch -->
         <section class="bg-white rounded-2xl border border-slate-200/60 p-6 shadow-sm mb-8">
             <div class="flex items-center justify-between mb-4 border-b border-slate-100 pb-3">
                 <div class="flex items-center gap-3">
-                    <div class="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600">
-                        <i class="fa-solid fa-table-cells"></i>
+                    <div class="w-8 h-8 rounded-lg bg-amber-50 flex items-center justify-center text-amber-600">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i>
                     </div>
                     <div>
-                        <h2 class="text-base font-black text-slate-800 tracking-tight">Matriu de Relació: Tipus de Convocatòria vs. Naturalesa</h2>
-                        <p class="text-xs text-slate-500 mt-0.5">Nombre d'ajuts segons la naturalesa assignada i el tipus de convocatòria</p>
+                        <h2 class="text-base font-black text-slate-800 tracking-tight">Propostes de Relació: Convocatòria vs. Naturalesa</h2>
+                        <p class="text-xs text-slate-500 mt-0.5">Proposta de vinculació automàtica basada en l'històric d'assignacions</p>
                     </div>
                 </div>
-                <button type="button" onclick="toggleRelationTable()" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-slate-500 hover:text-slate-800 bg-slate-50 hover:bg-slate-100 transition-colors cursor-pointer border border-slate-200/60">
-                    <span id="relation-toggle-text">Ocultar taula</span>
-                    <i id="relation-toggle-icon" class="fa-solid fa-chevron-up"></i>
-                </button>
+                <div class="flex items-center gap-3">
+                    <button type="button" id="btn-batch-update-all" onclick="actualizarTodasLasProposiciones()" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 transition-all cursor-pointer shadow-sm disabled:opacity-50 disabled:pointer-events-none hover:scale-[1.02] active:scale-[0.98]">
+                        <i class="fa-solid fa-check-double"></i>
+                        <span>Actualitzar totes de cop</span>
+                    </button>
+                    <button type="button" onclick="toggleProposalsTable()" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-slate-500 hover:text-slate-800 bg-slate-50 hover:bg-slate-100 transition-colors cursor-pointer border border-slate-200/60">
+                        <span id="proposals-toggle-text">Ocultar propostes</span>
+                        <i id="proposals-toggle-icon" class="fa-solid fa-chevron-up"></i>
+                    </button>
+                </div>
             </div>
-            <div id="relation-table-container" class="overflow-x-auto transition-all duration-300">
+            <div id="proposals-table-container" class="overflow-x-auto transition-all duration-300">
                 <div class="flex items-center justify-center py-10 text-slate-400 italic font-medium gap-2">
                     <div class="w-5 h-5 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-                    <span>Carregant matriu de relació...</span>
+                    <span>Carregant propostes de relació...</span>
                 </div>
             </div>
         </section>
@@ -253,7 +259,7 @@
                 </button>
             </div>
 
-            <div id="awards-tabulator-table" class="w-full"></div>
+            <div id="awards-tabulator-table" class="w-full transition-opacity duration-200"></div>
 
             <!-- Pagination Bar -->
             <div class="px-8 py-5 flex justify-between items-center bg-slate-50/40 border-t border-slate-100">
@@ -276,11 +282,8 @@
         let filtroFundingType = 'all';
         let inputTimeout = null;
         window.availableNatures = [];
-        let relationTable = null;
         let awardsTable = null;
-        let cachedMatrixData = null;       // Matrix API response cache
         let currentAwardsFetch = null;     // AbortController for in-flight awards fetch
-        let matrixRenderPending = false;   // Debounce matrix re-renders
 
         // Custom multi-language and structure text normalizer
         function normalitzarText(value, fallback = 'No informat') {
@@ -342,6 +345,9 @@
                         <span class="text-slate-400 italic">Carregant ajuts de recerca...</span>
                     </div>
                 `;
+            } else {
+                container.classList.add('opacity-40');
+                container.style.pointerEvents = 'none';
             }
 
             try {
@@ -401,17 +407,15 @@
                                 title: "Naturalesa (Nature)",
                                 field: "natureTypes",
                                 widthGrow: 2,
-                                variableHeight: true,
                                 cssClass: "nature-cell-wrap",
-                                cellRendered: function(cell) {
+                                formatter: function(cell) {
                                     const el = cell.getElement();
                                     el.style.whiteSpace = 'normal';
                                     el.style.overflow = 'visible';
                                     el.style.lineHeight = '1.5';
                                     el.style.padding = '6px 8px';
                                     el.style.verticalAlign = 'top';
-                                },
-                                formatter: function(cell) {
+
                                     const a = cell.getRow().getData();
                                     const uuidText = a.uuid || '';
 
@@ -542,9 +546,13 @@
                 } else {
                     awardsTable.setData(tableData);
                 }
+                container.classList.remove('opacity-40');
+                container.style.pointerEvents = 'auto';
 
             } catch (err) {
                 if (err.name === 'AbortError') return; // Cancelled, ignore
+                container.classList.remove('opacity-40');
+                container.style.pointerEvents = 'auto';
                 console.error("Error al carregar awards:", err);
                 container.innerHTML = `<div class="px-8 py-20 text-center text-red-500 font-semibold border border-red-200 bg-red-50/50 rounded-xl">Error al conectar amb el servidor. Comproveu si el backend està actiu.</div>`;
             }
@@ -577,17 +585,32 @@
 
             paginaActual = 0;
             cargarAwards();
-            // Matrix column filtering is done client-side from cache; no new fetch needed
-            if (cachedMatrixData) renderMatriuFromCache();
+            if (proposalsTable) proposalsTable.reformat();
         }
 
         function setFilterFundingType(fType) {
             if (filtroFundingType === fType) {
+                // Clear filter: reset all filters
                 filtroFundingType = 'all';
                 filtroNature = 'all';
+                filtroConvocatoria = 'all';
+
+                // Sync UI Convocatoria Filter Toggle Buttons
+                ['all', 'yes', 'no'].forEach(t => {
+                    const btn = document.getElementById(`filter-${t}`);
+                    if (btn) {
+                        if (t === filtroConvocatoria) {
+                            btn.className = "px-4 py-2 text-xs font-bold rounded-lg transition-all text-indigo-600 bg-white shadow-sm";
+                        } else {
+                            btn.className = "px-4 py-2 text-xs font-bold rounded-lg transition-all text-slate-500 hover:text-slate-800";
+                        }
+                    }
+                });
+
+                // Sync UI Nature Filter Select Dropdown
                 const selectFilter = document.getElementById('selectNatureFilter');
                 if (selectFilter) {
-                    selectFilter.value = 'all';
+                    selectFilter.value = filtroNature;
                 }
             } else {
                 filtroFundingType = fType;
@@ -607,32 +630,9 @@
 
             paginaActual = 0;
             cargarAwards();
-            // Use cached data for instant matrix re-render; no HTTP needed
-            if (cachedMatrixData) renderMatriuFromCache(); else cargarMatriuRelacio();
+            if (proposalsTable) proposalsTable.reformat();
         }
         window.setFilterFundingType = setFilterFundingType;
-
-        function selectMatrixCell(fType, nType) {
-            // Toggle off if clicking the cell that is already fully selected
-            if (filtroFundingType === fType && filtroNature === nType) {
-                filtroFundingType = 'all';
-                setFilterNature('all');
-                return;
-            }
-
-            // Set Convocatoria
-            filtroFundingType = fType;
-            const banner = document.getElementById('active-filters-container');
-            const nameEl = document.getElementById('active-funding-type-name');
-            if (banner && nameEl) {
-                banner.classList.remove('hidden');
-                nameEl.textContent = fType;
-            }
-
-            // Set Nature
-            setFilterNature(nType);
-        }
-        window.selectMatrixCell = selectMatrixCell;
 
         function cambiarPagina(delta) {
             paginaActual += delta;
@@ -662,6 +662,7 @@
                 if (res.ok && resData.success) {
                     cargarAwards();
                     fetchStats();
+                    cargarPropostesRelacio();
                 } else {
                     alert(resData.message || "Error en desar la naturalesa proposada.");
                 }
@@ -717,8 +718,8 @@
                     
                     // Reload everything
                     cargarAwards();
-                    cargarMatriuRelacio();
                     fetchStats();
+                    cargarPropostesRelacio();
                 } else {
                     alert(resData.message || "Error al processar el lot.");
                 }
@@ -759,6 +760,7 @@
                 if (res.ok && resData.success) {
                     cargarAwards();
                     fetchStats();
+                    cargarPropostesRelacio();
                 } else {
                     alert(resData.message || "Error en desar la naturalesa proposada.");
                 }
@@ -833,278 +835,250 @@
         }
         window.toggleRelationTable = toggleRelationTable;
 
- 
-        // Shared matrix rendering logic — works on cachedMatrixData
-        function renderMatriuFromCache() {
-            const container = document.getElementById('relation-table-container');
-            const data = cachedMatrixData;
-            if (!data || data.length === 0) return;
+        let proposalsTable = null;
+        let proposalsTableVisible = true;
 
-            const fundingTypesSet = new Set();
-            const natureTypesSet = new Set();
-            const matrix = {};
-
-            function cleanNatureName(name) {
-                if (!name) return '';
-                return normalitzarText(name, '').toLowerCase().trim();
-            }
-
-            data.forEach(item => {
-                const fType = item.fundingType || 'Sense convocatòria / Conveni direct';
-                const nType = item.natureType || 'Sense naturalesa';
-                const confirmed = item.confirmed || 0;
-                const suggested = item.suggested || 0;
-
-                // Apply client-side nature filtering
-                if (filtroNature !== 'all') {
-                    if (filtroNature === 'no') {
-                        if (nType !== 'Sense naturalesa') return;
-                    } else {
-                        const cleanedFiltro = cleanNatureName(filtroNature);
-                        const cleanedNType = cleanNatureName(nType);
-                        if (cleanedNType !== cleanedFiltro) return;
-                    }
-                }
-
-                // Apply client-side convocatoria filtering
-                if (filtroConvocatoria !== 'all') {
-                    if (filtroConvocatoria === 'yes') {
-                        if (fType === 'Sense convocatòria / Conveni direct') return;
-                    } else if (filtroConvocatoria === 'no') {
-                        if (fType !== 'Sense convocatòria / Conveni direct') return;
-                    }
-                }
-
-                fundingTypesSet.add(fType);
-                natureTypesSet.add(nType);
-
-                if (!matrix[fType]) matrix[fType] = {};
-                if (!matrix[fType][nType]) matrix[fType][nType] = { confirmed: 0, suggested: 0 };
-                matrix[fType][nType].confirmed += confirmed;
-                matrix[fType][nType].suggested += suggested;
-            });
-
-            if (fundingTypesSet.size === 0) {
-                if (relationTable) {
-                    relationTable.setData([]);
-                }
-                return;
-            }
-
-            const fundingTypes = Array.from(fundingTypesSet).sort((a, b) => a.localeCompare(b, 'ca-ES'));
-            const natureTypes = Array.from(natureTypesSet).sort((a, b) => {
-                if (a === 'Sense naturalesa') return 1;
-                if (b === 'Sense naturalesa') return -1;
-                return a.localeCompare(b, 'ca-ES');
-            });
-
-            // columnsToShow
-            let columnsToShow = natureTypes;
-            if (filtroFundingType !== 'all' && matrix[filtroFundingType]) {
-                const relevant = natureTypes.filter(nType => {
-                    const cell = matrix[filtroFundingType][nType];
-                    return cell && (cell.confirmed > 0 || cell.suggested > 0);
-                });
-                if (relevant.length > 0) columnsToShow = relevant;
-            }
-
-            // rowsToShow
-            let rowsToShow = fundingTypes;
-            if (filtroFundingType !== 'all' && fundingTypes.includes(filtroFundingType)) {
-                rowsToShow = [filtroFundingType];
-            }
-
-            function formatMatrixVal(confirmed, suggested, isTotal = false, fType = null, nType = null) {
-                if (confirmed === 0 && suggested === 0) {
-                    return isTotal ? '0' : '';
-                }
-                const parts = [];
-                if (confirmed > 0) {
-                    parts.push(`<span class="${isTotal ? 'text-slate-800 font-bold' : 'text-indigo-800 font-bold'}">${confirmed}</span>`);
-                }
-                if (suggested > 0) {
-                    let btnHtml = '';
-                    if (!isTotal && fType && nType) {
-                        const escapedFType = fType.replace(/'/g, "\\'");
-                        const escapedNType = nType.replace(/'/g, "\\'");
-                        btnHtml = `<button onclick="event.stopPropagation(); proponerBatchNature('${escapedFType}', '${escapedNType}', ${suggested}, this)" class="ml-1 px-1 py-0.5 rounded bg-amber-50 hover:bg-amber-100 border border-amber-250 text-amber-700 text-[8px] font-bold cursor-pointer transition-all inline-flex items-center gap-0.5 shadow-sm hover:scale-105" title="Aplica aquesta naturalesa en batch a totes les propostes de la fila">
-                            <i class="fa-solid fa-wand-magic-sparkles text-[7px]"></i> Aplicar
-                        </button>`;
-                    }
-                    parts.push(`<span class="text-amber-600 font-semibold text-[9px]" title="Pendent de desar / Proposta">(+${suggested})</span>${btnHtml}`);
-                }
-                return parts.join(' ');
-            }
-
-            const colTotals = {};
-            let grandConfirmed = 0;
-            let grandSuggested = 0;
-
-            columnsToShow.forEach(nType => {
-                colTotals[nType] = { confirmed: 0, suggested: 0 };
-            });
-
-            const tableData = [];
-            rowsToShow.forEach(fType => {
-                const row = { fType: fType };
-                let rowConfirmed = 0;
-                let rowSuggested = 0;
-
-                columnsToShow.forEach(nType => {
-                    const cell = matrix[fType]?.[nType] || { confirmed: 0, suggested: 0 };
-                    row[nType] = cell;
-                    colTotals[nType].confirmed += cell.confirmed;
-                    colTotals[nType].suggested += cell.suggested;
-                    rowConfirmed += cell.confirmed;
-                    rowSuggested += cell.suggested;
-                });
-
-                row.totalConfirmed = rowConfirmed;
-                row.totalSuggested = rowSuggested;
-                tableData.push(row);
-                grandConfirmed += rowConfirmed;
-                grandSuggested += rowSuggested;
-            });
-
-            const totalsRow = {
-                fType: "Total General",
-                isTotalRow: true,
-                totalConfirmed: grandConfirmed,
-                totalSuggested: grandSuggested
-            };
-            columnsToShow.forEach(nType => {
-                totalsRow[nType] = colTotals[nType];
-            });
-            tableData.push(totalsRow);
-
-            const columnsConfig = [
-                {
-                    title: "Tipus de Convocatòria",
-                    field: "fType",
-                    frozen: true,
-                    width: 240,
-                    cssClass: "font-semibold text-slate-800 border-r border-slate-200 bg-white cursor-pointer",
-                    headerSort: true,
-                    cellClick: function(e, cell) {
-                        const data = cell.getRow().getData();
-                        if (data.isTotalRow) return;
-                        setFilterFundingType(data.fType);
-                    }
-                }
-            ];
-
-            columnsToShow.forEach(nType => {
-                const escapedNType = nType.replace(/'/g, "\\'");
-                columnsConfig.push({
-                    title: nType,
-                    field: nType,
-                    hozAlign: "center",
-                    headerSort: false,
-                    headerClick: function(e, column) {
-                        e.stopPropagation();
-                        setFilterNature(escapedNType);
-                    },
-                    formatter: function(cell) {
-                        const val = cell.getValue();
-                        if (!val) return "";
-                        const data = cell.getRow().getData();
-                        if (!data.isTotalRow) {
-                            const total = val.confirmed + val.suggested;
-                            let bgColor = "";
-                            if (total > 15) bgColor = "#dbeafe80";
-                            else if (total > 5) bgColor = "#eff6ff80";
-                            else if (total > 0) bgColor = "#f8fafc80";
-                            cell.getElement().style.backgroundColor = bgColor;
-                        }
-                        return formatMatrixVal(val.confirmed, val.suggested, data.isTotalRow, data.fType, cell.getField());
-                    },
-                    cellClick: function(e, cell) {
-                        if (e.target.closest('button')) return;
-                        const data = cell.getRow().getData();
-                        if (data.isTotalRow) return;
-                        selectMatrixCell(data.fType, cell.getField());
-                    }
-                });
-            });
-
-            columnsConfig.push({
-                title: "Total",
-                field: "total",
-                hozAlign: "center",
-                headerSort: false,
-                cssClass: "bg-indigo-50/20 text-indigo-850 font-bold",
-                formatter: function(cell) {
-                    const data = cell.getRow().getData();
-                    return formatMatrixVal(data.totalConfirmed, data.totalSuggested, true);
-                }
-            });
-
-            let tableEl = document.getElementById('relation-tabulator-table');
-            if (!tableEl) {
-                container.innerHTML = `<div id="relation-tabulator-table" class="border border-slate-200/80 rounded-xl overflow-hidden shadow-sm"></div>`;
-                tableEl = document.getElementById('relation-tabulator-table');
-            }
-
-            if (!relationTable) {
-                relationTable = new Tabulator(tableEl, {
-                    data: tableData,
-                    columns: columnsConfig,
-                    layout: 'fitColumns',
-                    rowFormatter: function(row) {
-                        const data = row.getData();
-                        if (data.isTotalRow) {
-                            row.getElement().classList.add("bg-slate-100/60", "font-black", "border-t-2", "border-slate-350");
-                        } else if (filtroFundingType === data.fType) {
-                            row.getElement().classList.add("bg-indigo-50/50", "font-bold", "border-l-4", "border-indigo-500");
-                        } else {
-                            row.getElement().classList.remove("bg-indigo-50/50", "font-bold", "border-l-4", "border-indigo-500");
-                        }
-                    }
-                });
+        function toggleProposalsTable() {
+            const container = document.getElementById('proposals-table-container');
+            const text = document.getElementById('proposals-toggle-text');
+            const icon = document.getElementById('proposals-toggle-icon');
+            
+            proposalsTableVisible = !proposalsTableVisible;
+            if (proposalsTableVisible) {
+                container.classList.remove('hidden');
+                text.textContent = 'Ocultar propostes';
+                icon.className = 'fa-solid fa-chevron-up';
             } else {
-                relationTable.setColumns(columnsConfig);
-                relationTable.setData(tableData);
+                container.classList.add('hidden');
+                text.textContent = 'Mostrar propostes';
+                icon.className = 'fa-solid fa-chevron-down';
             }
         }
+        window.toggleProposalsTable = toggleProposalsTable;
 
-        async function cargarMatriuRelacio() {
-            const container = document.getElementById('relation-table-container');
+        function selectProposalRow(fType) {
+            if (filtroFundingType === fType) {
+                // Deselect: reset to all convocatorias and all natures
+                filtroFundingType = 'all';
+                filtroNature = 'all';
+                filtroConvocatoria = 'all';
 
-            // If we have cached data, just re-render from it instantly
-            if (cachedMatrixData) {
-                renderMatriuFromCache();
-                return;
+                // Hide banner
+                const banner = document.getElementById('active-filters-container');
+                if (banner) banner.classList.add('hidden');
+            } else {
+                // Select: filter by this funding type, show all (both with and without nature)
+                filtroFundingType = fType;
+                filtroNature = 'all';
+                filtroConvocatoria = 'yes';
+
+                // Update active filters banner
+                const banner = document.getElementById('active-filters-container');
+                const nameEl = document.getElementById('active-funding-type-name');
+                if (banner && nameEl) {
+                    banner.classList.remove('hidden');
+                    nameEl.textContent = fType;
+                }
             }
 
-            // First load: show spinner and fetch
-            container.innerHTML = `
-                <div class="flex items-center justify-center py-10 text-slate-400 italic font-medium gap-2">
-                    <div class="w-5 h-5 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-                    <span>Carregant matriu de relació...</span>
-                </div>
-            `;
+            // Sync UI Convocatoria Filter Toggle Buttons
+            ['all', 'yes', 'no'].forEach(t => {
+                const btn = document.getElementById(`filter-${t}`);
+                if (btn) {
+                    if (t === filtroConvocatoria) {
+                        btn.className = "px-4 py-2 text-xs font-bold rounded-lg transition-all text-indigo-600 bg-white shadow-sm";
+                    } else {
+                        btn.className = "px-4 py-2 text-xs font-bold rounded-lg transition-all text-slate-500 hover:text-slate-800";
+                    }
+                }
+            });
+
+            // Sync UI Nature Filter Select Dropdown
+            const selectFilter = document.getElementById('selectNatureFilter');
+            if (selectFilter) {
+                selectFilter.value = filtroNature;
+            }
+
+            // Refresh Bottom Table
+            paginaActual = 0;
+            cargarAwards();
+            if (proposalsTable) proposalsTable.reformat();
+        }
+        window.selectProposalRow = selectProposalRow;
+
+        async function cargarPropostesRelacio() {
+            const container = document.getElementById('proposals-table-container');
+            if (!proposalsTable) {
+                container.innerHTML = `
+                    <div class="flex items-center justify-center py-10 text-slate-400 italic font-medium gap-2">
+                        <div class="w-5 h-5 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+                        <span>Carregant propostes de relació...</span>
+                    </div>
+                `;
+            }
 
             try {
-                const res = await fetch(apiUrl('/awards/stats/nature-funding-relation'));
+                const res = await fetch(apiUrl('/awards/proposed-relations'));
                 if (!res.ok) throw new Error('Response error');
-                cachedMatrixData = await res.json();
+                const data = await res.json();
 
-                if (!cachedMatrixData || cachedMatrixData.length === 0) {
-                    container.innerHTML = `<div class="py-10 text-center text-slate-400 italic">No hi ha dades disponibles per generar la matriu de relació.</div>`;
+                if (!data || data.length === 0) {
+                    container.innerHTML = `<div class="py-10 text-center text-slate-400 italic">No hi ha propostes de relació disponibles en aquest moment.</div>`;
                     return;
                 }
 
-                renderMatriuFromCache();
+                // Filter out entries where pendingCount is 0 to only show actionable proposals
+                const activeProposals = data.filter(item => item.pendingCount > 0);
+
+                if (activeProposals.length === 0) {
+                    container.innerHTML = `<div class="py-10 text-center text-emerald-600 font-semibold flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-circle-check"></i>
+                        <span>Tots els ajuts amb convocatòria tenen la naturalesa assignada!</span>
+                    </div>`;
+                    return;
+                }
+
+                let tableEl = document.getElementById('proposals-tabulator-table');
+                if (!tableEl) {
+                    container.innerHTML = `<div id="proposals-tabulator-table" class="border border-slate-200/80 rounded-xl overflow-hidden shadow-sm"></div>`;
+                    tableEl = document.getElementById('proposals-tabulator-table');
+                }
+
+                if (!proposalsTable) {
+                    proposalsTable = new Tabulator(tableEl, {
+                        data: activeProposals,
+                        layout: 'fitColumns',
+                        rowFormatter: function(row) {
+                            row.getElement().style.cursor = 'pointer';
+                            const data = row.getData();
+                            if (filtroFundingType === data.fundingType) {
+                                row.getElement().classList.add("bg-indigo-50/50", "font-bold", "border-l-4", "border-indigo-500");
+                            } else {
+                                row.getElement().classList.remove("bg-indigo-50/50", "font-bold", "border-l-4", "border-indigo-500");
+                            }
+                        },
+                        rowClick: function(e, row) {
+                            if (e.target.closest('button')) return;
+                            const data = row.getData();
+                            selectProposalRow(data.fundingType);
+                        },
+                        columns: [
+                            {
+                                title: "Tipus de Convocatòria",
+                                field: "fundingType",
+                                cssClass: "font-semibold text-slate-800",
+                                headerSort: true,
+                                cellClick: function(e, cell) {
+                                    const data = cell.getRow().getData();
+                                    selectProposalRow(data.fundingType);
+                                }
+                            },
+                            {
+                                title: "Naturalesa Proposada",
+                                field: "nature",
+                                formatter: function(cell) {
+                                    const nature = cell.getValue();
+                                    const name = normalitzarText(nature ? (nature.term || nature) : '', 'Sense definir');
+                                    return `<span class="inline-flex items-center px-2.5 py-1 rounded text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-250">${name}</span>`;
+                                },
+                                cellClick: function(e, cell) {
+                                    const data = cell.getRow().getData();
+                                    selectProposalRow(data.fundingType);
+                                }
+                            },
+                            {
+                                title: "Ajuts Pendents",
+                                field: "pendingCount",
+                                hozAlign: "center",
+                                headerHozAlign: "center",
+                                width: 150,
+                                formatter: function(cell) {
+                                    const count = cell.getValue();
+                                    return `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-rose-50 text-rose-700 border border-rose-100">${count}</span>`;
+                                },
+                                cellClick: function(e, cell) {
+                                    const data = cell.getRow().getData();
+                                    selectProposalRow(data.fundingType);
+                                }
+                            },
+                            {
+                                title: "Accions",
+                                field: "actions",
+                                hozAlign: "center",
+                                headerHozAlign: "center",
+                                width: 180,
+                                headerSort: false,
+                                formatter: function(cell) {
+                                    const rowData = cell.getRow().getData();
+                                    const escapedFType = rowData.fundingType.replace(/'/g, "\\'");
+                                    const natureName = normalitzarText(rowData.nature ? (rowData.nature.term || rowData.nature) : '', '');
+                                    const escapedNType = natureName.replace(/'/g, "\\'");
+                                    return `
+                                        <button onclick="proponerBatchNature('${escapedFType}', '${escapedNType}', ${rowData.pendingCount}, this)" class="px-3 py-1.5 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100 hover:text-indigo-800 text-xs font-bold border border-indigo-100 transition-colors cursor-pointer inline-flex items-center gap-1">
+                                            <i class="fa-solid fa-wand-magic-sparkles text-[10px]"></i> Aplicar
+                                        </button>
+                                    `;
+                                }
+                            }
+                        ]
+                    });
+                } else {
+                    proposalsTable.setData(activeProposals);
+                }
 
             } catch (err) {
-                console.error("Error al carregar matriu relacio:", err);
+                console.error("Error al carregar propostes:", err);
                 container.innerHTML = `<div class="py-10 text-center text-rose-500 font-semibold flex items-center justify-center gap-2 border border-red-200 bg-red-50/50 rounded-xl">
                     <i class="fa-solid fa-triangle-exclamation"></i>
-                    <span>S'ha produït un error al carregar la matriu de relació.</span>
+                    <span>Error al carregar les propostes de relació.</span>
                 </div>`;
             }
         }
-        window.cargarMatriuRelacio = cargarMatriuRelacio;
+        window.cargarPropostesRelacio = cargarPropostesRelacio;
+
+        async function actualizarTodasLasProposiciones() {
+            const envSelect = document.getElementById('selectEntorn');
+            const env = envSelect ? envSelect.value : 'test';
+
+            if (!confirm("Vols aplicar totes les naturaleses proposades en batch a tots els ajuts pendents del sistema? Aquest procés pot trigar uns minuts.")) {
+                return;
+            }
+
+            const btn = document.getElementById('btn-batch-update-all');
+            const origHtml = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin mr-1.5"></i> Actualitzant...`;
+
+            try {
+                const res = await fetch(apiUrl(`/awards/batch-update-all-proposals?env=${env}`), {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (!res.ok) throw new Error('Response error');
+                const resData = await res.json();
+
+                if (resData.success) {
+                    alert(`S'ha completat el procés massiu:\n\n- Sincronitzats correctament: ${resData.successCount}\n- Errors de sincronització: ${resData.failCount}`);
+                    
+                    // Reload everything
+                    cargarAwards();
+                    fetchStats();
+                    cargarPropostesRelacio();
+                } else {
+                    alert(resData.message || "Error al processar el lot complet.");
+                }
+            } catch (err) {
+                console.error("Error batch update all:", err);
+                alert("Error al connectar amb el servidor o API d'Egreta.");
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = origHtml;
+            }
+        }
+        window.actualizarTodasLasProposiciones = actualizarTodasLasProposiciones;
 
         // Search input with debounce
         document.getElementById('search-input').addEventListener('input', () => {
@@ -1120,7 +1094,7 @@
             await cargarNatures();
             fetchStats();
             cargarAwards();
-            cargarMatriuRelacio();
+            cargarPropostesRelacio();
         }
         init();
     </script>

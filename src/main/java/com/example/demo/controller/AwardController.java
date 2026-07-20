@@ -482,6 +482,192 @@ public class AwardController {
         }
     }
 
+    @GetMapping("/proposed-relations")
+    public List<Map<String, Object>> getProposedRelations() {
+        Map<String, Document> suggestionsMap = getSuggestedNatureMap();
+        
+        List<Document> basePipeline = new ArrayList<>();
+        Document matchQuery = new Document();
+        List<Document> andConditions = new ArrayList<>();
+        andConditions.add(new Document("$or", Arrays.asList(
+            new Document("type.term.ca_ES", "Conveni extern a la UAB").append("workflow.step", "approved"),
+            new Document("type.term.ca_ES", new Document("$ne", "Conveni extern a la UAB")).append("workflow.step", "validated")
+        )));
+        andConditions.add(new Document("categoria", new Document("$regex", "^Ajudes competitives")));
+        andConditions.add(new Document("$or", Arrays.asList(
+            new Document("natureTypes", new Document("$exists", false)),
+            new Document("natureTypes", null),
+            new Document("natureTypes", new Document("$size", 0))
+        )));
+        matchQuery.put("$and", andConditions);
+        basePipeline.add(new Document("$match", matchQuery));
+
+        basePipeline.add(new Document("$lookup", new Document()
+            .append("from", "Applications")
+            .append("localField", "applications.uuid")
+            .append("foreignField", "uuid")
+            .append("as", "appDocs")));
+        basePipeline.add(new Document("$unwind", new Document("path", "$appDocs").append("preserveNullAndEmptyArrays", true)));
+
+        basePipeline.add(new Document("$lookup", new Document()
+            .append("from", "FundingOpportunities")
+            .append("localField", "appDocs.fundingOpportunity.uuid")
+            .append("foreignField", "uuid")
+            .append("as", "fOpp")));
+        basePipeline.add(new Document("$unwind", new Document("path", "$fOpp").append("preserveNullAndEmptyArrays", true)));
+
+        basePipeline.add(new Document("$project", new Document("fOppType", "$fOpp.type")));
+
+        List<Document> data = new ArrayList<>();
+        try {
+            mongoTemplate.getCollection("Awards").aggregate(basePipeline).into(data);
+        } catch (Exception e) {
+            // Silently catch
+        }
+
+        Map<String, Integer> pendingCounts = new HashMap<>();
+        for (Document d : data) {
+            String fundingType = extractCaEsFromType(d.get("fOppType"));
+            if (fundingType == null || fundingType.isBlank()) {
+                continue;
+            }
+            pendingCounts.put(fundingType, pendingCounts.getOrDefault(fundingType, 0) + 1);
+        }
+
+        List<Map<String, Object>> result = new ArrayList<>();
+        Set<String> allFundingTypes = new HashSet<>();
+        allFundingTypes.addAll(suggestionsMap.keySet());
+        
+        for (Document d : data) {
+            String fundingType = extractCaEsFromType(d.get("fOppType"));
+            if (fundingType != null && !fundingType.isBlank()) {
+                allFundingTypes.add(fundingType);
+            }
+        }
+
+        for (String fType : allFundingTypes) {
+            Document suggested = suggestionsMap.get(fType);
+            if (suggested == null) {
+                for (Document d : data) {
+                    String dFType = extractCaEsFromType(d.get("fOppType"));
+                    if (fType.equals(dFType) && d.get("fOppType") instanceof Document fOppTypeDoc) {
+                        String callTypeUri = fOppTypeDoc.getString("uri");
+                        suggested = findNatureByUriSimilarity(callTypeUri);
+                        if (suggested != null) break;
+                    }
+                }
+            }
+
+            if (suggested != null) {
+                Map<String, Object> row = new HashMap<>();
+                row.put("fundingType", fType);
+                row.put("nature", suggested);
+                row.put("pendingCount", pendingCounts.getOrDefault(fType, 0));
+                result.add(row);
+            }
+        }
+
+        result.sort((a, b) -> {
+            int pA = (int) a.get("pendingCount");
+            int pB = (int) b.get("pendingCount");
+            if (pA != pB) {
+                return Integer.compare(pB, pA);
+            }
+            return ((String) a.get("fundingType")).compareTo((String) b.get("fundingType"));
+        });
+
+        return result;
+    }
+
+    @PostMapping("/batch-update-all-proposals")
+    public Map<String, Object> batchUpdateAllProposals(@RequestParam(defaultValue = "test") String env) {
+        Map<String, Document> suggestionsMap = getSuggestedNatureMap();
+        
+        List<Document> basePipeline = new ArrayList<>();
+        Document matchQuery = new Document();
+        List<Document> andConditions = new ArrayList<>();
+        andConditions.add(new Document("$or", Arrays.asList(
+            new Document("type.term.ca_ES", "Conveni extern a la UAB").append("workflow.step", "approved"),
+            new Document("type.term.ca_ES", new Document("$ne", "Conveni extern a la UAB")).append("workflow.step", "validated")
+        )));
+        andConditions.add(new Document("categoria", new Document("$regex", "^Ajudes competitives")));
+        andConditions.add(new Document("$or", Arrays.asList(
+            new Document("natureTypes", new Document("$exists", false)),
+            new Document("natureTypes", null),
+            new Document("natureTypes", new Document("$size", 0))
+        )));
+        matchQuery.put("$and", andConditions);
+        basePipeline.add(new Document("$match", matchQuery));
+
+        basePipeline.add(new Document("$lookup", new Document()
+            .append("from", "Applications")
+            .append("localField", "applications.uuid")
+            .append("foreignField", "uuid")
+            .append("as", "appDocs")));
+        basePipeline.add(new Document("$unwind", new Document("path", "$appDocs").append("preserveNullAndEmptyArrays", true)));
+
+        basePipeline.add(new Document("$lookup", new Document()
+            .append("from", "FundingOpportunities")
+            .append("localField", "appDocs.fundingOpportunity.uuid")
+            .append("foreignField", "uuid")
+            .append("as", "fOpp")));
+        basePipeline.add(new Document("$unwind", new Document("path", "$fOpp").append("preserveNullAndEmptyArrays", true)));
+
+        basePipeline.add(new Document("$project", new Document("uuid", 1).append("fOppType", "$fOpp.type")));
+
+        List<Document> data = new ArrayList<>();
+        try {
+            mongoTemplate.getCollection("Awards").aggregate(basePipeline).into(data);
+        } catch (Exception e) {
+            // Silently catch
+        }
+
+        int successCount = 0;
+        int failCount = 0;
+        List<String> failedUuids = new ArrayList<>();
+
+        for (Document d : data) {
+            String fundingType = extractCaEsFromType(d.get("fOppType"));
+            if (fundingType == null || fundingType.isBlank()) {
+                continue;
+            }
+            
+            Document natureDoc = suggestionsMap.get(fundingType);
+            if (natureDoc == null && d.get("fOppType") instanceof Document fOppTypeDoc) {
+                String callTypeUri = fOppTypeDoc.getString("uri");
+                natureDoc = findNatureByUriSimilarity(callTypeUri);
+            }
+            
+            if (natureDoc != null) {
+                String uuid = d.getString("uuid");
+                if (uuid != null) {
+                    boolean egretaSuccess = syncAwardNatureToEgreta(uuid, natureDoc, env);
+                    if (egretaSuccess) {
+                        mongoTemplate.getCollection("Awards")
+                                .updateOne(new Document("uuid", uuid),
+                                        new Document("$set", new Document("natureTypes", Arrays.asList(natureDoc))));
+                        successCount++;
+                    } else {
+                        failCount++;
+                        failedUuids.add(uuid);
+                    }
+                }
+            }
+        }
+
+        if (successCount > 0) {
+            suggestedNatureCache = null;
+            allNatures = null;
+        }
+
+        Map<String, Object> resp = new HashMap<>();
+        resp.put("success", true);
+        resp.put("successCount", successCount);
+        resp.put("failCount", failCount);
+        resp.put("failedUuids", failedUuids);
+        return resp;
+    }
+
     @GetMapping("/natures")
     public List<Document> getAvailableNatures() {
         return getAllNatures();

@@ -23,10 +23,14 @@ public class StrategicIndicatorsController {
     private final ResearchOutputJournalLinkService researchOutputJournalLinkService;
     private final Map<String, Long> tramsViusCache = new java.util.concurrent.ConcurrentHashMap<>();
 
+    private record StatsCacheEntry(Map<String, Object> data, long expiresAtMs) {}
+    private final Map<String, StatsCacheEntry> statsCache = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final long STATS_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+
     @Autowired
     public StrategicIndicatorsController(MongoTemplate mongoTemplate, 
-                                         AwardService awardService, 
-                                         ResearchOutputJournalLinkService researchOutputJournalLinkService) {
+                                          AwardService awardService, 
+                                          ResearchOutputJournalLinkService researchOutputJournalLinkService) {
         this.mongoTemplate = mongoTemplate;
         this.awardService = awardService;
         this.researchOutputJournalLinkService = researchOutputJournalLinkService;
@@ -36,6 +40,13 @@ public class StrategicIndicatorsController {
     public Map<String, Object> getStats(
             @RequestParam(required = false, defaultValue = "2024") int year,
             @RequestParam(required = false, defaultValue = "all") String dept) {
+
+        String cacheKey = year + "-" + (dept != null ? dept.trim().toLowerCase() : "all");
+        long now = System.currentTimeMillis();
+        StatsCacheEntry cachedEntry = statsCache.get(cacheKey);
+        if (cachedEntry != null && cachedEntry.expiresAtMs() > now) {
+            return cachedEntry.data();
+        }
 
         String collaboratorUuid = "all".equalsIgnoreCase(dept) ? null : dept;
         List<Document> powerTableRows = awardService.getPowerTable(year, year, "awardDate", collaboratorUuid);
@@ -83,6 +94,7 @@ public class StrategicIndicatorsController {
         long tramsVius = getTramsViusCountFromExcel(year, dept);
         response.put("tramsVius", tramsVius);
 
+        statsCache.put(cacheKey, new StatsCacheEntry(response, now + STATS_CACHE_TTL_MS));
         return response;
     }
 
