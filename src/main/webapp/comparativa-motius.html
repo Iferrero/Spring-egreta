@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Comparativa de Motius de Tancament | Portal de Recerca UAB</title>
+    <script src="config.js"></script>
+    <script src="uab-brand.js" defer></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="uab-theme.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-slate-50 min-h-screen font-sans text-slate-800 antialiased pb-12">
+
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6">
+
+        <!-- Top Navigation -->
+        <div class="flex items-center justify-between mb-6">
+            <div class="flex items-center gap-4">
+                <a href="index.html" class="inline-flex items-center text-sm font-semibold text-indigo-600 hover:text-indigo-800 transition-colors">
+                    <i class="fa-solid fa-arrow-left mr-2"></i> Menú principal
+                </a>
+                <span class="text-slate-300">|</span>
+                <a href="projectes-renunciats.html" class="inline-flex items-center text-sm font-semibold text-slate-600 hover:text-indigo-600 transition-colors">
+                    Projectes Finalitzats
+                </a>
+            </div>
+            <span class="text-xs font-semibold px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
+                <i class="fa-solid fa-scale-balanced mr-1"></i> Anàlisi Comparativa de Textos
+            </span>
+        </div>
+
+        <!-- Header Title Section -->
+        <div class="bg-white border border-slate-200 rounded-2xl p-6 md:p-8 mb-8 shadow-sm">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                    <h1 class="text-2xl md:text-3xl font-extrabold text-slate-900 tracking-tight flex items-center gap-3">
+                        <span class="p-3 bg-indigo-100 text-indigo-700 rounded-xl flex items-center justify-center">
+                            <i class="fa-solid fa-scale-balanced text-xl md:text-2xl"></i>
+                        </span>
+                        Comparativa de Motius de Tancament
+                    </h1>
+                    <p class="text-slate-500 text-sm md:text-base mt-2 max-w-3xl">
+                        Eina per veure totes les casuístiques i la relació directa entre el camp <code class="bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded text-xs font-mono">status.reason</code>, l'Estat Formal del Projecte, l'Estat d'Ajut i les Incidències.
+                    </p>
+                </div>
+                <div>
+                    <button id="btnExportCsv" onclick="exportToCsv()" class="inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2.5 rounded-xl shadow-sm hover:shadow transition-all text-sm">
+                        <i class="fa-solid fa-file-excel"></i> Exportar a CSV
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- KPI Cards Grid -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 mb-8">
+            <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+                <div class="flex items-center justify-between mb-3">
+                    <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Total Analitzats</span>
+                    <div class="w-10 h-10 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center">
+                        <i class="fa-solid fa-database"></i>
+                    </div>
+                </div>
+                <div id="kpiTotalAnalyzed" class="text-3xl font-black text-slate-900">--</div>
+                <p class="text-xs text-slate-500 mt-1">Projectes tancats o en revisió</p>
+            </div>
+
+            <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+                <div class="flex items-center justify-between mb-3">
+                    <span class="text-xs font-bold uppercase tracking-wider text-indigo-500">Amb status.reason</span>
+                    <div class="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                        <i class="fa-solid fa-comment-dots"></i>
+                    </div>
+                </div>
+                <div id="kpiHasReason" class="text-3xl font-black text-indigo-600">--</div>
+                <p class="text-xs text-slate-500 mt-1">Amb motiu a status.reason</p>
+            </div>
+
+            <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+                <div class="flex items-center justify-between mb-3">
+                    <span class="text-xs font-bold uppercase tracking-wider text-rose-500">Casos de Renúncia</span>
+                    <div class="w-10 h-10 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center">
+                        <i class="fa-solid fa-user-slash"></i>
+                    </div>
+                </div>
+                <div id="kpiRenuncia" class="text-3xl font-black text-rose-600">--</div>
+                <p class="text-xs text-slate-500 mt-1">Motius o estats de renúncia</p>
+            </div>
+        </div>
+
+        <!-- Filters Section -->
+        <div class="bg-white border border-slate-200 rounded-2xl p-6 mb-8 shadow-sm">
+            <div class="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
+                <h2 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                    <i class="fa-solid fa-filter text-indigo-500"></i> Filtres de la Comparativa
+                </h2>
+                <button onclick="resetFilters()" class="text-xs text-slate-500 hover:text-indigo-600 font-medium transition-colors">
+                    <i class="fa-solid fa-rotate-left mr-1"></i> Restablir filtres
+                </button>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <!-- Search Text -->
+                <div>
+                    <label for="searchInput" class="block text-xs font-semibold text-slate-600 mb-1.5">Cerca de Text o UUID</label>
+                    <div class="relative">
+                        <input type="text" id="searchInput" placeholder="Títol, motiu, UUID..."
+                            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 pl-9 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                            oninput="debouncedFetch()">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-slate-400 text-xs"></i>
+                    </div>
+                </div>
+
+                <!-- Filter Mode -->
+                <div>
+                    <label for="filterModeSelect" class="block text-xs font-semibold text-slate-600 mb-1.5">Mode de Casuística</label>
+                    <select id="filterModeSelect" onchange="fetchData(0)"
+                        class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all">
+                        <option value="terminated_with_reason" selected>Només Terminated / Curtailed amb motiu</option>
+                        <option value="all">Tots els casos analitzats</option>
+                        <option value="has_reason">Només amb status.reason emplenat</option>
+                        <option value="renuncia">Només casos de Renúncia (status / motiu)</option>
+                        <option value="discrepancy">Només amb desalineació d'estats</option>
+                    </select>
+                </div>
+
+                <!-- Page Size -->
+                <div>
+                    <label for="pageSizeSelect" class="block text-xs font-semibold text-slate-600 mb-1.5">Registres per pàgina</label>
+                    <select id="pageSizeSelect" onchange="fetchData(0)"
+                        class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all">
+                        <option value="15">15 registres</option>
+                        <option value="25" selected>25 registres</option>
+                        <option value="50">50 registres</option>
+                        <option value="100">100 registres</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Comparison Table -->
+        <div class="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden mb-6">
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse text-sm">
+                    <thead>
+                        <tr class="bg-slate-100/70 border-b border-slate-200 text-xs font-bold text-slate-600 uppercase tracking-wider">
+                            <th class="px-5 py-3.5 w-[25%]">Projecte / Ajut</th>
+                            <th class="px-5 py-3.5 w-[15%]">Estat Discriminator</th>
+                            <th class="px-5 py-3.5 w-[35%] bg-indigo-50/50 text-indigo-900 border-x border-indigo-100">
+                                <i class="fa-solid fa-comment-dots text-indigo-500 mr-1"></i> status.reason
+                            </th>
+                            <th class="px-5 py-3.5 w-[15%]">Estat d'Ajut (KW)</th>
+                            <th class="px-5 py-3.5 w-[10%]">Incidències</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody" class="divide-y divide-slate-100">
+                        <tr>
+                            <td colspan="5" class="text-center py-12 text-slate-400">
+                                <i class="fa-solid fa-spinner fa-spin text-2xl mb-2 text-indigo-500"></i>
+                                <p>Carregant comparativa...</p>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Table Footer / Pagination -->
+            <div class="bg-slate-50 px-6 py-4 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs font-medium text-slate-600">
+                <div id="paginationInfo">
+                    Mostrant 0 registres
+                </div>
+                <div class="flex items-center gap-2">
+                    <button id="btnPrevPage" onclick="changePage(-1)" disabled
+                        class="px-3 py-1.5 bg-white border border-slate-200 rounded-lg shadow-sm hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all">
+                        <i class="fa-solid fa-chevron-left mr-1"></i> Anterior
+                    </button>
+                    <span id="currentPageBadge" class="px-3 py-1.5 bg-indigo-50 text-indigo-700 font-bold rounded-lg border border-indigo-200">
+                        Pàgina 1
+                    </span>
+                    <button id="btnNextPage" onclick="changePage(1)" disabled
+                        class="px-3 py-1.5 bg-white border border-slate-200 rounded-lg shadow-sm hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all">
+                        Següent <i class="fa-solid fa-chevron-right ml-1"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Details Modal -->
+    <div id="detailsModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-2xl shadow-xl border border-slate-200 max-w-2xl w-full overflow-hidden transform transition-all">
+            <div class="px-6 py-4 bg-slate-900 text-white flex items-center justify-between">
+                <h3 class="font-bold text-base flex items-center gap-2">
+                    <i class="fa-solid fa-scale-balanced text-indigo-400"></i> Detall de Motius i Textos
+                </h3>
+                <button onclick="closeModal()" class="text-slate-400 hover:text-white transition-colors text-lg">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="p-6 space-y-4 max-h-[75vh] overflow-y-auto" id="modalContent">
+                <!-- Modal Body inserted here -->
+            </div>
+            <div class="px-6 py-3 bg-slate-50 border-t border-slate-100 flex justify-end">
+                <button onclick="closeModal()" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold rounded-xl text-xs transition-colors">
+                    Tancar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentPage = 0;
+        let totalPages = 1;
+        let debounceTimer = null;
+        let currentDataCache = [];
+
+        function debouncedFetch() {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => {
+                fetchData(0);
+            }, 350);
+        }
+
+        async function fetchData(page = 0) {
+            currentPage = page;
+            const search = document.getElementById('searchInput').value;
+            const filterMode = document.getElementById('filterModeSelect').value;
+            const size = document.getElementById('pageSizeSelect').value;
+
+            const params = new URLSearchParams({
+                page: page,
+                size: size,
+                filterMode: filterMode
+            });
+
+            if (search) params.append('search', search);
+
+            const tableBody = document.getElementById('tableBody');
+            tableBody.innerHTML = `
+                <tr>
+                    <td colspan="5" class="text-center py-12 text-slate-400">
+                        <i class="fa-solid fa-spinner fa-spin text-2xl mb-2 text-indigo-500"></i>
+                        <p class="text-sm font-medium">Carregant comparativa...</p>
+                    </td>
+                </tr>
+            `;
+
+            try {
+                const url = window.apiUrl(`awards/stats/reason-comparison?${params.toString()}`);
+                const response = await fetch(url);
+                if (!response.ok) throw new Error('Error al carregar les dades');
+
+                const data = await response.json();
+                currentDataCache = data.content || [];
+                totalPages = data.totalPages || 1;
+
+                renderSummary(data.summary || {});
+                renderTable(data.content || []);
+                renderPagination(data);
+            } catch (err) {
+                console.error(err);
+                tableBody.innerHTML = `
+                    <tr>
+                        <td colspan="5" class="text-center py-8 text-rose-500 font-medium">
+                            <i class="fa-solid fa-triangle-exclamation text-2xl mb-2"></i>
+                            <p>No s'ha pogut carregar la comparativa (${err.message})</p>
+                        </td>
+                    </tr>
+                `;
+            }
+        }
+
+        function renderSummary(summary) {
+            document.getElementById('kpiTotalAnalyzed').textContent = (summary.totalAnalyzed || 0).toLocaleString('ca-ES');
+            document.getElementById('kpiHasReason').textContent = (summary.countHasReason || 0).toLocaleString('ca-ES');
+            document.getElementById('kpiRenuncia').textContent = (summary.countRenuncia || 0).toLocaleString('ca-ES');
+        }
+
+        function renderTable(items) {
+            const tableBody = document.getElementById('tableBody');
+            if (!items || items.length === 0) {
+                tableBody.innerHTML = `
+                    <tr>
+                        <td colspan="5" class="text-center py-12 text-slate-400">
+                            <i class="fa-solid fa-folder-open text-3xl mb-2"></i>
+                            <p class="text-sm">No s'ha trobat cap ajut/projecte amb els filtres seleccionats.</p>
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            tableBody.innerHTML = items.map((item, index) => {
+                let statusBadge;
+                if (item.statusType === 'TerminatedAwardStatus') {
+                    statusBadge = `<span class="px-2 py-0.5 rounded text-xs font-bold bg-slate-200 text-slate-800 border border-slate-300">Terminated</span>`;
+                } else if (item.statusType === 'CurtailedAwardStatus') {
+                    statusBadge = `<span class="px-2 py-0.5 rounded text-xs font-bold bg-amber-100 text-amber-800 border border-amber-200">Curtailed</span>`;
+                } else if (item.statusType === 'DeclinedAwardStatus') {
+                    statusBadge = `<span class="px-2 py-0.5 rounded text-xs font-extrabold bg-rose-100 text-rose-800 border border-rose-200">Declined</span>`;
+                } else {
+                    statusBadge = `<span class="px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-700">${escapeHtml(item.statusType || 'Sense estat')}</span>`;
+                }
+
+                const reasonContent = item.statusReason
+                    ? `<div class="font-medium text-slate-900">${escapeHtml(item.statusReason)}</div>`
+                    : `<div class="text-slate-400 italic text-xs">Buit (Sense status.reason)</div>`;
+
+                return `
+                    <tr class="hover:bg-slate-50/80 transition-colors cursor-pointer" onclick="openModal(${index})">
+                        <td class="px-5 py-4">
+                            <div class="font-bold text-slate-900 line-clamp-2" title="${escapeHtml(item.title)}">
+                                ${escapeHtml(item.title || 'Sense títol')}
+                            </div>
+                            <div class="text-xs text-slate-400 mt-1">
+                                UUID: <span class="font-mono">${escapeHtml(item.uuid || '-')}</span>
+                            </div>
+                        </td>
+                        <td class="px-5 py-4">
+                            <div>${statusBadge}</div>
+                            <div class="text-xs text-slate-500 mt-1">${formatDate(item.statusDate)}</div>
+                        </td>
+                        <td class="px-5 py-4 bg-indigo-50/20 border-x border-indigo-100/60 text-xs">
+                            ${reasonContent}
+                        </td>
+                        <td class="px-5 py-4 text-xs font-semibold text-slate-700">
+                            ${escapeHtml(item.estatAjut || '-')}
+                        </td>
+                        <td class="px-5 py-4 text-xs text-slate-600 truncate max-w-[150px]" title="${escapeHtml(item.incidencies)}">
+                            ${escapeHtml(item.incidencies || '-')}
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function renderPagination(data) {
+            const page = data.page || 0;
+            const size = data.size || 25;
+            const total = data.totalElements || 0;
+            const pages = data.totalPages || 1;
+
+            const from = total === 0 ? 0 : page * size + 1;
+            const to = Math.min((page + 1) * size, total);
+
+            document.getElementById('paginationInfo').innerHTML = `Mostrant <strong>${from}</strong> a <strong>${to}</strong> de <strong>${total.toLocaleString('ca-ES')}</strong> casus analitzades`;
+            document.getElementById('currentPageBadge').textContent = `Pàgina ${page + 1} de ${pages}`;
+
+            document.getElementById('btnPrevPage').disabled = page <= 0;
+            document.getElementById('btnNextPage').disabled = page >= pages - 1;
+        }
+
+        function changePage(delta) {
+            const newPage = currentPage + delta;
+            if (newPage >= 0 && newPage < totalPages) {
+                fetchData(newPage);
+            }
+        }
+
+        function resetFilters() {
+            document.getElementById('searchInput').value = '';
+            document.getElementById('filterModeSelect').value = 'terminated_with_reason';
+            fetchData(0);
+        }
+
+        function openModal(index) {
+            const item = currentDataCache[index];
+            if (!item) return;
+
+            const modalContent = document.getElementById('modalContent');
+            modalContent.innerHTML = `
+                <div>
+                    <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">UUID: ${escapeHtml(item.uuid)}</span>
+                    <h2 class="text-lg font-extrabold text-slate-900 mt-0.5">${escapeHtml(item.title || 'Sense títol')}</h2>
+                </div>
+
+                <div class="bg-indigo-50 border border-indigo-200 rounded-xl p-4">
+                    <h4 class="text-xs font-bold uppercase tracking-wider text-indigo-900 mb-1 flex items-center gap-1.5">
+                        <i class="fa-solid fa-comment-dots text-indigo-600"></i> status.reason
+                    </h4>
+                    <div class="text-sm font-bold text-slate-900 italic">
+                        "${escapeHtml(item.statusReason || 'Buit')}"
+                    </div>
+                    <div class="text-xs text-slate-500 mt-2">
+                        <strong>Estat:</strong> ${escapeHtml(item.statusType)} (${formatDate(item.statusDate)})
+                    </div>
+                </div>
+
+                <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 text-xs space-y-2">
+                    <div><strong>Estat d'Ajut (Keyword):</strong> ${escapeHtml(item.estatAjut || 'No definit')}</div>
+                    <div><strong>Incidències (Keyword):</strong> ${escapeHtml(item.incidencies || 'No definit')}</div>
+                </div>
+            `;
+
+            const modal = document.getElementById('detailsModal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closeModal() {
+            const modal = document.getElementById('detailsModal');
+            modal.classList.remove('flex');
+            modal.classList.add('hidden');
+        }
+
+        async function exportToCsv() {
+            const search = document.getElementById('searchInput').value;
+            const filterMode = document.getElementById('filterModeSelect').value;
+
+            const params = new URLSearchParams({
+                exportAll: 'true',
+                filterMode: filterMode
+            });
+            if (search) params.append('search', search);
+
+            try {
+                const url = window.apiUrl(`awards/stats/reason-comparison?${params.toString()}`);
+                const response = await fetch(url);
+                if (!response.ok) throw new Error('Error al descarregar dades');
+                const data = await response.json();
+                const items = data.content || [];
+
+                if (items.length === 0) {
+                    alert('No hi ha dades per exportar');
+                    return;
+                }
+
+                const headers = ['UUID', 'PureID', 'Titol', 'Estat_Discriminator', 'Data_Estat', 'Status_Reason', 'Estat_Ajut_Keyword', 'Incidencies'];
+                const rows = items.map(item => [
+                    item.uuid || '',
+                    item.pureId || '',
+                    `"${(item.title || '').replace(/"/g, '""')}"`,
+                    item.statusType || '',
+                    item.statusDate || '',
+                    `"${(item.statusReason || '').replace(/"/g, '""')}"`,
+                    `"${(item.estatAjut || '').replace(/"/g, '""')}"`,
+                    `"${(item.incidencies || '').replace(/"/g, '""')}"`
+                ]);
+
+                const csvContent = "\uFEFF" + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.setAttribute('download', `comparativa_motius_${new Date().toISOString().slice(0, 10)}.csv`);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            } catch (err) {
+                alert('Error al generar l\'exportació CSV: ' + err.message);
+            }
+        }
+
+        function formatDate(dateStr) {
+            if (!dateStr) return '-';
+            if (dateStr.includes('T')) dateStr = dateStr.split('T')[0];
+            const parts = dateStr.split('-');
+            if (parts.length === 3) {
+                return `${parts[2]}/${parts[1]}/${parts[0]}`;
+            }
+            return dateStr;
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchData(0);
+        });
+    </script>
+</body>
+</html>

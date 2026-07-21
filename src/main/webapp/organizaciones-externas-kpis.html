@@ -65,7 +65,7 @@
 </head>
 
 <body class="bg-slate-50 min-h-screen">
-    <div class="mx-auto max-w-7xl px-4 py-10">
+    <div class="mx-auto w-[95%] px-4 py-10">
         <header class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5 mb-8">
             <a href="index-orgaext.html" class="hover:opacity-80 transition-opacity">
                 <div class="hidden">
@@ -99,11 +99,15 @@
         <section id="autoApplySection" class="mb-6 bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
             <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                 <div>
-                    <h3 id="autoApplyTitle" class="text-sm font-bold text-slate-800">Auto-aplicar País</h3>
-                    <p id="autoApplyDescription" class="text-xs text-slate-500 mt-1">Cerca automàticament suggeriments
-                        de país per a organitzacions que no en tenen i aplica els que superen la confiança mínima.</p>
+                    <h3 id="autoApplyTitle" class="text-base font-bold text-slate-800 flex items-center gap-2">
+                        <i class="fa-solid fa-wand-magic-sparkles text-indigo-500"></i>
+                        Procés d'aplicació automatitzada de país
+                    </h3>
+                    <p id="autoApplyDescription" class="text-xs text-slate-500 mt-0.5">
+                        Aplica automàticament els suggeriments de la IA amb alta confiança als registres sense país
+                    </p>
                 </div>
-                <div class="flex flex-col sm:flex-row items-start sm:items-center gap-4 shrink-0">
+                <div class="flex flex-wrap items-center gap-3">
                     <!-- Environment Selector -->
                     <div class="flex items-center gap-2">
                         <label for="autoApplyEnv"
@@ -336,8 +340,12 @@
         const typeSuggestionCache = new Map();
         const fundingSuggestionCache = new Map();
         const suggestionBundleCache = new Map();
+        // In-flight promise deduplication: evita peticiones duplicadas para la misma org
+        const suggestionBundleInFlight = new Map();
         const uuidsBeingFetched = new Set();
         let typeCatalogOptions = null;
+        let countryCatalogOptions = null;
+        let fundingCatalogOptions = null;
         const EGRETA_EXTERNAL_ORG_BASE =
             'https://egreta.uab.cat/admin/editor/dk/atira/pure/api/shared/model/ueo/externalorganisation/editor/ueoexternalorganisationeditor.xhtml?scheme=&type=&id=';
         function esc(v) {
@@ -414,6 +422,18 @@
             return '';
         }
 
+        function getOrgFundingUri(org) {
+            const groups = (org && Array.isArray(org.keywordGroups)) ? org.keywordGroups : [];
+            for (const g of groups) {
+                const logicalName = String((g && g.logicalName) || '').trim();
+                if (logicalName !== '/uab/externalorganisations/caracter') continue;
+                const classifications = (g && Array.isArray(g.classifications)) ? g.classifications : [];
+                if (!classifications.length) return '';
+                return String((classifications[0] && classifications[0].uri) || '').trim();
+            }
+            return '';
+        }
+
         function getOrgEgretaUrl(org) {
             const pureId = org && org.pureId != null ? String(org.pureId).trim() : '';
             if (!pureId) return '';
@@ -471,6 +491,11 @@
             }
             if (suggestionBundleCache.has(key)) return suggestionBundleCache.get(key);
 
+            // Deduplicar: si ya hay una petición en vuelo para esta clave, esperar a que resuelva
+            if (suggestionBundleInFlight.has(key)) {
+                return suggestionBundleInFlight.get(key);
+            }
+
             const orgName = String(getOrgNameLabel(org) || '').trim();
             if (!orgName) {
                 const emptyBundle = {
@@ -485,49 +510,88 @@
                 return emptyBundle;
             }
 
-            let bundle = {
+            // Crear señal combinada: timeout de 90 s + señal de abort externa
+            const timeoutController = new AbortController();
+            const timeoutId = setTimeout(() => timeoutController.abort(), 90000);
+
+            // Combinar señales: abortar si cualquiera de las dos lo hace
+            let combinedSignal = timeoutController.signal;
+            if (signal) {
+                // AbortSignal.any disponible en navegadores modernos; fallback manual si no existe
+                if (typeof AbortSignal.any === 'function') {
+                    combinedSignal = AbortSignal.any([signal, timeoutController.signal]);
+                } else {
+                    // Fallback: propagar abort de la señal externa al timeout controller
+                    if (signal.aborted) {
+                        clearTimeout(timeoutId);
+                        throw new DOMException('Aborted', 'AbortError');
+                    }
+                    signal.addEventListener('abort', () => timeoutController.abort(), { once: true });
+                }
+            }
+
+            const emptyBundle = {
                 country: { country: '', uri: '', confidence: 0, reason: '' },
                 type: { type: '', confidence: 0, reason: '' },
                 funding: { funding: '', confidence: 0, reason: '' }
             };
-            let success = false;
-            try {
-                const res = await apiFetch('/external-organizations/stats/suggest-metadata?name=' + encodeURIComponent(orgName), { signal });
-                if (res.ok) {
-                    const data = await res.json();
-                    bundle = {
-                        country: {
-                            country: String((data && data.suggestedCountry) || '').trim(),
-                            uri: String((data && data.suggestedCountryUri) || '').trim(),
-                            confidence: Number((data && data.countryConfidence) || 0),
-                            reason: String((data && data.countryReason) || '').trim()
-                        },
-                        type: {
-                            type: String((data && data.suggestedType) || '').trim(),
-                            confidence: Number((data && data.typeConfidence) || 0),
-                            reason: String((data && data.typeReason) || '').trim()
-                        },
-                        funding: {
-                            funding: String((data && data.suggestedFunding) || '').trim(),
-                            uri: String((data && data.suggestedFundingUri) || '').trim(),
-                            confidence: Number((data && data.fundingConfidence) || 0),
-                            reason: String((data && data.fundingReason) || '').trim()
-                        }
-                    };
-                    success = true;
-                }
-            } catch (err) {
-                if (err.name === 'AbortError') throw err;
-            }
 
-            if (success) {
-                suggestionBundleCache.set(key, bundle);
-                countrySuggestionCache.set(key, bundle.country);
-                typeSuggestionCache.set(key, bundle.type);
-                fundingSuggestionCache.set(key, bundle.funding);
-            }
-            return bundle;
+            const fetchPromise = (async () => {
+                let bundle = { ...emptyBundle };
+                let success = false;
+                try {
+                    const res = await apiFetch('/external-organizations/stats/suggest-metadata?name=' + encodeURIComponent(orgName), { signal: combinedSignal });
+                    if (res.ok) {
+                        const data = await res.json();
+                        bundle = {
+                            country: {
+                                country: String((data && data.suggestedCountry) || '').trim(),
+                                uri: String((data && data.suggestedCountryUri) || '').trim(),
+                                confidence: Number((data && data.countryConfidence) || 0),
+                                reason: String((data && data.countryReason) || '').trim()
+                            },
+                            type: {
+                                type: String((data && data.suggestedType) || '').trim(),
+                                confidence: Number((data && data.typeConfidence) || 0),
+                                reason: String((data && data.typeReason) || '').trim()
+                            },
+                            funding: {
+                                funding: String((data && data.suggestedFunding) || '').trim(),
+                                uri: String((data && data.suggestedFundingUri) || '').trim(),
+                                confidence: Number((data && data.fundingConfidence) || 0),
+                                reason: String((data && data.fundingReason) || '').trim()
+                            }
+                        };
+                        success = true;
+                    }
+                } catch (err) {
+                    // Determinar si es un AbortError real de la señal externa (no del timeout)
+                    const isExternalAbort = signal && signal.aborted;
+                    clearTimeout(timeoutId);
+                    suggestionBundleInFlight.delete(key);
+                    if (isExternalAbort) throw err; // Propagar abort externo
+                    // Timeout u otro error: devolver bundle vacío sin cachear
+                    console.warn('fetchSuggestionBundle error for key:', key, err);
+                    return bundle;
+                }
+
+                clearTimeout(timeoutId);
+                suggestionBundleInFlight.delete(key);
+
+                if (success) {
+                    suggestionBundleCache.set(key, bundle);
+                    countrySuggestionCache.set(key, bundle.country);
+                    typeSuggestionCache.set(key, bundle.type);
+                    fundingSuggestionCache.set(key, bundle.funding);
+                }
+                return bundle;
+            })();
+
+            // Registrar en el mapa in-flight antes de awaitar
+            suggestionBundleInFlight.set(key, fetchPromise);
+            return fetchPromise;
         }
+
 
         async function preloadSuggestionsForPage(rows, loadId, signal) {
             const targets = (rows || []);
@@ -543,38 +607,50 @@
             // Registrar todos en el Set de fetching
             needsFetch.forEach(org => uuidsBeingFetched.add(org.uuid));
 
-            // Forzar renderizado para mostrar los spinners "Analitzant..."
+            // Mostrar spinners inmediatamente
             if (loadId === currentLoadId) {
                 renderTable(targets);
             }
 
-            // Cargar cada organización individualmente en paralelo, actualizando a medida que terminan
-            needsFetch.forEach(org => {
-                fetchSuggestionBundle(org, signal)
-                    .catch(err => {
-                        if (err.name === 'AbortError') {
-                            // Re-lanzar para que el .finally no actualice el DOM con datos vacíos
-                            throw err;
-                        }
-                        console.error('Error preloading individual suggestions:', err);
-                    })
-                    .finally(() => {
+            // Lanzar todas las peticiones en paralelo y actualizar el DOM a medida que resuelven
+            const fetchPromises = needsFetch.map(org => {
+                return fetchSuggestionBundle(org, signal)
+                    .then(() => {
+                        // Petición completada con éxito — actualizar celdas de esta fila
                         uuidsBeingFetched.delete(org.uuid);
-                        if (loadId === currentLoadId) {
-                            const rowEl = document.querySelector(`tr[data-uuid="${org.uuid}"]`);
-                            if (rowEl) {
-                                const typeCell = rowEl.querySelector('td[data-cell="suggested-type"]');
-                                const fundingCell = rowEl.querySelector('td[data-cell="suggested-funding"]');
-                                const countryCell = rowEl.querySelector('td[data-cell="suggested-country"]');
-
-                                if (typeCell) typeCell.innerHTML = getSuggestedTypeHtml(org);
-                                if (fundingCell) fundingCell.innerHTML = getSuggestedFundingHtml(org);
-                                if (countryCell) countryCell.innerHTML = getSuggestedCountryHtml(org);
-                            }
-                        }
+                        if (loadId !== currentLoadId) return;
+                        const rowEl = document.querySelector(`tr[data-uuid="${org.uuid}"]`);
+                        if (!rowEl) return;
+                        const typeCell = rowEl.querySelector('td[data-cell="suggested-type"]');
+                        const fundingCell = rowEl.querySelector('td[data-cell="suggested-funding"]');
+                        const countryCell = rowEl.querySelector('td[data-cell="suggested-country"]');
+                        if (typeCell) typeCell.innerHTML = getSuggestedTypeHtml(org);
+                        if (fundingCell) fundingCell.innerHTML = getSuggestedFundingHtml(org);
+                        if (countryCell) countryCell.innerHTML = getSuggestedCountryHtml(org);
                     })
-                    .catch(() => { /* AbortError silenciado aquí */ });
+                    .catch(err => {
+                        // Siempre limpiar el Set, incluso en error o AbortError
+                        uuidsBeingFetched.delete(org.uuid);
+                        if (err && err.name === 'AbortError') {
+                            // Petición cancelada: no tocar el DOM
+                            return;
+                        }
+                        // Error de red u otro: actualizar celdas con el estado vacío del caché
+                        console.warn('Error fetching suggestion for org', org.uuid, err);
+                        if (loadId !== currentLoadId) return;
+                        const rowEl = document.querySelector(`tr[data-uuid="${org.uuid}"]`);
+                        if (!rowEl) return;
+                        const typeCell = rowEl.querySelector('td[data-cell="suggested-type"]');
+                        const fundingCell = rowEl.querySelector('td[data-cell="suggested-funding"]');
+                        const countryCell = rowEl.querySelector('td[data-cell="suggested-country"]');
+                        if (typeCell) typeCell.innerHTML = getSuggestedTypeHtml(org);
+                        if (fundingCell) fundingCell.innerHTML = getSuggestedFundingHtml(org);
+                        if (countryCell) countryCell.innerHTML = getSuggestedCountryHtml(org);
+                    });
             });
+
+            // Usar allSettled para que un fallo individual no aborte el resto
+            await Promise.allSettled(fetchPromises);
         }
 
         async function preloadCountrySuggestions(rows, loadId, signal) {
@@ -656,6 +732,112 @@
             return '<select class="type-suggest-select w-full max-w-[280px] px-2 py-1.5 rounded-lg border border-slate-300 bg-white text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-300" data-uuid="' + esc(safeUuid) + '">' + placeholder + rendered + '</select>';
         }
 
+        async function ensureCountryCatalogOptions() {
+            if (Array.isArray(countryCatalogOptions)) return countryCatalogOptions;
+
+            try {
+                const res = await apiFetch('/external-organizations/stats/country-catalog');
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const data = await res.json();
+
+                countryCatalogOptions = (Array.isArray(data) ? data : [])
+                    .map(row => {
+                        const uri = String((row && row.uri) || '').trim();
+                        const label = String((row && row.label) || '').trim();
+                        return { uri, label };
+                    })
+                    .filter(row => !!row.label && normalizeText(row.label) !== normalizeText('(desconegut)'));
+            } catch (_) {
+                countryCatalogOptions = [];
+            }
+
+            return countryCatalogOptions;
+        }
+
+        function findCountryOptionByLabel(label) {
+            const normalized = normalizeText(label || '');
+            if (!normalized || !Array.isArray(countryCatalogOptions)) return null;
+            return countryCatalogOptions.find(opt => normalizeText(opt.label) === normalized) || null;
+        }
+
+        function buildCountrySuggestionSelect(uuid, selectedCountryUri, selectedCountryLabel) {
+            const safeUuid = String(uuid || '').trim();
+            if (!safeUuid) return '<span class="text-slate-400">—</span>';
+
+            const selectedUri = String(selectedCountryUri || '').trim();
+            const selectedLabel = String(selectedCountryLabel || '').trim();
+            const options = Array.isArray(countryCatalogOptions) ? [...countryCatalogOptions] : [];
+
+            if (selectedLabel && !options.some(opt => normalizeText(opt.label) === normalizeText(selectedLabel))) {
+                options.unshift({ uri: selectedUri, label: selectedLabel });
+            }
+
+            const placeholder = '<option value="">Selecciona país...</option>';
+            const rendered = options.map(opt => {
+                const uri = String((opt && opt.uri) || '').trim();
+                const label = String((opt && opt.label) || '').trim();
+                const isSelected = (selectedUri && uri === selectedUri) || (selectedLabel && normalizeText(label) === normalizeText(selectedLabel));
+                return '<option value="' + esc(uri) + '" data-label="' + esc(label) + '"' + (isSelected ? ' selected' : '') + '>' + esc(label) + '</option>';
+            }).join('');
+
+            return '<select class="country-suggest-select w-full max-w-[280px] px-2 py-1.5 rounded-lg border border-slate-300 bg-white text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-300" data-uuid="' + esc(safeUuid) + '">' + placeholder + rendered + '</select>';
+        }
+
+        async function ensureFundingCatalogOptions() {
+            if (Array.isArray(fundingCatalogOptions)) return fundingCatalogOptions;
+
+            try {
+                const res = await apiFetch('/external-organizations/stats/funding-catalog');
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const data = await res.json();
+
+                fundingCatalogOptions = (Array.isArray(data) ? data : [])
+                    .map(row => {
+                        const uri = String((row && row.uri) || '').trim();
+                        const label = String((row && row.label) || '').trim();
+                        return { uri, label };
+                    })
+                    .filter(row => !!row.label);
+            } catch (_) {
+                fundingCatalogOptions = [
+                    { uri: '/uab/externalorganisations/caracter/pub', label: 'Publica' },
+                    { uri: '/uab/externalorganisations/caracter/prv', label: 'Privada' },
+                    { uri: '/uab/externalorganisations/caracter/mix', label: 'Mixta' }
+                ];
+            }
+
+            return fundingCatalogOptions;
+        }
+
+        function findFundingOptionByLabel(label) {
+            const normalized = normalizeText(label || '');
+            if (!normalized || !Array.isArray(fundingCatalogOptions)) return null;
+            return fundingCatalogOptions.find(opt => normalizeText(opt.label) === normalized) || null;
+        }
+
+        function buildFundingSuggestionSelect(uuid, selectedFundingUri, selectedFundingLabel) {
+            const safeUuid = String(uuid || '').trim();
+            if (!safeUuid) return '<span class="text-slate-400">—</span>';
+
+            const selectedUri = String(selectedFundingUri || '').trim();
+            const selectedLabel = String(selectedFundingLabel || '').trim();
+            const options = Array.isArray(fundingCatalogOptions) ? [...fundingCatalogOptions] : [];
+
+            if (selectedLabel && !options.some(opt => normalizeText(opt.label) === normalizeText(selectedLabel))) {
+                options.unshift({ uri: selectedUri, label: selectedLabel });
+            }
+
+            const placeholder = '<option value="">Selecciona finançament...</option>';
+            const rendered = options.map(opt => {
+                const uri = String((opt && opt.uri) || '').trim();
+                const label = String((opt && opt.label) || '').trim();
+                const isSelected = (selectedUri && uri === selectedUri) || (selectedLabel && normalizeText(label) === normalizeText(selectedLabel));
+                return '<option value="' + esc(uri) + '" data-label="' + esc(label) + '"' + (isSelected ? ' selected' : '') + '>' + esc(label) + '</option>';
+            }).join('');
+
+            return '<select class="funding-suggest-select w-full max-w-[280px] px-2 py-1.5 rounded-lg border border-slate-300 bg-white text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-300" data-uuid="' + esc(safeUuid) + '">' + placeholder + rendered + '</select>';
+        }
+
         function buildApplySuggestionButton(kind, uuid, suggestedLabel, suggestedUri) {
             const safeUuid = String(uuid || '').trim();
             const safeLabel = String(suggestedLabel || '').trim();
@@ -711,13 +893,21 @@
             }
 
             if (kind === 'country') {
-                const appliedCountry = String((result && result.appliedCountry) || payload.suggestedCountry || '').trim() || '—';
+                const select = rowEl.querySelector('.country-suggest-select');
+                const selectedLabel = select && select.options && select.selectedIndex >= 0
+                    ? (select.options[select.selectedIndex].getAttribute('data-label') || select.options[select.selectedIndex].text || '').trim()
+                    : '';
+                const appliedCountry = selectedLabel || String((result && result.appliedCountry) || payload.suggestedCountry || '').trim() || '—';
                 if (cells[5]) cells[5].textContent = appliedCountry;
                 if (cells[6]) cells[6].innerHTML = updatedChip;
             }
 
             if (kind === 'funding') {
-                const appliedFunding = String((result && result.appliedFunding) || payload.suggestedFunding || '').trim() || '—';
+                const select = rowEl.querySelector('.funding-suggest-select');
+                const selectedLabel = select && select.options && select.selectedIndex >= 0
+                    ? (select.options[select.selectedIndex].getAttribute('data-label') || select.options[select.selectedIndex].text || '').trim()
+                    : '';
+                const appliedFunding = selectedLabel || String((result && result.appliedFunding) || payload.suggestedFunding || '').trim() || '—';
                 if (cells[3]) cells[3].textContent = appliedFunding;
                 if (cells[4]) cells[4].innerHTML = updatedChip;
             }
@@ -845,7 +1035,9 @@
             const selectedTypeLabel = (suggestedTypeOption && suggestedTypeOption.label) || htmlSuggestedTypeRaw || typeRaw || '';
             const typeSelect = buildTypeSuggestionSelect(org.uuid, selectedTypeUri, selectedTypeLabel);
             const applyTypeBtn = buildApplySuggestionButton('type', org.uuid, '', '');
-            return typeSelect + (applyTypeBtn ? '<div class="mt-2">' + applyTypeBtn + '</div>' : '');
+            const suggestedTypeChip = buildConfidenceChip(htmlSuggestedTypeRaw, cachedTypeSuggestion.confidence, cachedTypeSuggestion.reason, 'tipus');
+
+            return (htmlSuggestedTypeRaw ? suggestedTypeChip + '<div class="mt-1"></div>' : '') + typeSelect + (applyTypeBtn ? '<div class="mt-2">' + applyTypeBtn + '</div>' : '');
         }
 
         function getSuggestedCountryHtml(org) {
@@ -861,12 +1053,16 @@
             }
 
             const suggestedCountryRaw = cachedCountrySuggestion.country;
-            const suggestedCountryUri = String(cachedCountrySuggestion.uri || '').trim();
+            const currentCountryUri = String((org && org.address && org.address.country && org.address.country.uri) || '').trim();
+            const suggestedCountryOption = findCountryOptionByLabel(suggestedCountryRaw);
+            const selectedCountryUri = (suggestedCountryOption && suggestedCountryOption.uri) || String(cachedCountrySuggestion.uri || '').trim() || currentCountryUri;
+            const selectedCountryLabel = (suggestedCountryOption && suggestedCountryOption.label) || suggestedCountryRaw || countryRaw || '';
+
             const suggestedCountryChip = buildConfidenceChip(suggestedCountryRaw, cachedCountrySuggestion.confidence, cachedCountrySuggestion.reason, 'pais');
-            const applyCountryBtn = suggestedCountryRaw
-                ? buildApplySuggestionButton('country', org.uuid, suggestedCountryRaw, suggestedCountryUri)
-                : '';
-            return suggestedCountryChip + (applyCountryBtn ? '<div class="mt-2">' + applyCountryBtn + '</div>' : '');
+            const countrySelect = buildCountrySuggestionSelect(org.uuid, selectedCountryUri, selectedCountryLabel);
+            const applyCountryBtn = buildApplySuggestionButton('country', org.uuid, '', '');
+
+            return (suggestedCountryRaw ? suggestedCountryChip + '<div class="mt-1"></div>' : '') + countrySelect + (applyCountryBtn ? '<div class="mt-2">' + applyCountryBtn + '</div>' : '');
         }
 
         function getSuggestedFundingHtml(org) {
@@ -881,11 +1077,17 @@
                 return getSuggestionSpinner();
             }
 
-            const fundingChip = buildConfidenceChip(cachedFundingSuggestion.funding, cachedFundingSuggestion.confidence, cachedFundingSuggestion.reason, 'financiacion');
-            const applyFundingBtn = cachedFundingSuggestion.funding
-                ? buildApplySuggestionButton('funding', org.uuid, cachedFundingSuggestion.funding, cachedFundingSuggestion.uri)
-                : '';
-            return fundingChip + (applyFundingBtn ? '<div class="mt-2">' + applyFundingBtn + '</div>' : '');
+            const suggestedFundingRaw = cachedFundingSuggestion.funding;
+            const currentFundingUri = String(getOrgFundingUri(org) || '').trim();
+            const suggestedFundingOption = findFundingOptionByLabel(suggestedFundingRaw);
+            const selectedFundingUri = (suggestedFundingOption && suggestedFundingOption.uri) || String(cachedFundingSuggestion.uri || '').trim() || currentFundingUri;
+            const selectedFundingLabel = (suggestedFundingOption && suggestedFundingOption.label) || suggestedFundingRaw || persistedFundingRaw || '';
+
+            const suggestedFundingChip = buildConfidenceChip(suggestedFundingRaw, cachedFundingSuggestion.confidence, cachedFundingSuggestion.reason, 'financiacion');
+            const fundingSelect = buildFundingSuggestionSelect(org.uuid, selectedFundingUri, selectedFundingLabel);
+            const applyFundingBtn = buildApplySuggestionButton('funding', org.uuid, '', '');
+
+            return (suggestedFundingRaw ? suggestedFundingChip + '<div class="mt-1"></div>' : '') + fundingSelect + (applyFundingBtn ? '<div class="mt-2">' + applyFundingBtn + '</div>' : '');
         }
 
         function renderTable(rows) {
@@ -948,16 +1150,34 @@
                 endpoint = '/external-organizations/stats/apply-suggested-country';
                 payload.suggestedCountryUri = String(buttonEl && buttonEl.getAttribute('data-suggested-uri') || '').trim();
                 payload.suggestedCountry = String(suggested || '').trim();
+                if (!payload.suggestedCountryUri && !payload.suggestedCountry && buttonEl) {
+                    const row = buttonEl.closest('tr');
+                    const select = row ? row.querySelector('.country-suggest-select') : null;
+                    if (select) {
+                        payload.suggestedCountryUri = String(select.value || '').trim();
+                        const selectedOpt = select.options && select.selectedIndex >= 0 ? select.options[select.selectedIndex] : null;
+                        payload.suggestedCountry = String(selectedOpt ? (selectedOpt.getAttribute('data-label') || selectedOpt.text) : '').trim();
+                    }
+                }
                 if (!payload.suggestedCountryUri && !payload.suggestedCountry) {
-                    showToast('No hi ha pais suggerit per aplicar.', 'error');
+                    showToast('Selecciona un país abans d\'aplicar.', 'error');
                     return;
                 }
             } else if (kind === 'funding') {
                 endpoint = '/external-organizations/stats/apply-suggested-funding';
                 payload.suggestedFundingUri = String(buttonEl && buttonEl.getAttribute('data-suggested-uri') || '').trim();
                 payload.suggestedFunding = String(suggested || '').trim();
+                if (!payload.suggestedFundingUri && !payload.suggestedFunding && buttonEl) {
+                    const row = buttonEl.closest('tr');
+                    const select = row ? row.querySelector('.funding-suggest-select') : null;
+                    if (select) {
+                        payload.suggestedFundingUri = String(select.value || '').trim();
+                        const selectedOpt = select.options && select.selectedIndex >= 0 ? select.options[select.selectedIndex] : null;
+                        payload.suggestedFunding = String(selectedOpt ? (selectedOpt.getAttribute('data-label') || selectedOpt.text) : '').trim();
+                    }
+                }
                 if (!payload.suggestedFundingUri && !payload.suggestedFunding) {
-                    showToast('No hi ha financiacio suggerida per aplicar.', 'error');
+                    showToast('Selecciona un finançament abans d\'aplicar.', 'error');
                     return;
                 }
             } else {
@@ -1092,7 +1312,7 @@
             body.innerHTML = '<tr><td colspan="8" class="px-6 py-10 text-center text-slate-400 italic">Carregant...</td></tr>';
 
             try {
-                await ensureTypeCatalogOptions();
+                await Promise.all([ensureTypeCatalogOptions(), ensureCountryCatalogOptions(), ensureFundingCatalogOptions()]);
                 if (myLoadId !== currentLoadId) return;
                 const res = await apiFetch(kpi.listEndpoint + '?' + params.toString(), { signal });
                 if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -1216,22 +1436,33 @@
 
         function updateAutoApplyTexts() {
             const titleEl = document.getElementById('autoApplyTitle');
-            const descEl = document.getElementById('autoApplyDescription');
+            const descEl = document.getElementById('autoApplyDescription') || document.getElementById('autoApplySubtitle');
             const btnDownload = document.getElementById('btnDownloadAutoLog');
             const metric = getActiveMetric();
 
-            if (activeKpi === 'withoutCountry') {
-                titleEl.textContent = 'Auto-aplicar País';
-                descEl.textContent = 'Cerca automàticament suggeriments de país per a organitzacions que no en tenen i aplica els que superen la confiança mínima.';
-            } else if (activeKpi === 'withoutType') {
-                titleEl.textContent = 'Auto-aplicar Tipus';
-                descEl.textContent = "Cerca automàticament suggeriments de tipus d'organització per a les que no en tenen i aplica els que superen la confiança mínima.";
-            } else if (activeKpi === 'withoutFunding') {
-                titleEl.textContent = 'Auto-aplicar Finançament';
-                descEl.textContent = 'Cerca automàticament suggeriments de finançament (Pública o Privada) per a les organitzacions que no en tenen i aplica els que superen la confiança mínima.';
+            if (titleEl) {
+                if (activeKpi === 'withoutCountry') {
+                    titleEl.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles text-indigo-500"></i> Auto-aplicar País';
+                } else if (activeKpi === 'withoutType') {
+                    titleEl.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles text-indigo-500"></i> Auto-aplicar Tipus';
+                } else if (activeKpi === 'withoutFunding') {
+                    titleEl.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles text-indigo-500"></i> Auto-aplicar Finançament';
+                }
             }
 
-            btnDownload.href = window.apiUrl('/external-organizations/stats/auto-apply-' + metric + '/download-log');
+            if (descEl) {
+                if (activeKpi === 'withoutCountry') {
+                    descEl.textContent = 'Cerca automàticament suggeriments de país per a organitzacions que no en tenen i aplica els que superen la confiança mínima.';
+                } else if (activeKpi === 'withoutType') {
+                    descEl.textContent = "Cerca automàticament suggeriments de tipus d'organització per a les que no en tenen i aplica els que superen la confiança mínima.";
+                } else if (activeKpi === 'withoutFunding') {
+                    descEl.textContent = 'Cerca automàticament suggeriments de finançament (Pública o Privada) per a les organitzacions que no en tenen i aplica els que superen la confiança mínima.';
+                }
+            }
+
+            if (btnDownload) {
+                btnDownload.href = window.apiUrl('/external-organizations/stats/auto-apply-' + metric + '/download-log');
+            }
         }
 
         function checkAutoApplyStatus() {

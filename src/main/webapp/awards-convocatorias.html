@@ -105,10 +105,31 @@
             height: auto !important;
             min-height: 36px;
             padding: 6px 8px !important;
-        }
         /* Ensure rows grow with content when variableHeight is on */
         #awards-tabulator-table .tabulator-row {
             height: auto !important;
+        }
+        /* Custom Hierarchical Dropdown Styles */
+        .nature-hierarchical-dropdown {
+            font-family: inherit;
+            overflow: hidden;
+        }
+        .nature-popup-shadow {
+            box-shadow: 0 10px 30px -5px rgba(99, 102, 241, 0.12), 0 25px 60px -15px rgba(0, 0, 0, 0.15);
+        }
+        /* Custom scrollbar styling inside dropdown panels */
+        .nature-hierarchical-dropdown ::-webkit-scrollbar {
+            width: 4px;
+        }
+        .nature-hierarchical-dropdown ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .nature-hierarchical-dropdown ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        .nature-hierarchical-dropdown ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
         }
     </style>
 </head>
@@ -427,19 +448,16 @@
                                             return `<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100 mr-1 mb-1">${name}</span>`;
                                         }).join('');
                                     } else {
-                                        const optionsHtml = (window.availableNatures || []).map((nat, idx) => {
-                                            const name = normalitzarText(nat.term || nat, '');
-                                            return `<option value="${idx}">${name}</option>`;
-                                        }).join('');
-
                                         const selectId = `select-nature-${uuidText}`;
+                                        const triggerId = `dropdown-trigger-${uuidText}`;
                                         const selectHtml = `
-                                            <div class="flex gap-1.5 w-full items-center">
-                                                <select id="${selectId}" class="flex-1 min-w-[120px] px-2 py-1 text-[11px] bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 font-medium text-slate-700">
-                                                    <option value="">-- Selecciona --</option>
-                                                    ${optionsHtml}
-                                                </select>
-                                                <button type="button" onclick="proponerNaturalezaSeleccionada('${uuidText}', '${selectId}')" class="px-2 py-1 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100 hover:text-indigo-800 text-[10px] font-bold border border-indigo-100 transition-colors cursor-pointer" title="Guardar naturalesa">
+                                            <div class="flex gap-1.5 w-full items-center relative">
+                                                <input type="hidden" id="${selectId}" value="">
+                                                <button type="button" id="${triggerId}" onclick="obrirSelectorJerarquic(this, '${selectId}', '${uuidText}')" class="flex-1 min-w-[145px] px-2.5 py-1.5 text-[11px] bg-white border border-slate-200 hover:border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 font-semibold text-slate-700 text-left flex justify-between items-center transition-colors shadow-sm cursor-pointer">
+                                                    <span id="label-${selectId}" class="text-slate-400 truncate">-- Selecciona --</span>
+                                                    <i class="fa-solid fa-chevron-down text-[9px] text-slate-450 ml-1"></i>
+                                                </button>
+                                                <button type="button" onclick="proponerNaturalezaSeleccionada('${uuidText}', '${selectId}')" class="px-2 py-1.5 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100 hover:text-indigo-800 text-[10px] font-bold border border-indigo-100 transition-colors cursor-pointer" title="Guardar naturalesa">
                                                     <i class="fa-solid fa-floppy-disk"></i>
                                                 </button>
                                             </div>
@@ -783,8 +801,166 @@
         }
         window.ocultarSelectorManual = ocultarSelectorManual;
 
+        function obrirSelectorJerarquic(buttonEl, inputId, uuidText) {
+            // Close any existing open dropdowns
+            const oldDropdowns = document.querySelectorAll('.nature-hierarchical-dropdown');
+            oldDropdowns.forEach(d => d.remove());
+
+            if (!window.natureHierarchy || window.natureHierarchy.length === 0) {
+                console.warn("Hierarchy not loaded yet, or empty.");
+                return;
+            }
+
+            const parentList = window.natureHierarchy;
+
+            // Create dropdown element
+            const dropdown = document.createElement('div');
+            dropdown.className = 'nature-hierarchical-dropdown fixed bg-white border border-slate-200 rounded-xl shadow-2xl z-[9999] flex text-[11px] text-slate-700 select-none nature-popup-shadow transition-all duration-150 scale-95 opacity-0';
+            dropdown.style.height = '320px';
+            
+            // Positioning relative to buttonEl
+            const rect = buttonEl.getBoundingClientRect();
+            const fitsBelow = (rect.bottom + 320 < window.innerHeight);
+            if (fitsBelow) {
+                dropdown.style.top = `${rect.bottom + 4}px`;
+            } else {
+                dropdown.style.top = `${rect.top - 324}px`;
+            }
+            dropdown.style.left = `${rect.left}px`;
+
+            // HTML content
+            dropdown.innerHTML = `
+                <div class="flex h-full w-[480px]">
+                    <!-- Left pane: categories -->
+                    <div class="w-[190px] border-r border-slate-100 overflow-y-auto p-1.5 bg-slate-50/60 flex flex-col gap-0.5">
+                        <div class="px-2 py-1 text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Categorització</div>
+                        
+                        <!-- Parent list -->
+                        ${parentList.map(p => `
+                            <div class="parent-item px-2 py-1.5 rounded-lg hover:bg-indigo-50/70 hover:text-indigo-750 cursor-pointer flex justify-between items-center font-semibold text-slate-750 transition-colors" data-parent-uri="${p.uri}">
+                                <span class="truncate" title="${p.term}">${p.term}</span>
+                                <i class="fa-solid fa-chevron-right text-[9px] opacity-40 ml-1"></i>
+                            </div>
+                        `).join('')}
+                    </div>
+
+                    <!-- Right pane: children options -->
+                    <div class="w-[290px] overflow-y-auto p-2 flex flex-col gap-0.5" id="nature-child-pane">
+                        <div class="h-full flex flex-col items-center justify-center text-slate-400 italic text-center p-4">
+                            <i class="fa-solid fa-arrow-left mb-2 text-slate-350 text-base"></i>
+                            <span>Passa el ratolí o clica en una categoria per veure les sub-opcions</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            document.body.appendChild(dropdown);
+
+            // Animate entrance
+            setTimeout(() => {
+                dropdown.classList.remove('scale-95', 'opacity-0');
+            }, 10);
+
+            // Add events to parents
+            const parentItems = dropdown.querySelectorAll('.parent-item');
+            const childPane = dropdown.querySelector('#nature-child-pane');
+
+            function showChildrenOf(parentUri) {
+                const parentObj = parentList.find(p => p.uri === parentUri);
+                if (!parentObj) return;
+
+                // Mark current parent as active
+                parentItems.forEach(item => {
+                    if (item.getAttribute('data-parent-uri') === parentUri) {
+                        item.classList.add('bg-indigo-50/80', 'text-indigo-700');
+                    } else {
+                        item.classList.remove('bg-indigo-50/80', 'text-indigo-700');
+                    }
+                });
+
+                // Helper to clean up parent prefix from child terms
+                // Example parentTerm = "PRO_Projecte", code prefix is "PRO_"
+                let parentPrefix = "";
+                const underscoreIdx = parentObj.term.indexOf("_");
+                if (underscoreIdx > 0) {
+                    parentPrefix = parentObj.term.substring(0, underscoreIdx + 1); // "PRO_"
+                }
+
+                // Populate right pane
+                childPane.innerHTML = `
+                    <div class="px-2 py-1 text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Sub-opcions</div>
+                    <div class="flex flex-col gap-0.5">
+                        ${parentObj.children.map(c => {
+                            // Strip parent prefix if it matches
+                            let displayTerm = c.term;
+                            if (parentPrefix && displayTerm.startsWith(parentPrefix)) {
+                                displayTerm = displayTerm.substring(parentPrefix.length);
+                            }
+                            return `
+                                <div class="child-item px-2 py-1.5 rounded-lg hover:bg-indigo-600 hover:text-white cursor-pointer font-medium text-slate-700 transition-colors" data-uri="${c.uri}">
+                                    ${displayTerm}
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                `;
+
+                // Add events to child items
+                childPane.querySelectorAll('.child-item').forEach(item => {
+                    item.addEventListener('click', () => {
+                        const uri = item.getAttribute('data-uri');
+                        selectValue(uri);
+                    });
+                });
+            }
+
+            parentItems.forEach(item => {
+                const parentUri = item.getAttribute('data-parent-uri');
+                item.addEventListener('mouseenter', () => showChildrenOf(parentUri));
+                item.addEventListener('click', () => showChildrenOf(parentUri));
+            });
+
+            function selectValue(uri) {
+                // Find index of nature with this uri in window.availableNatures
+                const index = (window.availableNatures || []).findIndex(n => n.uri === uri);
+                if (index === -1) return;
+
+                const nature = window.availableNatures[index];
+                const name = normalitzarText(nature.term || nature, '');
+                
+                const inputEl = document.getElementById(inputId);
+                if (inputEl) {
+                    inputEl.value = index;
+                }
+
+                const labelEl = document.getElementById(`label-${inputId}`);
+                if (labelEl) {
+                    labelEl.textContent = name;
+                    labelEl.classList.remove('text-slate-400');
+                    labelEl.classList.add('text-slate-800');
+                }
+
+                // Close dropdown
+                dropdown.remove();
+                document.removeEventListener('click', closeHandler);
+            }
+
+            // Close when clicking outside
+            function closeHandler(e) {
+                if (!dropdown.contains(e.target) && e.target !== buttonEl && !buttonEl.contains(e.target)) {
+                    dropdown.remove();
+                    document.removeEventListener('click', closeHandler);
+                }
+            }
+            setTimeout(() => {
+                document.addEventListener('click', closeHandler);
+            }, 50);
+        }
+        window.obrirSelectorJerarquic = obrirSelectorJerarquic;
+
         async function cargarNatures() {
             try {
+                // Fetch flat list of natures
                 const res = await fetch(apiUrl('/awards/natures'));
                 if (res.ok) {
                     const naturesList = await res.json();
@@ -801,6 +977,10 @@
                     // Populate select filter dropdown
                     const selectFilter = document.getElementById('selectNatureFilter');
                     if (selectFilter) {
+                        // Clear existing options (except first two)
+                        while (selectFilter.options.length > 2) {
+                            selectFilter.remove(2);
+                        }
                         naturesList.forEach(nat => {
                             const rawName = normalitzarText(nat.term || nat, '');
                             const opt = document.createElement('option');
@@ -809,6 +989,12 @@
                             selectFilter.appendChild(opt);
                         });
                     }
+                }
+
+                // Fetch hierarchical tree
+                const resH = await fetch(apiUrl('/awards/nature-hierarchy'));
+                if (resH.ok) {
+                    window.natureHierarchy = await resH.json();
                 }
             } catch (e) {
                 console.error("Error carregar llista de natures:", e);

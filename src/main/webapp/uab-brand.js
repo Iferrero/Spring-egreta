@@ -23,8 +23,13 @@
     function resolveHomeHref(pathname) {
         const fileName = (pathname || '').split('/').pop() || '';
         if (!fileName || fileName === 'index.html') return 'index.html';
+        if (fileName === 'index_assesora.html') return 'index_assesora.html';
         if (fileName === 'index-orgaext.html') return 'index-orgaext.html';
         if (fileName === 'index-tesis.html') return 'index-tesis.html';
+
+        if (fileName === 'awards-convocatorias.html' || fileName === 'publicacions-correccions.html') {
+            return 'index_assesora.html';
+        }
 
         // For external organizations module pages, go back to module index.
         if (fileName.startsWith('organizaciones-externas')) {

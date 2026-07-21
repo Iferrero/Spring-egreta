@@ -670,7 +670,143 @@ public class AwardController {
 
     @GetMapping("/natures")
     public List<Document> getAvailableNatures() {
-        return getAllNatures();
+        try {
+            Document scheme = mongoTemplate.getCollection("Classificationschemes")
+                    .find(new Document("baseUri", "/dk/atira/pure/upm/nature"))
+                    .first();
+            if (scheme != null) {
+                List<Document> contained = (List<Document>) scheme.get("containedClassifications");
+                if (contained != null) {
+                    return contained;
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return getAllNatures(); // Fallback
+    }
+
+    @GetMapping("/nature-hierarchy")
+    public List<Map<String, Object>> getNatureHierarchy() {
+        List<Map<String, Object>> hierarchy = new ArrayList<>();
+        try {
+            Document scheme = mongoTemplate.getCollection("Classificationschemes")
+                    .find(new Document("baseUri", "/dk/atira/pure/upm/nature"))
+                    .first();
+            
+            if (scheme != null) {
+                List<Document> contained = (List<Document>) scheme.get("containedClassifications");
+                if (contained != null) {
+                    // Create a map of URI -> Document for quick lookup
+                    Map<String, Document> uriToDoc = new HashMap<>();
+                    for (Document c : contained) {
+                        String uri = c.getString("uri");
+                        if (uri != null) {
+                            uriToDoc.put(uri, c);
+                        }
+                    }
+
+                    // Build children mapping: parentUri -> list of child documents
+                    Map<String, List<Document>> parentToChildren = new HashMap<>();
+                    Set<String> allChildUris = new HashSet<>();
+
+                    for (Document c : contained) {
+                        String uri = c.getString("uri");
+                        List<Document> relations = (List<Document>) c.get("classificationRelations");
+                        if (relations != null) {
+                            for (Document r : relations) {
+                                Document relType = (Document) r.get("relationType");
+                                String relTypeUri = relType != null ? relType.getString("uri") : "";
+                                if (relTypeUri != null && relTypeUri.contains("/hierarchies/child")) {
+                                    Document relatedTo = (Document) r.get("relatedTo");
+                                    String childUri = relatedTo != null ? relatedTo.getString("uri") : null;
+                                    if (childUri != null && uriToDoc.containsKey(childUri)) {
+                                        allChildUris.add(childUri);
+                                        parentToChildren.computeIfAbsent(uri, k -> new ArrayList<>()).add(uriToDoc.get(childUri));
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Build parent nodes (nodes that have children)
+                    for (Map.Entry<String, List<Document>> entry : parentToChildren.entrySet()) {
+                        String parentUri = entry.getKey();
+                        Document parentDoc = uriToDoc.get(parentUri);
+                        if (parentDoc != null) {
+                            Map<String, Object> parentNode = new HashMap<>();
+                            parentNode.put("uri", parentUri);
+                            parentNode.put("term", getCaEsTerm(parentDoc));
+                            
+                            List<Map<String, Object>> childNodes = new ArrayList<>();
+                            for (Document childDoc : entry.getValue()) {
+                                Map<String, Object> childNode = new HashMap<>();
+                                childNode.put("uri", childDoc.getString("uri"));
+                                childNode.put("term", getCaEsTerm(childDoc));
+                                childNodes.add(childNode);
+                            }
+                            
+                            // Sort children alphabetically
+                            childNodes.sort((a, b) -> ((String) a.get("term")).compareToIgnoreCase((String) b.get("term")));
+                            
+                            parentNode.put("children", childNodes);
+                            hierarchy.add(parentNode);
+                        }
+                    }
+
+                    // Sort parent nodes alphabetically
+                    hierarchy.sort((a, b) -> ((String) a.get("term")).compareToIgnoreCase((String) b.get("term")));
+
+                    // Build flat nodes (nodes that have no children and are not children of any parent)
+                    List<Map<String, Object>> flatNodes = new ArrayList<>();
+                    for (Document c : contained) {
+                        String uri = c.getString("uri");
+                        if (!parentToChildren.containsKey(uri) && !allChildUris.contains(uri)) {
+                            // Only include enabled classifications
+                            Boolean disabled = c.getBoolean("disabled");
+                            if (disabled == null || !disabled) {
+                                Map<String, Object> flatNode = new HashMap<>();
+                                flatNode.put("uri", uri);
+                                flatNode.put("term", getCaEsTerm(c));
+                                flatNodes.add(flatNode);
+                            }
+                        }
+                    }
+
+                    // Sort flat nodes alphabetically
+                    flatNodes.sort((a, b) -> ((String) a.get("term")).compareToIgnoreCase((String) b.get("term")));
+
+                    if (!flatNodes.isEmpty()) {
+                        Map<String, Object> flatGroup = new HashMap<>();
+                        flatGroup.put("uri", "flat_group");
+                        flatGroup.put("term", "Altres Natures");
+                        flatGroup.put("children", flatNodes);
+                        hierarchy.add(flatGroup);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return hierarchy;
+    }
+
+    private String getCaEsTerm(Document doc) {
+        if (doc == null) return "Sense títol";
+        Document termDoc = (Document) doc.get("term");
+        if (termDoc != null) {
+            List<Document> textList = (List<Document>) termDoc.get("text");
+            if (textList != null) {
+                for (Document td : textList) {
+                    if ("ca_ES".equals(td.getString("locale"))) {
+                        return td.getString("value");
+                    }
+                }
+            }
+        }
+        Object termObj = doc.get("term");
+        if (termObj instanceof String s) return s;
+        return doc.getString("uri");
     }
 
     private List<Document> allNatures = null;
@@ -752,6 +888,11 @@ public class AwardController {
     @GetMapping("/stats/tipus-per-categoria")
     public List<Document> getTipusPerCategoria() {
         return service.getTipusPerCategoria();
+    }
+
+    @GetMapping("/stats/awards-by-amount")
+    public List<Document> getAwardsByAmount() {
+        return service.getAwardsByAmount();
     }
 
     @GetMapping("/stats/import-per-tipus-anio")
@@ -3762,7 +3903,7 @@ public class AwardController {
         List<Document> pipeline = new ArrayList<>();
 
         Document matchStage = new Document("$match", new Document("$or", Arrays.asList(
-            new Document("type.term.ca_ES", "Conveni extern a la UAB").append("workflow.step", "approved"),
+            new Document("type.term.ca_ES", "Conveni extern a la UAB").append("workflow.step", new Document("$in", Arrays.asList("approved", "validated"))),
             new Document("type.term.ca_ES", new Document("$ne", "Conveni extern a la UAB")).append("workflow.step", "validated")
         )).append("budgets.costCode", new Document("$regex", "^(PK|EA|PO|PH|PI|DR|BJ|AG|AB|IM|IB|YA|PV|PZ|BA|BF|BB|NF|ND|NM|MH|NN|MI|NB)").append("$options", "i")));
         pipeline.add(matchStage);
@@ -3774,6 +3915,22 @@ public class AwardController {
             .append("connectToField", "uuid")
             .append("as", "orgAncestors")
         ));
+
+        Document isResignedExpr = new Document("$reduce", new Document()
+            .append("input", new Document("$ifNull", Arrays.asList("$keywordGroups", Collections.emptyList())))
+            .append("initialValue", false)
+            .append("in", new Document("$or", Arrays.asList(
+                "$$value",
+                new Document("$reduce", new Document()
+                    .append("input", new Document("$ifNull", Arrays.asList("$$this.keywordContainers", Collections.emptyList())))
+                    .append("initialValue", false)
+                    .append("in", new Document("$or", Arrays.asList(
+                        "$$value",
+                        new Document("$eq", Arrays.asList("$$this.structuredKeyword.uri", "/uab/awards/estat_ajut/resigned"))
+                    )))
+                )
+            )))
+        );
 
         pipeline.add(new Document("$addFields", new Document()
             .append("orgScope", new Document("$cond", Arrays.asList(
@@ -3790,11 +3947,7 @@ public class AwardController {
                 .append("onError", null)
                 .append("onNull", null)
             ))
-            .append("isDeclined", new Document("$cond", Arrays.asList(
-                new Document("$eq", Arrays.asList("$status.typeDiscriminator", "DeclinedAwardStatus")),
-                true,
-                false
-            )))
+            .append("isResigned", isResignedExpr)
             .append("prefixedBudgets", new Document("$filter", new Document()
                 .append("input", new Document("$ifNull", Arrays.asList("$budgets", Collections.emptyList())))
                 .append("as", "b")
@@ -3804,6 +3957,17 @@ public class AwardController {
                     .append("options", "i")
                 ))
             ))
+        ));
+
+        pipeline.add(new Document("$addFields", new Document()
+            .append("isDeclined", new Document("$cond", Arrays.asList(
+                new Document("$or", Arrays.asList(
+                    new Document("$eq", Arrays.asList("$status.typeDiscriminator", "DeclinedAwardStatus")),
+                    new Document("$eq", Arrays.asList("$isResigned", true))
+                )),
+                true,
+                false
+            )))
         ));
 
         pipeline.add(new Document("$addFields", new Document()
@@ -3889,6 +4053,574 @@ public class AwardController {
             e.printStackTrace();
         }
         return results;
+    }
+
+    @GetMapping("/stats/resigned-awards")
+    public Map<String, Object> getResignedAwards(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String categoria,
+            @RequestParam(required = false) String tipus,
+            @RequestParam(required = false) String reasonFilter,
+            @RequestParam(required = false) String statusType,
+            @RequestParam(required = false) String year,
+            @RequestParam(defaultValue = "date") String sortBy,
+            @RequestParam(defaultValue = "desc") String sortOrder,
+            @RequestParam(defaultValue = "false") boolean exportAll) {
+
+        Document matchQuery = new Document();
+        List<Document> andConditions = new ArrayList<>();
+
+        // 1. Must have a non-empty status.reason
+        andConditions.add(new Document("status.reason", new Document("$exists", true).append("$ne", null).append("$ne", "")));
+
+        // 2. Status type filtering (Terminated / Curtailed / Declined)
+        if (statusType != null && !statusType.isBlank() && !"all".equalsIgnoreCase(statusType)) {
+            if ("terminated".equalsIgnoreCase(statusType) || "terminated_curtailed".equalsIgnoreCase(statusType)) {
+                andConditions.add(new Document("status.typeDiscriminator", new Document("$in", Arrays.asList("TerminatedAwardStatus", "CurtailedAwardStatus"))));
+            } else if ("declined".equalsIgnoreCase(statusType)) {
+                andConditions.add(new Document("status.typeDiscriminator", "DeclinedAwardStatus"));
+            } else {
+                andConditions.add(new Document("status.typeDiscriminator", statusType.trim()));
+            }
+        } else {
+            andConditions.add(new Document("status.typeDiscriminator", new Document("$in", Arrays.asList("DeclinedAwardStatus", "CurtailedAwardStatus", "TerminatedAwardStatus"))));
+        }
+
+        // 3. Reason filter if specific renuncia requested
+        if (reasonFilter != null && !reasonFilter.isBlank() && !"all".equalsIgnoreCase(reasonFilter)) {
+            if ("renuncia".equalsIgnoreCase(reasonFilter)) {
+                andConditions.add(new Document("status.reason", new Document("$regex", "renunc|renuncia|resign|declin|personals|laborals|incompatib|tesi|baja|desist|revoc").append("$options", "i")));
+            }
+        }
+
+        // 4. Text search
+        if (search != null && !search.isBlank()) {
+            String s = search.trim();
+            andConditions.add(new Document("$or", Arrays.asList(
+                new Document("title.ca_ES", new Document("$regex", s).append("$options", "i")),
+                new Document("title.es_ES", new Document("$regex", s).append("$options", "i")),
+                new Document("title.en_GB", new Document("$regex", s).append("$options", "i")),
+                new Document("status.reason", new Document("$regex", s).append("$options", "i")),
+                new Document("uuid", new Document("$regex", s).append("$options", "i")),
+                new Document("pureId", new Document("$regex", s).append("$options", "i")),
+                new Document("awardHolders.name.firstName", new Document("$regex", s).append("$options", "i")),
+                new Document("awardHolders.name.lastName", new Document("$regex", s).append("$options", "i"))
+            )));
+        }
+
+        // 5. Categoria filter
+        if (categoria != null && !categoria.isBlank() && !"all".equalsIgnoreCase(categoria)) {
+            andConditions.add(new Document("categoria", categoria.trim()));
+        }
+
+        // 6. Tipus filter
+        if (tipus != null && !tipus.isBlank() && !"all".equalsIgnoreCase(tipus)) {
+            andConditions.add(new Document("$or", Arrays.asList(
+                new Document("type.term.ca_ES", tipus.trim()),
+                new Document("type.term.es_ES", tipus.trim())
+            )));
+        }
+
+        // 7. Year filter
+        if (year != null && !year.isBlank() && !"all".equalsIgnoreCase(year)) {
+            andConditions.add(new Document("$or", Arrays.asList(
+                new Document("awardDate", new Document("$regex", year.trim())),
+                new Document("status.date", new Document("$regex", year.trim()))
+            )));
+        }
+
+        if (!andConditions.isEmpty()) {
+            matchQuery.put("$and", andConditions);
+        }
+
+        // Fetch matching documents
+        List<Document> rawDocs = mongoTemplate.getCollection("Awards")
+                .find(matchQuery)
+                .into(new ArrayList<>());
+
+        // Process records
+        List<Map<String, Object>> processedList = new ArrayList<>();
+        double totalAmountAll = 0.0;
+
+        Map<String, Integer> categoryCounts = new HashMap<>();
+        Map<String, Integer> typeCounts = new HashMap<>();
+        Map<String, Integer> statusTypeCounts = new HashMap<>();
+        Map<String, Integer> topReasonsMap = new HashMap<>();
+
+        for (Document doc : rawDocs) {
+            Map<String, Object> map = new HashMap<>();
+            map.put("uuid", doc.getString("uuid"));
+            map.put("pureId", doc.get("pureId"));
+
+            // Title
+            Document titleDoc = (Document) doc.get("title");
+            String title = "";
+            if (titleDoc != null) {
+                title = titleDoc.getString("ca_ES");
+                if (title == null || title.isBlank()) title = titleDoc.getString("es_ES");
+                if (title == null || title.isBlank()) title = titleDoc.getString("en_GB");
+            }
+            map.put("title", title != null ? title : "");
+
+            // Status & Reason
+            Document statusDoc = (Document) doc.get("status");
+            String docStatusType = "";
+            String statusDate = "";
+            String reason = "";
+            if (statusDoc != null) {
+                docStatusType = statusDoc.getString("typeDiscriminator");
+                statusDate = statusDoc.getString("date");
+                reason = statusDoc.getString("reason");
+            }
+            map.put("statusType", docStatusType != null ? docStatusType : "");
+            map.put("statusDate", statusDate != null ? statusDate : "");
+            map.put("reason", reason != null ? reason : "");
+
+            if (docStatusType != null && !docStatusType.isBlank()) {
+                statusTypeCounts.put(docStatusType, statusTypeCounts.getOrDefault(docStatusType, 0) + 1);
+            }
+
+            if (reason != null && !reason.isBlank()) {
+                String cleanReason = reason.trim();
+                topReasonsMap.put(cleanReason, topReasonsMap.getOrDefault(cleanReason, 0) + 1);
+            }
+
+            // Type & Category
+            Document typeDoc = (Document) doc.get("type");
+            String typeTerm = "";
+            if (typeDoc != null) {
+                Document termDoc = (Document) typeDoc.get("term");
+                if (termDoc != null) {
+                    typeTerm = termDoc.getString("ca_ES");
+                    if (typeTerm == null || typeTerm.isBlank()) typeTerm = termDoc.getString("es_ES");
+                }
+            }
+            typeTerm = typeTerm != null ? typeTerm : "Altres";
+            map.put("type", typeTerm);
+            typeCounts.put(typeTerm, typeCounts.getOrDefault(typeTerm, 0) + 1);
+
+            String cat = doc.getString("categoria");
+            cat = cat != null ? cat : "Sense categoria";
+            map.put("categoria", cat);
+            categoryCounts.put(cat, categoryCounts.getOrDefault(cat, 0) + 1);
+
+            // Award Date
+            Object awardDateObj = doc.get("awardDate");
+            String awardDateStr = awardDateObj != null ? awardDateObj.toString() : "";
+            map.put("awardDate", awardDateStr);
+
+            // Amount & Funders
+            double amount = 0.0;
+            String funderName = "";
+            List<?> fundings = (List<?>) doc.get("fundings");
+            if (fundings != null && !fundings.isEmpty()) {
+                for (Object fObj : fundings) {
+                    if (fObj instanceof Document fDoc) {
+                        Document amtDoc = (Document) fDoc.get("awardedAmount");
+                        if (amtDoc != null) {
+                            Object val = amtDoc.get("value");
+                            if (val instanceof Number n) {
+                                amount += n.doubleValue();
+                            } else if (val instanceof String strVal) {
+                                try { amount += Double.parseDouble(strVal); } catch (Exception ignored) {}
+                            }
+                        }
+                        if (funderName.isBlank()) {
+                            Document funderDoc = (Document) fDoc.get("funder");
+                            if (funderDoc != null) {
+                                funderName = funderDoc.getString("systemName");
+                            }
+                        }
+                    }
+                }
+            }
+            map.put("amount", amount);
+            totalAmountAll += amount;
+            map.put("funder", funderName);
+
+            // Holders (IPs / Beneficiaries)
+            List<Map<String, String>> holders = new ArrayList<>();
+            List<?> holdersList = (List<?>) doc.get("awardHolders");
+            if (holdersList != null) {
+                for (Object hObj : holdersList) {
+                    if (hObj instanceof Document hDoc) {
+                        Document nameDoc = (Document) hDoc.get("name");
+                        Document roleDoc = (Document) hDoc.get("role");
+                        String personName = "";
+                        if (nameDoc != null) {
+                            String first = nameDoc.getString("firstName");
+                            String last = nameDoc.getString("lastName");
+                            personName = ((first != null ? first : "") + " " + (last != null ? last : "")).trim();
+                        }
+                        String roleName = "";
+                        if (roleDoc != null) {
+                            Document rTerm = (Document) roleDoc.get("term");
+                            if (rTerm != null) {
+                                roleName = rTerm.getString("ca_ES");
+                                if (roleName == null) roleName = rTerm.getString("es_ES");
+                            }
+                        }
+                        if (!personName.isBlank()) {
+                            Map<String, String> hMap = new HashMap<>();
+                            hMap.put("name", personName);
+                            hMap.put("role", roleName != null ? roleName : "");
+                            holders.add(hMap);
+                        }
+                    }
+                }
+            }
+            map.put("holders", holders);
+
+            processedList.add(map);
+        }
+
+        // Sorting
+        final boolean isAsc = "asc".equalsIgnoreCase(sortOrder);
+        processedList.sort((a, b) -> {
+            int cmp = 0;
+            if ("amount".equalsIgnoreCase(sortBy)) {
+                Double aVal = (Double) a.getOrDefault("amount", 0.0);
+                Double bVal = (Double) b.getOrDefault("amount", 0.0);
+                cmp = Double.compare(aVal, bVal);
+            } else if ("title".equalsIgnoreCase(sortBy)) {
+                String aVal = (String) a.getOrDefault("title", "");
+                String bVal = (String) b.getOrDefault("title", "");
+                cmp = aVal.compareToIgnoreCase(bVal);
+            } else if ("reason".equalsIgnoreCase(sortBy)) {
+                String aVal = (String) a.getOrDefault("reason", "");
+                String bVal = (String) b.getOrDefault("reason", "");
+                cmp = aVal.compareToIgnoreCase(bVal);
+            } else {
+                // Default: statusDate / awardDate
+                String aVal = (String) a.getOrDefault("statusDate", "");
+                if (aVal.isBlank()) aVal = (String) a.getOrDefault("awardDate", "");
+                String bVal = (String) b.getOrDefault("statusDate", "");
+                if (bVal.isBlank()) bVal = (String) b.getOrDefault("awardDate", "");
+                cmp = aVal.compareToIgnoreCase(bVal);
+            }
+            return isAsc ? cmp : -cmp;
+        });
+
+        int totalElements = processedList.size();
+        List<Map<String, Object>> pagedContent;
+
+        if (exportAll) {
+            pagedContent = processedList;
+        } else {
+            int fromIndex = Math.min(page * size, totalElements);
+            int toIndex = Math.min(fromIndex + size, totalElements);
+            pagedContent = processedList.subList(fromIndex, toIndex);
+        }
+
+        // Prepare Top Reasons List (sorted by frequency)
+        List<Map<String, Object>> topReasonsList = topReasonsMap.entrySet().stream()
+                .sorted((e1, e2) -> Integer.compare(e2.getValue(), e1.getValue()))
+                .limit(20)
+                .map(e -> Map.<String, Object>of("reason", e.getKey(), "count", e.getValue()))
+                .toList();
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("content", pagedContent);
+        response.put("page", page);
+        response.put("size", size);
+        response.put("totalElements", totalElements);
+        response.put("totalPages", size > 0 ? (int) Math.ceil((double) totalElements / size) : 1);
+
+        Map<String, Object> summary = new HashMap<>();
+        summary.put("totalCount", totalElements);
+        summary.put("totalAmount", totalAmountAll);
+        summary.put("categoryCounts", categoryCounts);
+        summary.put("typeCounts", typeCounts);
+        summary.put("statusTypeCounts", statusTypeCounts);
+        summary.put("topReasons", topReasonsList);
+
+        response.put("summary", summary);
+
+        return response;
+    }
+
+    @GetMapping("/stats/reason-comparison")
+    public Map<String, Object> getReasonComparison(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String filterMode,
+            @RequestParam(defaultValue = "false") boolean exportAll) {
+
+        Document matchQuery = new Document();
+        List<Document> andConditions = new ArrayList<>();
+
+        andConditions.add(new Document("$or", Arrays.asList(
+            new Document("status.reason", new Document("$exists", true).append("$ne", null).append("$ne", "")),
+            new Document("keywordGroups.logicalName", "/uab/awards/estat_ajut"),
+            new Document("status.typeDiscriminator", new Document("$in", Arrays.asList("DeclinedAwardStatus", "CurtailedAwardStatus", "TerminatedAwardStatus")))
+        )));
+
+        if (search != null && !search.isBlank()) {
+            String s = search.trim();
+            andConditions.add(new Document("$or", Arrays.asList(
+                new Document("title.ca_ES", new Document("$regex", s).append("$options", "i")),
+                new Document("title.es_ES", new Document("$regex", s).append("$options", "i")),
+                new Document("title.en_GB", new Document("$regex", s).append("$options", "i")),
+                new Document("status.reason", new Document("$regex", s).append("$options", "i")),
+                new Document("uuid", new Document("$regex", s).append("$options", "i")),
+                new Document("pureId", new Document("$regex", s).append("$options", "i"))
+            )));
+        }
+
+        if (!andConditions.isEmpty()) {
+            matchQuery.put("$and", andConditions);
+        }
+
+        List<Document> rawDocs = mongoTemplate.getCollection("Awards")
+                .find(matchQuery)
+                .into(new ArrayList<>());
+
+        List<Map<String, Object>> processedList = new ArrayList<>();
+
+        int countHasReason = 0;
+        int countDiscrepancies = 0;
+        int countRenuncia = 0;
+
+        for (Document doc : rawDocs) {
+            Map<String, Object> item = new HashMap<>();
+            item.put("uuid", doc.getString("uuid"));
+            item.put("pureId", doc.get("pureId"));
+
+            // Title
+            Document titleDoc = (Document) doc.get("title");
+            String title = "";
+            if (titleDoc != null) {
+                title = titleDoc.getString("ca_ES");
+                if (title == null || title.isBlank()) title = titleDoc.getString("es_ES");
+                if (title == null || title.isBlank()) title = titleDoc.getString("en_GB");
+            }
+            item.put("title", title != null ? title : "");
+
+            // Status & Reason
+            Document statusDoc = (Document) doc.get("status");
+            String docStatusType = "";
+            String statusDate = "";
+            String reason = "";
+            if (statusDoc != null) {
+                docStatusType = statusDoc.getString("typeDiscriminator");
+                statusDate = statusDoc.getString("date");
+                reason = statusDoc.getString("reason");
+            }
+            item.put("statusType", docStatusType != null ? docStatusType : "");
+            item.put("statusDate", statusDate != null ? statusDate : "");
+            item.put("statusReason", reason != null ? reason : "");
+
+            boolean hasReason = reason != null && !reason.isBlank();
+            if (hasReason) countHasReason++;
+
+            // Extract keywordGroups details (estat_ajut, incidencies)
+            String estatAjut = "";
+            String incidencies = "";
+
+            List<?> kwGroups = (List<?>) doc.get("keywordGroups");
+            if (kwGroups != null) {
+                for (Object kwObj : kwGroups) {
+                    if (kwObj instanceof Document kwDoc) {
+                        String logName = kwDoc.getString("logicalName");
+                        List<?> containers = (List<?>) kwDoc.get("keywordContainers");
+                        if (containers != null) {
+                            for (Object cObj : containers) {
+                                if (cObj instanceof Document cDoc) {
+                                    Document skDoc = (Document) cDoc.get("structuredKeyword");
+                                    String skTerm = "";
+                                    if (skDoc != null) {
+                                        Document tDoc = (Document) skDoc.get("term");
+                                        if (tDoc != null) {
+                                            skTerm = tDoc.getString("ca_ES");
+                                            if (skTerm == null) skTerm = tDoc.getString("es_ES");
+                                        }
+                                    }
+                                    List<String> freeList = new ArrayList<>();
+                                    List<?> fkList = (List<?>) cDoc.get("freeKeywords");
+                                    if (fkList != null) {
+                                        for (Object fkObj : fkList) {
+                                            if (fkObj instanceof Document fkDoc) {
+                                                List<?> fWords = (List<?>) fkDoc.get("freeKeywords");
+                                                if (fWords != null) {
+                                                    for (Object w : fWords) {
+                                                        if (w != null) freeList.add(w.toString());
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                    String joinedFree = String.join(", ", freeList);
+
+                                    if ("/uab/awards/estat_ajut".equals(logName)) {
+                                        if (!skTerm.isBlank()) estatAjut = skTerm;
+                                    } else if ("/uab/awards/incidencies".equals(logName)) {
+                                        String entry = (skTerm.isBlank() ? "" : "[" + skTerm + "] ") + joinedFree;
+                                        incidencies = incidencies.isBlank() ? entry : incidencies + " | " + entry;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            item.put("estatAjut", estatAjut);
+            item.put("incidencies", incidencies);
+
+            boolean isRenuncia = (reason != null && reason.toLowerCase().matches(".*(renunc|renuncia|resign|declin).*"))
+                    || "Renunciada".equalsIgnoreCase(estatAjut)
+                    || "DeclinedAwardStatus".equalsIgnoreCase(docStatusType);
+            if (isRenuncia) countRenuncia++;
+
+            boolean isDiscrepancy = false;
+            if ("DeclinedAwardStatus".equalsIgnoreCase(docStatusType) && "Vigent".equalsIgnoreCase(estatAjut)) {
+                isDiscrepancy = true;
+            }
+            if (isDiscrepancy) countDiscrepancies++;
+
+            boolean isTerminatedWithReason = hasReason && ("TerminatedAwardStatus".equalsIgnoreCase(docStatusType) || "CurtailedAwardStatus".equalsIgnoreCase(docStatusType));
+
+            item.put("isRenuncia", isRenuncia);
+            item.put("isDiscrepancy", isDiscrepancy);
+            item.put("isTerminatedWithReason", isTerminatedWithReason);
+
+            if ("terminated_with_reason".equalsIgnoreCase(filterMode) && !isTerminatedWithReason) continue;
+            if ("discrepancy".equalsIgnoreCase(filterMode) && !isDiscrepancy) continue;
+            if ("has_reason".equalsIgnoreCase(filterMode) && !hasReason) continue;
+            if ("renuncia".equalsIgnoreCase(filterMode) && !isRenuncia) continue;
+
+            processedList.add(item);
+        }
+
+        processedList.sort((a, b) -> {
+            String aDate = (String) a.getOrDefault("statusDate", "");
+            String bDate = (String) b.getOrDefault("statusDate", "");
+            return bDate.compareTo(aDate);
+        });
+
+        int totalElements = processedList.size();
+        List<Map<String, Object>> pagedContent;
+
+        if (exportAll) {
+            pagedContent = processedList;
+        } else {
+            int fromIndex = Math.min(page * size, totalElements);
+            int toIndex = Math.min(fromIndex + size, totalElements);
+            pagedContent = processedList.subList(fromIndex, toIndex);
+        }
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("content", pagedContent);
+        response.put("page", page);
+        response.put("size", size);
+        response.put("totalElements", totalElements);
+        response.put("totalPages", size > 0 ? (int) Math.ceil((double) totalElements / size) : 1);
+
+        Map<String, Object> summary = new HashMap<>();
+        summary.put("totalAnalyzed", rawDocs.size());
+        summary.put("countHasReason", countHasReason);
+        summary.put("countDiscrepancies", countDiscrepancies);
+        summary.put("countRenuncia", countRenuncia);
+
+        response.put("summary", summary);
+
+        return response;
+    }
+
+    @GetMapping("/stats/distinct-reasons")
+    public Map<String, Object> getDistinctReasons(
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String statusType,
+            @RequestParam(defaultValue = "count") String sortBy,
+            @RequestParam(defaultValue = "desc") String sortOrder) {
+
+        List<Document> pipeline = new ArrayList<>();
+        Document matchQuery = new Document("status.reason", new Document("$exists", true).append("$ne", null).append("$ne", ""));
+
+        if (statusType != null && !statusType.isBlank() && !"all".equalsIgnoreCase(statusType)) {
+            if ("terminated".equalsIgnoreCase(statusType)) {
+                matchQuery.append("status.typeDiscriminator", new Document("$in", Arrays.asList("TerminatedAwardStatus", "CurtailedAwardStatus")));
+            } else {
+                matchQuery.append("status.typeDiscriminator", statusType.trim());
+            }
+        }
+
+        pipeline.add(new Document("$match", matchQuery));
+
+        pipeline.add(new Document("$group", new Document("_id", new Document("reason", "$status.reason").append("typeDiscriminator", "$status.typeDiscriminator"))
+            .append("count", new Document("$sum", 1))
+            .append("sampleTitle", new Document("$first", "$title.ca_ES"))
+            .append("sampleTitleEs", new Document("$first", "$title.es_ES"))
+            .append("sampleTitleEn", new Document("$first", "$title.en_GB"))
+            .append("sampleUuid", new Document("$first", "$uuid"))
+            .append("samplePureId", new Document("$first", "$pureId"))
+            .append("sampleType", new Document("$first", "$type.term.ca_ES"))
+            .append("sampleCategory", new Document("$first", "$categoria"))
+        ));
+
+        List<Document> rawGrouped = mongoTemplate.getCollection("Awards")
+                .aggregate(pipeline)
+                .into(new ArrayList<>());
+
+        List<Map<String, Object>> processed = new ArrayList<>();
+        int totalProjectsWithReason = 0;
+
+        for (Document d : rawGrouped) {
+            Document idDoc = (Document) d.get("_id");
+            String reason = idDoc != null ? idDoc.getString("reason") : "";
+            String stType = idDoc != null ? idDoc.getString("typeDiscriminator") : "";
+
+            int cnt = d.getInteger("count", 0);
+            totalProjectsWithReason += cnt;
+
+            if (search != null && !search.isBlank()) {
+                String s = search.trim().toLowerCase();
+                if (!reason.toLowerCase().contains(s) && !stType.toLowerCase().contains(s)) {
+                    continue;
+                }
+            }
+
+            String sampleTitle = d.getString("sampleTitle");
+            if (sampleTitle == null || sampleTitle.isBlank()) sampleTitle = d.getString("sampleTitleEs");
+            if (sampleTitle == null || sampleTitle.isBlank()) sampleTitle = d.getString("sampleTitleEn");
+
+            Map<String, Object> map = new HashMap<>();
+            map.put("reason", reason != null ? reason : "");
+            map.put("statusType", stType != null ? stType : "");
+            map.put("count", cnt);
+            map.put("sampleTitle", sampleTitle != null ? sampleTitle : "");
+            map.put("sampleUuid", d.getString("sampleUuid"));
+            map.put("samplePureId", d.get("samplePureId"));
+            map.put("sampleType", d.getString("sampleType"));
+            map.put("sampleCategory", d.getString("sampleCategory"));
+
+            processed.add(map);
+        }
+
+        final boolean isAsc = "asc".equalsIgnoreCase(sortOrder);
+        processed.sort((a, b) -> {
+            int cmp = 0;
+            if ("reason".equalsIgnoreCase(sortBy)) {
+                String aR = (String) a.getOrDefault("reason", "");
+                String bR = (String) b.getOrDefault("reason", "");
+                cmp = aR.compareToIgnoreCase(bR);
+            } else {
+                Integer aC = (Integer) a.getOrDefault("count", 0);
+                Integer bC = (Integer) b.getOrDefault("count", 0);
+                cmp = Integer.compare(aC, bC);
+            }
+            return isAsc ? cmp : -cmp;
+        });
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("content", processed);
+        response.put("totalDistinctReasons", processed.size());
+        response.put("totalProjectsWithReason", totalProjectsWithReason);
+
+        return response;
     }
 
     private Object getByPath(Object root, String path) {
