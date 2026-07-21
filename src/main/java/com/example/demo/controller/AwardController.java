@@ -2907,6 +2907,531 @@ public class AwardController {
         return response;
     }
 
+    private LocalDate parseAnyDate(Object raw) {
+        if (raw == null) return null;
+        if (raw instanceof Date d) {
+            return d.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
+        }
+        if (raw instanceof String s && !s.isBlank()) {
+            try {
+                if (s.length() >= 10) {
+                    return LocalDate.parse(s.substring(0, 10));
+                }
+            } catch (Exception e) {}
+        }
+        return null;
+    }
+
+    @GetMapping("/stats/scholarship-employment-nature")
+    public Map<String, Object> getScholarshipEmploymentNatureStats(
+            @RequestParam(required = false) String role,
+            @RequestParam(required = false) String nature,
+            @RequestParam(required = false) String employmentType,
+            @RequestParam(required = false) String search,
+            @RequestParam(defaultValue = "false") boolean excludeResigned) {
+
+        List<String> availableTypes = mongoTemplate.getCollection("Awards")
+                .distinct("type.term.ca_ES", new Document("workflow.step", "validated"), String.class)
+                .into(new ArrayList<>())
+                .stream()
+                .filter(t -> t != null && (t.contains("Beques") || t.contains("Becas") || t.contains("Fellowship")))
+                .collect(java.util.stream.Collectors.toList());
+
+        if (availableTypes.isEmpty()) {
+            availableTypes = Arrays.asList("Beques", "Beques Internacionals");
+        }
+
+        Document matchStage = new Document("workflow.step", "validated")
+                .append("type.term.ca_ES", new Document("$in", availableTypes));
+
+        if (nature != null && !nature.isBlank() && !"all".equalsIgnoreCase(nature)) {
+            matchStage.append("natureTypes.term.ca_ES", nature);
+        }
+
+        List<Document> awards = mongoTemplate.getCollection("Awards")
+                .find(matchStage)
+                .projection(new Document("uuid", 1)
+                        .append("natureTypes", 1)
+                        .append("awardHolders", 1)
+                        .append("status", 1)
+                        .append("awardDate", 1)
+                        .append("actualPeriod", 1)
+                        .append("expectedPeriod", 1))
+                .into(new ArrayList<>());
+
+        Set<String> personUuids = new HashSet<>();
+        for (Document award : awards) {
+            if (excludeResigned) {
+                Document statusDoc = (Document) award.get("status");
+                if (statusDoc != null && "DeclinedAwardStatus".equals(statusDoc.getString("typeDiscriminator"))) {
+                    continue;
+                }
+            }
+            List<Document> holders = (List<Document>) award.get("awardHolders");
+            if (holders != null) {
+                for (Document h : holders) {
+                    Document personRef = (Document) h.get("person");
+                    if (personRef != null && personRef.getString("uuid") != null) {
+                        personUuids.add(personRef.getString("uuid"));
+                    }
+                }
+            }
+        }
+
+        Map<String, Document> personMap = new HashMap<>();
+        if (!personUuids.isEmpty()) {
+            List<Document> personDocs = mongoTemplate.getCollection("Persons")
+                    .find(new Document("uuid", new Document("$in", new ArrayList<>(personUuids))))
+                    .projection(new Document("uuid", 1)
+                            .append("employmentType", 1)
+                            .append("staffOrganizationAssociations", 1))
+                    .into(new ArrayList<>());
+
+            for (Document pDoc : personDocs) {
+                String pUuid = pDoc.getString("uuid");
+                if (pUuid != null) {
+                    personMap.put(pUuid, pDoc);
+                }
+            }
+        }
+
+        List<Map<String, Object>> rows = new ArrayList<>();
+        Map<String, Integer> matrixCounts = new HashMap<>();
+        Set<String> distinctNatures = new java.util.TreeSet<>();
+        Set<String> distinctEmpTypes = new java.util.TreeSet<>();
+        Set<String> matchedAwardUuids = new HashSet<>();
+        Set<String> matchedPersonUuids = new HashSet<>();
+
+        int totalLinks = 0;
+
+        for (Document award : awards) {
+            if (excludeResigned) {
+                Document statusDoc = (Document) award.get("status");
+                if (statusDoc != null && "DeclinedAwardStatus".equals(statusDoc.getString("typeDiscriminator"))) {
+                    continue;
+                }
+            }
+
+            Document actPer = (Document) award.get("actualPeriod");
+            Document expPer = (Document) award.get("expectedPeriod");
+            LocalDate awardDate = parseAnyDate(award.get("awardDate"));
+
+            LocalDate aStart = parseAnyDate(actPer != null ? actPer.get("startDate") : (expPer != null ? expPer.get("startDate") : null));
+            if (aStart == null) aStart = awardDate;
+            LocalDate aEnd = parseAnyDate(actPer != null ? actPer.get("endDate") : (expPer != null ? expPer.get("endDate") : null));
+
+            List<String> natureNames = new ArrayList<>();
+            List<Document> natureList = (List<Document>) award.get("natureTypes");
+            if (natureList != null && !natureList.isEmpty()) {
+                for (Document nDoc : natureList) {
+                    Document termDoc = (Document) nDoc.get("term");
+                    if (termDoc != null && termDoc.getString("ca_ES") != null) {
+                        natureNames.add(termDoc.getString("ca_ES"));
+                    }
+                }
+            }
+            if (natureNames.isEmpty()) {
+                natureNames.add("Sense Natura");
+            }
+
+            List<Document> holders = (List<Document>) award.get("awardHolders");
+            if (holders == null || holders.isEmpty()) {
+                holders = Collections.singletonList(new Document());
+            }
+
+            for (Document h : holders) {
+                Document roleDoc = (Document) h.get("role");
+                String roleUri = roleDoc != null ? roleDoc.getString("uri") : "";
+                String roleCa = roleDoc != null && roleDoc.get("term") instanceof Document tDoc ? tDoc.getString("ca_ES") : "";
+                String roleEs = roleDoc != null && roleDoc.get("term") instanceof Document tDoc ? tDoc.getString("es_ES") : "";
+
+                boolean matchesRole = false;
+                if (role == null || role.isBlank() || "all".equalsIgnoreCase(role)) {
+                    matchesRole = true;
+                } else if ("beneficiari".equalsIgnoreCase(role) || "strict_beneficiari".equalsIgnoreCase(role)) {
+                    matchesRole = isStrictBeneficiaryRole(roleUri, roleCa, roleEs);
+                } else if ("candidat".equalsIgnoreCase(role)) {
+                    matchesRole = isCandidateRole(roleUri, roleCa, roleEs);
+                } else if ("beneficiari_and_candidate".equalsIgnoreCase(role)) {
+                    matchesRole = isBeneficiaryRole(roleUri, roleCa, roleEs);
+                } else if ("pi".equalsIgnoreCase(role) || "investigador".equalsIgnoreCase(role)) {
+                    matchesRole = isInvestigatorRole(roleUri, roleCa, roleEs);
+                }
+
+                if (!matchesRole) {
+                    continue;
+                }
+
+                Document personRef = (Document) h.get("person");
+                String pUuid = personRef != null ? personRef.getString("uuid") : null;
+                List<String> holderEmpTypes = new ArrayList<>();
+
+                Document pDoc = pUuid != null ? personMap.get(pUuid) : null;
+                if (pDoc != null) {
+                    List<Document> assocs = (List<Document>) pDoc.get("staffOrganizationAssociations");
+                    if (assocs != null) {
+                        for (Document assoc : assocs) {
+                            Document empTypeDoc = (Document) assoc.get("employmentType");
+                            if (empTypeDoc != null && empTypeDoc.get("term") instanceof Document termDoc) {
+                                String termCa = termDoc.getString("ca_ES");
+                                if (termCa != null && !termCa.isBlank()) {
+                                    Document aper = (Document) assoc.get("period");
+                                    LocalDate pStart = aper != null ? parseAnyDate(aper.get("startDate")) : null;
+                                    LocalDate pEnd = aper != null ? parseAnyDate(aper.get("endDate")) : null;
+
+                                    boolean overlaps = true;
+                                    if (pStart != null && aEnd != null && pStart.isAfter(aEnd)) {
+                                        overlaps = false;
+                                    }
+                                    if (pEnd != null && aStart != null && pEnd.isBefore(aStart)) {
+                                        overlaps = false;
+                                    }
+
+                                    if (overlaps && !holderEmpTypes.contains(termCa)) {
+                                        holderEmpTypes.add(termCa);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (holderEmpTypes.isEmpty()) {
+                    holderEmpTypes.add("Sense Employment Type en el període");
+                }
+
+                String displayRole = roleCa != null && !roleCa.isBlank() ? roleCa : "Sense Rol";
+
+                matchedAwardUuids.add(award.getString("uuid"));
+                if (pUuid != null) {
+                    matchedPersonUuids.add(pUuid);
+                }
+
+                for (String nName : natureNames) {
+                    distinctNatures.add(nName);
+                    for (String eName : holderEmpTypes) {
+                        if (employmentType != null && !employmentType.isBlank() && !"all".equalsIgnoreCase(employmentType)) {
+                            if (!eName.equalsIgnoreCase(employmentType)) {
+                                continue;
+                            }
+                        }
+
+                        if (search != null && !search.isBlank()) {
+                            String cleanSearch = search.trim().toLowerCase();
+                            boolean matchesSearch = nName.toLowerCase().contains(cleanSearch) ||
+                                                    eName.toLowerCase().contains(cleanSearch) ||
+                                                    displayRole.toLowerCase().contains(cleanSearch);
+                            if (!matchesSearch) {
+                                continue;
+                            }
+                        }
+
+                        distinctEmpTypes.add(eName);
+
+                        String matrixKey = nName + "|||" + eName + "|||" + displayRole;
+                        matrixCounts.put(matrixKey, matrixCounts.getOrDefault(matrixKey, 0) + 1);
+                        totalLinks++;
+                    }
+                }
+            }
+        }
+
+        for (Map.Entry<String, Integer> entry : matrixCounts.entrySet()) {
+            String[] parts = entry.getKey().split("\\|\\|\\|");
+            String nName = parts[0];
+            String eName = parts[1];
+            String rName = parts.length > 2 ? parts[2] : "Sense Rol";
+            int count = entry.getValue();
+
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("nature", nName);
+            row.put("employmentType", eName);
+            row.put("role", rName);
+            row.put("count", count);
+            row.put("percentage", totalLinks > 0 ? Math.round((double) count * 1000.0 / totalLinks) / 10.0 : 0.0);
+            rows.add(row);
+        }
+
+        rows.sort((a, b) -> Integer.compare((Integer) b.get("count"), (Integer) a.get("count")));
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("totalAwards", matchedAwardUuids.size());
+        result.put("totalPersons", matchedPersonUuids.size());
+        result.put("totalLinks", totalLinks);
+        result.put("natures", new ArrayList<>(distinctNatures));
+        result.put("employmentTypes", new ArrayList<>(distinctEmpTypes));
+        result.put("rows", rows);
+
+        return result;
+    }
+
+    @GetMapping("/stats/scholarship-employment-nature-details")
+    public List<Map<String, Object>> getScholarshipEmploymentNatureDetails(
+            @RequestParam(required = false) String nature,
+            @RequestParam(required = false) String employmentType,
+            @RequestParam(required = false) String role,
+            @RequestParam(defaultValue = "false") boolean excludeResigned) {
+
+        List<String> availableTypes = mongoTemplate.getCollection("Awards")
+                .distinct("type.term.ca_ES", new Document("workflow.step", "validated"), String.class)
+                .into(new ArrayList<>())
+                .stream()
+                .filter(t -> t != null && (t.contains("Beques") || t.contains("Becas") || t.contains("Fellowship")))
+                .collect(java.util.stream.Collectors.toList());
+
+        if (availableTypes.isEmpty()) {
+            availableTypes = Arrays.asList("Beques", "Beques Internacionals");
+        }
+
+        Document matchStage = new Document("workflow.step", "validated")
+                .append("type.term.ca_ES", new Document("$in", availableTypes));
+
+        if (nature != null && !nature.isBlank() && !"all".equalsIgnoreCase(nature)) {
+            matchStage.append("natureTypes.term.ca_ES", nature);
+        }
+
+        List<Document> awards = mongoTemplate.getCollection("Awards")
+                .find(matchStage)
+                .projection(new Document("uuid", 1)
+                        .append("pureId", 1)
+                        .append("title", 1)
+                        .append("natureTypes", 1)
+                        .append("awardHolders", 1)
+                        .append("status", 1)
+                        .append("awardDate", 1)
+                        .append("actualPeriod", 1)
+                        .append("expectedPeriod", 1)
+                        .append("portalUrl", 1))
+                .into(new ArrayList<>());
+
+        Set<String> personUuids = new HashSet<>();
+        for (Document award : awards) {
+            if (excludeResigned) {
+                Document statusDoc = (Document) award.get("status");
+                if (statusDoc != null && "DeclinedAwardStatus".equals(statusDoc.getString("typeDiscriminator"))) {
+                    continue;
+                }
+            }
+            List<Document> holders = (List<Document>) award.get("awardHolders");
+            if (holders != null) {
+                for (Document h : holders) {
+                    Document personRef = (Document) h.get("person");
+                    if (personRef != null && personRef.getString("uuid") != null) {
+                        personUuids.add(personRef.getString("uuid"));
+                    }
+                }
+            }
+        }
+
+        Map<String, Document> personMap = new HashMap<>();
+        if (!personUuids.isEmpty()) {
+            List<Document> personDocs = mongoTemplate.getCollection("Persons")
+                    .find(new Document("uuid", new Document("$in", new ArrayList<>(personUuids))))
+                    .projection(new Document("uuid", 1)
+                            .append("pureId", 1)
+                            .append("name", 1)
+                            .append("employmentType", 1)
+                            .append("staffOrganizationAssociations", 1))
+                    .into(new ArrayList<>());
+
+            for (Document pDoc : personDocs) {
+                String pUuid = pDoc.getString("uuid");
+                if (pUuid != null) {
+                    personMap.put(pUuid, pDoc);
+                }
+            }
+        }
+
+        List<Map<String, Object>> result = new ArrayList<>();
+
+        for (Document award : awards) {
+            if (excludeResigned) {
+                Document statusDoc = (Document) award.get("status");
+                if (statusDoc != null && "DeclinedAwardStatus".equals(statusDoc.getString("typeDiscriminator"))) {
+                    continue;
+                }
+            }
+
+            Document actPer = (Document) award.get("actualPeriod");
+            Document expPer = (Document) award.get("expectedPeriod");
+            LocalDate awardDate = parseAnyDate(award.get("awardDate"));
+
+            LocalDate aStart = parseAnyDate(actPer != null ? actPer.get("startDate") : (expPer != null ? expPer.get("startDate") : null));
+            if (aStart == null) aStart = awardDate;
+            LocalDate aEnd = parseAnyDate(actPer != null ? actPer.get("endDate") : (expPer != null ? expPer.get("endDate") : null));
+
+            String titleText = "Sense Títol";
+            Object titleObj = award.get("title");
+            if (titleObj instanceof Document tDoc) {
+                String ca = tDoc.getString("ca_ES");
+                String es = tDoc.getString("es_ES");
+                String en = tDoc.getString("en_GB");
+                if (ca != null && !ca.isBlank()) titleText = ca;
+                else if (es != null && !es.isBlank()) titleText = es;
+                else if (en != null && !en.isBlank()) titleText = en;
+            } else if (titleObj instanceof String s && !s.isBlank()) {
+                titleText = s;
+            }
+
+            List<Document> holders = (List<Document>) award.get("awardHolders");
+            if (holders == null || holders.isEmpty()) {
+                holders = Collections.singletonList(new Document());
+            }
+
+            List<Map<String, Object>> matchedHoldersList = new ArrayList<>();
+
+            for (Document h : holders) {
+                Document roleDoc = (Document) h.get("role");
+                String roleUri = roleDoc != null ? roleDoc.getString("uri") : "";
+                String roleCa = roleDoc != null && roleDoc.get("term") instanceof Document tDoc ? tDoc.getString("ca_ES") : "";
+                String roleEs = roleDoc != null && roleDoc.get("term") instanceof Document tDoc ? tDoc.getString("es_ES") : "";
+
+                boolean matchesRole = false;
+                if (role == null || role.isBlank() || "all".equalsIgnoreCase(role)) {
+                    matchesRole = true;
+                } else if ("beneficiari".equalsIgnoreCase(role) || "strict_beneficiari".equalsIgnoreCase(role)) {
+                    matchesRole = isStrictBeneficiaryRole(roleUri, roleCa, roleEs);
+                } else if ("candidat".equalsIgnoreCase(role)) {
+                    matchesRole = isCandidateRole(roleUri, roleCa, roleEs);
+                } else if ("pi".equalsIgnoreCase(role) || "investigador".equalsIgnoreCase(role)) {
+                    matchesRole = isInvestigatorRole(roleUri, roleCa, roleEs);
+                }
+
+                if (!matchesRole) {
+                    continue;
+                }
+
+                Document personRef = (Document) h.get("person");
+                String pUuid = personRef != null ? personRef.getString("uuid") : null;
+                List<String> holderEmpTypes = new ArrayList<>();
+                List<Map<String, Object>> holderEmploymentsDetails = new ArrayList<>();
+                String fullName = "Desconegut";
+
+                Document pDoc = pUuid != null ? personMap.get(pUuid) : null;
+                if (pDoc != null) {
+                    Object nameObj = pDoc.get("name");
+                    if (nameObj instanceof Document nDoc) {
+                        String first = nDoc.getString("firstName");
+                        String last = nDoc.getString("lastName");
+                        if (last != null && first != null) fullName = last + ", " + first;
+                        else if (last != null) fullName = last;
+                        else if (first != null) fullName = first;
+                    }
+
+                    List<Document> assocs = (List<Document>) pDoc.get("staffOrganizationAssociations");
+                    if (assocs != null) {
+                        for (Document assoc : assocs) {
+                            Document empTypeDoc = (Document) assoc.get("employmentType");
+                            if (empTypeDoc != null && empTypeDoc.get("term") instanceof Document termDoc) {
+                                String termCa = termDoc.getString("ca_ES");
+                                if (termCa != null && !termCa.isBlank()) {
+                                    Document aper = (Document) assoc.get("period");
+                                    LocalDate pStart = aper != null ? parseAnyDate(aper.get("startDate")) : null;
+                                    LocalDate pEnd = aper != null ? parseAnyDate(aper.get("endDate")) : null;
+
+                                    boolean overlaps = true;
+                                    if (pStart != null && aEnd != null && pStart.isAfter(aEnd)) {
+                                        overlaps = false;
+                                    }
+                                    if (pEnd != null && aStart != null && pEnd.isBefore(aStart)) {
+                                        overlaps = false;
+                                    }
+
+                                    if (overlaps) {
+                                        if (!holderEmpTypes.contains(termCa)) {
+                                            holderEmpTypes.add(termCa);
+                                        }
+                                        Map<String, Object> empDetail = new LinkedHashMap<>();
+                                        empDetail.put("type", termCa);
+                                        empDetail.put("startDate", pStart != null ? pStart.toString() : null);
+                                        empDetail.put("endDate", pEnd != null ? pEnd.toString() : null);
+                                        holderEmploymentsDetails.add(empDetail);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (holderEmpTypes.isEmpty()) {
+                    holderEmpTypes.add("Sense Employment Type en el període");
+                    Map<String, Object> empDetail = new LinkedHashMap<>();
+                    empDetail.put("type", "Sense Employment Type en el període");
+                    empDetail.put("startDate", null);
+                    empDetail.put("endDate", null);
+                    holderEmploymentsDetails.add(empDetail);
+                }
+
+                // Sort employments from oldest to newest (by startDate ascending)
+                holderEmploymentsDetails.sort((e1, e2) -> {
+                    String s1 = (String) e1.get("startDate");
+                    String s2 = (String) e2.get("startDate");
+                    if (s1 == null && s2 == null) return 0;
+                    if (s1 == null) return -1;
+                    if (s2 == null) return 1;
+                    return s1.compareTo(s2);
+                });
+
+                boolean empTypeMatches = false;
+                if (employmentType == null || employmentType.isBlank() || "all".equalsIgnoreCase(employmentType)) {
+                    empTypeMatches = true;
+                } else {
+                    for (String et : holderEmpTypes) {
+                        if (et.equalsIgnoreCase(employmentType)) {
+                            empTypeMatches = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (empTypeMatches) {
+                    Object pPureIdObj = pDoc != null ? pDoc.get("pureId") : null;
+                    String pPureIdStr = pPureIdObj != null ? pPureIdObj.toString() : null;
+                    String personEgretaUrl = pPureIdStr != null && !pPureIdStr.isBlank() ?
+                            "https://egreta.uab.cat/admin/editor/dk/atira/pure/api/shared/model/person/editor/personeditor.xhtml?scheme=&type=&id=" + pPureIdStr : null;
+
+                    Map<String, Object> holderMap = new LinkedHashMap<>();
+                    holderMap.put("personUuid", pUuid);
+                    holderMap.put("personPureId", pPureIdStr);
+                    holderMap.put("personEgretaUrl", personEgretaUrl);
+                    holderMap.put("name", fullName);
+                    holderMap.put("role", roleCa != null && !roleCa.isBlank() ? roleCa : "Sense Rol");
+                    holderMap.put("employmentTypes", holderEmpTypes);
+                    holderMap.put("employments", holderEmploymentsDetails);
+                    matchedHoldersList.add(holderMap);
+                }
+            }
+
+            if (!matchedHoldersList.isEmpty()) {
+                String uuid = award.getString("uuid");
+                String portalUrl = award.getString("portalUrl");
+                if (portalUrl == null || portalUrl.isBlank()) {
+                    portalUrl = "https://portalrecerca.uab.cat/en/projects/" + uuid;
+                }
+
+                Object pIdObj = award.get("pureId");
+                String pIdStr = pIdObj != null ? pIdObj.toString() : null;
+                String egretaUrl = pIdStr != null && !pIdStr.isBlank() ?
+                        "https://egreta.uab.cat/admin/editor/dk/atira/pure/modules/unifiedprojectmodel/external/model/award/editor/awardeditor.xhtml?scheme=&type=&id=" + pIdStr :
+                        "https://egreta.uab.cat/ws/api/awards/" + uuid;
+
+                Map<String, Object> awardDetail = new LinkedHashMap<>();
+                awardDetail.put("uuid", uuid);
+                awardDetail.put("pureId", award.get("pureId"));
+                awardDetail.put("title", titleText);
+                awardDetail.put("portalUrl", portalUrl);
+                awardDetail.put("egretaUrl", egretaUrl);
+                awardDetail.put("startDate", aStart != null ? aStart.toString() : null);
+                awardDetail.put("endDate", aEnd != null ? aEnd.toString() : null);
+                awardDetail.put("holders", matchedHoldersList);
+
+                result.add(awardDetail);
+            }
+        }
+
+        return result;
+    }
+
     @GetMapping("/stats/fellowship-call-types")
     public List<String> getFellowshipCallTypes() {
         List<String> appUuids = mongoTemplate.getCollection("Awards")
@@ -3257,6 +3782,28 @@ public class AwardController {
             }
         }
         return result;
+    }
+
+    private boolean isStrictBeneficiaryRole(String uri, String ca, String es) {
+        List<String> uris = Arrays.asList(
+            "/dk/atira/pure/award/roles/award/ben",
+            "/dk/atira/pure/award/roles/award/bec"
+        );
+        List<String> terms = Arrays.asList(
+            "beneficiari/a", "becari/a",
+            "beneficiario/a", "becario/a"
+        );
+        if (uri != null && uris.contains(uri.toLowerCase())) return true;
+        if (ca != null && terms.contains(ca.toLowerCase())) return true;
+        if (es != null && terms.contains(es.toLowerCase())) return true;
+        return false;
+    }
+
+    private boolean isCandidateRole(String uri, String ca, String es) {
+        if (uri != null && uri.toLowerCase().contains("/can")) return true;
+        if (ca != null && ca.toLowerCase().contains("candidat")) return true;
+        if (es != null && es.toLowerCase().contains("candidat")) return true;
+        return false;
     }
 
     private boolean isBeneficiaryRole(String uri, String ca, String es) {

@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Relació Employment Type vs Natura de Beca - Portal de Recerca UAB</title>
+    <script src="config.js"></script>
+    <script src="uab-brand.js" defer></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="uab-theme.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .kpi-card {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .kpi-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
+        }
+        .heat-cell-0 { background-color: #f8fafc; color: #94a3b8; }
+        .heat-cell-low { background-color: #e0e7ff; color: #3730a3; }
+        .heat-cell-medium { background-color: #818cf8; color: #ffffff; font-weight: 700; }
+        .heat-cell-high { background-color: #4338ca; color: #ffffff; font-weight: 800; }
+        .tab-active {
+            background-color: #ffffff;
+            color: #4338ca;
+            border-bottom: 2px solid #4338ca;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+        }
+        .tab-inactive {
+            background-color: transparent;
+            color: #64748b;
+        }
+        .tab-inactive:hover {
+            color: #1e293b;
+            background-color: #e2e8f0;
+        }
+    </style>
+</head>
+<body class="bg-[#f1f2f4] min-h-screen text-slate-800 font-sans">
+
+    <div class="mx-auto px-4 sm:px-6 py-8 max-w-7xl">
+        <!-- Structural Header for Brandbar subtitle -->
+        <header class="mb-6 hidden">
+            <h1 class="text-2xl font-extrabold text-slate-800">Relació Natura de la Beca i Tipus d'Ocupació</h1>
+            <p class="text-sm text-slate-500 mt-1">Anàlisi del tipus d'ocupació (Employment Type) dels titulars durant el període d'execució de la beca segons la natura de l'ajut</p>
+        </header>
+
+        <!-- Filters Section -->
+        <section class="bg-white border border-slate-200 rounded-2xl shadow-sm p-5 mb-6">
+            <div class="flex flex-col gap-4">
+                <!-- Role Selector Tabs -->
+                <div class="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 pb-4">
+                    <div class="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
+                        <button id="btnRoleBen" onclick="setRoleFilter('beneficiari')" 
+                            class="px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2 tab-active">
+                            <i class="fa-solid fa-graduation-cap"></i> Beneficiaris
+                        </button>
+                        <button id="btnRoleCan" onclick="setRoleFilter('candidat')" 
+                            class="px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2 tab-inactive">
+                            <i class="fa-solid fa-user-graduate"></i> Candidats
+                        </button>
+                        <button id="btnRolePi" onclick="setRoleFilter('pi')" 
+                            class="px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2 tab-inactive">
+                            <i class="fa-solid fa-user-tie"></i> Investigadors Principals
+                        </button>
+                        <button id="btnRoleAll" onclick="setRoleFilter('all')" 
+                            class="px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2 tab-inactive">
+                            <i class="fa-solid fa-users"></i> Tots els Rols
+                        </button>
+                    </div>
+
+                    <!-- View Switcher & Export -->
+                    <div class="flex items-center gap-3">
+                        <a href="beques.html" class="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-2">
+                            <i class="fa-solid fa-arrow-left"></i> Tornar a Beques
+                        </a>
+                        <div class="inline-flex bg-slate-100 p-1 rounded-xl">
+                            <button id="btnViewTable" onclick="switchView('table')" 
+                                class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-white shadow-sm text-slate-800 flex items-center gap-1.5">
+                                <i class="fa-solid fa-list-check"></i> Taula Detallada
+                            </button>
+                            <button id="btnViewMatrix" onclick="switchView('matrix')" 
+                                class="px-3 py-1.5 text-xs font-semibold rounded-lg text-slate-500 hover:text-slate-800 flex items-center gap-1.5">
+                                <i class="fa-solid fa-table-cells"></i> Matriu Creuada
+                            </button>
+                        </div>
+                        <button onclick="exportToCSV()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-2 shadow-sm">
+                            <i class="fa-solid fa-file-csv"></i> Exportar CSV
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Secondary Filters Grid -->
+                <div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+                    <!-- Nature Filter -->
+                    <div class="md:col-span-4">
+                        <label for="selectNature" class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Natura de la Beca</label>
+                        <select id="selectNature" onchange="fetchData()" class="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition cursor-pointer">
+                            <option value="all">Totes les Natures</option>
+                        </select>
+                    </div>
+
+                    <!-- Employment Type Filter -->
+                    <div class="md:col-span-4">
+                        <label for="selectEmployment" class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Employment Type (Ocupació)</label>
+                        <select id="selectEmployment" onchange="fetchData()" class="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition cursor-pointer">
+                            <option value="all">Tots els Tipus d'Ocupació</option>
+                        </select>
+                    </div>
+
+                    <!-- Search Input -->
+                    <div class="md:col-span-3">
+                        <label for="inputSearch" class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Cerca Ràpida</label>
+                        <div class="relative">
+                            <input type="text" id="inputSearch" onkeyup="handleSearchKeyup(event)" placeholder="Cerca per natura o ocupació..." 
+                                class="w-full border border-slate-300 rounded-xl pl-9 pr-3 py-2 text-xs focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition">
+                            <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-400 text-xs"></i>
+                        </div>
+                    </div>
+
+                    <!-- Exclude Resigned Checkbox -->
+                    <div class="md:col-span-1 flex items-center justify-start pb-2">
+                        <label class="flex items-center gap-2 cursor-pointer select-none">
+                            <input type="checkbox" id="chkExcludeResigned" onchange="fetchData()" class="w-4 h-4 rounded text-indigo-600 border-slate-300 focus:ring-indigo-500">
+                            <span class="text-xs font-medium text-slate-600">Excloure renúncies</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Spinner -->
+        <div id="loader" class="flex flex-col items-center justify-center py-20 gap-4">
+            <div class="w-12 h-12 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
+            <p class="text-slate-500 font-medium text-sm">Carregant relacions de beques i tipus d'ocupació...</p>
+        </div>
+
+        <!-- Content Area -->
+        <div id="content" class="hidden">
+            <!-- KPI Grid -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-6">
+                <!-- KPI 1 -->
+                <div class="kpi-card bg-white border border-slate-200 rounded-2xl p-4 flex items-center gap-4">
+                    <div class="w-11 h-11 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center text-xl font-bold">
+                        <i class="fa-solid fa-award"></i>
+                    </div>
+                    <div>
+                        <p class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Total Beques</p>
+                        <p id="kpiAwards" class="text-2xl font-black text-slate-800">0</p>
+                    </div>
+                </div>
+
+                <!-- KPI 2 -->
+                <div class="kpi-card bg-white border border-slate-200 rounded-2xl p-4 flex items-center gap-4">
+                    <div class="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl font-bold">
+                        <i class="fa-solid fa-user-graduate"></i>
+                    </div>
+                    <div>
+                        <p id="lblKpiPersons" class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Persones Titulars</p>
+                        <p id="kpiPersons" class="text-2xl font-black text-slate-800">0</p>
+                    </div>
+                </div>
+
+                <!-- KPI 3 -->
+                <div class="kpi-card bg-white border border-slate-200 rounded-2xl p-4 flex items-center gap-4">
+                    <div class="w-11 h-11 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center text-xl font-bold">
+                        <i class="fa-solid fa-diagram-project"></i>
+                    </div>
+                    <div>
+                        <p class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Total Vinculacions</p>
+                        <p id="kpiLinks" class="text-2xl font-black text-slate-800">0</p>
+                    </div>
+                </div>
+
+                <!-- KPI 4 -->
+                <div class="kpi-card bg-white border border-slate-200 rounded-2xl p-4 flex items-center gap-4">
+                    <div class="w-11 h-11 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center text-xl font-bold">
+                        <i class="fa-solid fa-briefcase"></i>
+                    </div>
+                    <div>
+                        <p class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Tipus d'Ocupació</p>
+                        <p id="kpiEmpTypes" class="text-2xl font-black text-slate-800">0</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- View 1: Detailed Table View -->
+            <div id="viewTableContainer" class="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden mb-8">
+                <div class="p-4 border-b border-slate-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 bg-slate-50/50">
+                    <div>
+                        <h2 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                            <i class="fa-solid fa-table-list text-indigo-600"></i>
+                            <span>Desglossament per Natura i Employment Type</span>
+                        </h2>
+                        <p class="text-xs text-slate-500">Comptador de beques/titulars relacionats i el seu pes percentual</p>
+                    </div>
+                    <span id="lblResultCount" class="text-xs font-semibold text-indigo-700 bg-indigo-50 px-3 py-1 rounded-full">0 combinacions trobades</span>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs">
+                        <thead class="bg-slate-100/80 text-slate-600 font-bold uppercase border-b border-slate-200 tracking-wider">
+                            <tr>
+                                <th class="py-3 px-4 w-12 text-center">#</th>
+                                <th class="py-3 px-4 cursor-pointer hover:bg-slate-200/60 transition" onclick="sortByColumn('nature')">
+                                    Natura del Award <i id="sortIconNature" class="fa-solid fa-sort ml-1 text-slate-400"></i>
+                                </th>
+                                <th class="py-3 px-4 cursor-pointer hover:bg-slate-200/60 transition" onclick="sortByColumn('employmentType')">
+                                    Employment Type (Ocupació) <i id="sortIconEmploymentType" class="fa-solid fa-sort ml-1 text-slate-400"></i>
+                                </th>
+                                <th class="py-3 px-4 cursor-pointer hover:bg-slate-200/60 transition" onclick="sortByColumn('role')">
+                                    Rol <i id="sortIconRole" class="fa-solid fa-sort ml-1 text-slate-400"></i>
+                                </th>
+                                <th class="py-3 px-4 text-right cursor-pointer hover:bg-slate-200/60 transition" onclick="sortByColumn('count')">
+                                    Nº Beques <i id="sortIconCount" class="fa-solid fa-sort-down ml-1 text-indigo-600"></i>
+                                </th>
+                                <th class="py-3 px-4 text-right">Pes %</th>
+                                <th class="py-3 px-4 w-40 text-center">Distribució Visual</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tableBody" class="divide-y divide-slate-100 font-normal text-slate-700">
+                            <!-- Populated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Empty State -->
+                <div id="emptyState" class="hidden p-12 text-center text-slate-400">
+                    <i class="fa-solid fa-folder-open text-4xl mb-3"></i>
+                    <p class="font-semibold text-slate-600 text-sm">No s'han trobat dades amb els filtres seleccionats</p>
+                    <p class="text-xs text-slate-400 mt-1">Prova de canviar el rol o treure els filtres de cerca.</p>
+                </div>
+            </div>
+
+            <!-- View 2: Matrix View -->
+            <div id="viewMatrixContainer" class="hidden bg-white border border-slate-200 rounded-2xl shadow-sm p-5 mb-8">
+                <div class="mb-4">
+                    <h2 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                        <i class="fa-solid fa-table-cells text-indigo-600"></i>
+                        <span>Matriu Creuada (Natura vs Ocupació)</span>
+                    </h2>
+                    <p class="text-xs text-slate-500">Visualització en graella de les natures principals i els tipus d'ocupació més freqüents (Prem sobre qualsevol cel·la amb dades per veure les beques)</p>
+                </div>
+                <div class="overflow-x-auto">
+                    <table id="matrixTable" class="w-full text-xs border-collapse">
+                        <!-- Populated dynamically -->
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Error Alert -->
+        <div id="errorAlert" class="hidden bg-rose-50 border border-rose-200 text-rose-700 p-6 rounded-2xl text-center font-medium">
+            <i class="fa-solid fa-triangle-exclamation text-2xl mb-2 block text-rose-500"></i>
+            <span>No s'ha pogut carregar la informació de les beques. Torneu-ho a provar d'aquí a uns minuts.</span>
+        </div>
+    </div>
+
+    <!-- Details Modal -->
+    <div id="detailsModal" class="hidden fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden transform transition-all">
+            <!-- Modal Header -->
+            <div class="p-5 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+                <div>
+                    <h3 id="modalTitle" class="text-base font-extrabold text-slate-800 flex items-center gap-2">
+                        <i class="fa-solid fa-award text-indigo-600"></i> Llista de Beques i Titulars
+                    </h3>
+                    <p id="modalSubtitle" class="text-xs text-slate-500 mt-0.5"></p>
+                </div>
+                <button onclick="closeDetailsModal()" class="w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-600 flex items-center justify-center transition cursor-pointer">
+                    <i class="fa-solid fa-xmark text-sm"></i>
+                </button>
+            </div>
+
+            <!-- Modal Search / Info Bar -->
+            <div class="px-5 py-3 border-b border-slate-100 bg-slate-100/60 flex flex-col sm:flex-row items-center justify-between gap-3">
+                <div class="relative w-full sm:w-80">
+                    <input type="text" id="modalSearch" onkeyup="filterModalRows()" placeholder="Cerca per títol de la beca o nom del titular..." 
+                        class="w-full border border-slate-300 rounded-xl pl-8 pr-3 py-1.5 text-xs bg-white focus:ring-2 focus:ring-indigo-500">
+                    <i class="fa-solid fa-magnifying-glass absolute left-2.5 top-2.5 text-slate-400 text-xs"></i>
+                </div>
+                <span id="modalItemCount" class="text-xs font-semibold text-indigo-700 bg-indigo-50 px-3 py-1 rounded-full">0 beques</span>
+            </div>
+
+            <!-- Modal Body (List of Awards) -->
+            <div class="p-5 overflow-y-auto flex-1 bg-slate-50/30">
+                <div id="modalLoader" class="flex flex-col items-center justify-center py-16 gap-3">
+                    <div class="w-10 h-10 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
+                    <p class="text-xs text-slate-500 font-medium">Carregant la llista de beques des de MongoDB i Egreta...</p>
+                </div>
+                <div id="modalList" class="space-y-3 hidden">
+                    <!-- Populated dynamically -->
+                </div>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="p-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
+                <span class="text-[11px] text-slate-400"><i class="fa-solid fa-circle-info mr-1"></i> Prem sobre qualsevol títol per obrir la fitxa al Portal de Recerca o el botó Egreta per l'API.</span>
+                <button onclick="closeDetailsModal()" class="px-5 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-bold rounded-xl transition cursor-pointer">
+                    Tancar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentRole = 'beneficiari';
+        let currentView = 'table';
+        let apiData = null;
+        let sortedRows = [];
+        let sortCol = 'count';
+        let sortAsc = false;
+        let searchTimeout = null;
+        let currentModalDetails = [];
+
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchData();
+        });
+
+        function setRoleFilter(role) {
+            if (currentRole === role) return;
+            currentRole = role;
+
+            document.getElementById('btnRoleBen').className = role === 'beneficiari' ? 'px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2 tab-active' : 'px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2 tab-inactive';
+            document.getElementById('btnRoleCan').className = role === 'candidat' ? 'px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2 tab-active' : 'px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2 tab-inactive';
+            document.getElementById('btnRolePi').className = role === 'pi' ? 'px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2 tab-active' : 'px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2 tab-inactive';
+            document.getElementById('btnRoleAll').className = role === 'all' ? 'px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2 tab-active' : 'px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2 tab-inactive';
+
+            document.getElementById('lblKpiPersons').textContent = role === 'beneficiari' ? 'Beneficiaris / Becaris' : (role === 'candidat' ? 'Candidats' : (role === 'pi' ? 'Investigadors Principals' : 'Persones Titulars'));
+
+            fetchData();
+        }
+
+        function switchView(view) {
+            currentView = view;
+            const btnTable = document.getElementById('btnViewTable');
+            const btnMatrix = document.getElementById('btnViewMatrix');
+            const viewTableContainer = document.getElementById('viewTableContainer');
+            const viewMatrixContainer = document.getElementById('viewMatrixContainer');
+
+            if (view === 'table') {
+                btnTable.className = 'px-3 py-1.5 text-xs font-semibold rounded-lg bg-white shadow-sm text-slate-800 flex items-center gap-1.5';
+                btnMatrix.className = 'px-3 py-1.5 text-xs font-semibold rounded-lg text-slate-500 hover:text-slate-800 flex items-center gap-1.5';
+                viewTableContainer.classList.remove('hidden');
+                viewMatrixContainer.classList.add('hidden');
+            } else {
+                btnMatrix.className = 'px-3 py-1.5 text-xs font-semibold rounded-lg bg-white shadow-sm text-slate-800 flex items-center gap-1.5';
+                btnTable.className = 'px-3 py-1.5 text-xs font-semibold rounded-lg text-slate-500 hover:text-slate-800 flex items-center gap-1.5';
+                viewMatrixContainer.classList.remove('hidden');
+                viewTableContainer.classList.add('hidden');
+                renderMatrix();
+            }
+        }
+
+        function handleSearchKeyup(e) {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                fetchData();
+            }, 350);
+        }
+
+        async function fetchData() {
+            document.getElementById('loader').classList.remove('hidden');
+            document.getElementById('content').classList.add('hidden');
+            document.getElementById('errorAlert').classList.add('hidden');
+
+            const nature = document.getElementById('selectNature').value;
+            const employment = document.getElementById('selectEmployment').value;
+            const search = document.getElementById('inputSearch').value;
+            const excludeResigned = document.getElementById('chkExcludeResigned').checked;
+
+            let path = `/awards/stats/scholarship-employment-nature?role=${currentRole}&excludeResigned=${excludeResigned}`;
+            if (nature && nature !== 'all') path += `&nature=${encodeURIComponent(nature)}`;
+            if (employment && employment !== 'all') path += `&employmentType=${encodeURIComponent(employment)}`;
+            if (search && search.trim() !== '') path += `&search=${encodeURIComponent(search.trim())}`;
+
+            try {
+                const response = typeof apiFetch === 'function' ? await apiFetch(path) : await fetch(typeof apiUrl === 'function' ? apiUrl(path) : `/api${path}`);
+                if (!response.ok) throw new Error(`HTTP error ${response.status}`);
+                apiData = await response.json();
+
+                populateFilterSelects(apiData.natures, apiData.employmentTypes);
+                renderKPIs(apiData);
+                
+                sortedRows = [...(apiData.rows || [])];
+                applySorting();
+
+                if (currentView === 'matrix') {
+                    renderMatrix();
+                }
+
+                document.getElementById('loader').classList.add('hidden');
+                document.getElementById('content').classList.remove('hidden');
+            } catch (err) {
+                console.error("Error fetching data:", err);
+                document.getElementById('loader').classList.add('hidden');
+                document.getElementById('errorAlert').classList.remove('hidden');
+            }
+        }
+
+        function populateFilterSelects(natures, empTypes) {
+            const selectNature = document.getElementById('selectNature');
+            const selectEmp = document.getElementById('selectEmployment');
+            const curNature = selectNature.value;
+            const curEmp = selectEmp.value;
+
+            if (selectNature.options.length <= 1 && natures && natures.length > 0) {
+                natures.forEach(n => {
+                    const opt = document.createElement('option');
+                    opt.value = n;
+                    opt.textContent = n;
+                    selectNature.appendChild(opt);
+                });
+                selectNature.value = curNature;
+            }
+
+            if (selectEmp.options.length <= 1 && empTypes && empTypes.length > 0) {
+                empTypes.forEach(e => {
+                    const opt = document.createElement('option');
+                    opt.value = e;
+                    opt.textContent = e;
+                    selectEmp.appendChild(opt);
+                });
+                selectEmp.value = curEmp;
+            }
+        }
+
+        function renderKPIs(data) {
+            document.getElementById('kpiAwards').textContent = (data.totalAwards || 0).toLocaleString();
+            document.getElementById('kpiPersons').textContent = (data.totalPersons || 0).toLocaleString();
+            document.getElementById('kpiLinks').textContent = (data.totalLinks || 0).toLocaleString();
+            document.getElementById('kpiEmpTypes').textContent = (data.employmentTypes ? data.employmentTypes.length : 0).toLocaleString();
+        }
+
+        function sortByColumn(col) {
+            if (sortCol === col) {
+                sortAsc = !sortAsc;
+            } else {
+                sortCol = col;
+                sortAsc = col === 'nature' || col === 'employmentType' || col === 'role';
+            }
+            updateSortIcons();
+            applySorting();
+        }
+
+        function updateSortIcons() {
+            ['Nature', 'EmploymentType', 'Role', 'Count'].forEach(c => {
+                const icon = document.getElementById(`sortIcon${c}`);
+                if (!icon) return;
+                if (sortCol.toLowerCase() === c.toLowerCase()) {
+                    icon.className = sortAsc ? 'fa-solid fa-sort-up ml-1 text-indigo-600' : 'fa-solid fa-sort-down ml-1 text-indigo-600';
+                } else {
+                    icon.className = 'fa-solid fa-sort ml-1 text-slate-400';
+                }
+            });
+        }
+
+        function applySorting() {
+            sortedRows.sort((a, b) => {
+                let valA = a[sortCol];
+                let valB = b[sortCol];
+                if (typeof valA === 'string') {
+                    return sortAsc ? valA.localeCompare(valB) : valB.localeCompare(valA);
+                } else {
+                    return sortAsc ? valA - valB : valB - valA;
+                }
+            });
+            renderTable();
+        }
+
+        function renderTable() {
+            const tbody = document.getElementById('tableBody');
+            const emptyState = document.getElementById('emptyState');
+            const lblCount = document.getElementById('lblResultCount');
+
+            tbody.innerHTML = '';
+
+            if (!sortedRows || sortedRows.length === 0) {
+                emptyState.classList.remove('hidden');
+                lblCount.textContent = '0 combinacions trobades';
+                return;
+            }
+
+            emptyState.classList.add('hidden');
+            lblCount.textContent = `${sortedRows.length} combinació${sortedRows.length > 1 ? 'ns' : ''} trobada${sortedRows.length > 1 ? 's' : ''}`;
+
+            const maxCount = Math.max(...sortedRows.map(r => r.count || 0), 1);
+
+            sortedRows.forEach((row, index) => {
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-indigo-50/80 cursor-pointer transition border-b border-slate-100 group';
+                tr.onclick = () => openDetailsModal(row.nature, row.employmentType, row.role);
+
+                const pct = row.percentage || 0;
+                const barWidth = Math.max(Math.round((row.count / maxCount) * 100), 2);
+
+                tr.innerHTML = `
+                    <td class="py-3 px-4 text-center font-mono text-slate-400 text-[11px]">${index + 1}</td>
+                    <td class="py-3 px-4 font-semibold text-slate-800 group-hover:text-indigo-600 transition">
+                        <div class="flex items-center gap-2">
+                            <span class="w-2 h-2 rounded-full bg-indigo-500"></span>
+                            <span>${escapeHtml(row.nature)}</span>
+                        </div>
+                    </td>
+                    <td class="py-3 px-4 font-medium text-slate-700">
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium ${getEmpTypeBadgeClass(row.employmentType)}">
+                            ${escapeHtml(row.employmentType)}
+                        </span>
+                    </td>
+                    <td class="py-3 px-4 text-slate-600 font-medium">${escapeHtml(row.role)}</td>
+                    <td class="py-3 px-4 text-right font-black text-indigo-700 text-sm">${row.count.toLocaleString()}</td>
+                    <td class="py-3 px-4 text-right font-bold text-slate-600">${pct}%</td>
+                    <td class="py-3 px-4">
+                        <div class="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden flex">
+                            <div class="bg-indigo-600 h-full rounded-full transition-all duration-500" style="width: ${barWidth}%"></div>
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function getEmpTypeBadgeClass(empType) {
+            if (!empType) return 'bg-slate-100 text-slate-700';
+            const t = (empType || '').toLowerCase();
+            if (t.includes('catedràtic') || t.includes('professor')) {
+                return 'bg-purple-50 text-purple-700 border border-purple-200';
+            }
+            if (t.includes('formació') || t.includes('fpu') || t.includes('fi-') || t.includes('beca')) {
+                return 'bg-indigo-50 text-indigo-700 border border-indigo-200';
+            }
+            if (t.includes('tècnic') || t.includes('suport')) {
+                return 'bg-emerald-50 text-emerald-700 border border-emerald-200';
+            }
+            if (t.includes('conveni')) {
+                return 'bg-amber-50 text-amber-700 border border-amber-200';
+            }
+            return 'bg-slate-100 text-slate-700 border border-slate-200';
+        }
+
+        function renderMatrix() {
+            const matrixTable = document.getElementById('matrixTable');
+            matrixTable.innerHTML = '';
+
+            if (!apiData || !apiData.rows || apiData.rows.length === 0) return;
+
+            const natureCounts = {};
+            const empTypeCounts = {};
+
+            apiData.rows.forEach(r => {
+                natureCounts[r.nature] = (natureCounts[r.nature] || 0) + r.count;
+                empTypeCounts[r.employmentType] = (empTypeCounts[r.employmentType] || 0) + r.count;
+            });
+
+            const topNatures = Object.entries(natureCounts)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 15)
+                .map(x => x[0]);
+
+            const topEmpTypes = Object.entries(empTypeCounts)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 10)
+                .map(x => x[0]);
+
+            const matrixMap = {};
+            apiData.rows.forEach(r => {
+                const key = `${r.nature}|||${r.employmentType}`;
+                matrixMap[key] = (matrixMap[key] || 0) + r.count;
+            });
+
+            const maxVal = Math.max(...Object.values(matrixMap), 1);
+
+            const thead = document.createElement('thead');
+            thead.className = 'bg-slate-100 text-slate-700 font-bold uppercase';
+            let headRow = `<tr><th class="p-3 border border-slate-200 bg-slate-200/70 text-left min-w-[200px]">Natura del Award \\ Employment Type</th>`;
+            topEmpTypes.forEach(emp => {
+                headRow += `<th class="p-3 border border-slate-200 text-center min-w-[120px] text-[11px] leading-tight">${escapeHtml(emp)}</th>`;
+            });
+            headRow += `</tr>`;
+            thead.innerHTML = headRow;
+            matrixTable.appendChild(thead);
+
+            const tbody = document.createElement('tbody');
+            topNatures.forEach(nat => {
+                const tr = document.createElement('tr');
+                let rowHtml = `<td class="p-3 border border-slate-200 font-bold text-slate-800 bg-slate-50">${escapeHtml(nat)}</td>`;
+                
+                topEmpTypes.forEach(emp => {
+                    const count = matrixMap[`${nat}|||${emp}`] || 0;
+                    let heatClass = 'heat-cell-0';
+                    if (count > 0) {
+                        const ratio = count / maxVal;
+                        if (ratio > 0.4) heatClass = 'heat-cell-high';
+                        else if (ratio > 0.15) heatClass = 'heat-cell-medium';
+                        else heatClass = 'heat-cell-low';
+                    }
+
+                    const clickAttr = count > 0 ? `onclick="openDetailsModal('${escapeAttr(nat)}', '${escapeAttr(emp)}')" style="cursor:pointer;" title="Prem per veure les ${count} beques"` : '';
+
+                    rowHtml += `<td class="p-3 border border-slate-200 text-center font-mono text-xs ${heatClass} ${count > 0 ? 'hover:ring-2 hover:ring-indigo-500 cursor-pointer' : ''}" ${clickAttr}>
+                        ${count > 0 ? count.toLocaleString() : '-'}
+                    </td>`;
+                });
+
+                tr.innerHTML = rowHtml;
+                tbody.appendChild(tr);
+            });
+
+            matrixTable.appendChild(tbody);
+        }
+
+        async function openDetailsModal(nature, employmentType, role) {
+            const modal = document.getElementById('detailsModal');
+            const modalTitle = document.getElementById('modalTitle');
+            const modalSubtitle = document.getElementById('modalSubtitle');
+            const modalLoader = document.getElementById('modalLoader');
+            const modalList = document.getElementById('modalList');
+            const modalSearch = document.getElementById('modalSearch');
+
+            modalSearch.value = '';
+            modal.classList.remove('hidden');
+            modalLoader.classList.remove('hidden');
+            modalList.classList.add('hidden');
+
+            const displayRole = role || currentRole;
+            modalTitle.innerHTML = `<i class="fa-solid fa-award text-indigo-600"></i> ${escapeHtml(nature)}`;
+            modalSubtitle.textContent = `Employment Type: ${employmentType} | Rol: ${displayRole}`;
+
+            const excludeResigned = document.getElementById('chkExcludeResigned').checked;
+            let path = `/awards/stats/scholarship-employment-nature-details?nature=${encodeURIComponent(nature)}&employmentType=${encodeURIComponent(employmentType)}&role=${encodeURIComponent(currentRole)}&excludeResigned=${excludeResigned}`;
+
+            try {
+                const response = typeof apiFetch === 'function' ? await apiFetch(path) : await fetch(typeof apiUrl === 'function' ? apiUrl(path) : `/api${path}`);
+                if (!response.ok) throw new Error('Error al carregar detalls');
+                currentModalDetails = await response.json();
+
+                renderModalList(currentModalDetails);
+                modalLoader.classList.add('hidden');
+                modalList.classList.remove('hidden');
+            } catch (e) {
+                console.error("Modal fetch error:", e);
+                modalLoader.classList.add('hidden');
+                modalList.innerHTML = `<div class="p-6 text-center text-rose-600 font-medium text-xs">S'ha produït un error al carregar les beques.</div>`;
+                modalList.classList.remove('hidden');
+            }
+        }
+
+        function closeDetailsModal() {
+            document.getElementById('detailsModal').classList.add('hidden');
+        }
+
+        function filterModalRows() {
+            const term = document.getElementById('modalSearch').value.toLowerCase().trim();
+            if (!term) {
+                renderModalList(currentModalDetails);
+                return;
+            }
+            const filtered = currentModalDetails.filter(item => {
+                const title = (item.title || '').toLowerCase();
+                const holdersText = (item.holders || []).map(h => `${h.name} ${h.role} ${(h.employmentTypes || []).join(' ')}`).join(' ').toLowerCase();
+                return title.includes(term) || holdersText.includes(term);
+            });
+            renderModalList(filtered);
+        }
+
+        function renderModalList(items) {
+            const modalList = document.getElementById('modalList');
+            const modalItemCount = document.getElementById('modalItemCount');
+            modalList.innerHTML = '';
+
+            modalItemCount.textContent = `${items.length} beca${items.length !== 1 ? 's' : ''}`;
+
+            if (!items || items.length === 0) {
+                modalList.innerHTML = `<div class="p-8 text-center text-slate-400 text-xs">No s'han trobat beques registrades per aquesta combinació.</div>`;
+                return;
+            }
+
+            items.forEach(item => {
+                const card = document.createElement('div');
+                card.className = 'bg-white border border-slate-200 rounded-2xl p-4 shadow-sm hover:border-indigo-300 transition';
+
+                const holdersHtml = (item.holders || []).map(h => {
+                    const personLinkHtml = h.personEgretaUrl ?
+                        `<a href="${h.personEgretaUrl}" onclick="return openPopupWindow(this.href, 'EgretaPersonEditor');" target="_blank" class="font-bold text-slate-800 hover:text-indigo-600 hover:underline flex items-center gap-1" title="Obrir fitxa de la persona a l'Editor d'Egreta (Finestra flotant)">
+                            <span>${escapeHtml(h.name)}</span>
+                            <i class="fa-solid fa-pen-to-square text-[10px] text-indigo-400"></i>
+                         </a>` :
+                        `<span class="font-bold text-slate-800">${escapeHtml(h.name)}</span>`;
+
+                    let employmentsBadgeHtml = '';
+                    if (h.employments && h.employments.length > 0) {
+                        employmentsBadgeHtml = h.employments.map(e => {
+                            const dateStr = (e.startDate || e.endDate) ? `${formatDateES(e.startDate) || '?'} a ${formatDateES(e.endDate) || 'actual'}` : '';
+                            return `<div class="inline-flex items-center gap-1 text-[11px] font-semibold text-indigo-800 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-lg">
+                                <span>${escapeHtml(e.type)}</span>
+                                ${dateStr ? `<span class="text-[10px] text-indigo-500 font-mono">(${dateStr})</span>` : ''}
+                            </div>`;
+                        }).join(' ');
+                    } else {
+                        employmentsBadgeHtml = `<span class="text-[11px] font-semibold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md">${escapeHtml((h.employmentTypes || []).join(', '))}</span>`;
+                    }
+
+                    return `
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between text-xs bg-slate-50 p-2.5 rounded-xl border border-slate-100 mt-2 gap-2">
+                        <div class="flex items-center gap-2 min-w-[200px]">
+                            <i class="fa-solid fa-user-graduate text-indigo-500"></i>
+                            ${personLinkHtml}
+                            <span class="text-[11px] text-slate-400">(${escapeHtml(h.role)})</span>
+                        </div>
+                        <div class="flex flex-wrap items-center gap-1.5 self-start sm:self-auto">
+                            ${employmentsBadgeHtml}
+                        </div>
+                    </div>
+                `;
+                }).join('');
+
+                card.innerHTML = `
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-2">
+                        <div class="flex items-center gap-2">
+                            <a href="${item.portalUrl}" onclick="return openPopupWindow(this.href, 'PortalRecercaWin');" target="_blank" class="text-sm font-extrabold text-indigo-600 hover:text-indigo-800 hover:underline flex items-center gap-1.5" title="Veure al Portal de Recerca UAB (Finestra flotant)">
+                                <i class="fa-solid fa-arrow-up-right-from-square text-xs"></i>
+                                <span>${escapeHtml(item.title)}</span>
+                            </a>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <a href="${item.egretaUrl}" onclick="return openPopupWindow(this.href, 'EgretaAwardEditor');" target="_blank" class="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 rounded-lg text-[11px] font-bold transition flex items-center gap-1" title="Obrir editor a Egreta (Finestra flotant)">
+                                <i class="fa-solid fa-pen-to-square text-[10px]"></i> Editor Egreta
+                            </a>
+                            ${item.pureId ? `<span class="text-[10px] font-mono font-semibold text-slate-400 bg-slate-100 px-2 py-0.5 rounded">ID: ${item.pureId}</span>` : ''}
+                        </div>
+                    </div>
+                    <div class="mt-2 flex items-center gap-4 text-xs text-slate-500">
+                        <div><i class="fa-regular fa-calendar mr-1"></i> Període Beca: <span class="font-semibold text-slate-700">${formatDateES(item.startDate) || '?'} a ${formatDateES(item.endDate) || 'actual'}</span></div>
+                    </div>
+                    ${holdersHtml}
+                `;
+                modalList.appendChild(card);
+            });
+        }
+
+        function exportToCSV() {
+            if (!sortedRows || sortedRows.length === 0) {
+                alert("No hi ha dades per exportar.");
+                return;
+            }
+
+            let csv = "\uFEFF"; // UTF-8 BOM
+            csv += "Natura del Award;Employment Type;Rol;Nombre de Beques;Pes Percentual (%)\n";
+
+            sortedRows.forEach(r => {
+                const nat = `"${(r.nature || '').replace(/"/g, '""')}"`;
+                const emp = `"${(r.employmentType || '').replace(/"/g, '""')}"`;
+                const rol = `"${(r.role || '').replace(/"/g, '""')}"`;
+                csv += `${nat};${emp};${rol};${r.count};${r.percentage}\n`;
+            });
+
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            const url = URL.createObjectURL(blob);
+            link.setAttribute("href", url);
+            link.setAttribute("download", `beques_employment_type_natura_${currentRole}_${new Date().toISOString().slice(0, 10)}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function formatDateES(dateStr) {
+            if (!dateStr) return '';
+            if (dateStr === 'actual') return 'actual';
+            const match = String(dateStr).match(/^(\d{4})-(\d{2})-(\d{2})/);
+            if (match) {
+                return `${match[3]}/${match[2]}/${match[1]}`;
+            }
+            return dateStr;
+        }
+
+        function openPopupWindow(url, title = 'EgretaWin') {
+            if (!url) return false;
+            const width = 1280;
+            const height = 850;
+            const left = Math.max(0, Math.round((window.screen.width - width) / 2));
+            const top = Math.max(0, Math.round((window.screen.height - height) / 2));
+            window.open(url, title, `width=${width},height=${height},top=${top},left=${left},scrollbars=yes,resizable=yes,status=yes`);
+            return false;
+        }
+
+        function escapeAttr(str) {
+            if (!str) return '';
+            return String(str).replace(/'/g, "\\'").replace(/"/g, '&quot;');
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+    </script>
+</body>
+</html>

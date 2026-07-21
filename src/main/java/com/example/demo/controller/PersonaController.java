@@ -4727,4 +4727,262 @@ public class PersonaController {
 
         return response;
     }
+
+    @GetMapping("/contract-validation")
+    public Map<String, Object> getContractValidation(
+            @RequestParam(required = false, defaultValue = "ALL_ISSUES") String issueType,
+            @RequestParam(required = false, defaultValue = "") String search,
+            @RequestParam(required = false, defaultValue = "0") int page,
+            @RequestParam(required = false, defaultValue = "20") int size
+    ) {
+        // Build organization names lookup map from Organizations collection
+        Map<String, String> orgMap = new HashMap<>();
+        List<Document> orgDocs = mongoTemplate.findAll(Document.class, "Organizations");
+        for (Document o : orgDocs) {
+            String u = o.getString("uuid");
+            if (u != null) {
+                Document nameDoc = (Document) o.get("name");
+                String nameStr = null;
+                if (nameDoc != null) {
+                    if (nameDoc.containsKey("ca_ES")) nameStr = nameDoc.getString("ca_ES");
+                    else if (nameDoc.containsKey("es_ES")) nameStr = nameDoc.getString("es_ES");
+                    else if (nameDoc.containsKey("en_GB")) nameStr = nameDoc.getString("en_GB");
+                }
+                if (nameStr != null) {
+                    orgMap.put(u, nameStr);
+                }
+            }
+        }
+
+        List<Document> allPersons = mongoTemplate.findAll(Document.class, "Persons");
+
+        long totalPersons = allPersons.size();
+        long personsWithAssocs = 0;
+        long personsWithMultipleAssocs = 0;
+
+        long countInvalidDates = 0;
+        long countOpenEndedFollowed = 0;
+        long countOverlapping = 0;
+        long countGaps = 0;
+        long countDuplicates = 0;
+        long countTotalWithIssues = 0;
+
+        List<Map<String, Object>> matchingResults = new ArrayList<>();
+        String searchLower = search != null ? search.trim().toLowerCase() : "";
+
+        for (Document pDoc : allPersons) {
+            List<Document> assocs = (List<Document>) pDoc.get("staffOrganizationAssociations");
+            if (assocs == null || assocs.isEmpty()) {
+                continue;
+            }
+            personsWithAssocs++;
+            if (assocs.size() >= 2) {
+                personsWithMultipleAssocs++;
+            }
+
+            // Extract periods
+            List<Map<String, Object>> parsedAssocs = new ArrayList<>();
+            for (Document a : assocs) {
+                Document per = (Document) a.get("period");
+                String stStr = per != null ? per.getString("startDate") : null;
+                String enStr = per != null ? per.getString("endDate") : null;
+
+                LocalDate st = parseLocalDate(stStr);
+                LocalDate en = parseLocalDate(enStr);
+
+                String empTypeStr = "Desconocido";
+                Object empObj = a.get("employmentType");
+                if (empObj instanceof Document empDoc) {
+                    Object termObj = empDoc.get("term");
+                    if (termObj instanceof Document termDoc) {
+                        if (termDoc.containsKey("ca_ES")) empTypeStr = termDoc.getString("ca_ES");
+                        else if (termDoc.containsKey("es_ES")) empTypeStr = termDoc.getString("es_ES");
+                    }
+                }
+
+                String orgNameStr = "Sin departamento";
+                Object orgObj = a.get("organization");
+                if (orgObj instanceof Document orgDoc) {
+                    String orgUuid = orgDoc.getString("uuid");
+                    if (orgUuid != null && orgMap.containsKey(orgUuid)) {
+                        orgNameStr = orgMap.get(orgUuid);
+                    } else {
+                        Object nameObj = orgDoc.get("name");
+                        if (nameObj instanceof Document nameDoc) {
+                            Object textObj = nameDoc.get("text");
+                            if (textObj instanceof List textList && !textList.isEmpty()) {
+                                for (Object tItem : textList) {
+                                    if (tItem instanceof Document tDoc) {
+                                        if ("ca_ES".equals(tDoc.getString("locale")) || "es_ES".equals(tDoc.getString("locale"))) {
+                                            orgNameStr = tDoc.getString("value");
+                                            break;
+                                        }
+                                    }
+                                }
+                                if ("Sin departamento".equals(orgNameStr) && textList.get(0) instanceof Document tDoc0) {
+                                    orgNameStr = tDoc0.getString("value");
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Map<String, Object> assocData = new HashMap<>();
+                assocData.put("pureId", a.get("pureId"));
+                assocData.put("startDate", stStr);
+                assocData.put("endDate", enStr);
+                assocData.put("parsedStart", st);
+                assocData.put("parsedEnd", en);
+                assocData.put("employmentType", empTypeStr);
+                assocData.put("organizationName", orgNameStr);
+                assocData.put("issues", new ArrayList<String>());
+                parsedAssocs.add(assocData);
+            }
+
+            Set<String> personIssues = new HashSet<>();
+
+            // 1. Check invalid dates (st > en)
+            for (Map<String, Object> pa : parsedAssocs) {
+                LocalDate st = (LocalDate) pa.get("parsedStart");
+                LocalDate en = (LocalDate) pa.get("parsedEnd");
+                if (st != null && en != null && st.isAfter(en)) {
+                    personIssues.add("INVALID_DATES");
+                    ((List<String>) pa.get("issues")).add("INVALID_DATES");
+                }
+            }
+
+            // Sort by start date for chronological analysis
+            List<Map<String, Object>> validStartAssocs = parsedAssocs.stream()
+                    .filter(pa -> pa.get("parsedStart") != null)
+                    .sorted(Comparator.comparing(pa -> (LocalDate) pa.get("parsedStart")))
+                    .collect(Collectors.toList());
+
+            for (int i = 1; i < validStartAssocs.size(); i++) {
+                Map<String, Object> prev = validStartAssocs.get(i - 1);
+                Map<String, Object> curr = validStartAssocs.get(i);
+
+                LocalDate prevSt = (LocalDate) prev.get("parsedStart");
+                LocalDate prevEn = (LocalDate) prev.get("parsedEnd");
+                LocalDate currSt = (LocalDate) curr.get("parsedStart");
+                LocalDate currEn = (LocalDate) curr.get("parsedEnd");
+
+                if (prevSt != null && prevSt.equals(currSt) && ((prevEn == null && currEn == null) || (prevEn != null && prevEn.equals(currEn)))) {
+                    personIssues.add("DUPLICATES");
+                    ((List<String>) curr.get("issues")).add("DUPLICATES");
+                    List<String> prevIss = (List<String>) prev.get("issues");
+                    if (!prevIss.contains("DUPLICATES")) prevIss.add("DUPLICATES");
+                } else if (prevEn == null) {
+                    personIssues.add("OPEN_ENDED_FOLLOWED");
+                    List<String> prevIss = (List<String>) prev.get("issues");
+                    if (!prevIss.contains("OPEN_ENDED_FOLLOWED")) prevIss.add("OPEN_ENDED_FOLLOWED");
+                } else if (currSt.isBefore(prevEn)) {
+                    personIssues.add("OVERLAPPING");
+                    ((List<String>) curr.get("issues")).add("OVERLAPPING");
+                } else {
+                    long gapDays = java.time.temporal.ChronoUnit.DAYS.between(prevEn, currSt);
+                    if (gapDays > 1) {
+                        personIssues.add("GAPS");
+                        ((List<String>) curr.get("issues")).add("GAPS");
+                        curr.put("gapDays", gapDays);
+                    }
+                }
+            }
+
+            if (personIssues.contains("INVALID_DATES")) countInvalidDates++;
+            if (personIssues.contains("OPEN_ENDED_FOLLOWED")) countOpenEndedFollowed++;
+            if (personIssues.contains("OVERLAPPING")) countOverlapping++;
+            if (personIssues.contains("GAPS")) countGaps++;
+            if (personIssues.contains("DUPLICATES")) countDuplicates++;
+            if (!personIssues.isEmpty()) countTotalWithIssues++;
+
+            // Check if matches issueType filter
+            boolean matchesIssue = false;
+            if ("ALL_ISSUES".equalsIgnoreCase(issueType) || "ALL".equalsIgnoreCase(issueType)) {
+                matchesIssue = !personIssues.isEmpty();
+            } else if ("EVERYONE".equalsIgnoreCase(issueType)) {
+                matchesIssue = true;
+            } else {
+                matchesIssue = personIssues.contains(issueType.toUpperCase());
+            }
+
+            if (!matchesIssue) {
+                continue;
+            }
+
+            // Extract name
+            Document nameDoc = (Document) pDoc.get("name");
+            String firstName = nameDoc != null ? nameDoc.getString("firstName") : "";
+            String lastName = nameDoc != null ? nameDoc.getString("lastName") : "";
+            String fullName = (lastName != null ? lastName : "") + ", " + (firstName != null ? firstName : "");
+            String uuid = pDoc.getString("uuid");
+
+            // Filter search query
+            if (!searchLower.isEmpty()) {
+                boolean matchSearch = (fullName.toLowerCase().contains(searchLower)) ||
+                                     (uuid != null && uuid.toLowerCase().contains(searchLower));
+                if (!matchSearch) {
+                    continue;
+                }
+            }
+
+            Map<String, Object> pRes = new LinkedHashMap<>();
+            pRes.put("uuid", uuid);
+            pRes.put("fullName", fullName);
+            pRes.put("orcid", pDoc.getString("orcid"));
+            pRes.put("issues", new ArrayList<>(personIssues));
+            // Remove parsed LocalDate objects before JSON serialization
+            List<Map<String, Object>> cleanAssocs = new ArrayList<>();
+            for (Map<String, Object> pa : parsedAssocs) {
+                Map<String, Object> c = new LinkedHashMap<>(pa);
+                c.remove("parsedStart");
+                c.remove("parsedEnd");
+                cleanAssocs.add(c);
+            }
+            pRes.put("associations", cleanAssocs);
+
+            matchingResults.add(pRes);
+        }
+
+        // Stats summary
+        Map<String, Object> stats = new LinkedHashMap<>();
+        stats.put("totalPersons", totalPersons);
+        stats.put("personsWithAssocs", personsWithAssocs);
+        stats.put("personsWithMultipleAssocs", personsWithMultipleAssocs);
+        stats.put("invalidDates", countInvalidDates);
+        stats.put("openEndedFollowed", countOpenEndedFollowed);
+        stats.put("overlapping", countOverlapping);
+        stats.put("gaps", countGaps);
+        stats.put("duplicates", countDuplicates);
+        stats.put("totalWithIssues", countTotalWithIssues);
+
+        // Pagination
+        int totalElements = matchingResults.size();
+        int totalPages = (int) Math.ceil((double) totalElements / size);
+        if (totalPages == 0) totalPages = 1;
+        int pageNum = Math.max(0, Math.min(page, totalPages - 1));
+
+        int fromIndex = Math.min(pageNum * size, totalElements);
+        int toIndex = Math.min(fromIndex + size, totalElements);
+        List<Map<String, Object>> pagedContent = matchingResults.subList(fromIndex, toIndex);
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("stats", stats);
+        response.put("page", pageNum);
+        response.put("size", size);
+        response.put("totalElements", totalElements);
+        response.put("totalPages", totalPages);
+        response.put("content", pagedContent);
+
+        return response;
+    }
+
+    private LocalDate parseLocalDate(String str) {
+        if (str == null || str.isBlank()) return null;
+        try {
+            if (str.contains("T")) str = str.split("T")[0];
+            return LocalDate.parse(str);
+        } catch (Exception e) {
+            return null;
+        }
+    }
 }
