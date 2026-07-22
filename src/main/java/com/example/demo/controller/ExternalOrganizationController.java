@@ -850,6 +850,63 @@ public class ExternalOrganizationController {
         }).collect(Collectors.toList());
     }
 
+    @GetMapping("/stats/country-catalog")
+    public List<Map<String, String>> countryCatalog() {
+        try {
+            Query query = new Query(Criteria.where("baseUri").is("/dk/atira/pure/core/countries"));
+            Document schemeDoc = mongoTemplate.findOne(query, Document.class, "Classificationschemes");
+            if (schemeDoc != null) {
+                @SuppressWarnings("unchecked")
+                List<Document> contained = (List<Document>) schemeDoc.get("containedClassifications");
+                if (contained != null && !contained.isEmpty()) {
+                    List<Map<String, String>> countries = new ArrayList<>();
+                    for (Document c : contained) {
+                        Boolean disabled = c.getBoolean("disabled");
+                        if (disabled != null && disabled) continue;
+                        String uri = Objects.toString(c.getString("uri"), "").trim();
+                        String label = "";
+                        Document termDoc = (Document) c.get("term");
+                        if (termDoc != null) {
+                            label = termDoc.getString("ca_ES");
+                            if (label == null || label.isBlank()) label = termDoc.getString("es_ES");
+                            if (label == null || label.isBlank()) label = termDoc.getString("en_GB");
+                        }
+                        label = label == null ? "" : label.trim();
+                        if (!label.isBlank() && !"(desconegut)".equalsIgnoreCase(label)) {
+                            countries.add(Map.of("uri", uri, "label", label));
+                        }
+                    }
+                    if (!countries.isEmpty()) {
+                        return countries.stream()
+                            .sorted(Comparator.comparing(
+                                r -> r.get("label"),
+                                String.CASE_INSENSITIVE_ORDER))
+                            .collect(Collectors.toList());
+                    }
+                }
+            }
+        } catch (Exception ignored) {}
+
+        List<CountryAggregate> catalog = getCachedCountryCatalog();
+        return catalog.stream()
+            .map(c -> {
+                String label = c.label;
+                String uri = resolveCountryUriByLabel(label);
+                return Map.of("uri", uri, "label", label);
+            })
+            .sorted(Comparator.comparing(r -> r.get("label"), String.CASE_INSENSITIVE_ORDER))
+            .collect(Collectors.toList());
+    }
+
+    @GetMapping("/stats/funding-catalog")
+    public List<Map<String, String>> fundingCatalog() {
+        return List.of(
+            Map.of("uri", "/uab/externalorganisations/caracter/pub", "label", "Publica"),
+            Map.of("uri", "/uab/externalorganisations/caracter/prv", "label", "Privada"),
+            Map.of("uri", "/uab/externalorganisations/caracter/mix", "label", "Mixta")
+        );
+    }
+
     @GetMapping("/stats/type-catalog")
     public List<Map<String, String>> typeCatalog() {
         Query query = new Query(Criteria.where("baseUri").is("/dk/atira/pure/ueoexternalorganisation/ueoexternalorganisationtypes"));

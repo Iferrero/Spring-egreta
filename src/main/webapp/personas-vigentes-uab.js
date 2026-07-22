@@ -17,9 +17,9 @@ const TYPOLOGY_PATTERNS = {
     agregados: 'agregat|agregado|associate professor',
     lectores: 'lector|lectura|reader',
     icrea: 'icrea',
-    predoctorals: 'predoctoral|en formaci|FPI|FI-JOAN|FI-SDUR|novell|La Caixa|pre-doctoral|research training|novel research',
+    predoctorals: 'predoctoral|en formaci|FPI|FPU|PIP|FI-JOAN|FI-SDUR|novell|La Caixa|pre-doctoral|research training|novel research',
     postdoctorals: 'ordinari|postdoctoral|Cajal|Beatriu|Cierva|doctor distingit|director investigaci|regular researcher|post-doctoral|distinguished research|research director',
-    total_vigentes: 'catedr|chair|full professor|titular|tenured|tenure|agregat|agregado|associate professor|lector|lectura|reader|predoctoral|en formaci|FPI|FI-JOAN|FI-SDUR|novell|La Caixa|pre-doctoral|research training|novel research|ordinari|postdoctoral|Cajal|Beatriu|Cierva|doctor distingit|director investigaci|regular researcher|post-doctoral|distinguished research|research director'
+    total_vigentes: 'catedr|chair|full professor|titular|tenured|tenure|agregat|agregado|associate professor|lector|lectura|reader|predoctoral|en formaci|FPI|FPU|PIP|FI-JOAN|FI-SDUR|novell|La Caixa|pre-doctoral|research training|novel research|ordinari|postdoctoral|Cajal|Beatriu|Cierva|doctor distingit|director investigaci|regular researcher|post-doctoral|distinguished research|research director'
 };
 
 function getPersonalTypeParam() {
@@ -459,7 +459,7 @@ async function cargarTooltipSummary() {
             { id: 'tooltipLectores',      pattern: 'lector|lectura|reader' },
             { id: 'tooltipAsociados',     pattern: 'associat|asociad|adjunct' },
             { id: 'tooltipSubstituts',    pattern: 'substitu|sustitu' },
-            { id: 'tooltipPredoctorals',  pattern: 'predoctoral|en formaci|FPI|FI-JOAN|FI-SDUR|novell|La Caixa|pre-doctoral|research training|novel research' },
+            { id: 'tooltipPredoctorals',  pattern: 'predoctoral|en formaci|FPI|FPU|PIP|FI-JOAN|FI-SDUR|novell|La Caixa|pre-doctoral|research training|novel research' },
             { id: 'tooltipPostdoctorals', pattern: 'ordinari|postdoctoral|Cajal|Beatriu|Cierva|doctor distingit|director investigaci|regular researcher|post-doctoral|distinguished research|research director' },
         ];
 
@@ -485,7 +485,7 @@ async function cargarPredoctorals() {
     estado.textContent = 'Carregant dades...';
     try {
         const cats = await _fetchVigentesCats();
-        const total = _sumCatsByRegex(cats, 'predoctoral|en formaci|FPI|FI-JOAN|FI-SDUR|novell|La Caixa|pre-doctoral|research training|novel research');
+        const total = _sumCatsByRegex(cats, 'predoctoral|en formaci|FPI|FPU|PIP|FI-JOAN|FI-SDUR|novell|La Caixa|pre-doctoral|research training|novel research');
         valor.textContent = formatearNumero(total);
         estado.textContent = '';
         return total;
@@ -790,7 +790,7 @@ async function cargarEvolucion() {
                 titulares: _sumCatsByRegex(cats, 'titular|tenured|tenure'),
                 agregados: _sumCatsByRegex(cats, 'agregat|agregado|associate professor'),
                 lectores: _sumCatsByRegex(cats, 'lector|lectura|reader'),
-                predoctorals: _sumCatsByRegex(cats, 'predoctoral|en formaci|FPI|FI-JOAN|FI-SDUR|novell|La Caixa|pre-doctoral|research training|novel research'),
+                predoctorals: _sumCatsByRegex(cats, 'predoctoral|en formaci|FPI|FPU|PIP|FI-JOAN|FI-SDUR|novell|La Caixa|pre-doctoral|research training|novel research'),
                 postdoctorals: _sumCatsByRegex(cats, 'ordinari|postdoctoral|Cajal|Beatriu|Cierva|doctor distingit|director investigaci|regular researcher|post-doctoral|distinguished research|research director'),
                 icrea: icreaTotal
             };
@@ -1005,7 +1005,7 @@ function abrirModalBreakdown(tipo) {
         agregados: { title: 'Agregats', regex: 'agregat|agregado|associate professor', color: '#F88C12' },
         lectores: { title: 'Lectors', regex: 'lector|lectura|reader', color: '#004D21' },
         icrea: { title: 'Personal investigador ICREA', regex: 'icrea', color: '#003a47' },
-        predoctorals: { title: 'Inv. Predoctorals', regex: 'predoctoral|en formaci|FPI|FI-JOAN|FI-SDUR|novell|La Caixa|pre-doctoral|research training|novel research', color: '#1a6b1a' },
+        predoctorals: { title: 'Inv. Predoctorals', regex: 'predoctoral|en formaci|FPI|FPU|PIP|FI-JOAN|FI-SDUR|novell|La Caixa|pre-doctoral|research training|novel research', color: '#1a6b1a' },
         postdoctorals: { title: 'Inv. Postdoctorals', regex: 'ordinari|postdoctoral|Cajal|Beatriu|Cierva|doctor distingit|director investigaci|regular researcher|post-doctoral|distinguished research|research director', color: '#5a1a8b' }
     };
 

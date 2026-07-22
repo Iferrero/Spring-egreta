@@ -180,11 +180,6 @@
       }
     },
     {
-      "$match": {
-        "fundings.fundingCollaborators.collaborator.uuid": "84443078-1a60-462d-9d0a-b04312afd9eb"
-      }
-    },
-    {
       "$addFields": {
         "importe_partida": {
           "$convert": {
@@ -254,36 +249,16 @@
       }
     },
     {
-      "$group": {
-        "_id": {
-          "tipus": "$_id.tipus",
-          "anyo": "$_id.anyo",
-          "nature": "$nature",
-          "callType": "$callType",
-          "isDeclined": "$isDeclined",
-          "orgScope": "$orgScope"
-        },
-        "totalImport": { "$sum": "$importe" },
-        "count": { "$sum": 1 }
-      }
-    },
-    {
       "$project": {
         "_id": 0,
+        "uuid": "$_id.uuid",
         "tipus": "$_id.tipus",
         "anyo": "$_id.anyo",
-        "nature": "$_id.nature",
-        "callType": "$_id.callType",
-        "isDeclined": "$_id.isDeclined",
-        "orgScope": "$_id.orgScope",
-        "totalImport": 1,
-        "count": 1
-      }
-    },
-    {
-      "$sort": {
-        "tipus": 1,
-        "anyo": 1
+        "importe": 1,
+        "nature": 1,
+        "callType": 1,
+        "isDeclined": 1,
+        "orgScope": 1
       }
     }
   ]

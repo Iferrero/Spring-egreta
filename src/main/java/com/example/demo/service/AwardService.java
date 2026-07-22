@@ -152,6 +152,10 @@ public class AwardService {
         return list;
     }
 
+    public List<Document> getAwardsByAmount() {
+        return runPipeline("mongodb/awards/awards-by-amount.json", null);
+    }
+
     public List<Document> getImportPerTipusAnio() {
         List<Document> list = new ArrayList<>(runPipeline(
                 "mongodb/awards/import-per-tipus-anio.json",

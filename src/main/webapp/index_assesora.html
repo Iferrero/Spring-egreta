@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Portal d'Assessorament de Recerca - UAB</title>
+    <script src="config.js"></script>
+    <script src="uab-brand.js" defer></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="uab-theme.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body class="bg-slate-50 min-h-screen text-slate-800">
+
+    <div class="mx-auto px-6 py-12 max-w-3xl">
+        <!-- Main Header -->
+        <header class="mb-10 text-center md:text-left">
+            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100 mb-3">
+                <i class="fa-solid fa-user-shield text-[10px]"></i> Rol d'Assessora de Recerca
+            </span>
+            <h1 class="text-3xl font-black tracking-tight text-slate-800">Panell d'Assessorament</h1>
+            <p class="text-sm text-slate-500 mt-2 font-medium">Selecciona un dels mòduls de supervisió per gestionar les dades de recerca i publicacions.</p>
+        </header>
+
+        <!-- Eines / Links Grid -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-12">
+
+            <!-- Card 1: Ajuts i Convocatòries -->
+            <a href="awards-convocatorias.html"
+               class="group bg-white border border-slate-200 rounded-2xl shadow-sm p-6 flex flex-col gap-4 hover:border-indigo-500 hover:shadow-md transition-all duration-300 relative overflow-hidden">
+                <!-- Decorative background gradient on hover -->
+                <div class="absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl from-indigo-50/40 to-transparent rounded-bl-full opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
+                
+                <div class="w-12 h-12 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-all duration-300 shadow-sm">
+                    <i class="fa-solid fa-list-check text-lg"></i>
+                </div>
+                <div class="z-10">
+                    <h2 class="text-base font-bold text-slate-800 group-hover:text-indigo-650 transition-colors">Ajuts i Convocatòries</h2>
+                    <p class="text-xs text-slate-500 mt-1.5 leading-relaxed">Cercador complet de concessions d'ajuts competitius, vinculació amb naturalesa de recerca i tipus de convocatòria del portal.</p>
+                </div>
+                <div class="mt-auto pt-2 flex items-center text-[11px] font-bold text-indigo-600 group-hover:translate-x-1 transition-transform">
+                    <span>Accedir al mòdul</span>
+                    <i class="fa-solid fa-arrow-right ml-1.5 text-[9px]"></i>
+                </div>
+            </a>
+
+            <!-- Card 2: Qualitat de publicacions -->
+            <a href="publicacions-correccions.html"
+               class="group bg-white border border-slate-200 rounded-2xl shadow-sm p-6 flex flex-col gap-4 hover:border-indigo-500 hover:shadow-md transition-all duration-300 relative overflow-hidden">
+                <!-- Decorative background gradient on hover -->
+                <div class="absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl from-indigo-50/40 to-transparent rounded-bl-full opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
+                
+                <div class="w-12 h-12 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-all duration-300 shadow-sm">
+                    <i class="fa-solid fa-file-shield text-lg"></i>
+                </div>
+                <div class="z-10">
+                    <h2 class="text-base font-bold text-slate-800 group-hover:text-indigo-650 transition-colors">Qualitat de publicacions</h2>
+                    <p class="text-xs text-slate-500 mt-1.5 leading-relaxed">Control de qualitat de metadades de producció científica, resolució de duplicats, verificació de DOI/URL i estat d'accés obert.</p>
+                </div>
+                <div class="mt-auto pt-2 flex items-center text-[11px] font-bold text-indigo-600 group-hover:translate-x-1 transition-transform">
+                    <span>Accedir al mòdul</span>
+                    <i class="fa-solid fa-arrow-right ml-1.5 text-[9px]"></i>
+                </div>
+            </a>
+
+        </div>
+
+        <!-- Footer -->
+        <footer class="text-center text-[10px] text-slate-400 font-medium tracking-wide uppercase">
+            Universitat Autònoma de Barcelona &copy; 2026
+        </footer>
+    </div>
+
+</body>
+</html>
