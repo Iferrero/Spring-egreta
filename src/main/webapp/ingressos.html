@@ -1531,7 +1531,7 @@
                     // Start with all awards for this tipus
                     let filteredAwards = [];
                     if (tipus === 'Total Ajuts') {
-                        const totalAjutsCats = ['Ajudes competitives nacionals', 'Ajudes competitives internacionals', 'Ajudes no competitives'];
+                        const totalAjutsCats = ['Ajudes competitives estattals', 'Ajudes competitives internacionals', 'Ajudes no competitives'];
                         const tipusInTotalCats = tipologiesData.filter(d => totalAjutsCats.includes(d.categoria)).map(d => d.tipus).filter(Boolean);
                         filteredAwards = awardsImportData.filter(d => tipusInTotalCats.includes(d.tipus) && d.tipus !== 'Prestació de Serveis');
                     } else if (tipus.startsWith('Total ')) {
@@ -1900,7 +1900,7 @@ function renderDropdownOptions() {
                     const { tipus, callFilter, progFilter } = chip;
                     let filteredAwards = [];
                     if (tipus === 'Total Ajuts') {
-                        const totalAjutsCats = ['Ajudes competitives nacionals', 'Ajudes competitives internacionals', 'Ajudes no competitives'];
+                        const totalAjutsCats = ['Ajudes competitives estatals', 'Ajudes competitives internacionals', 'Ajudes no competitives'];
                         const tipusInTotalCats = tipologiesData.filter(d => totalAjutsCats.includes(d.categoria)).map(d => d.tipus).filter(Boolean);
                         filteredAwards = awardsImportData.filter(d => tipusInTotalCats.includes(d.tipus) && d.tipus !== 'Prestació de Serveis');
                     } else if (tipus.startsWith('Total ')) {
@@ -2121,7 +2121,7 @@ function renderDropdownOptions() {
                 selectedTipologies.forEach(tipus => {
                     let filteredAwards = [];
                     if (tipus === 'Total Ajuts') {
-                        const totalAjutsCats = ['Ajudes competitives nacionals', 'Ajudes competitives internacionals', 'Ajudes no competitives'];
+                        const totalAjutsCats = ['Ajudes competitives estatals', 'Ajudes competitives internacionals', 'Ajudes no competitives'];
                         const tipusInTotalCats = tipologiesData.filter(d => totalAjutsCats.includes(d.categoria)).map(d => d.tipus).filter(Boolean);
                         filteredAwards = awardsImportData.filter(d => tipusInTotalCats.includes(d.tipus) && d.tipus !== 'Prestació de Serveis');
                     } else if (tipus.startsWith('Total ')) {
@@ -2818,7 +2818,7 @@ function renderDropdownOptions() {
 
                     let subFiltered = [];
                     if (tipus === 'Total Ajuts') {
-                        const totalAjutsCats = ['Ajudes competitives nacionals', 'Ajudes competitives internacionals', 'Ajudes no competitives'];
+                        const totalAjutsCats = ['Ajudes competitives estatals', 'Ajudes competitives internacionals', 'Ajudes no competitives'];
                         const tipusInTotalCats = tipologiesData.filter(d => totalAjutsCats.includes(d.categoria)).map(d => d.tipus).filter(Boolean);
                         subFiltered = awardsByAmountData.filter(d => tipusInTotalCats.includes(d.tipus) && d.tipus !== 'Prestació de Serveis');
                     } else if (tipus.startsWith('Total ')) {
