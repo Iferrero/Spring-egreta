@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="ca">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Validación de Correlatividad de Contratos | UAB</title>
+    <title>Validació de Correlativitat de Contractes | UAB</title>
     <script src="config.js"></script>
     <script src="uab-brand.js" defer></script>
     <script src="https://cdn.tailwindcss.com"></script>
@@ -21,14 +21,14 @@
         <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
             <div>
                 <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-xs font-semibold mb-2">
-                    <i class="fa-solid fa-shield-halved"></i> Control de Calidad de Datos
+                    <i class="fa-solid fa-shield-halved"></i> Control de Qualitat de Dades
                 </div>
-                <h1 class="text-2xl font-extrabold text-slate-900 tracking-tight">Validación de Correlatividad de Contratos</h1>
-                <p class="text-sm text-slate-500 mt-1">Detección de solapamientos, saltos temporales, fechas invertidas y periodos inconsistentes en el personal.</p>
+                <h1 class="text-2xl font-extrabold text-slate-900 tracking-tight">Validació de Correlativitat de Contractes</h1>
+                <p class="text-sm text-slate-500 mt-1">Detecció de solapaments, salts temporals, dates invertides i períodes inconsistents en el personal.</p>
             </div>
             <div class="flex items-center gap-3">
                 <button onclick="fetchData()" class="inline-flex items-center gap-2 px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-medium text-sm rounded-xl transition shadow-sm">
-                    <i class="fa-solid fa-rotate-right"></i> Actualizar Datos
+                    <i class="fa-solid fa-rotate-right"></i> Actualitzar Dades
                 </button>
             </div>
         </div>
@@ -36,76 +36,76 @@
         <!-- KPI Cards Grid -->
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4" id="kpi-container">
             
-            <!-- Total Incidencias -->
+            <!-- Total Incidencies -->
             <div onclick="setFilter('ALL_ISSUES')" class="cursor-pointer bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:border-emerald-500 hover:shadow-md transition group">
                 <div class="flex items-center justify-between">
-                    <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Con Incidencias</span>
+                    <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Amb Incidències</span>
                     <div class="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:bg-emerald-600 group-hover:text-white transition">
                         <i class="fa-solid fa-triangle-exclamation text-sm"></i>
                     </div>
                 </div>
                 <div class="text-2xl font-extrabold text-slate-900 mt-3" id="kpi-total-issues">--</div>
-                <div class="text-xs text-slate-500 mt-1">Personas afectadas</div>
+                <div class="text-xs text-slate-500 mt-1">Persones afectades</div>
             </div>
 
-            <!-- Fechas Invertidas -->
+            <!-- Dates Invertides -->
             <div onclick="setFilter('INVALID_DATES')" class="cursor-pointer bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:border-rose-500 hover:shadow-md transition group">
                 <div class="flex items-center justify-between">
-                    <span class="text-xs font-bold uppercase tracking-wider text-rose-500">Fechas Invertidas</span>
+                    <span class="text-xs font-bold uppercase tracking-wider text-rose-500">Dates Invertides</span>
                     <div class="w-8 h-8 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center group-hover:bg-rose-600 group-hover:text-white transition">
                         <i class="fa-solid fa-clock-rotate-left text-sm"></i>
                     </div>
                 </div>
                 <div class="text-2xl font-extrabold text-rose-600 mt-3" id="kpi-invalid-dates">--</div>
-                <div class="text-xs text-slate-500 mt-1">Inicio &gt; Fin</div>
+                <div class="text-xs text-slate-500 mt-1">Inici &gt; Fi</div>
             </div>
 
-            <!-- Abierto + Posterior -->
+            <!-- Obert + Nou -->
             <div onclick="setFilter('OPEN_ENDED_FOLLOWED')" class="cursor-pointer bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:border-amber-500 hover:shadow-md transition group">
                 <div class="flex items-center justify-between">
-                    <span class="text-xs font-bold uppercase tracking-wider text-amber-600">Abierto + Nuevo</span>
+                    <span class="text-xs font-bold uppercase tracking-wider text-amber-600">Obert + Nou</span>
                     <div class="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center group-hover:bg-amber-600 group-hover:text-white transition">
                         <i class="fa-solid fa-door-open text-sm"></i>
                     </div>
                 </div>
                 <div class="text-2xl font-extrabold text-amber-600 mt-3" id="kpi-open-ended">--</div>
-                <div class="text-xs text-slate-500 mt-1">Sin fin + posterior</div>
+                <div class="text-xs text-slate-500 mt-1">Sense fi + posterior</div>
             </div>
 
-            <!-- Solapamientos -->
+            <!-- Solapaments -->
             <div onclick="setFilter('OVERLAPPING')" class="cursor-pointer bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:border-purple-500 hover:shadow-md transition group">
                 <div class="flex items-center justify-between">
-                    <span class="text-xs font-bold uppercase tracking-wider text-purple-600">Solapamientos</span>
+                    <span class="text-xs font-bold uppercase tracking-wider text-purple-600">Solapaments</span>
                     <div class="w-8 h-8 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center group-hover:bg-purple-600 group-hover:text-white transition">
                         <i class="fa-solid fa-layer-group text-sm"></i>
                     </div>
                 </div>
                 <div class="text-2xl font-extrabold text-purple-600 mt-3" id="kpi-overlapping">--</div>
-                <div class="text-xs text-slate-500 mt-1">Solapa fechas</div>
+                <div class="text-xs text-slate-500 mt-1">Solapa dates</div>
             </div>
 
-            <!-- Duplicados -->
+            <!-- Duplicats -->
             <div onclick="setFilter('DUPLICATES')" class="cursor-pointer bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:border-blue-500 hover:shadow-md transition group">
                 <div class="flex items-center justify-between">
-                    <span class="text-xs font-bold uppercase tracking-wider text-blue-600">Duplicados</span>
+                    <span class="text-xs font-bold uppercase tracking-wider text-blue-600">Duplicats</span>
                     <div class="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition">
                         <i class="fa-solid fa-clone text-sm"></i>
                     </div>
                 </div>
                 <div class="text-2xl font-extrabold text-blue-600 mt-3" id="kpi-duplicates">--</div>
-                <div class="text-xs text-slate-500 mt-1">Periodos idénticos</div>
+                <div class="text-xs text-slate-500 mt-1">Períodes idèntics</div>
             </div>
 
-            <!-- Saltos / Gaps -->
+            <!-- Salts / Gaps -->
             <div onclick="setFilter('GAPS')" class="cursor-pointer bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:border-slate-500 hover:shadow-md transition group">
                 <div class="flex items-center justify-between">
-                    <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Saltos / Gaps</span>
+                    <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Salts / Gaps</span>
                     <div class="w-8 h-8 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center group-hover:bg-slate-700 group-hover:text-white transition">
                         <i class="fa-solid fa-arrow-right-arrows-left text-sm"></i>
                     </div>
                 </div>
                 <div class="text-2xl font-extrabold text-slate-700 mt-3" id="kpi-gaps">--</div>
-                <div class="text-xs text-slate-500 mt-1">Días sin contrato</div>
+                <div class="text-xs text-slate-500 mt-1">Dies sense contracte</div>
             </div>
 
         </div>
@@ -115,7 +115,7 @@
             <div class="flex flex-1 items-center gap-3 w-full md:w-auto">
                 <div class="relative flex-1">
                     <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
-                    <input type="text" id="input-search" placeholder="Buscar por nombre o UUID..." 
+                    <input type="text" id="input-search" placeholder="Cercar per nom o UUID..." 
                            oninput="onSearchInput()"
                            class="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition">
                 </div>
@@ -123,19 +123,19 @@
 
             <div class="flex flex-wrap items-center gap-3 w-full md:w-auto">
                 <select id="select-issue" onchange="onFilterChange()" class="bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-                    <option value="ALL_ISSUES">⚠️ Todas las Incidencias</option>
-                    <option value="INVALID_DATES">🚨 Fechas Invertidas (Inicio &gt; Fin)</option>
-                    <option value="OPEN_ENDED_FOLLOWED">🔓 Contrato Abierto + Posterior</option>
-                    <option value="OVERLAPPING">🔄 Solapamientos de Contrato</option>
-                    <option value="DUPLICATES">♊ Periodos Duplicados</option>
-                    <option value="GAPS">⏳ Saltos / Interrupciones (Gaps)</option>
-                    <option value="EVERYONE">👥 Todas las Personas con Contratos</option>
+                    <option value="ALL_ISSUES">⚠️ Totes les Incidències</option>
+                    <option value="INVALID_DATES">🚨 Dates Invertides (Inici &gt; Fi)</option>
+                    <option value="OPEN_ENDED_FOLLOWED">🔓 Contracte Obert + Posterior</option>
+                    <option value="OVERLAPPING">🔄 Solapaments de Contracte</option>
+                    <option value="DUPLICATES">♊ Períodes Duplicats</option>
+                    <option value="GAPS">⏳ Salts / Interrupcions (Gaps)</option>
+                    <option value="EVERYONE">👥 Totes les Persones amb Contractes</option>
                 </select>
 
                 <select id="select-size" onchange="onFilterChange()" class="bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-                    <option value="20">20 por pág.</option>
-                    <option value="50">50 por pág.</option>
-                    <option value="100">100 por pág.</option>
+                    <option value="20">20 per pàg.</option>
+                    <option value="50">50 per pàg.</option>
+                    <option value="100">100 per pàg.</option>
                 </select>
             </div>
         </div>
@@ -147,16 +147,16 @@
                     <thead>
                         <tr class="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold text-xs uppercase tracking-wider">
                             <th class="py-3.5 px-6">Persona</th>
-                            <th class="py-3.5 px-6">Incidencias Detectadas</th>
-                            <th class="py-3.5 px-6 text-center">N.º Contratos</th>
-                            <th class="py-3.5 px-6 text-right">Acciones</th>
+                            <th class="py-3.5 px-6">Incidències Detectades</th>
+                            <th class="py-3.5 px-6 text-center">N.º Contractes</th>
+                            <th class="py-3.5 px-6 text-right">Accions</th>
                         </tr>
                     </thead>
                     <tbody id="table-body" class="divide-y divide-slate-100">
                         <tr>
                             <td colspan="4" class="text-center py-12 text-slate-400">
                                 <i class="fa-solid fa-spinner fa-spin text-2xl text-emerald-600 mb-2"></i>
-                                <p>Cargando datos de validación...</p>
+                                <p>Carregant dades de validació...</p>
                             </td>
                         </tr>
                     </tbody>
@@ -166,15 +166,15 @@
             <!-- Pagination Bar -->
             <div class="flex flex-col sm:flex-row items-center justify-between gap-4 px-6 py-4 border-t border-slate-200 bg-slate-50">
                 <div class="text-xs text-slate-500" id="pagination-info">
-                    Mostrando 0 - 0 de 0 resultados
+                    Mostrant 0 - 0 de 0 resultats
                 </div>
                 <div class="flex items-center gap-2" id="pagination-buttons">
                     <button id="btn-prev" onclick="changePage(-1)" class="px-3 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-100 text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed">
                         <i class="fa-solid fa-chevron-left"></i> Anterior
                     </button>
-                    <span id="page-indicator" class="text-xs font-semibold px-2 text-slate-700">Pág 1 de 1</span>
+                    <span id="page-indicator" class="text-xs font-semibold px-2 text-slate-700">Pàg. 1 de 1</span>
                     <button id="btn-next" onclick="changePage(1)" class="px-3 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-100 text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed">
-                        Siguiente <i class="fa-solid fa-chevron-right"></i>
+                        Següent <i class="fa-solid fa-chevron-right"></i>
                     </button>
                 </div>
             </div>
@@ -186,8 +186,15 @@
         <div class="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-150">
             <!-- Modal Header -->
             <div class="p-6 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
-                <div>
-                    <h3 class="text-lg font-bold text-slate-900" id="modal-person-name">Nombre Persona</h3>
+                <div class="flex-1">
+                    <div class="flex items-center gap-3">
+                        <h3 class="text-lg font-bold text-slate-900" id="modal-person-name">Nom Persona</h3>
+                        <a id="modal-egreta-btn" href="#" target="_blank" onclick="return openPopupWindow(this.href, 'EgretaPersonEditor');" 
+                           class="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 rounded-lg text-xs font-bold transition shadow-2xs" 
+                           title="Obrir fitxa de la persona a l'Editor d'Egreta (Finestra flotant)">
+                            <i class="fa-solid fa-pen-to-square"></i> Editor Egreta
+                        </a>
+                    </div>
                     <p class="text-xs text-slate-500 mt-0.5" id="modal-person-uuid">UUID: --</p>
                 </div>
                 <button onclick="closeModal()" class="w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 flex items-center justify-center text-slate-600 transition">
@@ -203,7 +210,7 @@
             <!-- Modal Footer -->
             <div class="p-4 bg-slate-50 border-t border-slate-200 flex justify-end">
                 <button onclick="closeModal()" class="px-4 py-2 bg-slate-800 text-white rounded-xl text-xs font-semibold hover:bg-slate-900 transition">
-                    Cerrar
+                    Tancar
                 </button>
             </div>
         </div>
@@ -217,34 +224,34 @@
 
         const ISSUE_CONFIG = {
             'INVALID_DATES': {
-                label: 'Fecha Invertida',
+                label: 'Data Invertida',
                 badgeClass: 'bg-rose-100 text-rose-800 border-rose-200',
                 icon: 'fa-clock-rotate-left',
-                desc: 'La fecha de inicio es posterior a la fecha de finalización.'
+                desc: "La data d'inici és posterior a la data de finalització."
             },
             'OPEN_ENDED_FOLLOWED': {
-                label: 'Abierto + Posterior',
+                label: 'Obert + Posterior',
                 badgeClass: 'bg-amber-100 text-amber-800 border-amber-200',
                 icon: 'fa-door-open',
-                desc: 'Tiene un contrato sin fecha de fin registrado antes de otra contratación.'
+                desc: "Té un contracte sense data de fi registrat abans d'una altra contractació."
             },
             'OVERLAPPING': {
-                label: 'Solapamiento',
+                label: 'Solapament',
                 badgeClass: 'bg-purple-100 text-purple-800 border-purple-200',
                 icon: 'fa-layer-group',
-                desc: 'El contrato se solapa en fechas con otro contrato previo.'
+                desc: 'El contracte es solapa en dates amb un altre contracte previ.'
             },
             'DUPLICATES': {
-                label: 'Duplicado',
+                label: 'Duplicat',
                 badgeClass: 'bg-blue-100 text-blue-800 border-blue-200',
                 icon: 'fa-clone',
-                desc: 'Mismas fechas exactas de inicio y fin registradas en múltiples contratos.'
+                desc: "Mateixes dates exactes d'inici i fi registrades en múltiples contractes."
             },
             'GAPS': {
-                label: 'Salto / Gap',
+                label: 'Salt / Gap',
                 badgeClass: 'bg-slate-200 text-slate-700 border-slate-300',
                 icon: 'fa-arrow-right-arrows-left',
-                desc: 'Existe una interrupción de más de 1 día entre contratos.'
+                desc: "Existeix una interrupció de més d'un dia entre contractes."
             }
         };
 
@@ -258,7 +265,7 @@
                 <tr>
                     <td colspan="4" class="text-center py-12 text-slate-400">
                         <i class="fa-solid fa-spinner fa-spin text-2xl text-emerald-600 mb-2"></i>
-                        <p>Cargando datos de validación...</p>
+                        <p>Carregant dades de validació...</p>
                     </td>
                 </tr>
             `;
@@ -278,7 +285,7 @@
                     <tr>
                         <td colspan="4" class="text-center py-12 text-rose-500">
                             <i class="fa-solid fa-triangle-exclamation text-2xl mb-2"></i>
-                            <p>Error al cargar los datos. Verifica la conexión con el servidor.</p>
+                            <p>Error en carregar les dades. Verifica la connexió amb el servidor.</p>
                         </td>
                     </tr>
                 `;
@@ -287,12 +294,12 @@
 
         function updateKPIs(stats) {
             if (!stats) return;
-            document.getElementById('kpi-total-issues').textContent = stats.totalWithIssues.toLocaleString('es-ES');
-            document.getElementById('kpi-invalid-dates').textContent = stats.invalidDates.toLocaleString('es-ES');
-            document.getElementById('kpi-open-ended').textContent = stats.openEndedFollowed.toLocaleString('es-ES');
-            document.getElementById('kpi-overlapping').textContent = stats.overlapping.toLocaleString('es-ES');
-            document.getElementById('kpi-duplicates').textContent = stats.duplicates.toLocaleString('es-ES');
-            document.getElementById('kpi-gaps').textContent = stats.gaps.toLocaleString('es-ES');
+            document.getElementById('kpi-total-issues').textContent = stats.totalWithIssues.toLocaleString('ca-ES');
+            document.getElementById('kpi-invalid-dates').textContent = stats.invalidDates.toLocaleString('ca-ES');
+            document.getElementById('kpi-open-ended').textContent = stats.openEndedFollowed.toLocaleString('ca-ES');
+            document.getElementById('kpi-overlapping').textContent = stats.overlapping.toLocaleString('ca-ES');
+            document.getElementById('kpi-duplicates').textContent = stats.duplicates.toLocaleString('ca-ES');
+            document.getElementById('kpi-gaps').textContent = stats.gaps.toLocaleString('ca-ES');
         }
 
         function renderTable(persons) {
@@ -302,7 +309,7 @@
                     <tr>
                         <td colspan="4" class="text-center py-12 text-slate-400">
                             <i class="fa-solid fa-circle-check text-2xl text-emerald-500 mb-2"></i>
-                            <p class="font-medium text-slate-600">No se encontraron registros con los filtros seleccionados.</p>
+                            <p class="font-medium text-slate-600">No s'han trobat registres amb els filtres seleccionats.</p>
                         </td>
                     </tr>
                 `;
@@ -311,7 +318,7 @@
 
             let html = '';
             persons.forEach((p, idx) => {
-                const name = p.fullName || 'Sin nombre';
+                const name = p.fullName || 'Sense nom';
                 const uuid = p.uuid || '';
                 const countAssocs = p.associations ? p.associations.length : 0;
 
@@ -326,7 +333,7 @@
                         `;
                     });
                 } else {
-                    badgesHtml = `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200"><i class="fa-solid fa-check"></i> Correcto</span>`;
+                    badgesHtml = `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200"><i class="fa-solid fa-check"></i> Correcte</span>`;
                 }
 
                 html += `
@@ -343,7 +350,7 @@
                         </td>
                         <td class="py-4 px-6 text-right">
                             <button onclick="openModal(${idx})" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-700 rounded-xl text-xs font-semibold transition border border-slate-200">
-                                <i class="fa-solid fa-timeline"></i> Ver Cronología
+                                <i class="fa-solid fa-timeline"></i> Veure Cronologia
                             </button>
                         </td>
                     </tr>
@@ -361,9 +368,9 @@
             const to = Math.min((currentPage + 1) * data.size, data.totalElements);
 
             document.getElementById('pagination-info').textContent = 
-                `Mostrando ${from.toLocaleString('es-ES')} - ${to.toLocaleString('es-ES')} de ${data.totalElements.toLocaleString('es-ES')} personas`;
+                `Mostrant ${from.toLocaleString('ca-ES')} - ${to.toLocaleString('ca-ES')} de ${data.totalElements.toLocaleString('ca-ES')} persones`;
 
-            document.getElementById('page-indicator').textContent = `Pág. ${currentPage + 1} de ${totalPages}`;
+            document.getElementById('page-indicator').textContent = `Pàg. ${currentPage + 1} de ${totalPages}`;
             document.getElementById('btn-prev').disabled = currentPage <= 0;
             document.getElementById('btn-next').disabled = currentPage >= totalPages - 1;
         }
@@ -395,6 +402,25 @@
             }, 300);
         }
 
+        function formatSpanishDate(dateStr) {
+            if (!dateStr) return null;
+            const cleanStr = dateStr.split('T')[0];
+            const parts = cleanStr.split('-');
+            if (parts.length === 3) {
+                return `${parts[2]}/${parts[1]}/${parts[0]}`;
+            }
+            return dateStr;
+        }
+
+        function openPopupWindow(url, name) {
+            const w = 1300;
+            const h = 900;
+            const left = (screen.width - w) / 2;
+            const top = (screen.height - h) / 2;
+            window.open(url, name, `width=${w},height=${h},left=${left},top=${top},resizable=yes,scrollbars=yes`);
+            return false;
+        }
+
         function openModal(idx) {
             if (!currentData || !currentData.content || !currentData.content[idx]) return;
             const person = currentData.content[idx];
@@ -402,12 +428,22 @@
             document.getElementById('modal-person-name').textContent = person.fullName;
             document.getElementById('modal-person-uuid').textContent = `UUID: ${person.uuid}`;
 
+            // Configure Egreta button link
+            const egretaBtn = document.getElementById('modal-egreta-btn');
+            if (person.pureId) {
+                egretaBtn.href = `https://egreta.uab.cat/admin/editor/dk/atira/pure/api/shared/model/person/editor/personeditor.xhtml?scheme=&type=&id=${person.pureId}`;
+                egretaBtn.classList.remove('hidden');
+            } else {
+                egretaBtn.href = '#';
+                egretaBtn.classList.add('hidden');
+            }
+
             const modalBody = document.getElementById('modal-body');
             let html = '';
 
             if (person.issues && person.issues.length > 0) {
                 html += `<div class="p-4 bg-amber-50 border border-amber-200 rounded-xl mb-4">
-                    <h4 class="text-xs font-bold text-amber-800 uppercase tracking-wider mb-2"><i class="fa-solid fa-triangle-exclamation"></i> Diagnóstico de Inconsistencias</h4>
+                    <h4 class="text-xs font-bold text-amber-800 uppercase tracking-wider mb-2"><i class="fa-solid fa-triangle-exclamation"></i> Diagnòstic d'Inconsistències</h4>
                     <div class="space-y-1">`;
                 person.issues.forEach(issKey => {
                     const cfg = ISSUE_CONFIG[issKey] || { label: issKey, desc: '' };
@@ -416,14 +452,14 @@
                 html += `</div></div>`;
             }
 
-            html += `<h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">Historial de Periodos Contractuales (${person.associations.length})</h4>`;
+            html += `<h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">Historial de Períodes Contractuals (${person.associations.length})</h4>`;
             html += `<div class="space-y-3 relative before:absolute before:inset-0 before:left-3.5 before:w-0.5 before:bg-slate-200">`;
 
             person.associations.forEach((assoc, i) => {
-                const st = assoc.startDate || 'Sin fecha inicio';
-                const en = assoc.endDate || 'Vigente (Sin fecha fin)';
-                const empType = assoc.employmentType || 'Desconocido';
-                const orgName = assoc.organizationName || 'Sin departamento';
+                const st = formatSpanishDate(assoc.startDate) || "Sense data d'inici";
+                const en = formatSpanishDate(assoc.endDate) || "Vigent (Sense data de fi)";
+                const empType = assoc.employmentType || 'Desconegut';
+                const orgName = assoc.organizationName || 'Sense departament';
                 const assocIssues = assoc.issues || [];
                 const gapDays = assoc.gapDays;
 
@@ -437,7 +473,7 @@
                     alertsHtml += `
                         <div class="mt-2 p-2.5 rounded-lg bg-rose-100 border border-rose-300 text-rose-900 text-xs font-semibold flex items-center gap-2">
                             <i class="fa-solid fa-clock-rotate-left text-rose-600 text-sm"></i>
-                            <span>🚨 <strong>FECHA INVERTIDA:</strong> La fecha de inicio (${st}) es posterior a la fecha de finalización (${en}).</span>
+                            <span>🚨 <strong>DATA INVERTIDA:</strong> La data d'inici (${st}) és posterior a la data de finalització (${en}).</span>
                         </div>
                     `;
                 }
@@ -450,7 +486,7 @@
                     alertsHtml += `
                         <div class="mt-2 p-2.5 rounded-lg bg-amber-100 border border-amber-300 text-amber-900 text-xs font-semibold flex items-center gap-2">
                             <i class="fa-solid fa-door-open text-amber-600 text-sm"></i>
-                            <span>🔓 <strong>CONTRATO ABIERTO:</strong> Este contrato no tiene fecha de fin registrada, pero existe una nueva contratación posterior.</span>
+                            <span>🔓 <strong>CONTRACTE OBERT:</strong> Aquest contracte no té data de fi registrada, però existeix una nova contractació posterior.</span>
                         </div>
                     `;
                 }
@@ -463,7 +499,7 @@
                     alertsHtml += `
                         <div class="mt-2 p-2.5 rounded-lg bg-purple-100 border border-purple-300 text-purple-900 text-xs font-semibold flex items-center gap-2">
                             <i class="fa-solid fa-layer-group text-purple-600 text-sm"></i>
-                            <span>🔄 <strong>SOLAPAMIENTO TEMPORAL:</strong> La fecha de inicio (${st}) se solapa con la vigencia del contrato anterior.</span>
+                            <span>🔄 <strong>SOLAPAMENT TEMPORAL:</strong> La data d'inici (${st}) es solapa amb la vigència del contracte anterior.</span>
                         </div>
                     `;
                 }
@@ -476,17 +512,17 @@
                     alertsHtml += `
                         <div class="mt-2 p-2.5 rounded-lg bg-blue-100 border border-blue-300 text-blue-900 text-xs font-semibold flex items-center gap-2">
                             <i class="fa-solid fa-clone text-blue-600 text-sm"></i>
-                            <span>♊ <strong>PERIODO DUPLICADO:</strong> Mismas fechas exactas de inicio y fin registradas en múltiples entradas.</span>
+                            <span>♊ <strong>PERÍODE DUPLICAT:</strong> Mateixes dates exactes d'inici i fi registrades en múltiples entrades.</span>
                         </div>
                     `;
                 }
 
                 if (assocIssues.includes('GAPS')) {
-                    const daysStr = gapDays ? ` (${gapDays} días sin contrato)` : '';
+                    const daysStr = gapDays ? ` (${gapDays} dies sense contracte)` : '';
                     alertsHtml += `
                         <div class="mt-2 p-2 rounded-lg bg-slate-200/80 border border-slate-300 text-slate-700 text-xs font-medium flex items-center gap-2">
                             <i class="fa-solid fa-arrow-right-arrows-left text-slate-500 text-sm"></i>
-                            <span>⏳ <strong>INTERRUPCIÓN / GAP:</strong> Transcurrió un periodo de interrupción${daysStr} desde la finalización del contrato anterior.</span>
+                            <span>⏳ <strong>INTERRUPCIÓ / GAP:</strong> Va transcórrer un període d'interrupció${daysStr} des de la finalització del contracte anterior.</span>
                         </div>
                     `;
                 }
@@ -508,7 +544,7 @@
                                 </span>
                             </div>
                             <div class="text-xs text-slate-600">
-                                <i class="fa-solid fa-sitemap text-slate-400 mr-1"></i> <strong>Unidad/Departamento:</strong> ${orgName}
+                                <i class="fa-solid fa-sitemap text-slate-400 mr-1"></i> <strong>Unitat/Departament:</strong> ${orgName}
                             </div>
                             ${assoc.pureId ? `<div class="text-[11px] text-slate-400">Pure ID: ${assoc.pureId}</div>` : ''}
                             ${alertsHtml}

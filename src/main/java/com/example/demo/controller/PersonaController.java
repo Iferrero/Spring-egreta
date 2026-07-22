@@ -4791,8 +4791,10 @@ public class PersonaController {
                 LocalDate en = parseLocalDate(enStr);
 
                 String empTypeStr = "Desconocido";
+                String empUri = null;
                 Object empObj = a.get("employmentType");
                 if (empObj instanceof Document empDoc) {
+                    empUri = empDoc.getString("uri");
                     Object termObj = empDoc.get("term");
                     if (termObj instanceof Document termDoc) {
                         if (termDoc.containsKey("ca_ES")) empTypeStr = termDoc.getString("ca_ES");
@@ -4834,6 +4836,7 @@ public class PersonaController {
                 assocData.put("parsedStart", st);
                 assocData.put("parsedEnd", en);
                 assocData.put("employmentType", empTypeStr);
+                assocData.put("employmentTypeUri", empUri);
                 assocData.put("organizationName", orgNameStr);
                 assocData.put("issues", new ArrayList<String>());
                 parsedAssocs.add(assocData);
@@ -4876,8 +4879,12 @@ public class PersonaController {
                     List<String> prevIss = (List<String>) prev.get("issues");
                     if (!prevIss.contains("OPEN_ENDED_FOLLOWED")) prevIss.add("OPEN_ENDED_FOLLOWED");
                 } else if (currSt.isBefore(prevEn)) {
-                    personIssues.add("OVERLAPPING");
-                    ((List<String>) curr.get("issues")).add("OVERLAPPING");
+                    boolean isPrevAdscripcio = isAdscripcioRecerca(prev);
+                    boolean isCurrAdscripcio = isAdscripcioRecerca(curr);
+                    if (!isPrevAdscripcio && !isCurrAdscripcio) {
+                        personIssues.add("OVERLAPPING");
+                        ((List<String>) curr.get("issues")).add("OVERLAPPING");
+                    }
                 } else {
                     long gapDays = java.time.temporal.ChronoUnit.DAYS.between(prevEn, currSt);
                     if (gapDays > 1) {
@@ -4929,6 +4936,7 @@ public class PersonaController {
             pRes.put("uuid", uuid);
             pRes.put("fullName", fullName);
             pRes.put("orcid", pDoc.getString("orcid"));
+            pRes.put("pureId", pDoc.get("pureId"));
             pRes.put("issues", new ArrayList<>(personIssues));
             // Remove parsed LocalDate objects before JSON serialization
             List<Map<String, Object>> cleanAssocs = new ArrayList<>();
@@ -4984,5 +4992,20 @@ public class PersonaController {
         } catch (Exception e) {
             return null;
         }
+    }
+
+    private boolean isAdscripcioRecerca(Map<String, Object> assoc) {
+        String uri = (String) assoc.get("employmentTypeUri");
+        if (uri != null && uri.contains("adscripcio_recerca")) {
+            return true;
+        }
+        String label = (String) assoc.get("employmentType");
+        if (label != null) {
+            String lower = label.toLowerCase();
+            if (lower.contains("adscripció a recerca") || lower.contains("adscripcio a recerca")) {
+                return true;
+            }
+        }
+        return false;
     }
 }
