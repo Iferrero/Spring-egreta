@@ -3,11 +3,21 @@ package com.example.demo.model;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
+import org.springframework.data.mongodb.core.index.Indexed;
+import org.springframework.data.mongodb.core.index.CompoundIndex;
+import org.springframework.data.mongodb.core.index.CompoundIndexes;
 
 import java.util.List;
 import java.util.Map;
 
 @Document(collection = "ExternalOrganizations")
+@CompoundIndexes({
+    @CompoundIndex(name = "type_uri", def = "{'type.uri': 1}"),
+    @CompoundIndex(name = "address_country_uri", def = "{'address.country.uri': 1}"),
+    @CompoundIndex(name = "name_ca_ES", def = "{'name.ca_ES': 1}"),
+    @CompoundIndex(name = "name_es_ES", def = "{'name.es_ES': 1}"),
+    @CompoundIndex(name = "name_en_GB", def = "{'name.en_GB': 1}")
+})
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class ExternalOrganization {
 
@@ -15,6 +25,8 @@ public class ExternalOrganization {
     private String id;
 
     private Long pureId;
+
+    @Indexed(unique = true)
     private String uuid;
     private String createdBy;
     private String createdDate;
