@@ -1471,22 +1471,11 @@
             function buildAwardSeries(chartYears) {
                 if (!awardsDataLoaded || selectedTipologies.length === 0) return [];
 
-                // Amber/orange palette for awards series
-                const awardColors = [
-                    '#f59e0b', // amber-400
-                    '#f97316', // orange-500
-                    '#ef4444', // red-500
-                    '#a855f7', // purple-500
-                    '#06b6d4', // cyan-500
-                    '#84cc16', // lime-500
-                    '#ec4899', // pink-500
-                    '#14b8a6', // teal-500
-                    '#3b82f6', // blue-500
-                    '#d97706', // amber-600
-                ];
-
                 const allSeries = [];
-                let colorIdx = 0;
+                let nationalIdx = 0;
+                let internationalIdx = 0;
+                let nonCompetitiveIdx = 0;
+                let defaultIdx = 0;
 
                 // Build one entry per chip (same logic as renderTipologiesChips)
                 const chips = []; // { label, tipus, filterFn }
@@ -1508,10 +1497,36 @@
                 });
 
                 chips.forEach(chip => {
-                    const color = awardColors[colorIdx % awardColors.length];
-                    colorIdx++;
-
                     const { label, tipus, callFilter, progFilter } = chip;
+
+                    let category = '';
+                    if (tipus.startsWith('Total ')) {
+                        category = tipus.substring(6);
+                    } else if (tipus !== 'Total Ajuts') {
+                        const entry = tipologiesData.find(d => d.tipus === tipus);
+                        category = entry ? (entry.categoria || '') : '';
+                    }
+
+                    const textToSearch = (tipus + ' ' + category).toLowerCase();
+                    let color = '#f59e0b'; // default amber
+
+                    if (textToSearch.includes('internacional')) {
+                        const colorsList = ['#ef4444', '#b91c1c', '#f87171', '#991b1b', '#dc2626'];
+                        color = colorsList[internationalIdx % colorsList.length];
+                        internationalIdx++;
+                    } else if (textToSearch.includes('no competitiv')) {
+                        const colorsList = ['#000000', '#1e293b', '#475569', '#334155', '#52525b'];
+                        color = colorsList[nonCompetitiveIdx % colorsList.length];
+                        nonCompetitiveIdx++;
+                    } else if (textToSearch.includes('nacional')) {
+                        const colorsList = ['#3b82f6', '#1d4ed8', '#60a5fa', '#1e40af', '#2563eb'];
+                        color = colorsList[nationalIdx % colorsList.length];
+                        nationalIdx++;
+                    } else {
+                        const colorsList = ['#f59e0b', '#f97316', '#a855f7', '#06b6d4', '#84cc16', '#ec4899', '#14b8a6', '#d97706'];
+                        color = colorsList[defaultIdx % colorsList.length];
+                        defaultIdx++;
+                    }
 
                     // Start with all awards for this tipus
                     let filteredAwards = [];
@@ -1612,12 +1627,8 @@
                         data: dataCount,
                         barMaxWidth: 24,
                         itemStyle: {
-                            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                                { offset: 0, color: color },
-                                { offset: 1, color: color + '40' }
-                            ]),
-                            borderRadius: [6, 6, 0, 0],
-                            opacity: 0.6
+                            color: color,
+                            borderRadius: [0, 0, 0, 0]
                         },
                         emphasis: { focus: 'series' },
                         tooltip: {
@@ -1797,20 +1808,48 @@ function renderDropdownOptions() {
 
                     const hasSubItems = activeCalls.length > 0 || activeProgs.length > 0;
 
+                    // Determine color category for chip styling
+                    let chipClasses = 'bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-200';
+                    let iconClasses = 'text-amber-400';
+                    let removeBtnClasses = 'text-amber-400 hover:text-amber-800';
+
+                    let category = '';
+                    if (tipus.startsWith('Total ')) {
+                        category = tipus.substring(6);
+                    } else if (tipus !== 'Total Ajuts') {
+                        const entry = tipologiesData.find(d => d.tipus === tipus);
+                        category = entry ? (entry.categoria || '') : '';
+                    }
+
+                    const textToSearch = (tipus + ' ' + category).toLowerCase();
+                    if (textToSearch.includes('internacional')) {
+                        chipClasses = 'bg-rose-50 hover:bg-rose-100 text-rose-800 border-rose-200';
+                        iconClasses = 'text-rose-400';
+                        removeBtnClasses = 'text-rose-400 hover:text-rose-800';
+                    } else if (textToSearch.includes('no competitiv')) {
+                        chipClasses = 'bg-slate-100 hover:bg-slate-200 text-slate-800 border-slate-300';
+                        iconClasses = 'text-slate-500';
+                        removeBtnClasses = 'text-slate-400 hover:text-slate-800';
+                    } else if (textToSearch.includes('nacional')) {
+                        chipClasses = 'bg-blue-50 hover:bg-blue-100 text-blue-800 border-blue-200';
+                        iconClasses = 'text-blue-400';
+                        removeBtnClasses = 'text-blue-400 hover:text-blue-800';
+                    }
+
                     // --- Chip for the tipologia itself ---
                     const makeChip = (label, onRemove) => {
                         const chip = document.createElement('div');
-                        chip.className = 'bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 px-3 py-1 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-sm';
+                        chip.className = `${chipClasses} border px-3 py-1 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-sm`;
 
                         const icon = document.createElement('i');
-                        icon.className = 'fa-solid fa-trophy text-amber-400 text-[10px]';
+                        icon.className = `fa-solid fa-trophy ${iconClasses} text-[10px]`;
 
                         const textSpan = document.createElement('span');
                         textSpan.textContent = label;
 
                         const removeBtn = document.createElement('button');
                         removeBtn.type = 'button';
-                        removeBtn.className = 'text-amber-400 hover:text-amber-800 transition-colors focus:outline-none';
+                        removeBtn.className = `${removeBtnClasses} transition-colors focus:outline-none`;
                         removeBtn.innerHTML = '<i class="fa-solid fa-xmark text-[10px]"></i>';
                         removeBtn.addEventListener('click', (e) => { e.stopPropagation(); onRemove(); });
 
@@ -2525,7 +2564,7 @@ function renderDropdownOptions() {
                         },
                         itemStyle: {
                             color: color,
-                            borderRadius: currentChartType === 'bar' ? [6, 6, 0, 0] : [0, 0, 0, 0]
+                            borderRadius: [0, 0, 0, 0]
                         },
                         areaStyle: currentChartType === 'line' ? {
                             color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
@@ -2543,7 +2582,7 @@ function renderDropdownOptions() {
                                 forecastData.push(null);
                             } else if (y === 2025) {
                                 const val = item.values['2025'] || 0;
-                                forecastData.push(roundToDecimals(val, 2));
+                                forecastData.push(currentChartType === 'bar' ? null : roundToDecimals(val, 2));
                             } else if (y === 2026 || y === 2027) {
                                 const forecast = calcularPrevisio(item.values, forecastMethod);
                                 const val = forecast[y.toString()];
@@ -2568,7 +2607,11 @@ function renderDropdownOptions() {
                             },
                             itemStyle: {
                                 color: color,
-                                borderRadius: currentChartType === 'bar' ? [6, 6, 0, 0] : [0, 0, 0, 0]
+                                borderRadius: [0, 0, 0, 0],
+                                borderType: currentChartType === 'bar' ? 'dashed' : 'solid',
+                                borderWidth: currentChartType === 'bar' ? 2 : 0,
+                                borderColor: '#ffffff',
+                                opacity: currentChartType === 'bar' ? 0.85 : 1
                             },
                             areaStyle: currentChartType === 'line' ? {
                                 color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
@@ -2682,13 +2725,13 @@ function renderDropdownOptions() {
                     grid: {
                         top: '10%',
                         left: '2%',
-                        right: '4%',
+                        right: '5%',
                         bottom: '15%',
                         containLabel: true
                     },
                     xAxis: {
                         type: 'category',
-                        boundaryGap: currentChartType === 'bar',
+                        boundaryGap: true,
                         data: chartYears,
                         axisLine: {
                             lineStyle: {
@@ -2734,6 +2777,7 @@ function renderDropdownOptions() {
                         {
                             type: 'value',
                             name: 'Nombre d’ajuts',
+                            offset: 0,
                             nameTextStyle: {
                                 color: '#d97706',
                                 fontWeight: 'bold',
@@ -2741,6 +2785,8 @@ function renderDropdownOptions() {
                             },
                             axisLabel: {
                                 color: '#d97706',
+                                fontWeight: 'bold',
+                                margin: 10,
                                 formatter: v => v
                             },
                             axisLine: {
@@ -2861,7 +2907,7 @@ function renderDropdownOptions() {
                     });
                 });
 
-                seriesData[seriesData.length - 1].borderRadius = [6, 6, 0, 0];
+                seriesData[seriesData.length - 1].borderRadius = [0, 0, 0, 0];
 
                 return seriesData;
             }

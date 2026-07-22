@@ -3,17 +3,27 @@ package com.example.demo.model;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
+import org.springframework.data.mongodb.core.index.Indexed;
+import org.springframework.data.mongodb.core.index.CompoundIndex;
+import org.springframework.data.mongodb.core.index.CompoundIndexes;
 
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
 @Document(collection = "Awards")
+@CompoundIndexes({
+    @CompoundIndex(name = "workflow_step_awardDate_uuid", def = "{'workflow.step': 1, 'awardDate': -1, 'uuid': 1}"),
+    @CompoundIndex(name = "awardHolders_person_uuid", def = "{'awardHolders.person.uuid': 1}"),
+    @CompoundIndex(name = "fundings_funder_uuid", def = "{'fundings.funder.uuid': 1}")
+})
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class Award {
 
     @Id
     private String id;
+
+    @Indexed(unique = true)
     private String uuid;
     private Map<String, String> title;
     private Workflow workflow;

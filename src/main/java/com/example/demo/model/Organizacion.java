@@ -3,15 +3,24 @@ package com.example.demo.model;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
+import org.springframework.data.mongodb.core.index.Indexed;
+import org.springframework.data.mongodb.core.index.CompoundIndex;
+import org.springframework.data.mongodb.core.index.CompoundIndexes;
 
 import java.time.LocalDate;
 import java.util.Map;
 
 @Document(collection = "Organizations") // Asegúrate de que este nombre coincida con tu colección en Mongo
+@CompoundIndexes({
+    @CompoundIndex(name = "type_term_ca_ES_lifecycle_endDate", def = "{'type.term.ca_ES': 1, 'lifecycle.endDate': 1}"),
+    @CompoundIndex(name = "identifiers_id", def = "{'identifiers.id': 1}")
+})
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class Organizacion {
     @Id
     private String id;
+
+    @Indexed(unique = true)
     private String uuid;
     private Map<String, String> name; // Mapea "es_ES", "ca_ES", "en_GB"
     private String type; // Campo para filtrar por "department"

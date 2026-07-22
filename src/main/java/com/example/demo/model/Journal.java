@@ -3,6 +3,9 @@ package com.example.demo.model;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
+import org.springframework.data.mongodb.core.index.Indexed;
+import org.springframework.data.mongodb.core.index.CompoundIndex;
+import org.springframework.data.mongodb.core.index.CompoundIndexes;
 
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -12,12 +15,20 @@ import java.util.Map;
 import java.util.Set;
 
 @Document(collection = "Journals")
+@CompoundIndexes({
+    @CompoundIndex(name = "issns_issn", def = "{'issns.issn': 1}"),
+    @CompoundIndex(name = "additionalSearchableIssns_issn", def = "{'additionalSearchableIssns.issn': 1}")
+})
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class Journal {
 
     @Id
     private String id;
+
+    @Indexed
     private Integer pureId;
+
+    @Indexed(unique = true)
     private String uuid;
     private String createdBy;
     private String createdDate;

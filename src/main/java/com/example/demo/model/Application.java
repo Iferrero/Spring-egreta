@@ -3,16 +3,24 @@ package com.example.demo.model;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
+import org.springframework.data.mongodb.core.index.Indexed;
+import org.springframework.data.mongodb.core.index.CompoundIndex;
+import org.springframework.data.mongodb.core.index.CompoundIndexes;
 
 import java.util.List;
 import java.util.Map;
 
 @Document(collection = "Applications")
+@CompoundIndexes({
+    @CompoundIndex(name = "title_value", def = "{'title.value': 1}")
+})
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class Application {
 
     @Id
     private String id;
+
+    @Indexed(unique = true)
     private String uuid;
     private Object title;
     private Object type;

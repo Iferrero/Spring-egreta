@@ -3,6 +3,7 @@ package com.example.demo.model;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
+import org.springframework.data.mongodb.core.index.Indexed;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -18,8 +19,14 @@ public class Jcr {
     private String name;
     private String jcrTitle;
     private String isoTitle;
+
+    @Indexed
     private String issn;
+
+    @Indexed
     private List<String> previousIssn;
+
+    @Indexed
     private String eIssn;
     private Publisher publisher;
     private Integer frequency;

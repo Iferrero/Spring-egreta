@@ -3,6 +3,7 @@ package com.example.demo.model;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
+import org.springframework.data.mongodb.core.index.Indexed;
 
 import java.util.Map;
 
@@ -12,13 +13,19 @@ public class Publisher {
 
     @Id
     private String id;
+
+    @Indexed
     private Integer pureId;
+
+    @Indexed(unique = true)
     private String uuid;
     private String createdBy;
     private String createdDate;
     private String modifiedBy;
     private String modifiedDate;
     private String version;
+
+    @Indexed
     private String name;
     private LocalizedTerm type;
     private Workflow workflow;

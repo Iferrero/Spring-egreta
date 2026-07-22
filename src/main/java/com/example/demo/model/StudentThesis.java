@@ -5,12 +5,19 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 import org.springframework.data.mongodb.core.mapping.Field;
+import org.springframework.data.mongodb.core.index.Indexed;
+import org.springframework.data.mongodb.core.index.CompoundIndex;
+import org.springframework.data.mongodb.core.index.CompoundIndexes;
 
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
 @Document(collection = "StudentTheses")
+@CompoundIndexes({
+    @CompoundIndex(name = "workflow_step_managingOrg_awardDateYear", def = "{'workflow.step': 1, 'managingOrganization.uuid': 1, 'awardDate.year': 1}"),
+    @CompoundIndex(name = "supervisors_person_uuid", def = "{'supervisors.person.uuid': 1}")
+})
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class StudentThesis {
 
@@ -18,6 +25,8 @@ public class StudentThesis {
     private String id;
 
     private Long pureId;
+
+    @Indexed(unique = true)
     private String uuid;
     private String createdBy;
     private String createdDate;

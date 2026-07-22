@@ -2,6 +2,9 @@ package com.example.demo.model;
 
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
+import org.springframework.data.mongodb.core.index.Indexed;
+import org.springframework.data.mongodb.core.index.CompoundIndex;
+import org.springframework.data.mongodb.core.index.CompoundIndexes;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 import java.util.List;
@@ -9,12 +12,22 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 @Document(collection = "Researchoutputs") 
+@CompoundIndexes({
+    @CompoundIndex(name = "workflow_step_type_submissionYear", def = "{'workflow.step': 1, 'type.term.ca_ES': 1, 'submissionYear': 1}"),
+    @CompoundIndex(name = "contributors_person_uuid", def = "{'contributors.person.uuid': 1}"),
+    @CompoundIndex(name = "contributors_externalPerson_uuid", def = "{'contributors.externalPerson.uuid': 1}"),
+    @CompoundIndex(name = "journalAssociation_journal_uuid_submissionYear", def = "{'journalAssociation.journal.uuid': 1, 'submissionYear': -1}")
+})
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class Publicacion {
     
     @Id
     private String id;
+
+    @Indexed(unique = true)
     private String uuid;
+
+    @Indexed
     private Integer submissionYear;
     private Title title;
     private Type type;
