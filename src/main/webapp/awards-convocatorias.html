@@ -143,8 +143,25 @@
 
     <main class="w-full py-8 px-6">
         
+        <!-- Action Banner: Accés al filtrador tipus Excel -->
+        <section class="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-2xl bg-gradient-to-r from-indigo-50/80 via-white to-rose-50/60 border border-indigo-100 shadow-xs">
+            <div class="flex items-center gap-3">
+                <div class="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-bold text-sm shadow-xs">
+                    <i class="fa-solid fa-table-list"></i>
+                </div>
+                <div>
+                    <h3 class="text-xs font-black text-slate-800 tracking-tight">Nova eina: Filtrador tipus Excel d'Ajuts sense Naturalesa</h3>
+                    <p class="text-[11px] text-slate-500">Consulta tots els identificadors (FÈNIX, AGAUR, etc.), filtra per qualsevol columna i actualitza seleccions de cop.</p>
+                </div>
+            </div>
+            <a href="awards-sense-naturalesa.html" class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-xs transition-all hover:scale-[1.02] active:scale-[0.98] whitespace-nowrap self-start sm:self-auto">
+                <span>Obrir Taula Excel</span>
+                <i class="fa-solid fa-arrow-right text-[10px]"></i>
+            </a>
+        </section>
+
         <!-- Summary Stats Cards -->
-        <section class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <section class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
             <div class="glass-card bg-white rounded-2xl shadow-sm border border-slate-200/60 p-6 transition-all hover:shadow-md">
                 <div class="flex items-center justify-between mb-2">
                     <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Total d'Ajuts</span>
@@ -182,6 +199,19 @@
                     <span id="stats-no-convocatoria" class="text-3xl font-black tracking-tight text-slate-800">-</span>
                 </div>
                 <p class="text-[11px] text-slate-400 mt-2 font-medium">Convenis directes o dotacions especials</p>
+            </div>
+
+            <div class="glass-card bg-white rounded-2xl shadow-sm border border-slate-200/60 p-6 transition-all hover:shadow-md cursor-pointer hover:border-amber-300" onclick="setFilterTypeMatch('mismatch')" title="Clica per filtrar ajuts amb tipus discordant">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Tipus Discordants</span>
+                    <div class="w-8 h-8 rounded-lg bg-rose-50 flex items-center justify-center text-rose-600">
+                        <i class="fa-solid fa-triangle-exclamation"></i>
+                    </div>
+                </div>
+                <div class="flex items-baseline gap-2">
+                    <span id="stats-mismatch" class="text-3xl font-black tracking-tight text-rose-600">-</span>
+                </div>
+                <p class="text-[11px] text-slate-400 mt-2 font-medium">Tipus d'ajut ≠ tipus convocatòria</p>
             </div>
         </section>
 
@@ -257,10 +287,26 @@
                     <div class="relative">
                         <select id="selectNatureFilter" onchange="setFilterNature(this.value)" class="w-full pl-3 pr-8 py-2.5 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium text-xs text-slate-700 appearance-none cursor-pointer">
                             <option value="all">Totes les Natures</option>
-                            <option value="no">Només Sense Naturalesa</option>
+                            <option value="no">Només Sense Naturalesa (Pendents)</option>
+                            <option value="yes">Només Amb Naturalesa</option>
                         </select>
                         <span class="absolute inset-y-0 right-0 pr-2.5 flex items-center pointer-events-none text-slate-400">
                             <i class="fa-solid fa-filter text-[10px]"></i>
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Type Match Filter Select -->
+                <div class="flex items-center gap-2">
+                    <label for="selectTypeMatchFilter" class="text-xs font-bold text-slate-500 uppercase whitespace-nowrap">Coincidència:</label>
+                    <div class="relative">
+                        <select id="selectTypeMatchFilter" onchange="setFilterTypeMatch(this.value)" class="w-full pl-3 pr-8 py-2.5 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium text-xs text-slate-700 appearance-none cursor-pointer">
+                            <option value="all">Tots els Tipus</option>
+                            <option value="match">✓ Només Coincidents</option>
+                            <option value="mismatch">⚠️ Només Discordants</option>
+                        </select>
+                        <span class="absolute inset-y-0 right-0 pr-2.5 flex items-center pointer-events-none text-slate-400">
+                            <i class="fa-solid fa-code-compare text-[10px]"></i>
                         </span>
                     </div>
                 </div>
@@ -301,6 +347,7 @@
         let filtroConvocatoria = 'all'; // 'all', 'yes', 'no'
         let filtroNature = 'all'; // 'all', 'no'
         let filtroFundingType = 'all';
+        let filtroTypeMatch = 'all'; // 'all', 'match', 'mismatch'
         let inputTimeout = null;
         window.availableNatures = [];
         let awardsTable = null;
@@ -329,21 +376,126 @@
             return String(value).trim() || fallback;
         }
 
+        // Extract parent type code (e.g., PRO, GAC, BEC, ESA, XAT, INF, etc.)
+        function extreureTipusConvocatoria(fOppType) {
+            if (!fOppType) return null;
+            let uri = '';
+            if (typeof fOppType === 'object' && fOppType !== null) {
+                if (fOppType.uri) uri = fOppType.uri;
+            } else if (typeof fOppType === 'string' && fOppType.startsWith('/')) {
+                uri = fOppType;
+            }
+            if (uri) {
+                const parts = uri.split('/').filter(Boolean);
+                if (parts.length >= 2) {
+                    return parts[parts.length - 2].toUpperCase();
+                }
+            }
+            return null;
+        }
+
+        // Return a styled HTML badge for parent type (PRO, GAC, BEC, etc.)
+        function getParentTypeBadge(parentCode) {
+            if (!parentCode) return '';
+            const code = parentCode.toUpperCase();
+            let colorClasses = 'bg-slate-100 text-slate-700 border-slate-200';
+            if (code === 'PRO') {
+                colorClasses = 'bg-indigo-50 text-indigo-700 border-indigo-200';
+            } else if (code === 'GAC') {
+                colorClasses = 'bg-purple-50 text-purple-700 border-purple-200';
+            } else if (code === 'BEC') {
+                colorClasses = 'bg-emerald-50 text-emerald-700 border-emerald-200';
+            } else if (code === 'ESA') {
+                colorClasses = 'bg-amber-50 text-amber-800 border-amber-200';
+            } else if (code === 'ESF') {
+                colorClasses = 'bg-yellow-50 text-yellow-800 border-yellow-200';
+            } else if (code === 'XAT') {
+                colorClasses = 'bg-cyan-50 text-cyan-700 border-cyan-200';
+            } else if (code === 'INF') {
+                colorClasses = 'bg-sky-50 text-sky-700 border-sky-200';
+            } else if (code === 'ALT') {
+                colorClasses = 'bg-rose-50 text-rose-700 border-rose-200';
+            }
+            return `<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-black border uppercase tracking-wider font-mono ${colorClasses}">${code}</span>`;
+        }
+
+        // Extract parent type code for an Award (PRO, BEC, ESF, ESA, INF, GAC, AVR, FIN, ALT)
+        function extreureTipusAjut(awardType) {
+            if (!awardType) return null;
+            const uri = (typeof awardType === 'object' ? (awardType.uri || '') : '') || '';
+            const term = normalitzarText(awardType, '').toLowerCase();
+
+            if (uri.includes('/research_projects') || uri.includes('/uab_external_research_projects') || 
+                uri.includes('/international_award') || uri.includes('/international_educational') || 
+                uri.includes('/rtc_award') || term.includes('projecte')) {
+                return 'PRO';
+            }
+            if (uri.includes('/fellowship') || uri.includes('/international_fellowships') || term.includes('beques')) {
+                return 'BEC';
+            }
+            if (uri.includes('/mobility') || term.includes('mobilitat')) {
+                return 'ESF';
+            }
+            if (uri.includes('/staff_to_incorporate') || term.includes('incorporaci')) {
+                return 'ESA';
+            }
+            if (uri.includes('/infraestructure') || term.includes('infraestructura')) {
+                return 'INF';
+            }
+            if (uri.includes('/uab_research_group') || uri.includes('/external_research_groups_and_networks') || term.includes('grups') || term.includes('xarxes')) {
+                return 'GAC';
+            }
+            if (uri.includes('/other_grants') || uri.includes('/other_international_grants') || term.includes('accions') || term.includes('altres')) {
+                return 'GAC';
+            }
+            if (uri.includes('/avr_award') || term.includes('vicerectorat')) {
+                return 'AVR';
+            }
+            if (uri.includes('/fin_award') || term.includes('finan')) {
+                return 'FIN';
+            }
+            return null;
+        }
+
+        // Check if an Award and its linked Convocatòria have compatible/matching types
+        function comprovarCoincidenciaTipus(awardType, fOppType) {
+            if (!fOppType) return null;
+            const fCat = extreureTipusConvocatoria(fOppType);
+            if (!fCat) return null;
+            
+            const aCat = extreureTipusAjut(awardType);
+            if (!aCat) return null;
+
+            const isMatch = (aCat === fCat);
+
+            return {
+                isMatch,
+                awardCategory: aCat,
+                foppCategory: fCat
+            };
+        }
+
         async function fetchStats() {
             try {
                 // Fetch stats by counting total entries with yes/no filters
                 const pTotal = fetch(apiUrl('/awards/detailed-list?page=0&size=1&hasConvocatoria=all'));
                 const pYes = fetch(apiUrl('/awards/detailed-list?page=0&size=1&hasConvocatoria=yes'));
                 const pNo = fetch(apiUrl('/awards/detailed-list?page=0&size=1&hasConvocatoria=no'));
+                const pMismatch = fetch(apiUrl('/awards/detailed-list?page=0&size=1&typeMatch=mismatch'));
                 
-                const [rTotal, rYes, rNo] = await Promise.all([pTotal, pYes, pNo]);
+                const [rTotal, rYes, rNo, rMismatch] = await Promise.all([pTotal, pYes, pNo, pMismatch]);
                 const dTotal = await rTotal.json();
                 const dYes = await rYes.json();
                 const dNo = await rNo.json();
+                const dMismatch = await rMismatch.json();
                 
                 document.getElementById('stats-total').innerText = (dTotal.totalElements ?? 0).toLocaleString('ca-ES');
                 document.getElementById('stats-convocatoria').innerText = (dYes.totalElements ?? 0).toLocaleString('ca-ES');
                 document.getElementById('stats-no-convocatoria').innerText = (dNo.totalElements ?? 0).toLocaleString('ca-ES');
+                const mismatchEl = document.getElementById('stats-mismatch');
+                if (mismatchEl) {
+                    mismatchEl.innerText = (dMismatch.totalElements ?? 0).toLocaleString('ca-ES');
+                }
             } catch (e) {
                 console.error("Error carregar stats:", e);
             }
@@ -374,7 +526,7 @@
             try {
                 window.suggestedNaturesMap = {};
                 const res = await fetch(
-                    apiUrl(`/awards/detailed-list?page=${paginaActual}&size=15&search=${encodeURIComponent(search)}&hasConvocatoria=${filtroConvocatoria}&hasNature=${filtroNature}&fundingType=${encodeURIComponent(filtroFundingType)}`),
+                    apiUrl(`/awards/detailed-list?page=${paginaActual}&size=15&search=${encodeURIComponent(search)}&hasConvocatoria=${filtroConvocatoria}&hasNature=${filtroNature}&fundingType=${encodeURIComponent(filtroFundingType)}&typeMatch=${filtroTypeMatch}`),
                     { signal: currentAwardsFetch.signal }
                 );
                 const data = await res.json();
@@ -416,10 +568,15 @@
                                     const a = cell.getRow().getData();
                                     const titleText = normalitzarText(a.title, 'Sense títol');
                                     const typeText = normalitzarText(a.type, 'Ajut General');
+                                    const awardParentCode = extreureTipusAjut(a.type);
+                                    const awardBadge = awardParentCode ? getParentTypeBadge(awardParentCode) : '';
                                     return `
                                         <div class="flex flex-col py-1 max-w-xs md:max-w-md">
                                             <span class="font-bold text-slate-800 text-sm line-clamp-2" title="${titleText}">${titleText}</span>
-                                            <span class="text-[10px] text-slate-400 mt-0.5 font-medium">${typeText}</span>
+                                            <div class="flex items-center gap-1.5 mt-0.5">
+                                                ${awardBadge}
+                                                <span class="text-[10px] text-slate-400 font-medium">${typeText}</span>
+                                            </div>
                                         </div>
                                     `;
                                 }
@@ -445,7 +602,7 @@
                                         natureText = a.natureTypes.map(nt => {
                                             const name = normalitzarText(nt.term || nt, '');
                                             if (!name) return '';
-                                            return `<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100 mr-1 mb-1">${name}</span>`;
+                                            return `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 mr-1 mb-1 shadow-xs"><i class="fa-solid fa-circle-check text-emerald-600 text-[9px]"></i> ${name}</span>`;
                                         }).join('');
                                     } else {
                                         const selectId = `select-nature-${uuidText}`;
@@ -457,7 +614,7 @@
                                                     <span id="label-${selectId}" class="text-slate-400 truncate">-- Selecciona --</span>
                                                     <i class="fa-solid fa-chevron-down text-[9px] text-slate-450 ml-1"></i>
                                                 </button>
-                                                <button type="button" onclick="proponerNaturalezaSeleccionada('${uuidText}', '${selectId}')" class="px-2 py-1.5 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100 hover:text-indigo-800 text-[10px] font-bold border border-indigo-100 transition-colors cursor-pointer" title="Guardar naturalesa">
+                                                <button type="button" onclick="proponerNaturalezaSeleccionada('${uuidText}', '${selectId}')" class="px-2.5 py-1.5 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100 hover:text-indigo-800 text-[10px] font-bold border border-indigo-100 transition-colors cursor-pointer" title="Guardar naturalesa">
                                                     <i class="fa-solid fa-floppy-disk"></i>
                                                 </button>
                                             </div>
@@ -467,20 +624,29 @@
                                             window.suggestedNaturesMap[a.uuid] = a.suggestedNature;
                                             const name = normalitzarText(a.suggestedNature.term || a.suggestedNature, '');
                                             natureText = `
-                                                <div id="suggest-container-${uuidText}" class="flex flex-col gap-1.5 items-start">
-                                                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Sugerida:</span>
-                                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200/80 mr-1 mb-1">${name}</span>
-                                                    <div class="flex items-center gap-1.5">
-                                                        <button type="button" onclick="proponerNaturalezaDesdeMapa('${uuidText}')" class="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 hover:underline inline-flex items-center gap-1 cursor-pointer">
-                                                            <i class="fa-solid fa-magic mr-0.5"></i> Proposar
-                                                        </button>
-                                                        <span class="text-slate-300 text-[10px]">|</span>
-                                                        <button type="button" onclick="mostrarSelectorManual('${uuidText}')" class="text-[10px] font-bold text-slate-500 hover:text-slate-800 hover:underline inline-flex items-center gap-1 cursor-pointer">
-                                                            Altres...
-                                                        </button>
+                                                <div id="suggest-container-${uuidText}" class="flex flex-col gap-1.5 items-start w-full">
+                                                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200/80">
+                                                        <i class="fa-solid fa-circle-xmark text-[9px] text-rose-500"></i> Sense naturalesa
+                                                    </span>
+                                                    <div class="w-full bg-amber-50/70 border border-amber-200/90 rounded-lg p-2 flex flex-col gap-1.5 mt-0.5">
+                                                        <div class="flex items-center gap-1 text-[10px] font-bold text-amber-900">
+                                                            <i class="fa-solid fa-wand-magic-sparkles text-[9px] text-amber-600"></i> Sugerència automàtica:
+                                                        </div>
+                                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-white text-amber-950 border border-amber-200/80 shadow-xs">${name}</span>
+                                                        <div class="flex items-center gap-2 mt-0.5">
+                                                            <button type="button" onclick="proponerNaturalezaDesdeMapa('${uuidText}')" class="px-2 py-1 rounded bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-bold inline-flex items-center gap-1 shadow-xs transition-colors cursor-pointer">
+                                                                <i class="fa-solid fa-check text-[9px]"></i> Proposar
+                                                            </button>
+                                                            <button type="button" onclick="mostrarSelectorManual('${uuidText}')" class="text-[10px] font-bold text-slate-500 hover:text-slate-800 hover:underline inline-flex items-center gap-1 cursor-pointer">
+                                                                Altres...
+                                                            </button>
+                                                        </div>
                                                     </div>
                                                 </div>
                                                 <div id="manual-container-${uuidText}" class="hidden flex flex-col gap-1 items-start w-full">
+                                                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200/80 mb-1">
+                                                        <i class="fa-solid fa-circle-xmark text-[9px] text-rose-500"></i> Sense naturalesa
+                                                    </span>
                                                     <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Tria una naturalesa:</span>
                                                     <div class="flex gap-1.5 w-full items-center">
                                                         ${selectHtml}
@@ -492,7 +658,10 @@
                                             `;
                                         } else {
                                             natureText = `
-                                                <div class="flex flex-col gap-1 items-start w-full">
+                                                <div class="flex flex-col gap-1.5 items-start w-full">
+                                                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200/80">
+                                                        <i class="fa-solid fa-circle-xmark text-[9px] text-rose-500"></i> Sense naturalesa
+                                                    </span>
                                                     <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Tria una naturalesa:</span>
                                                     ${selectHtml}
                                                 </div>
@@ -510,10 +679,36 @@
                                     if (a.fOppUuid) {
                                         const oppTitle = normalitzarText(a.fOppTitle, 'Convocatòria sense títol');
                                         const oppType = normalitzarText(a.fOppType, 'General');
+                                        const parentCode = extreureTipusConvocatoria(a.fOppType);
+                                        const badge = parentCode ? getParentTypeBadge(parentCode) : '';
+
+                                        // Check type matching between Award and Convocatoria
+                                        const check = comprovarCoincidenciaTipus(a.type, a.fOppType);
+                                        let matchHtml = '';
+                                        if (check) {
+                                            if (check.isMatch) {
+                                                matchHtml = `
+                                                    <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200" title="Tipus coincidents: Ajut (${check.awardCategory}) i Convocatòria (${check.foppCategory})">
+                                                        <i class="fa-solid fa-check text-[8px]"></i> Coincident
+                                                    </span>
+                                                `;
+                                            } else {
+                                                matchHtml = `
+                                                    <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-rose-50 text-rose-700 border border-rose-200" title="Discrepància de tipus: Ajut (${check.awardCategory}) vs Convocatòria (${check.foppCategory})">
+                                                         <i class="fa-solid fa-triangle-exclamation text-[8px] text-rose-500"></i> Discordant (${check.awardCategory} ≠ ${check.foppCategory})
+                                                     </span>
+                                                `;
+                                            }
+                                        }
+
                                         return `
                                             <div class="flex flex-col py-1">
                                                 <span class="text-xs font-semibold text-slate-700 line-clamp-1" title="${oppTitle}">${oppTitle}</span>
-                                                <span class="text-[10px] text-slate-400 font-medium">${oppType}</span>
+                                                <div class="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                                                    ${badge}
+                                                    <span class="text-[10px] text-slate-400 font-medium">${oppType}</span>
+                                                    ${matchHtml}
+                                                </div>
                                             </div>
                                         `;
                                     } else {
@@ -606,12 +801,26 @@
             if (proposalsTable) proposalsTable.reformat();
         }
 
+        function setFilterTypeMatch(tipo) {
+            filtroTypeMatch = tipo;
+            
+            const selectFilter = document.getElementById('selectTypeMatchFilter');
+            if (selectFilter && selectFilter.value !== tipo) {
+                selectFilter.value = tipo;
+            }
+
+            paginaActual = 0;
+            cargarAwards();
+        }
+        window.setFilterTypeMatch = setFilterTypeMatch;
+
         function setFilterFundingType(fType) {
             if (filtroFundingType === fType) {
                 // Clear filter: reset all filters
                 filtroFundingType = 'all';
                 filtroNature = 'all';
                 filtroConvocatoria = 'all';
+                filtroTypeMatch = 'all';
 
                 // Sync UI Convocatoria Filter Toggle Buttons
                 ['all', 'yes', 'no'].forEach(t => {
@@ -630,8 +839,34 @@
                 if (selectFilter) {
                     selectFilter.value = filtroNature;
                 }
+
+                // Sync UI Type Match Filter Select Dropdown
+                const selectMatchFilter = document.getElementById('selectTypeMatchFilter');
+                if (selectMatchFilter) {
+                    selectMatchFilter.value = filtroTypeMatch;
+                }
             } else {
                 filtroFundingType = fType;
+                filtroNature = 'no';
+                filtroConvocatoria = 'yes';
+
+                // Sync UI Convocatoria Filter Toggle Buttons
+                ['all', 'yes', 'no'].forEach(t => {
+                    const btn = document.getElementById(`filter-${t}`);
+                    if (btn) {
+                        if (t === filtroConvocatoria) {
+                            btn.className = "px-4 py-2 text-xs font-bold rounded-lg transition-all text-indigo-600 bg-white shadow-sm";
+                        } else {
+                            btn.className = "px-4 py-2 text-xs font-bold rounded-lg transition-all text-slate-500 hover:text-slate-800";
+                        }
+                    }
+                });
+
+                // Sync UI Nature Filter Select Dropdown
+                const selectFilter = document.getElementById('selectNatureFilter');
+                if (selectFilter) {
+                    selectFilter.value = filtroNature;
+                }
             }
 
             // Update banner
@@ -642,7 +877,15 @@
                     banner.classList.add('hidden');
                 } else {
                     banner.classList.remove('hidden');
-                    nameEl.textContent = filtroFundingType;
+                    let parentCode = null;
+                    if (proposalsTable) {
+                        const row = proposalsTable.getData().find(r => r.fundingType === filtroFundingType);
+                        if (row) {
+                            parentCode = row.parentType || extreureTipusConvocatoria(row.uri);
+                        }
+                    }
+                    const badge = parentCode ? getParentTypeBadge(parentCode) + ' ' : '';
+                    nameEl.innerHTML = `${badge}${filtroFundingType}`;
                 }
             }
 
@@ -977,9 +1220,10 @@
                     // Populate select filter dropdown
                     const selectFilter = document.getElementById('selectNatureFilter');
                     if (selectFilter) {
-                        // Clear existing options (except first two)
-                        while (selectFilter.options.length > 2) {
-                            selectFilter.remove(2);
+                        const currentVal = selectFilter.value;
+                        // Clear existing options (except first three: all, no, yes)
+                        while (selectFilter.options.length > 3) {
+                            selectFilter.remove(3);
                         }
                         naturesList.forEach(nat => {
                             const rawName = normalitzarText(nat.term || nat, '');
@@ -988,6 +1232,7 @@
                             opt.textContent = rawName;
                             selectFilter.appendChild(opt);
                         });
+                        selectFilter.value = currentVal || filtroNature;
                     }
                 }
 
@@ -1053,9 +1298,9 @@
                 const banner = document.getElementById('active-filters-container');
                 if (banner) banner.classList.add('hidden');
             } else {
-                // Select: filter by this funding type, show all (both with and without nature)
+                // Select: filter by this funding type, show only pending awards without nature
                 filtroFundingType = fType;
-                filtroNature = 'all';
+                filtroNature = 'no';
                 filtroConvocatoria = 'yes';
 
                 // Update active filters banner
@@ -1063,7 +1308,15 @@
                 const nameEl = document.getElementById('active-funding-type-name');
                 if (banner && nameEl) {
                     banner.classList.remove('hidden');
-                    nameEl.textContent = fType;
+                    let parentCode = null;
+                    if (proposalsTable) {
+                        const row = proposalsTable.getData().find(r => r.fundingType === fType);
+                        if (row) {
+                            parentCode = row.parentType || extreureTipusConvocatoria(row.uri);
+                        }
+                    }
+                    const badge = parentCode ? getParentTypeBadge(parentCode) + ' ' : '';
+                    nameEl.innerHTML = `${badge}${fType}`;
                 }
             }
 
@@ -1154,6 +1407,21 @@
                                 field: "fundingType",
                                 cssClass: "font-semibold text-slate-800",
                                 headerSort: true,
+                                formatter: function(cell) {
+                                    const rowData = cell.getRow().getData();
+                                    const fType = cell.getValue();
+                                    let parentCode = rowData.parentType;
+                                    if (!parentCode) {
+                                        parentCode = extreureTipusConvocatoria(rowData.uri || rowData.fOppType);
+                                    }
+                                    const badge = parentCode ? getParentTypeBadge(parentCode) : '';
+                                    return `
+                                        <div class="flex items-center gap-1.5 py-0.5">
+                                            ${badge}
+                                            <span class="truncate text-xs font-semibold text-slate-700" title="${fType}">${fType}</span>
+                                        </div>
+                                    `;
+                                },
                                 cellClick: function(e, cell) {
                                     const data = cell.getRow().getData();
                                     selectProposalRow(data.fundingType);

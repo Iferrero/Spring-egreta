@@ -36,12 +36,16 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.apache.poi.xwpf.usermodel.*;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.*;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import java.text.Normalizer;
 
 @RestController
 @RequestMapping("/api/awards")
 @CrossOrigin(origins = "*")
 public class AwardController {
+
+    @Value("${app.api.key}")
+    private String egretaApiKey;
 
     private final AwardRepository repository;
     private final AwardService service;
@@ -82,7 +86,8 @@ public class AwardController {
             @RequestParam(required = false) String search,
             @RequestParam(required = false) String hasConvocatoria,
             @RequestParam(required = false) String hasNature,
-            @RequestParam(required = false) String fundingType) {
+            @RequestParam(required = false) String fundingType,
+            @RequestParam(required = false) String typeMatch) {
 
         List<Document> basePipeline = new ArrayList<>();
 
@@ -100,26 +105,32 @@ public class AwardController {
 
         if (search != null && !search.isBlank()) {
             String cleanSearch = search.trim();
-            andConditions.add(new Document("$or", Arrays.asList(
-                new Document("title.ca_ES", new Document("$regex", cleanSearch).append("$options", "i")),
-                new Document("title.es_ES", new Document("$regex", cleanSearch).append("$options", "i")),
-                new Document("title.en_GB", new Document("$regex", cleanSearch).append("$options", "i")),
-                new Document("uuid", new Document("$regex", cleanSearch).append("$options", "i")),
-                new Document("pureId", new Document("$regex", cleanSearch).append("$options", "i"))
-            )));
+            List<Document> searchOr = new ArrayList<>();
+            searchOr.add(new Document("title.ca_ES", new Document("$regex", cleanSearch).append("$options", "i")));
+            searchOr.add(new Document("title.es_ES", new Document("$regex", cleanSearch).append("$options", "i")));
+            searchOr.add(new Document("title.en_GB", new Document("$regex", cleanSearch).append("$options", "i")));
+            searchOr.add(new Document("uuid", new Document("$regex", cleanSearch).append("$options", "i")));
+            try {
+                long pureIdNum = Long.parseLong(cleanSearch);
+                searchOr.add(new Document("pureId", pureIdNum));
+            } catch (NumberFormatException ignored) {}
+            searchOr.add(new Document("pureId", new Document("$regex", cleanSearch).append("$options", "i")));
+            searchOr.add(new Document("identifiers.value", new Document("$regex", cleanSearch).append("$options", "i")));
+            searchOr.add(new Document("identifiers.id", new Document("$regex", cleanSearch).append("$options", "i")));
+            andConditions.add(new Document("$or", searchOr));
         }
 
         if (hasNature != null && !hasNature.isBlank() && !"all".equalsIgnoreCase(hasNature)) {
             if ("yes".equalsIgnoreCase(hasNature)) {
-                andConditions.add(new Document("natureTypes", new Document("$exists", true).append("$not", new Document("$size", 0))));
+                andConditions.add(new Document("natureTypes.0", new Document("$exists", true)));
             } else if ("no".equalsIgnoreCase(hasNature)) {
-                andConditions.add(new Document("$or", Arrays.asList(
-                    new Document("natureTypes", new Document("$exists", false)),
-                    new Document("natureTypes", null),
-                    new Document("natureTypes", new Document("$size", 0))
-                )));
+                andConditions.add(new Document("natureTypes.0", new Document("$exists", false)));
             } else {
-                andConditions.add(new Document("natureTypes.term.ca_ES", hasNature));
+                andConditions.add(new Document("$or", Arrays.asList(
+                    new Document("natureTypes.term.ca_ES", hasNature),
+                    new Document("natureTypes.term.text.value", hasNature),
+                    new Document("natureTypes.term", hasNature)
+                )));
             }
         }
 
@@ -160,6 +171,37 @@ public class AwardController {
             ))));
         }
 
+        if (typeMatch != null && !typeMatch.isBlank() && !"all".equalsIgnoreCase(typeMatch)) {
+            basePipeline.add(new Document("$match", new Document("fOpp.uuid", new Document("$ne", null))));
+            
+            basePipeline.add(new Document("$addFields", new Document()
+                .append("awardUri", new Document("$ifNull", Arrays.asList("$type.uri", "")))
+                .append("foppUri", new Document("$ifNull", Arrays.asList("$fOpp.type.uri", "")))));
+
+            basePipeline.add(new Document("$addFields", new Document()
+                .append("awardCat", new Document("$switch", new Document("branches", Arrays.asList(
+                    new Document("case", new Document("$regexMatch", new Document("input", "$awardUri").append("regex", "research_projects|international_award|international_educational|rtc_award"))).append("then", "PRO"),
+                    new Document("case", new Document("$regexMatch", new Document("input", "$awardUri").append("regex", "fellowship|international_fellowships"))).append("then", "BEC"),
+                    new Document("case", new Document("$regexMatch", new Document("input", "$awardUri").append("regex", "mobility"))).append("then", "ESF"),
+                    new Document("case", new Document("$regexMatch", new Document("input", "$awardUri").append("regex", "staff_to_incorporate"))).append("then", "ESA"),
+                    new Document("case", new Document("$regexMatch", new Document("input", "$awardUri").append("regex", "infraestructure"))).append("then", "INF"),
+                    new Document("case", new Document("$regexMatch", new Document("input", "$awardUri").append("regex", "research_group|other_grants|other_international_grants"))).append("then", "GAC"),
+                    new Document("case", new Document("$regexMatch", new Document("input", "$awardUri").append("regex", "avr_award"))).append("then", "AVR"),
+                    new Document("case", new Document("$regexMatch", new Document("input", "$awardUri").append("regex", "fin_award"))).append("then", "FIN")
+                )).append("default", "OTHER")))
+                .append("foppCat", new Document("$let", new Document()
+                    .append("vars", new Document("parts", new Document("$split", Arrays.asList("$foppUri", "/"))))
+                    .append("in", new Document("$toUpper", new Document("$arrayElemAt", Arrays.asList(
+                        "$$parts",
+                        new Document("$subtract", Arrays.asList(new Document("$size", "$$parts"), 2))
+                    ))))))));
+
+            basePipeline.add(new Document("$addFields", new Document("isTypeMatch", new Document("$eq", Arrays.asList("$awardCat", "$foppCat")))));
+
+            boolean targetMatch = "match".equalsIgnoreCase(typeMatch) || "yes".equalsIgnoreCase(typeMatch);
+            basePipeline.add(new Document("$match", new Document("isTypeMatch", targetMatch)));
+        }
+
         // Count total matching records using aggregation count
         List<Document> countPipeline = new ArrayList<>(basePipeline);
         countPipeline.add(new Document("$count", "total"));
@@ -176,8 +218,10 @@ public class AwardController {
         // Fetch paginated results
         List<Document> dataPipeline = new ArrayList<>(basePipeline);
         dataPipeline.add(new Document("$sort", new Document("awardDate", -1).append("uuid", 1)));
-        dataPipeline.add(new Document("$skip", page * size));
-        dataPipeline.add(new Document("$limit", size));
+        if (size > 0) {
+            dataPipeline.add(new Document("$skip", page * size));
+            dataPipeline.add(new Document("$limit", size));
+        }
 
         Document projection = new Document()
             .append("uuid", 1)
@@ -186,6 +230,9 @@ public class AwardController {
             .append("awardDate", 1)
             .append("type", 1)
             .append("natureTypes", 1)
+            .append("identifiers", 1)
+            .append("awardHolders", 1)
+            .append("managingOrganization", 1)
             .append("fOppUuid", "$fOpp.uuid")
             .append("fOppTitle", "$fOpp.title")
             .append("fOppType", "$fOpp.type");
@@ -196,9 +243,69 @@ public class AwardController {
                 .aggregate(dataPipeline)
                 .into(data);
 
-        // Apply suggestions for awards without nature
+        // Enrich awards with parsed identifiers, IP name, org name, and suggestions
+        enrichAwardDocuments(data);
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("content", data);
+        response.put("totalElements", totalElements);
+        response.put("page", page);
+        response.put("size", size);
+        response.put("totalPages", size > 0 ? (int) Math.ceil((double) totalElements / size) : 1);
+
+        return response;
+    }
+
+    /**
+     * Helper to enrich Award documents with parsed identifiers, IP names, org units, and suggestions.
+     */
+    private void enrichAwardDocuments(List<Document> awards) {
         Map<String, Document> suggestionsMap = getSuggestedNatureMap();
-        for (Document award : data) {
+        for (Document award : awards) {
+            // 1. Parsed Identifiers
+            Map<String, Object> idMap = extractParsedIdentifiers(award);
+            award.put("parsedIdentifiers", idMap);
+            award.put("primaryId", idMap.get("primaryId"));
+            award.put("idFenix", idMap.get("id_fenix"));
+            award.put("referenceCode", idMap.get("referenceCode"));
+            award.put("agaurCode", idMap.get("agaurCode"));
+            award.put("agaurCode2", idMap.get("agaurCode2"));
+
+            // 2. IP Name
+            Object holdersObj = award.get("awardHolders");
+            if (holdersObj instanceof List<?> list && !list.isEmpty()) {
+                Object first = list.get(0);
+                if (first instanceof Document hDoc) {
+                    Object nameObj = hDoc.get("name");
+                    if (nameObj instanceof Document nDoc) {
+                        String firstN = nDoc.getString("firstName");
+                        String lastN = nDoc.getString("lastName");
+                        String full = ((firstN != null ? firstN : "") + " " + (lastN != null ? lastN : "")).trim();
+                        if (!full.isBlank()) award.put("ipName", full);
+                    }
+                }
+            }
+
+            // 3. Managing Organization Name
+            Object orgObj = award.get("managingOrganization");
+            if (orgObj instanceof Document oDoc) {
+                Object nameObj = oDoc.get("name");
+                String orgName = extractCaEsFromType(nameObj);
+                if (orgName == null && nameObj instanceof String s) orgName = s;
+                if (orgName != null && !orgName.isBlank()) award.put("managingOrgName", orgName);
+            }
+
+            // 4. Year extraction
+            Object dateObj = award.get("awardDate");
+            if (dateObj instanceof Date d) {
+                LocalDate ld = d.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
+                award.put("awardYear", ld.getYear());
+            } else if (dateObj instanceof Document dDoc) {
+                Integer yr = dDoc.getInteger("year");
+                if (yr != null) award.put("awardYear", yr);
+            }
+
+            // 5. Suggestions for awards without nature
             Object natureObj = award.get("natureTypes");
             boolean hasAnyNature = false;
             if (natureObj instanceof List<?> list && !list.isEmpty()) {
@@ -221,15 +328,62 @@ public class AwardController {
                 }
             }
         }
+    }
 
-        Map<String, Object> response = new HashMap<>();
-        response.put("content", data);
-        response.put("totalElements", totalElements);
-        response.put("page", page);
-        response.put("size", size);
-        response.put("totalPages", (int) Math.ceil((double) totalElements / size));
+    private static Map<String, Object> extractParsedIdentifiers(Document award) {
+        Map<String, Object> res = new LinkedHashMap<>();
+        Object idListObj = award.get("identifiers");
+        if (idListObj instanceof List<?> list) {
+            for (Object item : list) {
+                if (item instanceof Document idDoc) {
+                    String disc = idDoc.getString("typeDiscriminator");
+                    String val = idDoc.getString("value");
+                    if (val == null) {
+                        Object vObj = idDoc.get("value");
+                        if (vObj != null) val = String.valueOf(vObj);
+                    }
+                    String idStr = idDoc.getString("id");
+                    if (idStr == null) {
+                        Object iObj = idDoc.get("id");
+                        if (iObj != null) idStr = String.valueOf(iObj);
+                    }
+                    
+                    if ("PrimaryId".equalsIgnoreCase(disc)) {
+                        res.put("primaryId", val != null ? val : idStr);
+                    }
+                    
+                    Object typeObj = idDoc.get("type");
+                    String uri = "";
+                    if (typeObj instanceof Document typeDoc) {
+                        uri = typeDoc.getString("uri");
+                    }
+                    if (uri != null) {
+                        String lowerUri = uri.toLowerCase();
+                        if (lowerUri.contains("id_fenix")) {
+                            res.put("id_fenix", idStr != null ? idStr : val);
+                        } else if (lowerUri.contains("reference") || lowerUri.contains("referencia") || lowerUri.contains("ref_code")) {
+                            res.put("referenceCode", idStr != null ? idStr : val);
+                        } else if (lowerUri.contains("agaur_code_2")) {
+                            res.put("agaurCode2", idStr != null ? idStr : val);
+                        } else if (lowerUri.contains("agaur_code")) {
+                            res.put("agaurCode", idStr != null ? idStr : val);
+                        }
+                    }
+                    if (disc != null && disc.toLowerCase().contains("reference") && !res.containsKey("referenceCode")) {
+                        res.put("referenceCode", idStr != null ? idStr : val);
+                    }
+                }
+            }
+        }
+        return res;
+    }
 
-        return response;
+    /**
+     * Endpoint to fetch all unassigned nature awards (without pagination limit) for instant Excel-like filtering.
+     */
+    @GetMapping("/all-unassigned-nature")
+    public Map<String, Object> getAllUnassignedNatureAwards() {
+        return getDetailedList(0, 0, null, "all", "no", null, "all");
     }
 
     private Map<String, Document> suggestedNatureCache = null;
@@ -259,7 +413,7 @@ public class AwardController {
                     .append("foreignField", "uuid")
                     .append("as", "fOpp")),
                 new Document("$unwind", "$fOpp"),
-                new Document("$match", new Document("natureTypes", new Document("$exists", true).append("$not", new Document("$size", 0)))),
+                new Document("$match", new Document("natureTypes.0", new Document("$exists", true))),
                 new Document("$project", new Document()
                     .append("fOppType", new Document("$ifNull", Arrays.asList(
                         "$fOpp.type.term.ca_ES",
@@ -305,27 +459,67 @@ public class AwardController {
     }
 
     private String extractCaEsFromType(Object typeObj) {
-        if (!(typeObj instanceof Document typeDoc)) return null;
-        Object termObj = typeDoc.get("term");
-        if (termObj instanceof Document termDoc) {
-            String ca = termDoc.getString("ca_ES");
-            if (ca != null && !ca.isBlank()) return ca;
-            Object textObj = termDoc.get("text");
+        if (typeObj == null) return null;
+        if (typeObj instanceof String s) return s;
+        if (!(typeObj instanceof Map<?, ?> typeMap)) return null;
+
+        Object termObj = typeMap.get("term");
+        if (termObj instanceof Map<?, ?> termMap) {
+            Object ca = termMap.get("ca_ES");
+            if (ca != null && !String.valueOf(ca).isBlank()) return String.valueOf(ca);
+            Object textObj = termMap.get("text");
             if (textObj instanceof List<?> list) {
                 for (Object o : list) {
-                    if (o instanceof Document td && "ca_ES".equals(td.getString("locale"))) {
-                        return td.getString("value");
+                    if (o instanceof Map<?, ?> td && "ca_ES".equals(td.get("locale"))) {
+                        Object val = td.get("value");
+                        if (val != null) return String.valueOf(val);
                     }
                 }
             }
         } else if (termObj instanceof List<?> list) {
             for (Object o : list) {
-                if (o instanceof Document td && "ca_ES".equals(td.getString("locale"))) {
-                    return td.getString("value");
+                if (o instanceof Map<?, ?> td && "ca_ES".equals(td.get("locale"))) {
+                    Object val = td.get("value");
+                    if (val != null) return String.valueOf(val);
                 }
+            }
+        } else if (termObj instanceof String s) {
+            return s;
+        }
+        return null;
+    }
+
+    private String extractNatureUri(Object natureObj) {
+        if (natureObj == null) return null;
+        if (natureObj instanceof Map<?, ?> map) {
+            Object uriObj = map.get("uri");
+            if (uriObj != null && !String.valueOf(uriObj).isBlank()) {
+                return String.valueOf(uriObj);
             }
         }
         return null;
+    }
+
+    private Document buildMongoNatureDoc(Object natureObj) {
+        if (natureObj == null) return null;
+        String uri = extractNatureUri(natureObj);
+        String termCa = getCaEsTerm(natureObj);
+        if (termCa == null || "Sense títol".equals(termCa) || termCa.isBlank()) {
+            termCa = extractCaEsFromType(natureObj);
+        }
+        if (termCa == null || termCa.isBlank() || "Sense títol".equals(termCa)) {
+            termCa = uri != null ? uri : "Sense títol";
+        }
+        Document doc = new Document();
+        if (uri != null) {
+            doc.append("uri", uri);
+        }
+        Document termDoc = new Document("ca_ES", termCa);
+        List<Document> textList = new ArrayList<>();
+        textList.add(new Document("locale", "ca_ES").append("value", termCa));
+        termDoc.append("text", textList);
+        doc.append("term", termDoc);
+        return doc;
     }
 
     @PostMapping("/{uuid}/nature")
@@ -338,9 +532,10 @@ public class AwardController {
         
         Map<String, Object> resp = new HashMap<>();
         if (egretaSuccess) {
+            Document mongoDoc = buildMongoNatureDoc(natureDoc);
             mongoTemplate.getCollection("Awards")
                     .updateOne(new Document("uuid", uuid),
-                            new Document("$set", new Document("natureTypes", Arrays.asList(natureDoc))));
+                            new Document("$set", new Document("natureTypes", Arrays.asList(mongoDoc))));
 
             suggestedNatureCache = null; // Clear cache on update
             allNatures = null;
@@ -367,11 +562,7 @@ public class AwardController {
             new Document("type.term.ca_ES", new Document("$ne", "Conveni extern a la UAB")).append("workflow.step", "validated")
         )));
         andConditions.add(new Document("categoria", new Document("$regex", "^Ajudes competitives")));
-        andConditions.add(new Document("$or", Arrays.asList(
-            new Document("natureTypes", new Document("$exists", false)),
-            new Document("natureTypes", null),
-            new Document("natureTypes", new Document("$size", 0))
-        )));
+        andConditions.add(new Document("natureTypes.0", new Document("$exists", false)));
         matchQuery.put("$and", andConditions);
         basePipeline.add(new Document("$match", matchQuery));
 
@@ -415,13 +606,14 @@ public class AwardController {
         int successCount = 0;
         int failCount = 0;
         List<String> failedUuids = new ArrayList<>();
+        Document mongoDoc = buildMongoNatureDoc(natureDoc);
 
         for (String uuid : uuidsToUpdate) {
             boolean egretaSuccess = syncAwardNatureToEgreta(uuid, natureDoc, env);
             if (egretaSuccess) {
                 mongoTemplate.getCollection("Awards")
                         .updateOne(new Document("uuid", uuid),
-                                new Document("$set", new Document("natureTypes", Arrays.asList(natureDoc))));
+                                new Document("$set", new Document("natureTypes", Arrays.asList(mongoDoc))));
                 successCount++;
             } else {
                 failCount++;
@@ -442,16 +634,163 @@ public class AwardController {
         return resp;
     }
 
+    @PostMapping("/batch-update-nature-by-uuids")
+    public Map<String, Object> batchUpdateNatureByUuids(
+            @RequestParam(defaultValue = "test") String env,
+            @RequestBody Map<String, Object> payload) {
+
+        @SuppressWarnings("unchecked")
+        List<String> uuids = (List<String>) payload.get("uuids");
+        Object natureObj = payload.get("natureDoc");
+        Document natureDoc = null;
+        if (natureObj instanceof Map<?, ?> map) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> castedMap = (Map<String, Object>) map;
+            natureDoc = new Document(castedMap);
+        }
+
+        Map<String, Object> resp = new HashMap<>();
+        if (uuids == null || uuids.isEmpty() || natureDoc == null) {
+            resp.put("success", false);
+            resp.put("message", "Cal proporcionar la llista d'UUIDs i el document de naturalesa.");
+            return resp;
+        }
+
+        int successCount = 0;
+        int failCount = 0;
+        List<String> failedUuids = new ArrayList<>();
+        Document mongoDoc = buildMongoNatureDoc(natureDoc);
+
+        for (String uuid : uuids) {
+            boolean egretaSuccess = syncAwardNatureToEgreta(uuid, natureDoc, env);
+            if (egretaSuccess) {
+                mongoTemplate.getCollection("Awards")
+                        .updateOne(new Document("uuid", uuid),
+                                new Document("$set", new Document("natureTypes", Arrays.asList(mongoDoc))));
+                successCount++;
+            } else {
+                failCount++;
+                failedUuids.add(uuid);
+            }
+        }
+
+        if (successCount > 0) {
+            suggestedNatureCache = null;
+            allNatures = null;
+        }
+
+        resp.put("success", true);
+        resp.put("total", uuids.size());
+        resp.put("successCount", successCount);
+        resp.put("failCount", failCount);
+        resp.put("failedUuids", failedUuids);
+        return resp;
+    }
+
+    @PostMapping("/batch-apply-suggested-by-uuids")
+    public Map<String, Object> batchApplySuggestedByUuids(
+            @RequestParam(defaultValue = "test") String env,
+            @RequestBody List<String> uuids) {
+
+        Map<String, Object> resp = new HashMap<>();
+        if (uuids == null || uuids.isEmpty()) {
+            resp.put("success", false);
+            resp.put("message", "Cal proporcionar la llista d'UUIDs.");
+            return resp;
+        }
+
+        Map<String, Document> suggestionsMap = getSuggestedNatureMap();
+        int successCount = 0;
+        int failCount = 0;
+        int noSuggestionCount = 0;
+        List<String> failedUuids = new ArrayList<>();
+
+        for (String uuid : uuids) {
+            List<Document> pipeline = Arrays.asList(
+                new Document("$match", new Document("uuid", uuid)),
+                new Document("$lookup", new Document()
+                    .append("from", "Applications")
+                    .append("localField", "applications.uuid")
+                    .append("foreignField", "uuid")
+                    .append("as", "appDocs")),
+                new Document("$unwind", new Document("path", "$appDocs").append("preserveNullAndEmptyArrays", true)),
+                new Document("$lookup", new Document()
+                    .append("from", "FundingOpportunities")
+                    .append("localField", "appDocs.fundingOpportunity.uuid")
+                    .append("foreignField", "uuid")
+                    .append("as", "fOpp")),
+                new Document("$unwind", new Document("path", "$fOpp").append("preserveNullAndEmptyArrays", true)),
+                new Document("$project", new Document("fOppType", "$fOpp.type"))
+            );
+
+            List<Document> res = new ArrayList<>();
+            try {
+                mongoTemplate.getCollection("Awards").aggregate(pipeline).into(res);
+            } catch (Exception e) {
+                // Ignore
+            }
+
+            Document suggested = null;
+            if (!res.isEmpty()) {
+                Object fOppType = res.get(0).get("fOppType");
+                String fTypeStr = extractCaEsFromType(fOppType);
+                if (fTypeStr != null) {
+                    suggested = suggestionsMap.get(fTypeStr);
+                }
+                if (suggested == null && fOppType instanceof Document fOppTypeDoc) {
+                    String callTypeUri = fOppTypeDoc.getString("uri");
+                    suggested = findNatureByUriSimilarity(callTypeUri);
+                }
+            }
+
+            if (suggested == null) {
+                noSuggestionCount++;
+                continue;
+            }
+
+            boolean egretaSuccess = syncAwardNatureToEgreta(uuid, suggested, env);
+            if (egretaSuccess) {
+                Document mongoDoc = buildMongoNatureDoc(suggested);
+                mongoTemplate.getCollection("Awards")
+                        .updateOne(new Document("uuid", uuid),
+                                new Document("$set", new Document("natureTypes", Arrays.asList(mongoDoc))));
+                successCount++;
+            } else {
+                failCount++;
+                failedUuids.add(uuid);
+            }
+        }
+
+        if (successCount > 0) {
+            suggestedNatureCache = null;
+            allNatures = null;
+        }
+
+        resp.put("success", true);
+        resp.put("total", uuids.size());
+        resp.put("successCount", successCount);
+        resp.put("failCount", failCount);
+        resp.put("noSuggestionCount", noSuggestionCount);
+        resp.put("failedUuids", failedUuids);
+        return resp;
+    }
+
     private boolean syncAwardNatureToEgreta(String uuid, Document natureDoc, String env) {
         try {
             org.springframework.web.client.RestTemplate restTemplate = new org.springframework.web.client.RestTemplate();
             org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
             headers.set("Content-Type", "application/json;charset=utf-8");
-            headers.set("api-key", "9971c3cc-b3e0-48e3-9ff9-e990c795e92f");
+            headers.set("api-key", egretaApiKey);
             headers.set("Accept", "application/json");
 
             String baseUrl = "prod".equalsIgnoreCase(env) ? "https://egreta.uab.cat/ws/api/" : "https://egretat.uab.cat/ws/api/";
             String url = baseUrl + "awards/" + uuid;
+
+            String uri = extractNatureUri(natureDoc);
+            if (uri == null || uri.isBlank()) {
+                System.err.println("No URI found in natureDoc for award UUID: " + uuid);
+                return false;
+            }
 
             // 1. GET current award document
             org.springframework.http.ResponseEntity<Map> getResp = restTemplate.exchange(
@@ -465,9 +804,12 @@ public class AwardController {
             @SuppressWarnings("unchecked")
             Map<String, Object> data = new java.util.LinkedHashMap<>(getResp.getBody());
             
-            // 2. Modify natureTypes
+            // 2. Modify natureTypes - Pure WS API expects ClassificationRef with only "uri"
+            Map<String, Object> classificationRef = new LinkedHashMap<>();
+            classificationRef.put("uri", uri);
+
             List<Object> natureList = new ArrayList<>();
-            natureList.add(natureDoc);
+            natureList.add(classificationRef);
             data.put("natureTypes", natureList);
             
             // 3. PUT updated award document back
@@ -476,6 +818,9 @@ public class AwardController {
                     url, org.springframework.http.HttpMethod.PUT, putEntity, Map.class);
             
             return putResp.getStatusCode().is2xxSuccessful();
+        } catch (org.springframework.web.client.HttpStatusCodeException e) {
+            System.err.println("Error syncing award nature to Egreta (HTTP " + e.getStatusCode() + "): " + e.getResponseBodyAsString());
+            return false;
         } catch (Exception e) {
             System.err.println("Error syncing award nature to Egreta: " + e.getMessage());
             return false;
@@ -494,11 +839,7 @@ public class AwardController {
             new Document("type.term.ca_ES", new Document("$ne", "Conveni extern a la UAB")).append("workflow.step", "validated")
         )));
         andConditions.add(new Document("categoria", new Document("$regex", "^Ajudes competitives")));
-        andConditions.add(new Document("$or", Arrays.asList(
-            new Document("natureTypes", new Document("$exists", false)),
-            new Document("natureTypes", null),
-            new Document("natureTypes", new Document("$size", 0))
-        )));
+        andConditions.add(new Document("natureTypes.0", new Document("$exists", false)));
         matchQuery.put("$and", andConditions);
         basePipeline.add(new Document("$match", matchQuery));
 
@@ -526,12 +867,24 @@ public class AwardController {
         }
 
         Map<String, Integer> pendingCounts = new HashMap<>();
+        Map<String, String> fundingTypeParentMap = new HashMap<>();
+        Map<String, String> fundingTypeUriMap = new HashMap<>();
         for (Document d : data) {
             String fundingType = extractCaEsFromType(d.get("fOppType"));
             if (fundingType == null || fundingType.isBlank()) {
                 continue;
             }
             pendingCounts.put(fundingType, pendingCounts.getOrDefault(fundingType, 0) + 1);
+            if (d.get("fOppType") instanceof Document typeDoc) {
+                String uri = typeDoc.getString("uri");
+                if (uri != null && !uri.isBlank()) {
+                    fundingTypeUriMap.put(fundingType, uri);
+                    String[] parts = uri.split("/");
+                    if (parts.length >= 2) {
+                        fundingTypeParentMap.put(fundingType, parts[parts.length - 2].toUpperCase());
+                    }
+                }
+            }
         }
 
         List<Map<String, Object>> result = new ArrayList<>();
@@ -561,6 +914,8 @@ public class AwardController {
             if (suggested != null) {
                 Map<String, Object> row = new HashMap<>();
                 row.put("fundingType", fType);
+                row.put("parentType", fundingTypeParentMap.get(fType));
+                row.put("uri", fundingTypeUriMap.get(fType));
                 row.put("nature", suggested);
                 row.put("pendingCount", pendingCounts.getOrDefault(fType, 0));
                 result.add(row);
@@ -591,11 +946,7 @@ public class AwardController {
             new Document("type.term.ca_ES", new Document("$ne", "Conveni extern a la UAB")).append("workflow.step", "validated")
         )));
         andConditions.add(new Document("categoria", new Document("$regex", "^Ajudes competitives")));
-        andConditions.add(new Document("$or", Arrays.asList(
-            new Document("natureTypes", new Document("$exists", false)),
-            new Document("natureTypes", null),
-            new Document("natureTypes", new Document("$size", 0))
-        )));
+        andConditions.add(new Document("natureTypes.0", new Document("$exists", false)));
         matchQuery.put("$and", andConditions);
         basePipeline.add(new Document("$match", matchQuery));
 
@@ -643,9 +994,10 @@ public class AwardController {
                 if (uuid != null) {
                     boolean egretaSuccess = syncAwardNatureToEgreta(uuid, natureDoc, env);
                     if (egretaSuccess) {
+                        Document mongoDoc = buildMongoNatureDoc(natureDoc);
                         mongoTemplate.getCollection("Awards")
                                 .updateOne(new Document("uuid", uuid),
-                                        new Document("$set", new Document("natureTypes", Arrays.asList(natureDoc))));
+                                        new Document("$set", new Document("natureTypes", Arrays.asList(mongoDoc))));
                         successCount++;
                     } else {
                         failCount++;
@@ -791,22 +1143,50 @@ public class AwardController {
         return hierarchy;
     }
 
-    private String getCaEsTerm(Document doc) {
-        if (doc == null) return "Sense títol";
-        Document termDoc = (Document) doc.get("term");
-        if (termDoc != null) {
-            List<Document> textList = (List<Document>) termDoc.get("text");
-            if (textList != null) {
-                for (Document td : textList) {
-                    if ("ca_ES".equals(td.getString("locale"))) {
-                        return td.getString("value");
+    private String getCaEsTerm(Object docObj) {
+        if (docObj == null) return "Sense títol";
+        if (docObj instanceof String s && !s.isBlank()) return s;
+        if (!(docObj instanceof Map<?, ?> map)) return "Sense títol";
+
+        Object termObj = map.get("term");
+        if (termObj instanceof Map<?, ?> termMap) {
+            Object caObj = termMap.get("ca_ES");
+            if (caObj != null && !String.valueOf(caObj).isBlank()) {
+                return String.valueOf(caObj);
+            }
+            Object textObj = termMap.get("text");
+            if (textObj instanceof List<?> list) {
+                for (Object o : list) {
+                    if (o instanceof Map<?, ?> td && "ca_ES".equals(td.get("locale"))) {
+                        Object val = td.get("value");
+                        if (val != null) return String.valueOf(val);
                     }
                 }
+                if (!list.isEmpty() && list.get(0) instanceof Map<?, ?> firstTd) {
+                    Object val = firstTd.get("value");
+                    if (val != null) return String.valueOf(val);
+                }
             }
+        } else if (termObj instanceof List<?> list) {
+            for (Object o : list) {
+                if (o instanceof Map<?, ?> td && "ca_ES".equals(td.get("locale"))) {
+                    Object val = td.get("value");
+                    if (val != null) return String.valueOf(val);
+                }
+            }
+            if (!list.isEmpty() && list.get(0) instanceof Map<?, ?> firstTd) {
+                Object val = firstTd.get("value");
+                if (val != null) return String.valueOf(val);
+            }
+        } else if (termObj instanceof String s && !s.isBlank()) {
+            return s;
         }
-        Object termObj = doc.get("term");
-        if (termObj instanceof String s) return s;
-        return doc.getString("uri");
+
+        Object uriObj = map.get("uri");
+        if (uriObj != null && !String.valueOf(uriObj).isBlank()) {
+            return String.valueOf(uriObj);
+        }
+        return "Sense títol";
     }
 
     private List<Document> allNatures = null;
@@ -817,11 +1197,26 @@ public class AwardController {
         }
         allNatures = new ArrayList<>();
         try {
-            allNatures = mongoTemplate.getCollection("Awards")
-                    .distinct("natureTypes", new Document(), Document.class)
-                    .into(new ArrayList<>());
+            Document scheme = mongoTemplate.getCollection("Classificationschemes")
+                    .find(new Document("baseUri", "/dk/atira/pure/upm/nature"))
+                    .first();
+            if (scheme != null) {
+                List<Document> contained = (List<Document>) scheme.get("containedClassifications");
+                if (contained != null && !contained.isEmpty()) {
+                    allNatures.addAll(contained);
+                }
+            }
         } catch (Exception e) {
             // Silently catch
+        }
+        if (allNatures.isEmpty()) {
+            try {
+                allNatures = mongoTemplate.getCollection("Awards")
+                        .distinct("natureTypes", new Document(), Document.class)
+                        .into(new ArrayList<>());
+            } catch (Exception e) {
+                // Silently catch
+            }
         }
         return allNatures;
     }
@@ -837,6 +1232,8 @@ public class AwardController {
             idx = callTypeUri.indexOf("fundingopportunitytypes/");
             if (idx >= 0) {
                 suffix = callTypeUri.substring(idx + "fundingopportunitytypes/".length());
+            } else {
+                suffix = callTypeUri.substring(callTypeUri.lastIndexOf("/") + 1);
             }
         }
         
@@ -847,6 +1244,7 @@ public class AwardController {
         String normSuffixUnder = suffix.replace("/", "_").replace("-", "_");
         
         List<Document> natures = getAllNatures();
+        // 1. Exact match
         for (Document nat : natures) {
             String nUri = nat.getString("uri");
             if (nUri == null) continue;
@@ -862,6 +1260,27 @@ public class AwardController {
             String nSuffixNorm = nSuffix.replace("/", "_").replace("-", "_");
             
             if (nSuffixNorm.equals(normSuffixUnder) || nSuffixNorm.equals(normSuffixSlash)) {
+                return nat;
+            }
+        }
+
+        // 2. Suffix / Substring match (e.g. "pro_zoo" with "zoo" or "pro/zoo")
+        for (Document nat : natures) {
+            String nUri = nat.getString("uri");
+            if (nUri == null) continue;
+            
+            String nSuffix = "";
+            int nIdx = nUri.indexOf("nature/");
+            if (nIdx >= 0) {
+                nSuffix = nUri.substring(nIdx + "nature/".length());
+            } else {
+                nSuffix = nUri.substring(nUri.lastIndexOf("/") + 1);
+            }
+            nSuffix = nSuffix.replaceAll("^/+", "").replaceAll("/+$", "").toLowerCase();
+            String nSuffixNorm = nSuffix.replace("/", "_").replace("-", "_");
+            
+            if (nSuffixNorm.endsWith("_" + normSuffixUnder) || normSuffixUnder.endsWith("_" + nSuffixNorm) ||
+                nSuffixNorm.contains(normSuffixUnder) || normSuffixUnder.contains(nSuffixNorm)) {
                 return nat;
             }
         }

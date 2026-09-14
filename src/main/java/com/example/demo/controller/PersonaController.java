@@ -3,6 +3,7 @@ package com.example.demo.controller;
 import com.example.demo.model.Organizacion;
 import com.example.demo.model.Persona;
 import com.example.demo.service.AwardService;
+import com.example.demo.service.PersonaCvService;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.annotation.PostConstruct;
 import org.apache.poi.util.Units;
@@ -64,11 +65,21 @@ public class PersonaController {
 
     private final MongoTemplate mongoTemplate;
     private final AwardService awardService;
+    private final PersonaCvService personaCvService;
 
     @Autowired
-    public PersonaController(MongoTemplate mongoTemplate, AwardService awardService) {
+    public PersonaController(MongoTemplate mongoTemplate, AwardService awardService, PersonaCvService personaCvService) {
         this.mongoTemplate = mongoTemplate;
         this.awardService = awardService;
+        this.personaCvService = personaCvService;
+    }
+
+    @GetMapping("/{uuid}/cv-data")
+    public Map<String, Object> getPersonaCvData(
+            @PathVariable String uuid,
+            @RequestParam(required = false) Integer desde,
+            @RequestParam(required = false) Integer hasta) {
+        return personaCvService.getCvData(uuid, desde, hasta);
     }
 
     @PostConstruct

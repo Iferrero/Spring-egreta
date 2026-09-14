@@ -682,6 +682,8 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('update-label').classList.remove('text-red-600');
         }
     });
+    const defaultEnv = (typeof window.getDefaultEnv === 'function') ? window.getDefaultEnv() : 'prod';
+    setEntorn(defaultEnv);
     updateEditSummary();
 
     // Carregar documentació OpenAPI inicial pel valor per defecte ('awards')

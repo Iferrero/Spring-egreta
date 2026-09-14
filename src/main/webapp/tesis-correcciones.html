@@ -260,7 +260,10 @@
 
         function abrirEgreta(event, pureId) {
             event.preventDefault();
-            const url = `https://egreta.uab.cat/admin/editor/dk/atira/pure/api/shared/model/studentthesis/editor/studentthesiseditor.xhtml?scheme=&type=&id=${pureId}`;
+            const selectEntorn = document.getElementById('selectEntorn');
+            const env = selectEntorn ? selectEntorn.value : ((typeof window.getDefaultEnv === 'function') ? window.getDefaultEnv() : 'prod');
+            const host = (env === 'test') ? 'egretat.uab.cat' : 'egreta.uab.cat';
+            const url = `https://${host}/admin/editor/dk/atira/pure/api/shared/model/studentthesis/editor/studentthesiseditor.xhtml?scheme=&type=&id=${pureId}`;
             if (window.abrirEgretaModal) {
                 window.abrirEgretaModal(url);
             } else {

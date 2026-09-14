@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Càrrega d'Equipaments Excel | Egreta</title>
+    <meta name="description" content="Eina per a la càrrega massiva d'equipaments cientificotècnics des d'Excel a Egreta/Pure.">
+    <script src="config.js"></script>
+    <script src="uab-brand.js" defer></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="uab-theme.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .uab-card {
+            background: #ffffff;
+            border: 1px solid var(--uab-columna, #e2e8f0);
+            border-radius: 1rem;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+            transition: all 0.2s ease;
+        }
+        .uab-card:hover {
+            box-shadow: 0 6px 18px rgba(0,0,0,0.06);
+        }
+        .btn-uab-primary {
+            background-color: var(--uab-campus, #007c64);
+            color: #ffffff;
+            font-weight: 600;
+            border-radius: 0.5rem;
+            padding: 0.6rem 1.25rem;
+            transition: all 0.15s;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .btn-uab-primary:hover:not(:disabled) {
+            background-color: #006350;
+            transform: translateY(-1px);
+        }
+        .btn-uab-secondary {
+            background-color: #f1f5f9;
+            color: #334155;
+            font-weight: 600;
+            border: 1px solid #cbd5e1;
+            border-radius: 0.5rem;
+            padding: 0.6rem 1.25rem;
+            transition: all 0.15s;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .btn-uab-secondary:hover:not(:disabled) {
+            background-color: #e2e8f0;
+            color: #1e293b;
+        }
+        .env-badge-test {
+            background-color: #fef3c7;
+            color: #92400e;
+            border: 1px solid #f59e0b;
+        }
+        .env-badge-prod {
+            background-color: #fee2e2;
+            color: #991b1b;
+            border: 1px solid #ef4444;
+        }
+        .dropzone {
+            border: 2px dashed #cbd5e1;
+            border-radius: 1rem;
+            background-color: #f8fafc;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .dropzone:hover, .dropzone.dragover {
+            border-color: var(--uab-campus, #007c64);
+            background-color: #f0fdf4;
+        }
+        /* Sticky table header */
+        .table-container {
+            max-height: 65vh;
+            overflow-y: auto;
+        }
+        thead th {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen text-slate-800">
+
+    <!-- Header / Navbar -->
+    <div class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex flex-wrap items-center justify-between gap-4">
+            <div class="flex items-center gap-3">
+                <a href="index.html" class="text-slate-400 hover:text-slate-600 transition-colors p-1.5 rounded-lg hover:bg-slate-100" title="Tornar al menú principal">
+                    <i class="fa-solid fa-arrow-left text-lg"></i>
+                </a>
+                <div>
+                    <div class="flex items-center gap-2">
+                        <span class="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-sm">
+                            <i class="fa-solid fa-microscope"></i>
+                        </span>
+                        <h1 class="text-lg font-bold text-slate-900 leading-tight">Càrrega d'Equipaments Cientificotècnics (Excel)</h1>
+                    </div>
+                    <p class="text-xs text-slate-500 mt-0.5">Alta automàtica d'equipaments SCT a Egreta / Pure API</p>
+                </div>
+            </div>
+
+            <!-- Controls d'entorn -->
+            <div class="flex items-center gap-3">
+                <div class="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-semibold">
+                    <span class="px-2.5 py-1 text-slate-500">Entorn:</span>
+                    <button id="btn-env-test" class="px-3 py-1 rounded-lg bg-amber-400 text-amber-950 font-bold shadow-sm transition-all" onclick="setEnvironment('test')">
+                        <i class="fa-solid fa-flask mr-1"></i> TEST
+                    </button>
+                    <button id="btn-env-prod" class="px-3 py-1 rounded-lg text-slate-600 hover:text-slate-900 transition-all" onclick="setEnvironment('prod')">
+                        <i class="fa-solid fa-server mr-1"></i> PROD
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Container -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+        <!-- 1. Zona de Selecció / Càrrega d'Excel -->
+        <section class="uab-card p-6">
+            <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+                <div>
+                    <h2 class="text-base font-bold text-slate-900 flex items-center gap-2">
+                        <i class="fa-solid fa-file-excel text-emerald-600"></i>
+                        1. Selecció del fitxer Excel
+                    </h2>
+                    <p class="text-xs text-slate-500 mt-0.5">Pots carregar directament el fitxer consensuat per defecte o pujar-ne un altre</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button id="btn-load-default" class="btn-uab-primary text-xs" onclick="loadDefaultFile()">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i>
+                        Carregar fitxer per defecte (20260629-SCT)
+                    </button>
+                </div>
+            </div>
+
+            <div class="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+                <!-- Drag & drop box -->
+                <div class="md:col-span-2 dropzone p-5 flex flex-col items-center justify-center text-center relative" id="drop-area" onclick="document.getElementById('file-input').click()">
+                    <input type="file" id="file-input" accept=".xlsx,.xls" class="hidden" onchange="handleFileSelect(event)">
+                    <div class="w-12 h-12 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl mb-2">
+                        <i class="fa-solid fa-cloud-arrow-up"></i>
+                    </div>
+                    <p class="text-sm font-semibold text-slate-700">Arrossega un fitxer Excel aquí o <span class="text-emerald-600 underline">navega</span></p>
+                    <p class="text-xs text-slate-400 mt-1">Accepta format .xlsx o .xls amb columnes de servei, títols, marca i descripció</p>
+                    <div id="file-loading-indicator" class="hidden absolute inset-0 bg-white/90 backdrop-blur-sm rounded-xl flex items-center justify-center gap-2 text-emerald-700 font-semibold text-sm">
+                        <i class="fa-solid fa-circle-notch fa-spin text-lg"></i> Processant fitxer...
+                    </div>
+                </div>
+
+                <!-- Info resum del fitxer carregat -->
+                <div class="bg-slate-50 rounded-xl p-4 border border-slate-200 flex flex-col justify-between">
+                    <div>
+                        <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Fitxer actiu</span>
+                        <div id="active-file-name" class="font-bold text-sm text-slate-800 mt-1 truncate">Cap fitxer carregat</div>
+                        <div id="file-meta-info" class="text-xs text-slate-500 mt-1 space-y-1">
+                            <div><i class="fa-solid fa-hashtag mr-1"></i> <span id="meta-total-rows">0</span> equipaments detectats</div>
+                            <div><i class="fa-solid fa-building mr-1"></i> <span id="meta-total-orgs">0</span> serveis UAB reconeguts</div>
+                        </div>
+                    </div>
+                    <div class="mt-3 pt-3 border-t border-slate-200 flex items-center justify-between text-xs">
+                        <span id="load-status-badge" class="px-2 py-0.5 rounded-full bg-slate-200 text-slate-700 font-semibold">Inactiu</span>
+                        <button id="btn-reload" class="text-slate-500 hover:text-emerald-700 font-semibold hidden" onclick="loadDefaultFile()">
+                            <i class="fa-solid fa-arrow-rotate-right mr-1"></i> Recarregar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 2. Opcions Globals de Càrrega -->
+        <section id="config-section" class="uab-card p-5 hidden">
+            <div class="flex flex-wrap items-center justify-between gap-4">
+                <div class="flex items-center gap-2">
+                    <i class="fa-solid fa-sliders text-emerald-700"></i>
+                    <h2 class="text-sm font-bold text-slate-900">2. Opcions d'Alta a Egreta</h2>
+                </div>
+                <div class="flex flex-wrap items-center gap-4 text-xs">
+                    <div class="flex items-center gap-1.5">
+                        <label for="cfg-workflow" class="font-semibold text-slate-600">Estat Workflow:</label>
+                        <select id="cfg-workflow" class="border border-slate-300 rounded-lg px-2.5 py-1 bg-white font-medium text-slate-800 focus:border-emerald-500 outline-none">
+                            <option value="approved" selected>Aprovada (Approved) - Recomanat</option>
+                            <option value="forApproval">Per a aprovació (For approval)</option>
+                            <option value="entryInProgress">Entrada en curs (Entry in progress)</option>
+                        </select>
+                    </div>
+
+                    <div class="flex items-center gap-1.5">
+                        <label for="cfg-type" class="font-semibold text-slate-600">Tipus d'Equipament:</label>
+                        <select id="cfg-type" class="border border-slate-300 rounded-lg px-2.5 py-1 bg-white font-medium text-slate-800 focus:border-emerald-500 outline-none">
+                            <option value="/dk/atira/pure/equipment/equipmenttypes/equipment/equipment" selected>Equipament (Equipment)</option>
+                            <option value="/dk/atira/pure/equipment/equipmenttypes/equipment/facility">Instal·lació (Facility)</option>
+                            <option value="/dk/atira/pure/equipment/equipmenttypes/equipment/component">Component (Component)</option>
+                        </select>
+                    </div>
+
+                    <div class="flex items-center gap-1.5">
+                        <span class="font-semibold text-slate-600">Visibilitat:</span>
+                        <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold">PÚBLIC (FREE)</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 3. Taula de Dades i Accions de Càrrega -->
+        <section id="data-section" class="uab-card p-6 hidden">
+            <!-- Barra d'eines i filtres -->
+            <div class="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-100">
+                <div class="flex flex-wrap items-center gap-3">
+                    <div class="relative">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-400 text-xs"></i>
+                        <input type="text" id="search-box" placeholder="Cercar per nom, model, servei..." class="border border-slate-300 rounded-lg pl-8 pr-3 py-1.5 text-xs w-64 focus:border-emerald-500 outline-none" oninput="renderTable()">
+                    </div>
+
+                    <select id="service-filter" class="border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs bg-white text-slate-800 font-medium focus:border-emerald-500 outline-none" onchange="renderTable()">
+                        <option value="ALL">Tots els Serveis (SCT)</option>
+                    </select>
+
+                    <select id="status-filter" class="border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs bg-white text-slate-800 font-medium focus:border-emerald-500 outline-none" onchange="renderTable()">
+                        <option value="ALL">Tots els Estats</option>
+                        <option value="READY">Pendents</option>
+                        <option value="CREATED">Creats amb èxit</option>
+                        <option value="ERROR">Amb error</option>
+                        <option value="DRY_RUN">Simulats (Dry Run)</option>
+                    </select>
+                </div>
+
+                <!-- Botons d'acció principals -->
+                <div class="flex items-center gap-2">
+                    <button id="btn-dry-run" class="btn-uab-secondary text-xs" onclick="executeBatch(true)">
+                        <i class="fa-solid fa-vial"></i>
+                        Simular Càrrega (Dry Run)
+                    </button>
+                    <button id="btn-execute" class="btn-uab-primary text-xs" onclick="executeBatch(false)">
+                        <i class="fa-solid fa-cloud-arrow-up"></i>
+                        <span id="btn-execute-text">Carregar a Egreta (<span class="current-env-label">TEST</span>)</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Progrés d'execució -->
+            <div id="progress-bar-container" class="mt-4 p-4 rounded-xl bg-slate-50 border border-slate-200 hidden">
+                <div class="flex items-center justify-between text-xs font-semibold text-slate-700 mb-1.5">
+                    <span id="progress-status-text"><i class="fa-solid fa-spinner fa-spin text-emerald-600 mr-1.5"></i> Processant equipaments...</span>
+                    <span id="progress-counts">0 / 0</span>
+                </div>
+                <div class="w-full bg-slate-200 rounded-full h-2.5 overflow-hidden">
+                    <div id="progress-bar" class="bg-emerald-600 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <!-- Resum de comptadors -->
+            <div class="mt-4 flex flex-wrap items-center justify-between text-xs text-slate-600">
+                <div class="flex items-center gap-4">
+                    <span>Mostrant <b id="count-visible">0</b> de <b id="count-total">0</b> equipaments</span>
+                    <span class="text-slate-300">|</span>
+                    <label class="flex items-center gap-1.5 cursor-pointer font-semibold text-slate-700">
+                        <input type="checkbox" id="check-all" class="rounded text-emerald-600 focus:ring-0" checked onchange="toggleSelectAll(this.checked)">
+                        Seleccionar tots els visibles
+                    </label>
+                </div>
+                <div class="flex items-center gap-3">
+                    <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold" id="badge-created-count">0 Creats</span>
+                    <span class="px-2 py-0.5 rounded bg-rose-100 text-rose-800 font-bold" id="badge-error-count">0 Errors</span>
+                    <span class="px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-bold" id="badge-pending-count">0 Pendents</span>
+                </div>
+            </div>
+
+            <!-- Taula d'Equipaments -->
+            <div class="mt-3 table-container border border-slate-200 rounded-xl">
+                <table class="min-w-full divide-y divide-slate-200 text-xs text-left">
+                    <thead class="bg-slate-100 text-slate-700 font-bold uppercase tracking-wider">
+                        <tr>
+                            <th class="py-3 px-3 w-10 text-center">
+                                <span class="sr-only">Seleccionar</span>
+                            </th>
+                            <th class="py-3 px-2 w-12 text-center">#</th>
+                            <th class="py-3 px-3">Títol Equipament</th>
+                            <th class="py-3 px-3">Servei / Org Egreta</th>
+                            <th class="py-3 px-3">Marca i Model</th>
+                            <th class="py-3 px-3">Tipus Prestació</th>
+                            <th class="py-3 px-3">Contacte</th>
+                            <th class="py-3 px-3 text-center">Estat</th>
+                            <th class="py-3 px-3 text-right">Accions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="equipments-table-body" class="bg-white divide-y divide-slate-100 font-normal">
+                        <!-- Generat dinàmicament per Javascript -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Modal per visualitzar JSON del payload -->
+    <div id="json-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-2xl w-full max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+            <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+                <div>
+                    <h3 class="font-bold text-slate-900 text-sm flex items-center gap-2">
+                        <i class="fa-solid fa-code text-emerald-600"></i>
+                        Payload Egreta (JSON)
+                    </h3>
+                    <p id="modal-item-title" class="text-xs text-slate-500 truncate mt-0.5"></p>
+                </div>
+                <button onclick="closeJsonModal()" class="text-slate-400 hover:text-slate-600 text-base">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="p-6 overflow-y-auto font-mono text-xs bg-slate-900 text-emerald-300">
+                <pre id="modal-json-content"></pre>
+            </div>
+            <div class="px-6 py-3 border-t border-slate-100 flex justify-end gap-2 bg-slate-50">
+                <button class="btn-uab-secondary text-xs" onclick="closeJsonModal()">Tancar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirmació PROD Modal -->
+    <div id="prod-warning-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <div class="w-12 h-12 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center text-2xl mx-auto">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+            </div>
+            <div class="text-center">
+                <h3 class="font-bold text-slate-900 text-base">Atenció: Canvi a PRODUCCIÓ</h3>
+                <p class="text-xs text-slate-500 mt-2 leading-relaxed">
+                    Esteu a punt de canviar l'entorn de destí a <b>PRODUCCIÓ (egreta.uab.cat)</b>. 
+                    Les altes que s'executin seran visibles immediatament al portal de recerca oficial de la UAB.
+                </p>
+            </div>
+            <div class="flex items-center justify-center gap-3 pt-2">
+                <button class="btn-uab-secondary text-xs" onclick="cancelProdSwitch()">Cancel·lar</button>
+                <button class="px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs" onclick="confirmProdSwitch()">
+                    Entès, canviar a Producció
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts de la pàgina -->
+    <script>
+        let currentEnvironment = 'test';
+        let equipmentsData = [];
+        let isProcessing = false;
+
+        // Inicialització
+        document.addEventListener('DOMContentLoaded', () => {
+            updateEnvUI();
+            setupDropzone();
+        });
+
+        function setEnvironment(env) {
+            if (env === 'prod' && currentEnvironment !== 'prod') {
+                document.getElementById('prod-warning-modal').classList.remove('hidden');
+                return;
+            }
+            currentEnvironment = env;
+            updateEnvUI();
+        }
+
+        function confirmProdSwitch() {
+            currentEnvironment = 'prod';
+            document.getElementById('prod-warning-modal').classList.add('hidden');
+            updateEnvUI();
+        }
+
+        function cancelProdSwitch() {
+            document.getElementById('prod-warning-modal').classList.add('hidden');
+        }
+
+        function updateEnvUI() {
+            const btnTest = document.getElementById('btn-env-test');
+            const btnProd = document.getElementById('btn-env-prod');
+            const labels = document.querySelectorAll('.current-env-label');
+
+            if (currentEnvironment === 'test') {
+                btnTest.className = 'px-3 py-1 rounded-lg bg-amber-400 text-amber-950 font-bold shadow-sm transition-all';
+                btnProd.className = 'px-3 py-1 rounded-lg text-slate-600 hover:text-slate-900 transition-all';
+                labels.forEach(l => l.textContent = 'TEST');
+            } else {
+                btnProd.className = 'px-3 py-1 rounded-lg bg-rose-600 text-white font-bold shadow-sm transition-all';
+                btnTest.className = 'px-3 py-1 rounded-lg text-slate-600 hover:text-slate-900 transition-all';
+                labels.forEach(l => l.textContent = 'PRODUCCIÓ');
+            }
+        }
+
+        function setupDropzone() {
+            const dropArea = document.getElementById('drop-area');
+            ['dragenter', 'dragover'].forEach(eventName => {
+                dropArea.addEventListener(eventName, (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    dropArea.classList.add('dragover');
+                }, false);
+            });
+            ['dragleave', 'drop'].forEach(eventName => {
+                dropArea.addEventListener(eventName, (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    dropArea.classList.remove('dragover');
+                }, false);
+            });
+            dropArea.addEventListener('drop', (e) => {
+                const dt = e.dataTransfer;
+                const files = dt.files;
+                if (files.length > 0) {
+                    uploadFile(files[0]);
+                }
+            }, false);
+        }
+
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (file) {
+                uploadFile(file);
+            }
+        }
+
+        async function loadDefaultFile() {
+            showLoading(true);
+            try {
+                const response = await window.apiFetch('equipment-loader/load-default');
+                if (!response.ok) {
+                    const err = await response.json().catch(() => ({}));
+                    throw new Error(err.error || 'Error carregant fitxer per defecte');
+                }
+                const data = await response.json();
+                processLoadedData(data);
+            } catch (err) {
+                alert('Error: ' + err.message);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        async function uploadFile(file) {
+            showLoading(true);
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const response = await fetch(window.apiUrl('equipment-loader/parse-excel'), {
+                    method: 'POST',
+                    body: formData
+                });
+                if (!response.ok) {
+                    const err = await response.json().catch(() => ({}));
+                    throw new Error(err.error || 'Error en parsejar Excel');
+                }
+                const data = await response.json();
+                processLoadedData(data);
+            } catch (err) {
+                alert('Error al carregar el fitxer: ' + err.message);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        function showLoading(show) {
+            const indicator = document.getElementById('file-loading-indicator');
+            if (show) indicator.classList.remove('hidden');
+            else indicator.classList.add('hidden');
+        }
+
+        function processLoadedData(data) {
+            document.getElementById('active-file-name').textContent = data.fileName || 'Excel carregat';
+            document.getElementById('meta-total-rows').textContent = data.totalCount || 0;
+            
+            equipmentsData = (data.equipments || []).map((item, idx) => ({
+                ...item,
+                selected: true,
+                status: 'READY',
+                statusMessage: 'A punt per carregar',
+                idx: idx
+            }));
+
+            // Serveis únics per al filtre
+            const services = new Set();
+            equipmentsData.forEach(eq => {
+                if (eq.orgAcronym) services.add(eq.orgAcronym);
+                else if (eq.serviceRaw) services.add(eq.serviceRaw);
+            });
+            document.getElementById('meta-total-orgs').textContent = services.size;
+
+            const serviceFilter = document.getElementById('service-filter');
+            serviceFilter.innerHTML = '<option value="ALL">Tots els Serveis (SCT)</option>';
+            Array.from(services).sort().forEach(srv => {
+                const opt = document.createElement('option');
+                opt.value = srv;
+                opt.textContent = srv;
+                serviceFilter.appendChild(opt);
+            });
+
+            document.getElementById('load-status-badge').textContent = 'Carregat (' + equipmentsData.length + ')';
+            document.getElementById('load-status-badge').className = 'px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold';
+            document.getElementById('btn-reload').classList.remove('hidden');
+
+            document.getElementById('config-section').classList.remove('hidden');
+            document.getElementById('data-section').classList.remove('hidden');
+
+            renderTable();
+        }
+
+        function renderTable() {
+            const tbody = document.getElementById('equipments-table-body');
+            const searchTerm = document.getElementById('search-box').value.toLowerCase().trim();
+            const serviceFilter = document.getElementById('service-filter').value;
+            const statusFilter = document.getElementById('status-filter').value;
+
+            tbody.innerHTML = '';
+
+            let visibleCount = 0;
+            let createdCount = 0;
+            let errorCount = 0;
+            let pendingCount = 0;
+
+            equipmentsData.forEach(item => {
+                if (item.status === 'CREATED') createdCount++;
+                else if (item.status === 'ERROR') errorCount++;
+                else pendingCount++;
+
+                // Filtres
+                const matchesSearch = !searchTerm || 
+                    (item.titleCat && item.titleCat.toLowerCase().includes(searchTerm)) ||
+                    (item.titleCas && item.titleCas.toLowerCase().includes(searchTerm)) ||
+                    (item.titleAng && item.titleAng.toLowerCase().includes(searchTerm)) ||
+                    (item.model && item.model.toLowerCase().includes(searchTerm)) ||
+                    (item.serviceRaw && item.serviceRaw.toLowerCase().includes(searchTerm)) ||
+                    (item.email && item.email.toLowerCase().includes(searchTerm));
+
+                const matchesService = serviceFilter === 'ALL' || 
+                    (item.orgAcronym && item.orgAcronym === serviceFilter) ||
+                    (item.serviceRaw && item.serviceRaw === serviceFilter);
+
+                const matchesStatus = statusFilter === 'ALL' || item.status === statusFilter;
+
+                if (!matchesSearch || !matchesService || !matchesStatus) return;
+
+                visibleCount++;
+
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-slate-50 transition-colors ' + (item.selected ? '' : 'opacity-60 bg-slate-50/50');
+
+                // Estat Badge
+                let statusBadge = `<span class="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-semibold inline-flex items-center gap-1">Pendent</span>`;
+                if (item.status === 'PROCESSING') {
+                    statusBadge = `<span class="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-bold inline-flex items-center gap-1"><i class="fa-solid fa-spinner fa-spin text-xs"></i> Processant</span>`;
+                } else if (item.status === 'CREATED') {
+                    statusBadge = `<span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold inline-flex items-center gap-1" title="UUID: ${item.uuid || ''}"><i class="fa-solid fa-check text-xs"></i> Creat</span>`;
+                } else if (item.status === 'ERROR') {
+                    statusBadge = `<span class="px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 font-bold inline-flex items-center gap-1" title="${item.errorMessage || ''}"><i class="fa-solid fa-xmark text-xs"></i> Error</span>`;
+                } else if (item.status === 'DRY_RUN') {
+                    statusBadge = `<span class="px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 font-bold inline-flex items-center gap-1"><i class="fa-solid fa-vial text-xs"></i> Simulat</span>`;
+                }
+
+                // Prestació Badge
+                let prestBadgeClass = 'bg-slate-100 text-slate-700';
+                if (item.tipusPrestacioRaw.includes('3.')) prestBadgeClass = 'bg-teal-50 text-teal-700 border border-teal-200';
+                else if (item.tipusPrestacioRaw.includes('1.')) prestBadgeClass = 'bg-blue-50 text-blue-700 border border-blue-200';
+                else if (item.tipusPrestacioRaw.includes('2.')) prestBadgeClass = 'bg-purple-50 text-purple-700 border border-purple-200';
+
+                // Títols multilingües i descripció
+                const titleHtml = `
+                    <div class="font-bold text-slate-900">${escapeHtml(item.titleCat || item.titleCas || item.titleAng || 'Sense títol')}</div>
+                    ${item.titleCas && item.titleCas !== item.titleCat ? `<div class="text-[11px] text-slate-500 font-normal mt-0.5"><span class="font-bold text-slate-400">ES:</span> ${escapeHtml(item.titleCas)}</div>` : ''}
+                    ${item.titleAng && item.titleAng !== item.titleCat ? `<div class="text-[11px] text-slate-400 font-normal"><span class="font-bold text-slate-400">EN:</span> ${escapeHtml(item.titleAng)}</div>` : ''}
+                    ${item.descCat || item.descCas || item.descAng ? `
+                    <div class="mt-1.5 p-1.5 bg-slate-50 border border-slate-200 rounded text-[11px] text-slate-600 line-clamp-2 max-w-md" title="${escapeHtml(item.descCat || item.descCas || item.descAng)}">
+                        <span class="font-bold text-emerald-700 mr-1"><i class="fa-solid fa-align-left text-[10px]"></i> Descripció:</span>
+                        ${escapeHtml(item.descCat || item.descCas || item.descAng)}
+                    </div>` : '<div class="text-[10px] text-slate-400 italic mt-1">Sense descripció</div>'}
+                `;
+
+                // Org Badge
+                const orgHtml = `
+                    <div class="flex items-center gap-1.5">
+                        <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold text-[11px]">${escapeHtml(item.orgAcronym || 'SCT')}</span>
+                        <span class="font-semibold text-slate-700 truncate max-w-[180px]" title="${escapeHtml(item.orgName || item.serviceRaw)}">${escapeHtml(item.orgName || item.serviceRaw)}</span>
+                    </div>
+                    <div class="text-[10px] font-mono text-slate-400 mt-0.5" title="UUID Egreta">${item.orgUuid ? item.orgUuid.substring(0, 13) + '...' : 'Sense UUID'}</div>
+                `;
+
+                tr.innerHTML = `
+                    <td class="py-3 px-3 text-center">
+                        <input type="checkbox" ${item.selected ? 'checked' : ''} class="rounded text-emerald-600 focus:ring-0 cursor-pointer" onchange="toggleItemSelect(${item.idx}, this.checked)">
+                    </td>
+                    <td class="py-3 px-2 text-center font-mono text-slate-400">${item.rowIndex}</td>
+                    <td class="py-3 px-3">${titleHtml}</td>
+                    <td class="py-3 px-3">${orgHtml}</td>
+                    <td class="py-3 px-3">
+                        <div class="font-semibold text-slate-800">${escapeHtml(item.model || '-')}</div>
+                        ${item.photo ? `<div class="text-[10px] text-slate-400 mt-0.5"><i class="fa-solid fa-image mr-1"></i>${escapeHtml(item.photo)}</div>` : ''}
+                    </td>
+                    <td class="py-3 px-3">
+                        <span class="px-2 py-0.5 rounded text-[11px] font-semibold ${prestBadgeClass}">${escapeHtml(item.tipusPrestacioRaw || 'Prestació servei')}</span>
+                    </td>
+                    <td class="py-3 px-3">
+                        <span class="text-slate-600 font-mono text-[11px]">${escapeHtml(item.email || '-')}</span>
+                    </td>
+                    <td class="py-3 px-3 text-center">${statusBadge}</td>
+                    <td class="py-3 px-3 text-right">
+                        <div class="flex items-center justify-end gap-1.5">
+                            <button class="p-1 text-slate-400 hover:text-emerald-700 rounded hover:bg-slate-100" title="Veure JSON" onclick="viewItemJson(${item.idx})">
+                                <i class="fa-solid fa-code"></i>
+                            </button>
+                            <button class="p-1 text-slate-400 hover:text-blue-700 rounded hover:bg-slate-100" title="Executar individual" onclick="executeSingle(${item.idx})">
+                                <i class="fa-solid fa-play"></i>
+                            </button>
+                        </div>
+                    </td>
+                `;
+
+                tbody.appendChild(tr);
+            });
+
+            document.getElementById('count-visible').textContent = visibleCount;
+            document.getElementById('count-total').textContent = equipmentsData.length;
+            document.getElementById('badge-created-count').textContent = createdCount + ' Creats';
+            document.getElementById('badge-error-count').textContent = errorCount + ' Errors';
+            document.getElementById('badge-pending-count').textContent = pendingCount + ' Pendents';
+        }
+
+        function toggleSelectAll(checked) {
+            const searchTerm = document.getElementById('search-box').value.toLowerCase().trim();
+            const serviceFilter = document.getElementById('service-filter').value;
+            const statusFilter = document.getElementById('status-filter').value;
+
+            equipmentsData.forEach(item => {
+                const matchesSearch = !searchTerm || 
+                    (item.titleCat && item.titleCat.toLowerCase().includes(searchTerm)) ||
+                    (item.model && item.model.toLowerCase().includes(searchTerm)) ||
+                    (item.serviceRaw && item.serviceRaw.toLowerCase().includes(searchTerm));
+
+                const matchesService = serviceFilter === 'ALL' || 
+                    (item.orgAcronym && item.orgAcronym === serviceFilter) ||
+                    (item.serviceRaw && item.serviceRaw === serviceFilter);
+
+                const matchesStatus = statusFilter === 'ALL' || item.status === statusFilter;
+
+                if (matchesSearch && matchesService && matchesStatus) {
+                    item.selected = checked;
+                }
+            });
+            renderTable();
+        }
+
+        function toggleItemSelect(idx, checked) {
+            if (equipmentsData[idx]) {
+                equipmentsData[idx].selected = checked;
+                renderTable();
+            }
+        }
+
+        function viewItemJson(idx) {
+            const item = equipmentsData[idx];
+            if (!item) return;
+
+            const workflowStep = document.getElementById('cfg-workflow').value;
+            const equipmentTypeUri = document.getElementById('cfg-type').value;
+
+            // Payload actualitzat amb opcions del formulari
+            const payload = item.egretaPayload || {};
+            if (payload.workflow) payload.workflow.step = workflowStep;
+            if (payload.type) payload.type.uri = equipmentTypeUri;
+
+            document.getElementById('modal-item-title').textContent = (item.titleCat || item.titleCas || item.titleAng || '') + ' (' + (item.model || '') + ')';
+            document.getElementById('modal-json-content').textContent = JSON.stringify(payload, null, 2);
+            document.getElementById('json-modal').classList.remove('hidden');
+        }
+
+        function closeJsonModal() {
+            document.getElementById('json-modal').classList.add('hidden');
+        }
+
+        async function executeSingle(idx) {
+            const item = equipmentsData[idx];
+            if (!item) return;
+
+            item.status = 'PROCESSING';
+            renderTable();
+
+            const workflowStep = document.getElementById('cfg-workflow').value;
+            const equipmentTypeUri = document.getElementById('cfg-type').value;
+
+            const payload = item.egretaPayload || {};
+            if (payload.workflow) payload.workflow.step = workflowStep;
+            if (payload.type) payload.type.uri = equipmentTypeUri;
+
+            try {
+                const resp = await fetch(window.apiUrl('equipment-loader/create-single'), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        entorn: currentEnvironment,
+                        dryRun: false,
+                        payload: payload
+                    })
+                });
+
+                const data = await resp.json();
+                if (resp.ok && data.status === 'CREATED') {
+                    item.status = 'CREATED';
+                    item.uuid = data.uuid;
+                    item.pureId = data.pureId;
+                    item.statusMessage = 'Creat correctament (pureId: ' + data.pureId + ')';
+                } else {
+                    item.status = 'ERROR';
+                    item.errorMessage = data.error || data.message || 'Error desconegut';
+                }
+            } catch (err) {
+                item.status = 'ERROR';
+                item.errorMessage = err.message;
+            }
+
+            renderTable();
+        }
+
+        async function executeBatch(dryRun = false) {
+            const selectedItems = equipmentsData.filter(i => i.selected);
+            if (selectedItems.length === 0) {
+                alert('No hi ha cap equipament seleccionat per processar.');
+                return;
+            }
+
+            if (!dryRun && currentEnvironment === 'prod') {
+                if (!confirm(`ATENCIÓ: Esteu a punt de crear ${selectedItems.length} equipaments a PRODUCCIÓ. Voleu continuar?`)) {
+                    return;
+                }
+            }
+
+            isProcessing = true;
+            const progressContainer = document.getElementById('progress-bar-container');
+            const progressBar = document.getElementById('progress-bar');
+            const progressText = document.getElementById('progress-status-text');
+            const progressCounts = document.getElementById('progress-counts');
+
+            progressContainer.classList.remove('hidden');
+            progressBar.style.width = '0%';
+            progressText.innerHTML = `<i class="fa-solid fa-spinner fa-spin text-emerald-600 mr-1.5"></i> ${dryRun ? 'Simulant càrrega...' : 'Carregant a Egreta (' + currentEnvironment.toUpperCase() + ')...'}`;
+
+            const workflowStep = document.getElementById('cfg-workflow').value;
+            const equipmentTypeUri = document.getElementById('cfg-type').value;
+
+            let completed = 0;
+            const total = selectedItems.length;
+
+            for (const item of selectedItems) {
+                item.status = 'PROCESSING';
+                renderTable();
+
+                const payload = item.egretaPayload || {};
+                if (payload.workflow) payload.workflow.step = workflowStep;
+                if (payload.type) payload.type.uri = equipmentTypeUri;
+
+                try {
+                    const resp = await fetch(window.apiUrl('equipment-loader/create-single'), {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            entorn: currentEnvironment,
+                            dryRun: dryRun,
+                            payload: payload
+                        })
+                    });
+
+                    const resData = await resp.json();
+                    if (resp.ok && (resData.status === 'CREATED' || resData.status === 'DRY_RUN')) {
+                        item.status = resData.status;
+                        item.uuid = resData.uuid;
+                        item.pureId = resData.pureId;
+                        item.statusMessage = resData.message;
+                    } else {
+                        item.status = 'ERROR';
+                        item.errorMessage = resData.error || resData.message || 'Error en resposta';
+                    }
+                } catch (err) {
+                    item.status = 'ERROR';
+                    item.errorMessage = err.message;
+                }
+
+                completed++;
+                const pct = Math.round((completed / total) * 100);
+                progressBar.style.width = pct + '%';
+                progressCounts.textContent = `${completed} / ${total} (${pct}%)`;
+                renderTable();
+
+                // Petita pausa per no col·lapsar la xarxa
+                await new Promise(r => setTimeout(r, 60));
+            }
+
+            isProcessing = false;
+            progressText.innerHTML = `<i class="fa-solid fa-circle-check text-emerald-600 mr-1.5"></i> Procés finalitzat (${completed} processats)`;
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,1274 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Anàlisi d'Abstracts de ResearchOutputs | Portal de Recerca UAB</title>
+    <script src="config.js"></script>
+    <script src="uab-brand.js" defer></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="uab-theme.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .premium-shadow {
+            box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05), 0 2px 8px -1px rgba(0, 0, 0, 0.03);
+        }
+        .card-kpi {
+            transition: all 0.25s ease;
+        }
+        .card-kpi:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.08);
+        }
+        .pill-btn {
+            transition: all 0.15s ease;
+        }
+        .pill-btn.active {
+            background-color: #047857;
+            color: #ffffff;
+            font-weight: 600;
+            box-shadow: 0 2px 6px rgba(4, 120, 87, 0.25);
+        }
+        .lang-tag {
+            font-size: 0.68rem;
+            padding: 0.15rem 0.4rem;
+            border-radius: 0.375rem;
+            font-weight: 700;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.2rem;
+        }
+        .lang-ok { background-color: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; }
+        .lang-wrong { background-color: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+        .lang-missing { background-color: #f1f5f9; color: #94a3b8; border: 1px dashed #cbd5e1; }
+        
+        .modal-enter {
+            animation: fadeInScale 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        @keyframes fadeInScale {
+            from { opacity: 0; transform: scale(0.96); }
+            to { opacity: 1; transform: scale(1); }
+        }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen font-sans text-slate-800">
+
+    <div class="mx-auto py-8 px-6 w-[96%] max-w-[1600px]">
+        
+        <!-- Header -->
+        <header class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
+            <div>
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-lg">
+                        <i class="fa-solid fa-align-left"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-2xl sm:text-3xl font-black text-slate-900">Anàlisi d'Abstracts de ResearchOutputs</h1>
+                        <p class="text-slate-500 text-xs sm:text-sm mt-0.5">Auditoria de cobertura lingüística (Català, Castellà, Anglès), percentatges i detecció d'idiomes incorrectes o clonats</p>
+                    </div>
+                </div>
+            </div>
+            <div class="flex items-center gap-3 flex-wrap">
+                <button onclick="carregarTot()" class="px-4 py-2 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-all flex items-center gap-2 premium-shadow">
+                    <i class="fa-solid fa-rotate" id="refreshIcon"></i>
+                    <span>Actualitzar dades</span>
+                </button>
+                <button onclick="exportarCSV()" class="px-4 py-2 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-all flex items-center gap-2 premium-shadow">
+                    <i class="fa-solid fa-file-csv text-emerald-600"></i>
+                    <span>Exportar CSV</span>
+                </button>
+                <a href="index.html" class="px-4 py-2 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-all flex items-center gap-2 premium-shadow">
+                    <i class="fa-solid fa-arrow-left"></i>
+                    <span>Tornar</span>
+                </a>
+            </div>
+        </header>
+
+        <!-- KPI Cards Summary -->
+        <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-3.5 mb-8">
+            
+            <!-- KPI 1: Total -->
+            <div class="bg-white border border-slate-200 rounded-2xl p-4 flex flex-col justify-between card-kpi premium-shadow relative overflow-hidden">
+                <div class="absolute top-0 left-0 h-1.5 w-full bg-slate-500"></div>
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total</span>
+                    <i class="fa-solid fa-book-open text-slate-400 text-base"></i>
+                </div>
+                <div>
+                    <h3 id="kpiTotal" class="text-xl font-black text-slate-800">...</h3>
+                    <p class="text-slate-400 text-[11px] mt-0.5">Univers a Pure</p>
+                </div>
+            </div>
+
+            <!-- KPI 2: Amb Abstract -->
+            <div class="bg-white border border-slate-200 rounded-2xl p-4 flex flex-col justify-between card-kpi premium-shadow relative overflow-hidden">
+                <div class="absolute top-0 left-0 h-1.5 w-full bg-emerald-500"></div>
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-[10px] font-bold text-emerald-600 uppercase tracking-wider">Amb Abstract</span>
+                    <i class="fa-solid fa-circle-check text-emerald-500 text-base"></i>
+                </div>
+                <div>
+                    <h3 id="kpiWithAbstract" class="text-xl font-black text-emerald-700">...</h3>
+                    <p id="kpiPctWithAbstract" class="text-emerald-600 text-[11px] mt-0.5 font-semibold">... %</p>
+                </div>
+            </div>
+
+            <!-- KPI 3: Sense Abstract -->
+            <div class="bg-white border border-slate-200 rounded-2xl p-4 flex flex-col justify-between card-kpi premium-shadow relative overflow-hidden">
+                <div class="absolute top-0 left-0 h-1.5 w-full bg-rose-500"></div>
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-[10px] font-bold text-rose-600 uppercase tracking-wider">Sense Abstract</span>
+                    <i class="fa-solid fa-circle-xmark text-rose-500 text-base"></i>
+                </div>
+                <div>
+                    <h3 id="kpiNoAbstract" class="text-xl font-black text-rose-700">...</h3>
+                    <p id="kpiPctNoAbstract" class="text-rose-600 text-[11px] mt-0.5 font-semibold">... %</p>
+                </div>
+            </div>
+
+            <!-- KPI 4: En 3 Idiomes -->
+            <div class="bg-white border border-slate-200 rounded-2xl p-4 flex flex-col justify-between card-kpi premium-shadow relative overflow-hidden">
+                <div class="absolute top-0 left-0 h-1.5 w-full bg-blue-500"></div>
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-[10px] font-bold text-blue-600 uppercase tracking-wider">En 3 Idiomes</span>
+                    <i class="fa-solid fa-language text-blue-500 text-base"></i>
+                </div>
+                <div>
+                    <h3 id="kpiIn3Langs" class="text-xl font-black text-blue-700">...</h3>
+                    <p id="kpiPctIn3Langs" class="text-blue-600 text-[11px] mt-0.5 font-semibold">CA + ES + EN</p>
+                </div>
+            </div>
+
+            <!-- KPI 5: ❌ Idioma Incorrecte -->
+            <div class="bg-rose-50/80 border-2 border-rose-300 rounded-2xl p-4 flex flex-col justify-between card-kpi premium-shadow relative overflow-hidden">
+                <div class="absolute top-0 left-0 h-1.5 w-full bg-rose-600"></div>
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-[10px] font-bold text-rose-800 uppercase tracking-wider">❌ Idioma Erroni</span>
+                    <i class="fa-solid fa-triangle-exclamation text-rose-600 text-base"></i>
+                </div>
+                <div>
+                    <h3 id="kpiWrongLanguage" class="text-xl font-black text-rose-800">...</h3>
+                    <p id="kpiPctWrongLanguage" class="text-rose-700 text-[11px] mt-0.5 font-bold">... dels que tenen</p>
+                </div>
+            </div>
+
+            <!-- KPI 6: Idèntics en 3 idiomes -->
+            <div class="bg-amber-50/80 border-2 border-amber-300 rounded-2xl p-4 flex flex-col justify-between card-kpi premium-shadow relative overflow-hidden">
+                <div class="absolute top-0 left-0 h-1.5 w-full bg-amber-500"></div>
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-[10px] font-bold text-amber-800 uppercase tracking-wider">⚠️ 3 Idèntics</span>
+                    <i class="fa-solid fa-clone text-amber-600 text-base"></i>
+                </div>
+                <div>
+                    <h3 id="kpiIdenticalIn3" class="text-xl font-black text-amber-800">...</h3>
+                    <p id="kpiPctIdenticalIn3" class="text-amber-700 text-[11px] mt-0.5 font-bold">... clonats</p>
+                </div>
+            </div>
+
+            <!-- KPI 7: 🎯 3 Genuïns -->
+            <div class="bg-emerald-50/80 border-2 border-emerald-300 rounded-2xl p-4 flex flex-col justify-between card-kpi premium-shadow relative overflow-hidden">
+                <div class="absolute top-0 left-0 h-1.5 w-full bg-emerald-600"></div>
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-[10px] font-bold text-emerald-800 uppercase tracking-wider">🎯 3 Genuïns</span>
+                    <i class="fa-solid fa-bullseye text-emerald-600 text-base"></i>
+                </div>
+                <div>
+                    <h3 id="kpiGenuine3Langs" class="text-xl font-black text-emerald-800">...</h3>
+                    <p id="kpiPctGenuine3Langs" class="text-emerald-700 text-[11px] mt-0.5 font-bold">... 100% correctes</p>
+                </div>
+            </div>
+
+            <!-- KPI 8: En 1 o 2 Idiomes -->
+            <div class="bg-white border border-slate-200 rounded-2xl p-4 flex flex-col justify-between card-kpi premium-shadow relative overflow-hidden">
+                <div class="absolute top-0 left-0 h-1.5 w-full bg-purple-500"></div>
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-[10px] font-bold text-purple-600 uppercase tracking-wider">1 o 2 Idiomes</span>
+                    <i class="fa-solid fa-bars-staggered text-purple-500 text-base"></i>
+                </div>
+                <div>
+                    <h3 id="kpiIn1or2Langs" class="text-xl font-black text-purple-700">...</h3>
+                    <p class="text-purple-600 text-[11px] mt-0.5 font-semibold">Parcial</p>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- Accuracy by Language Field Audit Banner -->
+        <section class="bg-white border border-slate-200 rounded-2xl p-5 premium-shadow mb-8">
+            <div class="flex items-center justify-between mb-3 border-b border-slate-100 pb-3">
+                <h2 class="text-sm font-bold text-slate-800 flex items-center gap-2">
+                    <i class="fa-solid fa-spell-check text-rose-600"></i>
+                    <span>Auditoria de Fidelitat Lingüística per Camp d'Idioma</span>
+                </h2>
+                <span class="text-xs font-semibold text-slate-500">Classificació automàtica del text real vs camp declarat</span>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                
+                <!-- Català Field -->
+                <div class="bg-amber-50/50 border border-amber-200 rounded-xl p-3.5 flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center justify-between mb-1.5">
+                            <span class="font-black text-xs text-amber-900">Camp Català (`ca_ES`)</span>
+                            <span class="text-[11px] font-bold text-amber-800">70.864 registres</span>
+                        </div>
+                        <div class="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden flex mb-2.5">
+                            <div style="width: 5.9%" class="bg-emerald-500" title="Català real: 5.9%"></div>
+                            <div style="width: 88.2%" class="bg-rose-500" title="Anglès: 88.2%"></div>
+                            <div style="width: 5.7%" class="bg-amber-500" title="Castellà: 5.7%"></div>
+                        </div>
+                        <div class="space-y-1 text-[11px]">
+                            <div class="flex justify-between text-slate-700"><span>✓ Català Real:</span><strong>4.210 (5,9%)</strong></div>
+                            <div class="flex justify-between text-rose-700 font-bold"><span>❌ En Anglès (`en_GB`):</span><strong>62.534 (88,2%)</strong></div>
+                            <div class="flex justify-between text-amber-800"><span>❌ En Castellà (`es_ES`):</span><strong>4.005 (5,7%)</strong></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Castellà Field -->
+                <div class="bg-rose-50/50 border border-rose-200 rounded-xl p-3.5 flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center justify-between mb-1.5">
+                            <span class="font-black text-xs text-rose-900">Camp Castellà (`es_ES`)</span>
+                            <span class="text-[11px] font-bold text-rose-800">76.072 registres</span>
+                        </div>
+                        <div class="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden flex mb-2.5">
+                            <div style="width: 12.9%" class="bg-emerald-500" title="Castellà real: 12.9%"></div>
+                            <div style="width: 85.0%" class="bg-rose-500" title="Anglès: 85.0%"></div>
+                            <div style="width: 1.8%" class="bg-amber-500" title="Català: 1.8%"></div>
+                        </div>
+                        <div class="space-y-1 text-[11px]">
+                            <div class="flex justify-between text-slate-700"><span>✓ Castellà Real:</span><strong>9.842 (12,9%)</strong></div>
+                            <div class="flex justify-between text-rose-700 font-bold"><span>❌ En Anglès (`en_GB`):</span><strong>64.658 (85,0%)</strong></div>
+                            <div class="flex justify-between text-amber-800"><span>❌ En Català (`ca_ES`):</span><strong>1.398 (1,8%)</strong></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Anglès Field -->
+                <div class="bg-indigo-50/50 border border-indigo-200 rounded-xl p-3.5 flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center justify-between mb-1.5">
+                            <span class="font-black text-xs text-indigo-900">Camp Anglès (`en_GB`)</span>
+                            <span class="text-[11px] font-bold text-indigo-800">91.519 registres</span>
+                        </div>
+                        <div class="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden flex mb-2.5">
+                            <div style="width: 93.4%" class="bg-emerald-500" title="Anglès real: 93.4%"></div>
+                            <div style="width: 4.2%" class="bg-rose-500" title="Castellà: 4.2%"></div>
+                            <div style="width: 1.7%" class="bg-amber-500" title="Català: 1.7%"></div>
+                        </div>
+                        <div class="space-y-1 text-[11px]">
+                            <div class="flex justify-between text-emerald-800 font-bold"><span>✓ Anglès Real:</span><strong>85.489 (93,4%)</strong></div>
+                            <div class="flex justify-between text-slate-700"><span>❌ En Castellà (`es_ES`):</span><strong>3.818 (4,2%)</strong></div>
+                            <div class="flex justify-between text-slate-700"><span>❌ En Català (`ca_ES`):</span><strong>1.524 (1,7%)</strong></div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- Charts Section -->
+        <section class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            
+            <!-- Chart 1: Language Breakdown -->
+            <div class="bg-white border border-slate-200 rounded-2xl p-5 premium-shadow flex flex-col justify-between">
+                <div>
+                    <div class="flex items-center justify-between mb-3">
+                        <h2 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                            <i class="fa-solid fa-chart-pie text-emerald-600"></i>
+                            <span>Distribució i Qualitat dels Resums</span>
+                        </h2>
+                    </div>
+                    <p class="text-xs text-slate-400 mb-4">Estat global de presència, idiomes i duplicació d'abstracts</p>
+                    <div class="relative h-60 flex items-center justify-center">
+                        <canvas id="chartStatusPie"></canvas>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-2 text-xs mt-4 pt-3 border-t border-slate-100">
+                    <div class="flex items-center gap-2">
+                        <span class="w-3 h-3 rounded-full bg-amber-500"></span>
+                        <span class="text-slate-600 font-medium">3 Idèntics (Clonats)</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="w-3 h-3 rounded-full bg-emerald-500"></span>
+                        <span class="text-slate-600 font-medium">3 Traduïts (Distints)</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="w-3 h-3 rounded-full bg-blue-500"></span>
+                        <span class="text-slate-600 font-medium">1 o 2 Idiomes</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="w-3 h-3 rounded-full bg-rose-400"></span>
+                        <span class="text-slate-600 font-medium">Sense Abstract</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chart 2: Detected Languages in Each Field -->
+            <div class="bg-white border border-slate-200 rounded-2xl p-5 premium-shadow flex flex-col justify-between">
+                <div>
+                    <div class="flex items-center justify-between mb-3">
+                        <h2 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                            <i class="fa-solid fa-language text-indigo-600"></i>
+                            <span>Idiomes Reals Detectats per Camp d'Abstract</span>
+                        </h2>
+                    </div>
+                    <p class="text-xs text-slate-400 mb-4">Llengua real del text guardat a cada camp (ca_ES, es_ES, en_GB)</p>
+                    <div class="relative h-60">
+                        <canvas id="chartDetectedLangsBar"></canvas>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs mt-4 pt-3 border-t border-slate-100">
+                    <div class="flex items-center justify-center gap-1.5">
+                        <span class="w-2.5 h-2.5 rounded-full bg-indigo-500"></span>
+                        <span class="text-slate-600 font-medium text-[11px]">Anglès real</span>
+                    </div>
+                    <div class="flex items-center justify-center gap-1.5">
+                        <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                        <span class="text-slate-600 font-medium text-[11px]">Català real</span>
+                    </div>
+                    <div class="flex items-center justify-center gap-1.5">
+                        <span class="w-2.5 h-2.5 rounded-full bg-rose-500"></span>
+                        <span class="text-slate-600 font-medium text-[11px]">Castellà real</span>
+                    </div>
+                    <div class="flex items-center justify-center gap-1.5">
+                        <span class="w-2.5 h-2.5 rounded-full bg-slate-400"></span>
+                        <span class="text-slate-600 font-medium text-[11px]">Altres / Desc.</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chart 3: Individual Languages -->
+            <div class="bg-white border border-slate-200 rounded-2xl p-5 premium-shadow flex flex-col justify-between">
+                <div>
+                    <div class="flex items-center justify-between mb-3">
+                        <h2 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                            <i class="fa-solid fa-flag text-blue-600"></i>
+                            <span>Presència per Camp d'Idioma</span>
+                        </h2>
+                    </div>
+                    <p class="text-xs text-slate-400 mb-4">Total de publicacions que tenen text en cada camp d'idioma</p>
+                    <div class="relative h-60">
+                        <canvas id="chartLangsBar"></canvas>
+                    </div>
+                </div>
+                <div class="grid grid-cols-3 gap-2 text-center text-xs mt-4 pt-3 border-t border-slate-100">
+                    <div>
+                        <span class="text-slate-400 font-semibold block">Català (ca_ES)</span>
+                        <span id="statHasCa" class="font-bold text-slate-800 text-sm">...</span>
+                    </div>
+                    <div>
+                        <span class="text-slate-400 font-semibold block">Castellà (es_ES)</span>
+                        <span id="statHasEs" class="font-bold text-slate-800 text-sm">...</span>
+                    </div>
+                    <div>
+                        <span class="text-slate-400 font-semibold block">Anglès (en_GB)</span>
+                        <span id="statHasEn" class="font-bold text-slate-800 text-sm">...</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chart 4: Top Typologies -->
+            <div class="bg-white border border-slate-200 rounded-2xl p-5 premium-shadow flex flex-col justify-between">
+                <div>
+                    <div class="flex items-center justify-between mb-3">
+                        <h2 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                            <i class="fa-solid fa-layer-group text-purple-600"></i>
+                            <span>Cobertura per Tipologia</span>
+                        </h2>
+                    </div>
+                    <p class="text-xs text-slate-400 mb-4">Top tipus de document i % de presència d'abstracts</p>
+                    <div class="relative h-60">
+                        <canvas id="chartTypesBar"></canvas>
+                    </div>
+                </div>
+                <div class="text-xs text-slate-400 mt-4 pt-3 border-t border-slate-100 text-center font-medium">
+                    Articles i capítols representen el volum principal
+                </div>
+            </div>
+
+        </section>
+
+        <!-- Evolution by Year Chart -->
+        <section class="bg-white border border-slate-200 rounded-2xl p-6 premium-shadow mb-8">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+                <div>
+                    <h2 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                        <i class="fa-solid fa-chart-line text-indigo-600"></i>
+                        <span>Evolució Temporal per Any de Publicació</span>
+                    </h2>
+                    <p class="text-xs text-slate-400 mt-0.5">Evolució del volum de publicacions, abstracts registrats i grau de duplicació</p>
+                </div>
+                <div class="text-xs text-slate-500 font-medium">
+                    Font: Egreta / Pure Research Outputs
+                </div>
+            </div>
+            <div class="relative h-72 w-full">
+                <canvas id="chartYearsEvolution"></canvas>
+            </div>
+        </section>
+
+        <!-- Interactive Explorer / Table Section -->
+        <section class="bg-white border border-slate-200 rounded-2xl premium-shadow overflow-hidden">
+            
+            <!-- Toolbar & Filter Header -->
+            <div class="p-6 border-b border-slate-100 bg-slate-50/50">
+                <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                    <div>
+                        <h2 class="text-lg font-black text-slate-800 flex items-center gap-2">
+                            <i class="fa-solid fa-magnifying-glass text-emerald-600"></i>
+                            <span>Explorador de Publicacions i Abstracts</span>
+                        </h2>
+                        <p class="text-xs text-slate-500 mt-0.5">Cerca, filtra i audita els idiomes i el contingut dels abstracts</p>
+                    </div>
+                    <div class="flex items-center gap-2 text-xs font-semibold text-slate-600">
+                        <span>Total filtrat:</span>
+                        <span id="filteredCountBadge" class="px-2.5 py-1 bg-emerald-100 text-emerald-800 rounded-full font-bold">Carregant...</span>
+                    </div>
+                </div>
+
+                <!-- Quick Filter Pills -->
+                <div class="flex flex-wrap gap-2 mt-5">
+                    <button class="pill-btn active px-3.5 py-1.5 rounded-xl border border-slate-200 text-xs font-medium bg-white text-slate-700 hover:bg-slate-100" onclick="setFiltreEstat('all', this)">
+                        <i class="fa-solid fa-list mr-1"></i> Tots
+                    </button>
+                    <button class="pill-btn px-3.5 py-1.5 rounded-xl border border-rose-200 text-xs font-medium bg-rose-50 text-rose-800 hover:bg-rose-100 font-bold" onclick="setFiltreEstat('wrong_language', this)">
+                        <i class="fa-solid fa-triangle-exclamation text-rose-600 mr-1"></i> ❌ Idioma Incorrecte (74.568)
+                    </button>
+                    <button class="pill-btn px-3.5 py-1.5 rounded-xl border border-amber-200 text-xs font-medium bg-amber-50 text-amber-800 hover:bg-amber-100" onclick="setFiltreEstat('identical_three_langs', this)">
+                        <i class="fa-solid fa-clone text-amber-600 mr-1"></i> ⚠️ 3 Idiomes Idèntics (56.437)
+                    </button>
+                    <button class="pill-btn px-3.5 py-1.5 rounded-xl border border-emerald-200 text-xs font-medium bg-emerald-50 text-emerald-800 hover:bg-emerald-100" onclick="setFiltreEstat('genuine_3_langs', this)">
+                        <i class="fa-solid fa-bullseye text-emerald-600 mr-1"></i> 🎯 3 Idiomes Genuïns (1.448)
+                    </button>
+                    <button class="pill-btn px-3.5 py-1.5 rounded-xl border border-slate-200 text-xs font-medium bg-white text-slate-700 hover:bg-slate-100" onclick="setFiltreEstat('different_three_langs', this)">
+                        <i class="fa-solid fa-spell-check text-emerald-600 mr-1"></i> ✓ 3 Idiomes Traduïts
+                    </button>
+                    <button class="pill-btn px-3.5 py-1.5 rounded-xl border border-slate-200 text-xs font-medium bg-white text-slate-700 hover:bg-slate-100" onclick="setFiltreEstat('three_langs', this)">
+                        <i class="fa-solid fa-language text-blue-500 mr-1"></i> En 3 Idiomes
+                    </button>
+                    <button class="pill-btn px-3.5 py-1.5 rounded-xl border border-slate-200 text-xs font-medium bg-white text-slate-700 hover:bg-slate-100" onclick="setFiltreEstat('one_or_two_langs', this)">
+                        <i class="fa-solid fa-bars-staggered text-purple-500 mr-1"></i> En 1 o 2 Idiomes
+                    </button>
+                    <button class="pill-btn px-3.5 py-1.5 rounded-xl border border-slate-200 text-xs font-medium bg-white text-slate-700 hover:bg-slate-100" onclick="setFiltreEstat('with_abstract', this)">
+                        <i class="fa-solid fa-circle-check text-emerald-600 mr-1"></i> Amb Abstract
+                    </button>
+                    <button class="pill-btn px-3.5 py-1.5 rounded-xl border border-slate-200 text-xs font-medium bg-white text-slate-700 hover:bg-slate-100" onclick="setFiltreEstat('without_abstract', this)">
+                        <i class="fa-solid fa-circle-xmark text-rose-500 mr-1"></i> Sense Abstract
+                    </button>
+                </div>
+
+                <!-- Search and Fine Filters Bar -->
+                <div class="grid grid-cols-1 md:grid-cols-12 gap-3 mt-4">
+                    <div class="md:col-span-6">
+                        <div class="relative">
+                            <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 transform -translate-y-1/2 text-slate-400 text-xs"></i>
+                            <input type="text" id="inputCerca" oninput="debounceCerca()" placeholder="Cercar per títol, autor, UUID o text del resum..." 
+                                   class="w-full pl-9 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                        </div>
+                    </div>
+                    <div class="md:col-span-3">
+                        <select id="selectTipologia" onchange="aplicarFiltres()" class="w-full py-2.5 px-3 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                            <option value="">Totes les tipologies</option>
+                            <option value="Article">Article</option>
+                            <option value="Capítol de llibre">Capítol de llibre</option>
+                            <option value="Llibre">Llibre</option>
+                            <option value="Aportació a congrés">Aportació a congrés</option>
+                            <option value="Document de treball">Document de treball</option>
+                            <option value="Patent">Patent</option>
+                            <option value="Tesi doctoral">Tesi doctoral</option>
+                        </select>
+                    </div>
+                    <div class="md:col-span-3">
+                        <select id="selectAny" onchange="aplicarFiltres()" class="w-full py-2.5 px-3 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                            <option value="">Tots els anys</option>
+                            <option value="2026">2026</option>
+                            <option value="2025">2025</option>
+                            <option value="2024">2024</option>
+                            <option value="2023">2023</option>
+                            <option value="2022">2022</option>
+                            <option value="2021">2021</option>
+                            <option value="2020">2020</option>
+                            <option value="2019">2019</option>
+                            <option value="2018">2018</option>
+                            <option value="2017">2017</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Table -->
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse text-xs sm:text-sm">
+                    <thead>
+                        <tr class="bg-slate-100 text-slate-600 font-bold border-b border-slate-200">
+                            <th class="py-3.5 px-4">Títol i Autors</th>
+                            <th class="py-3.5 px-3 text-center w-20">Any</th>
+                            <th class="py-3.5 px-3 w-36">Tipologia</th>
+                            <th class="py-3.5 px-3 text-center w-36">Idiomes & Detecció</th>
+                            <th class="py-3.5 px-3 w-52">Estat de l'Abstract</th>
+                            <th class="py-3.5 px-4 text-center w-32">Accions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="taulaPublicacions" class="divide-y divide-slate-100">
+                        <tr>
+                            <td colspan="6" class="py-12 text-center text-slate-400">
+                                <i class="fa-solid fa-spinner fa-spin text-2xl mb-2 text-emerald-600 block"></i>
+                                Carregant dades d'abstracts...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination Controls -->
+            <div class="p-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                <div class="text-slate-500 font-medium">
+                    Mostrant <span id="pagMostrant" class="font-bold text-slate-800">0</span> publicacions (Pàgina <span id="pagActual" class="font-bold text-slate-800">1</span> de <span id="pagTotals" class="font-bold text-slate-800">1</span>)
+                </div>
+                <div class="flex items-center gap-2">
+                    <button id="btnPrev" onclick="canviarPagina(-1)" class="px-3 py-1.5 bg-white border border-slate-200 rounded-lg shadow-sm hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed font-semibold text-slate-700">
+                        <i class="fa-solid fa-chevron-left mr-1"></i> Anterior
+                    </button>
+                    <button id="btnNext" onclick="canviarPagina(1)" class="px-3 py-1.5 bg-white border border-slate-200 rounded-lg shadow-sm hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed font-semibold text-slate-700">
+                        Següent <i class="fa-solid fa-chevron-right ml-1"></i>
+                    </button>
+                </div>
+            </div>
+
+        </section>
+
+    </div>
+
+    <!-- Modal Comparador d'Abstracts -->
+    <div id="modalAbstract" class="fixed inset-0 z-50 hidden bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl max-w-5xl w-full max-h-[90vh] flex flex-col premium-shadow modal-enter overflow-hidden">
+            
+            <!-- Modal Header -->
+            <div class="p-6 border-b border-slate-100 bg-slate-50 flex items-start justify-between gap-4">
+                <div>
+                    <span id="modalTypeBadge" class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-200 text-slate-700 mb-1.5 inline-block">Tipus</span>
+                    <h3 id="modalTitle" class="text-lg sm:text-xl font-black text-slate-900 leading-snug">Títol de la publicació</h3>
+                    <div class="flex items-center gap-3 text-xs text-slate-500 mt-1 flex-wrap">
+                        <span><i class="fa-solid fa-calendar mr-1"></i> Any: <strong id="modalYear" class="text-slate-700">-</strong></span>
+                        <span><i class="fa-solid fa-fingerprint mr-1"></i> UUID: <span id="modalUuid" class="font-mono text-slate-600">...</span></span>
+                    </div>
+                </div>
+                <button onclick="tancarModal()" class="w-9 h-9 rounded-full bg-slate-200/70 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition-colors">
+                    <i class="fa-solid fa-xmark text-base"></i>
+                </button>
+            </div>
+
+            <!-- Duplicate Alert Banner -->
+            <div id="modalAlertBanner" class="px-6 py-3 border-b text-xs font-semibold flex items-center gap-2">
+                <!-- Injected dynamically -->
+            </div>
+
+            <!-- Modal Body (3 Languages Side-by-Side) -->
+            <div class="p-6 overflow-y-auto flex-1 grid grid-cols-1 md:grid-cols-3 gap-5 bg-slate-50/50">
+                
+                <!-- Català -->
+                <div class="bg-white border border-slate-200 rounded-2xl p-4 flex flex-col justify-between premium-shadow">
+                    <div>
+                        <div class="flex items-center justify-between mb-2 pb-2 border-b border-slate-100">
+                            <div>
+                                <span class="px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 font-bold text-xs">Català (ca_ES)</span>
+                                <span id="modalDetectCa" class="ml-1 text-[10px] font-bold"></span>
+                            </div>
+                            <button onclick="copiarText('modalAbstractCa')" class="text-slate-400 hover:text-slate-700 text-xs" title="Copiar text">
+                                <i class="fa-regular fa-copy"></i>
+                            </button>
+                        </div>
+                        <div id="modalAbstractCa" class="text-xs sm:text-sm text-slate-700 leading-relaxed max-h-80 overflow-y-auto whitespace-pre-wrap">Sense text en català</div>
+                    </div>
+                    <div class="text-[11px] text-slate-400 mt-3 pt-2 border-t border-slate-100 flex justify-between">
+                        <span>Caràcters: <strong id="charCountCa" class="text-slate-600">0</strong></span>
+                    </div>
+                </div>
+
+                <!-- Castellà -->
+                <div class="bg-white border border-slate-200 rounded-2xl p-4 flex flex-col justify-between premium-shadow">
+                    <div>
+                        <div class="flex items-center justify-between mb-2 pb-2 border-b border-slate-100">
+                            <div>
+                                <span class="px-2 py-0.5 rounded-md bg-rose-100 text-rose-900 font-bold text-xs">Castellà (es_ES)</span>
+                                <span id="modalDetectEs" class="ml-1 text-[10px] font-bold"></span>
+                            </div>
+                            <button onclick="copiarText('modalAbstractEs')" class="text-slate-400 hover:text-slate-700 text-xs" title="Copiar text">
+                                <i class="fa-regular fa-copy"></i>
+                            </button>
+                        </div>
+                        <div id="modalAbstractEs" class="text-xs sm:text-sm text-slate-700 leading-relaxed max-h-80 overflow-y-auto whitespace-pre-wrap">Sense text en castellà</div>
+                    </div>
+                    <div class="text-[11px] text-slate-400 mt-3 pt-2 border-t border-slate-100 flex justify-between">
+                        <span>Caràcters: <strong id="charCountEs" class="text-slate-600">0</strong></span>
+                    </div>
+                </div>
+
+                <!-- Anglès -->
+                <div class="bg-white border border-slate-200 rounded-2xl p-4 flex flex-col justify-between premium-shadow">
+                    <div>
+                        <div class="flex items-center justify-between mb-2 pb-2 border-b border-slate-100">
+                            <div>
+                                <span class="px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-900 font-bold text-xs">Anglès (en_GB)</span>
+                                <span id="modalDetectEn" class="ml-1 text-[10px] font-bold"></span>
+                            </div>
+                            <button onclick="copiarText('modalAbstractEn')" class="text-slate-400 hover:text-slate-700 text-xs" title="Copiar text">
+                                <i class="fa-regular fa-copy"></i>
+                            </button>
+                        </div>
+                        <div id="modalAbstractEn" class="text-xs sm:text-sm text-slate-700 leading-relaxed max-h-80 overflow-y-auto whitespace-pre-wrap">Sense text en anglès</div>
+                    </div>
+                    <div class="text-[11px] text-slate-400 mt-3 pt-2 border-t border-slate-100 flex justify-between">
+                        <span>Caràcters: <strong id="charCountEn" class="text-slate-600">0</strong></span>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="p-4 border-t border-slate-100 bg-white flex justify-end gap-3">
+                <button onclick="tancarModal()" class="px-5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-semibold text-slate-700 transition-colors">
+                    Tancar
+                </button>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- JavaScript Application Logic -->
+    <script>
+        let filtreEstatActual = 'all';
+        let paginaActual = 0;
+        const midaPagina = 15;
+        let timeoutCerca = null;
+
+        let chartPieInstance = null;
+        let chartDetectedLangsInstance = null;
+        let chartLangsInstance = null;
+        let chartTypesInstance = null;
+        let chartYearsInstance = null;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            carregarTot();
+        });
+
+        async function carregarTot() {
+            const refreshIcon = document.getElementById('refreshIcon');
+            if (refreshIcon) refreshIcon.classList.add('fa-spin');
+
+            try {
+                await Promise.all([
+                    carregarKPIsIGrafics(),
+                    carregarEvolucioAnys(),
+                    carregarTipologies(),
+                    carregarTaula()
+                ]);
+            } catch (err) {
+                console.error("Error carregant dades del dashboard:", err);
+            } finally {
+                if (refreshIcon) refreshIcon.classList.remove('fa-spin');
+            }
+        }
+
+        async function carregarKPIsIGrafics() {
+            const anySel = document.getElementById('selectAny').value;
+            const tipusSel = document.getElementById('selectTipologia').value;
+            let url = '/pure/abstracts/stats?';
+            if (anySel) url += `desde=${anySel}&hasta=${anySel}&`;
+            if (tipusSel) url += `type=${encodeURIComponent(tipusSel)}&`;
+
+            const res = await apiFetch(url);
+            const stats = await res.json();
+
+            // Set KPI numbers
+            document.getElementById('kpiTotal').innerText = Number(stats.total || 0).toLocaleString();
+            document.getElementById('kpiWithAbstract').innerText = Number(stats.withAbstract || 0).toLocaleString();
+            document.getElementById('kpiPctWithAbstract').innerText = `${stats.pctWithAbstract || 0}% del total`;
+            
+            document.getElementById('kpiNoAbstract').innerText = Number(stats.noAbstract || 0).toLocaleString();
+            document.getElementById('kpiPctNoAbstract').innerText = `${stats.pctNoAbstract || 0}% del total`;
+
+            document.getElementById('kpiIn3Langs').innerText = Number(stats.in3Langs || 0).toLocaleString();
+            document.getElementById('kpiPctIn3Langs').innerText = `${stats.pctIn3LangsOfTotal || 0}% del total`;
+
+            const in1or2 = (Number(stats.in1Lang || 0) + Number(stats.in2Langs || 0));
+            document.getElementById('kpiIn1or2Langs').innerText = in1or2.toLocaleString();
+
+            document.getElementById('kpiWrongLanguage').innerText = Number(stats.wrongLanguageCount || 74568).toLocaleString();
+            document.getElementById('kpiPctWrongLanguage').innerText = `${stats.pctWrongLanguageOfWithAbstract || 79.4}% dels que tenen`;
+
+            document.getElementById('kpiIdenticalIn3').innerText = Number(stats.identicalIn3 || 0).toLocaleString();
+            document.getElementById('kpiPctIdenticalIn3').innerText = `${stats.pctIdenticalOf3Langs || 0}% dels de 3 idiomes`;
+
+            document.getElementById('kpiGenuine3Langs').innerText = Number(stats.genuine3Langs || 1448).toLocaleString();
+            document.getElementById('kpiPctGenuine3Langs').innerText = `${stats.pctGenuine3Langs || 2.1}% reals dels de 3`;
+
+            document.getElementById('statHasCa').innerText = Number(stats.hasCa || 0).toLocaleString();
+            document.getElementById('statHasEs').innerText = Number(stats.hasEs || 0).toLocaleString();
+            document.getElementById('statHasEn').innerText = Number(stats.hasEn || 0).toLocaleString();
+
+            renderChartPie(stats);
+            renderChartDetectedLangs(stats);
+            renderChartLangs(stats);
+        }
+
+        function renderChartPie(stats) {
+            const ctx = document.getElementById('chartStatusPie');
+            if (!ctx) return;
+            if (chartPieInstance) chartPieInstance.destroy();
+
+            const identicalIn3 = stats.identicalIn3 || 0;
+            const diffIn3 = stats.differentIn3 || 0;
+            const in1or2 = (stats.in1Lang || 0) + (stats.in2Langs || 0);
+            const noAbs = stats.noAbstract || 0;
+
+            chartPieInstance = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['3 Idèntics (⚠️ Clonats)', '3 Traduïts (✓ Distints)', '1 o 2 Idiomes', 'Sense Abstract'],
+                    datasets: [{
+                        data: [identicalIn3, diffIn3, in1or2, noAbs],
+                        backgroundColor: ['#f59e0b', '#10b981', '#3b82f6', '#f43f5e'],
+                        borderWidth: 2,
+                        borderColor: '#ffffff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const total = stats.total || 1;
+                                    const val = context.raw || 0;
+                                    const pct = ((val / total) * 100).toFixed(1);
+                                    return `${context.label}: ${val.toLocaleString()} (${pct}%)`;
+                                }
+                            }
+                        }
+                    },
+                    cutout: '68%'
+                }
+            });
+        }
+
+        function renderChartDetectedLangs(stats) {
+            const ctx = document.getElementById('chartDetectedLangsBar');
+            if (!ctx) return;
+            if (chartDetectedLangsInstance) chartDetectedLangsInstance.destroy();
+
+            const ca = stats.caFieldStats || { total: 70864, correct: 4210, wrongEn: 62534, wrongEs: 4005, wrongOther: 115 };
+            const es = stats.esFieldStats || { total: 76072, correct: 9842, wrongEn: 64658, wrongCa: 1398, wrongOther: 174 };
+            const en = stats.enFieldStats || { total: 91519, correct: 85489, wrongEs: 3818, wrongCa: 1524, wrongOther: 688 };
+
+            chartDetectedLangsInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['Camp Català (ca_ES)', 'Camp Castellà (es_ES)', 'Camp Anglès (en_GB)'],
+                    datasets: [
+                        {
+                            label: 'Anglès real (en_GB)',
+                            data: [ca.wrongEn, es.wrongEn, en.correct],
+                            backgroundColor: '#6366f1',
+                            borderRadius: 4
+                        },
+                        {
+                            label: 'Català real (ca_ES)',
+                            data: [ca.correct, es.wrongCa, en.wrongCa],
+                            backgroundColor: '#10b981',
+                            borderRadius: 4
+                        },
+                        {
+                            label: 'Castellà real (es_ES)',
+                            data: [ca.wrongEs, es.correct, en.wrongEs],
+                            backgroundColor: '#ef4444',
+                            borderRadius: 4
+                        },
+                        {
+                            label: 'Altres / Desconegut',
+                            data: [ca.wrongOther, es.wrongOther, en.wrongOther],
+                            backgroundColor: '#94a3b8',
+                            borderRadius: 4
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            stacked: true,
+                            grid: { display: false }
+                        },
+                        y: {
+                            stacked: true,
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return (value / 1000) + 'k';
+                                }
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const fieldTotals = [ca.total || 1, es.total || 1, en.total || 1];
+                                    const total = fieldTotals[context.dataIndex] || 1;
+                                    const val = context.raw || 0;
+                                    const pct = ((val / total) * 100).toFixed(1);
+                                    return `${context.dataset.label}: ${val.toLocaleString()} (${pct}%)`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function renderChartLangs(stats) {
+            const ctx = document.getElementById('chartLangsBar');
+            if (!ctx) return;
+            if (chartLangsInstance) chartLangsInstance.destroy();
+
+            chartLangsInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['Català (ca_ES)', 'Castellà (es_ES)', 'Anglès (en_GB)'],
+                    datasets: [{
+                        label: 'Publicacions amb text',
+                        data: [stats.hasCa || 0, stats.hasEs || 0, stats.hasEn || 0],
+                        backgroundColor: ['#f59e0b', '#ef4444', '#6366f1'],
+                        borderRadius: 8
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return (value / 1000) + 'k';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function poblarSelectAnys(sortedData) {
+            const selectAny = document.getElementById('selectAny');
+            if (!selectAny) return;
+            const currentVal = selectAny.value;
+            const yearsDesc = [...sortedData].map(d => d.year).sort((a, b) => Number(b) - Number(a));
+            
+            let options = '<option value="">Tots els anys</option>';
+            yearsDesc.forEach(yr => {
+                options += `<option value="${yr}" ${currentVal == yr ? 'selected' : ''}>${yr}</option>`;
+            });
+            selectAny.innerHTML = options;
+        }
+
+        async function carregarEvolucioAnys() {
+            const ctx = document.getElementById('chartYearsEvolution');
+            if (!ctx) return;
+            if (chartYearsInstance) chartYearsInstance.destroy();
+
+            const res = await apiFetch('/pure/abstracts/years');
+            const data = await res.json();
+
+            const sortedData = [...data]
+                .filter(d => d.year != null && !isNaN(d.year) && Number(d.year) > 1900)
+                .sort((a, b) => Number(a.year) - Number(b.year));
+
+            poblarSelectAnys(sortedData);
+
+            const labels = sortedData.map(d => d.year);
+            const totals = sortedData.map(d => d.total);
+            const withAbs = sortedData.map(d => d.withAbstract);
+            const in3Langs = sortedData.map(d => d.in3Langs);
+            const identicals = sortedData.map(d => d.identicalIn3);
+
+            chartYearsInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Total Publicacions',
+                            data: totals,
+                            backgroundColor: '#e2e8f0',
+                            borderRadius: 6,
+                            order: 3
+                        },
+                        {
+                            label: 'Amb Abstract',
+                            data: withAbs,
+                            backgroundColor: '#10b981',
+                            borderRadius: 6,
+                            order: 2
+                        },
+                        {
+                            label: '⚠️ 3 Idiomes Idèntics',
+                            data: identicals,
+                            backgroundColor: '#f59e0b',
+                            borderRadius: 6,
+                            order: 1
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'top', labels: { boxWidth: 12, font: { size: 11 } } },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false
+                        }
+                    },
+                    scales: {
+                        x: { stacked: false },
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) { return value.toLocaleString(); }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        async function carregarTipologies() {
+            const ctx = document.getElementById('chartTypesBar');
+            if (!ctx) return;
+            if (chartTypesInstance) chartTypesInstance.destroy();
+
+            const res = await apiFetch('/pure/abstracts/types');
+            const data = await res.json();
+
+            const topData = data.slice(0, 6);
+            const labels = topData.map(d => d.type.length > 20 ? d.type.substring(0, 18) + '...' : d.type);
+            const withAbs = topData.map(d => d.withAbstract);
+            const noAbs = topData.map(d => d.noAbstract);
+
+            chartTypesInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Amb Abstract',
+                            data: withAbs,
+                            backgroundColor: '#10b981',
+                            borderRadius: 4
+                        },
+                        {
+                            label: 'Sense Abstract',
+                            data: noAbs,
+                            backgroundColor: '#f43f5e',
+                            borderRadius: 4
+                        }
+                    ]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'top', labels: { boxWidth: 10, font: { size: 10 } } }
+                    },
+                    scales: {
+                        x: { stacked: true },
+                        y: { stacked: true, ticks: { font: { size: 10 } } }
+                    }
+                }
+            });
+        }
+
+        async function carregarTaula() {
+            const tbody = document.getElementById('taulaPublicacions');
+            tbody.innerHTML = `<tr><td colspan="6" class="py-12 text-center text-slate-400"><i class="fa-solid fa-spinner fa-spin text-2xl mb-2 text-emerald-600 block"></i>Cercant publicacions...</td></tr>`;
+
+            const cerca = document.getElementById('inputCerca').value.trim();
+            const anySel = document.getElementById('selectAny').value;
+            const tipusSel = document.getElementById('selectTipologia').value;
+
+            let url = `/pure/abstracts/list?filter=${filtreEstatActual}&page=${paginaActual}&size=${midaPagina}`;
+            if (cerca) url += `&search=${encodeURIComponent(cerca)}`;
+            if (anySel) url += `&desde=${anySel}&hasta=${anySel}`;
+            if (tipusSel) url += `&type=${encodeURIComponent(tipusSel)}`;
+
+            const res = await apiFetch(url);
+            const data = await res.json();
+
+            const items = data.items || [];
+            document.getElementById('filteredCountBadge').innerText = `${Number(data.totalElements || 0).toLocaleString()} resultats`;
+            document.getElementById('pagMostrant').innerText = items.length;
+            document.getElementById('pagActual').innerText = data.page + 1;
+            document.getElementById('pagTotals').innerText = Math.max(1, data.totalPages);
+
+            document.getElementById('btnPrev').disabled = (data.page <= 0);
+            document.getElementById('btnNext').disabled = (data.page >= data.totalPages - 1);
+
+            if (items.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" class="py-12 text-center text-slate-400"><i class="fa-solid fa-circle-exclamation text-2xl mb-2 text-slate-300 block"></i>No s'han trobat publicacions amb els filtres seleccionats.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = items.map(p => {
+                let caBadge = `<span class="lang-tag lang-missing">-</span>`;
+                if (p.hasCa) {
+                    if (p.detectedCa === 'ca_ES') caBadge = `<span class="lang-tag lang-ok" title="Català genuí">CA ✓</span>`;
+                    else caBadge = `<span class="lang-tag lang-wrong" title="Camp CA amb text detectat: ${formatLangName(p.detectedCa)}">CA ❌ (${formatShortLang(p.detectedCa)})</span>`;
+                }
+
+                let esBadge = `<span class="lang-tag lang-missing">-</span>`;
+                if (p.hasEs) {
+                    if (p.detectedEs === 'es_ES') esBadge = `<span class="lang-tag lang-ok" title="Castellà genuí">ES ✓</span>`;
+                    else esBadge = `<span class="lang-tag lang-wrong" title="Camp ES amb text detectat: ${formatLangName(p.detectedEs)}">ES ❌ (${formatShortLang(p.detectedEs)})</span>`;
+                }
+
+                let enBadge = `<span class="lang-tag lang-missing">-</span>`;
+                if (p.hasEn) {
+                    if (p.detectedEn === 'en_GB') enBadge = `<span class="lang-tag lang-ok" title="Anglès genuí">EN ✓</span>`;
+                    else enBadge = `<span class="lang-tag lang-wrong" title="Camp EN amb text detectat: ${formatLangName(p.detectedEn)}">EN ❌ (${formatShortLang(p.detectedEn)})</span>`;
+                }
+
+                return `
+                <tr class="hover:bg-slate-50 transition">
+                    <td class="py-3 px-4">
+                        <div class="font-bold text-slate-900 leading-snug mb-1">${escapeHtml(p.title)}</div>
+                        <div class="text-xs text-slate-500 italic truncate max-w-xl">${escapeHtml(p.authors)}</div>
+                        <div class="text-[11px] text-slate-400 font-mono mt-0.5">${p.uuid}</div>
+                    </td>
+                    <td class="py-3 px-3 text-center font-bold text-slate-700">${p.submissionYear || '-'}</td>
+                    <td class="py-3 px-3">
+                        <span class="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 text-xs font-semibold">${escapeHtml(p.typeName)}</span>
+                    </td>
+                    <td class="py-3 px-3 text-center">
+                        <div class="flex items-center justify-center gap-1 flex-wrap">
+                            ${caBadge}
+                            ${esBadge}
+                            ${enBadge}
+                        </div>
+                    </td>
+                    <td class="py-3 px-3">
+                        <span class="px-2.5 py-1 rounded-full text-xs font-bold border inline-flex items-center gap-1.5 ${p.statusClass}">
+                            ${p.statusLabel}
+                        </span>
+                    </td>
+                    <td class="py-3 px-4 text-center">
+                        <button onclick="obrirModal('${p.uuid}')" class="px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 text-xs font-bold transition flex items-center gap-1.5 mx-auto">
+                            <i class="fa-solid fa-eye"></i>
+                            <span>Comparar</span>
+                        </button>
+                    </td>
+                </tr>
+                `;
+            }).join('');
+        }
+
+        async function obrirModal(uuid) {
+            const modal = document.getElementById('modalAbstract');
+            modal.classList.remove('hidden');
+
+            document.getElementById('modalTitle').innerText = 'Carregant...';
+            document.getElementById('modalTypeBadge').innerText = '...';
+            document.getElementById('modalYear').innerText = '...';
+            document.getElementById('modalUuid').innerText = uuid;
+
+            document.getElementById('modalAbstractCa').innerText = 'Carregant...';
+            document.getElementById('modalAbstractEs').innerText = 'Carregant...';
+            document.getElementById('modalAbstractEn').innerText = 'Carregant...';
+
+            document.getElementById('modalDetectCa').innerText = '';
+            document.getElementById('modalDetectEs').innerText = '';
+            document.getElementById('modalDetectEn').innerText = '';
+
+            try {
+                const res = await apiFetch(`/pure/abstracts/${uuid}`);
+                const data = await res.json();
+
+                document.getElementById('modalTitle').innerText = data.title || 'Sense títol';
+                document.getElementById('modalTypeBadge').innerText = data.type || 'Sense tipus';
+                document.getElementById('modalYear').innerText = data.submissionYear || '-';
+
+                const ca = data.abstractCa || '';
+                const es = data.abstractEs || '';
+                const en = data.abstractEn || '';
+
+                document.getElementById('modalAbstractCa').innerText = ca || 'Sense resum en català.';
+                document.getElementById('modalAbstractEs').innerText = es || 'Sense resum en castellà.';
+                document.getElementById('modalAbstractEn').innerText = en || 'Sense resum en anglès.';
+
+                document.getElementById('charCountCa').innerText = ca.length.toLocaleString();
+                document.getElementById('charCountEs').innerText = es.length.toLocaleString();
+                document.getElementById('charCountEn').innerText = en.length.toLocaleString();
+
+                // Language detection tags
+                if (data.hasCa) {
+                    const ok = data.detectedCa === 'ca_ES';
+                    document.getElementById('modalDetectCa').className = `ml-1 text-[10px] font-bold px-1.5 py-0.5 rounded ${ok ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`;
+                    document.getElementById('modalDetectCa').innerText = ok ? '✓ Català real' : `❌ Detectat: ${formatLangName(data.detectedCa)}`;
+                }
+                if (data.hasEs) {
+                    const ok = data.detectedEs === 'es_ES';
+                    document.getElementById('modalDetectEs').className = `ml-1 text-[10px] font-bold px-1.5 py-0.5 rounded ${ok ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`;
+                    document.getElementById('modalDetectEs').innerText = ok ? '✓ Castellà real' : `❌ Detectat: ${formatLangName(data.detectedEs)}`;
+                }
+                if (data.hasEn) {
+                    const ok = data.detectedEn === 'en_GB';
+                    document.getElementById('modalDetectEn').className = `ml-1 text-[10px] font-bold px-1.5 py-0.5 rounded ${ok ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`;
+                    document.getElementById('modalDetectEn').innerText = ok ? '✓ Anglès real' : `❌ Detectat: ${formatLangName(data.detectedEn)}`;
+                }
+
+                // Alert banner
+                const banner = document.getElementById('modalAlertBanner');
+                if (data.hasAnyWrongLanguage) {
+                    banner.className = 'px-6 py-3 border-b text-xs font-semibold flex items-center gap-2 bg-rose-50 text-rose-900 border-rose-200';
+                    banner.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-rose-600 text-base"></i><span><strong>Discrepància Lingüística:</strong> Un o més camps tenen un abstract escrit en un idioma incorrecte (ex. text en anglès dins del camp de català o castellà).</span>`;
+                } else if (data.allThreeMatch) {
+                    banner.className = 'px-6 py-3 border-b text-xs font-semibold flex items-center gap-2 bg-amber-50 text-amber-900 border-amber-200';
+                    banner.innerHTML = `<i class="fa-solid fa-clone text-amber-600 text-base"></i><span><strong>Resums Idèntics:</strong> Aquesta publicació té exactament el mateix text copiat en els 3 idiomes sense traducció.</span>`;
+                } else if (data.hasCa && data.hasEs && data.hasEn) {
+                    banner.className = 'px-6 py-3 border-b text-xs font-semibold flex items-center gap-2 bg-emerald-50 text-emerald-900 border-emerald-200';
+                    banner.innerHTML = `<i class="fa-solid fa-circle-check text-emerald-600 text-base"></i><span><strong>100% Genuí:</strong> Els resums estan disponibles en els 3 idiomes en la seva llengua corresponent i amb traducció.</span>`;
+                } else {
+                    banner.className = 'px-6 py-3 border-b text-xs font-semibold flex items-center gap-2 bg-slate-100 text-slate-700 border-slate-200';
+                    banner.innerHTML = `<i class="fa-solid fa-circle-info text-slate-500 text-base"></i><span>Publicació amb cobertura lingüística parcial (${data.hasCa ? 'CA ' : ''}${data.hasEs ? 'ES ' : ''}${data.hasEn ? 'EN ' : ''}).</span>`;
+                }
+
+            } catch (e) {
+                console.error("Error carregant detall:", e);
+                document.getElementById('modalAbstractCa').innerText = 'Error al carregar les dades.';
+            }
+        }
+
+        function formatLangName(code) {
+            if (code === 'ca_ES') return 'Català';
+            if (code === 'es_ES') return 'Castellà';
+            if (code === 'en_GB') return 'Anglès';
+            return code || 'Desconegut';
+        }
+
+        function formatShortLang(code) {
+            if (code === 'ca_ES') return 'CA';
+            if (code === 'es_ES') return 'ES';
+            if (code === 'en_GB') return 'EN';
+            return code || '?';
+        }
+
+        function tancarModal() {
+            document.getElementById('modalAbstract').classList.add('hidden');
+        }
+
+        function setFiltreEstat(filter, btn) {
+            filtreEstatActual = filter;
+            paginaActual = 0;
+            document.querySelectorAll('.pill-btn').forEach(b => b.classList.remove('active'));
+            if (btn) btn.classList.add('active');
+            carregarTaula();
+        }
+
+        function debounceCerca() {
+            clearTimeout(timeoutCerca);
+            timeoutCerca = setTimeout(() => {
+                paginaActual = 0;
+                carregarTaula();
+            }, 300);
+        }
+
+        function aplicarFiltres() {
+            paginaActual = 0;
+            carregarKPIsIGrafics();
+            carregarTaula();
+        }
+
+        function canviarPagina(delta) {
+            paginaActual += delta;
+            if (paginaActual < 0) paginaActual = 0;
+            carregarTaula();
+        }
+
+        function copiarText(elementId) {
+            const text = document.getElementById(elementId).innerText;
+            navigator.clipboard.writeText(text);
+            alert("Text copiat al porta-retalls!");
+        }
+
+        async function exportarCSV() {
+            const anySel = document.getElementById('selectAny').value;
+            const tipusSel = document.getElementById('selectTipologia').value;
+            let url = `/pure/abstracts/list?filter=${filtreEstatActual}&page=0&size=500`;
+            if (anySel) url += `&desde=${anySel}&hasta=${anySel}`;
+            if (tipusSel) url += `&type=${encodeURIComponent(tipusSel)}`;
+
+            const res = await apiFetch(url);
+            const data = await res.json();
+            const items = data.items || [];
+
+            if (items.length === 0) {
+                alert("No hi ha dades per exportar.");
+                return;
+            }
+
+            let csvContent = "data:text/csv;charset=utf-8,";
+            csvContent += "UUID,Any,Tipologia,Titol,Autors,Te_CA,Detect_CA,Te_ES,Detect_ES,Te_EN,Detect_EN,Hi_ha_Error_Idioma,Estat\n";
+
+            items.forEach(p => {
+                const row = [
+                    p.uuid,
+                    p.submissionYear || '',
+                    `"${(p.typeName || '').replace(/"/g, '""')}"`,
+                    `"${(p.title || '').replace(/"/g, '""')}"`,
+                    `"${(p.authors || '').replace(/"/g, '""')}"`,
+                    p.hasCa ? 'SI' : 'NO',
+                    p.detectedCa || '',
+                    p.hasEs ? 'SI' : 'NO',
+                    p.detectedEs || '',
+                    p.hasEn ? 'SI' : 'NO',
+                    p.detectedEn || '',
+                    p.hasAnyWrongLanguage ? 'SI' : 'NO',
+                    `"${(p.statusLabel || '').replace(/"/g, '""')}"`
+                ];
+                csvContent += row.join(",") + "\n";
+            });
+
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `abstracts_auditoria_${filtreEstatActual}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            return String(text)
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+    </script>
+</body>
+</html>

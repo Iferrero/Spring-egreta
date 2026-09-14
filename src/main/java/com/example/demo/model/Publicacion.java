@@ -32,9 +32,15 @@ public class Publicacion {
     private Title title;
     private Type type;
     private List<Contributor> contributors;
+    @org.springframework.data.mongodb.core.mapping.Field("abstract")
+    @com.fasterxml.jackson.annotation.JsonProperty("abstract")
+    private Map<String, String> abstracts;
+    private List<Identifier> identifiers;
 
     // Getters y Setters
     public String getId() { return uuid; }
+    public String getUuid() { return uuid; }
+    public void setUuid(String uuid) { this.uuid = uuid; }
     public String getFullTitle() { return title != null ? title.getValue() : "Sin título"; }
     public String getTypeName() { 
         return (type != null && type.getTerm() != null) ? type.getTerm().get("es_ES") : "Desconocido"; 
@@ -43,6 +49,10 @@ public class Publicacion {
     public void setTitle(Title title) { this.title = title; }
     public void setType(Type type) { this.type = type; }
     public void setSubmissionYear(Integer submissionYear) { this.submissionYear = submissionYear; }
+    public List<Identifier> getIdentifiers() { return identifiers; }
+    public void setIdentifiers(List<Identifier> identifiers) { this.identifiers = identifiers; }
+    public Map<String, String> getAbstracts() { return abstracts; }
+    public void setAbstracts(Map<String, String> abstracts) { this.abstracts = abstracts; }
 
     // Clases internas para el mapeo del JSON anidado
     public static class Title {
@@ -61,7 +71,16 @@ public class Publicacion {
     public String getAuthorsNames() {
         if (contributors == null || contributors.isEmpty()) return "Sin autores";
         return contributors.stream()
-                .map(c -> c.getName().getLastName() + ", " + c.getName().getFirstName())
+                .map(c -> {
+                    if (c == null || c.getName() == null) return "";
+                    String ln = c.getName().getLastName() != null ? c.getName().getLastName() : "";
+                    String fn = c.getName().getFirstName() != null ? c.getName().getFirstName() : "";
+                    if (ln.isEmpty() && fn.isEmpty()) return "";
+                    if (ln.isEmpty()) return fn;
+                    if (fn.isEmpty()) return ln;
+                    return ln + ", " + fn;
+                })
+                .filter(s -> !s.isEmpty())
                 .collect(Collectors.joining(" | "));
     }
 
@@ -79,5 +98,21 @@ public class Publicacion {
         public void setFirstName(String firstName) { this.firstName = firstName; }
         public String getLastName() { return lastName; }
         public void setLastName(String lastName) { this.lastName = lastName; }
+    }
+
+    public static class Identifier {
+        private String typeDiscriminator;
+        private Long pureId;
+        private String idSource;
+        private String value;
+
+        public String getTypeDiscriminator() { return typeDiscriminator; }
+        public void setTypeDiscriminator(String typeDiscriminator) { this.typeDiscriminator = typeDiscriminator; }
+        public Long getPureId() { return pureId; }
+        public void setPureId(Long pureId) { this.pureId = pureId; }
+        public String getIdSource() { return idSource; }
+        public void setIdSource(String idSource) { this.idSource = idSource; }
+        public String getValue() { return value; }
+        public void setValue(String value) { this.value = value; }
     }
 }
