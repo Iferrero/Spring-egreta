@@ -365,4 +365,50 @@ public abstract class AbstractEgretaSyncService {
     protected void postProcess() {
         // Opcional: sobreescribir en subclase
     }
+
+    /**
+     * Sincronitza un únic document de l'API d'Egreta pel seu UUID i l'actualitza a MongoDB.
+     */
+    public Map<String, Object> syncOne(String uuid) {
+        if (getApiKey() == null || getApiKey().isEmpty()) {
+            throw new IllegalStateException("egreta.api.key not set in properties");
+        }
+        if (uuid == null || uuid.isBlank()) {
+            throw new IllegalArgumentException("UUID cannot be null or empty");
+        }
+
+        WebClient client = buildClient();
+        String url = UriComponentsBuilder.fromUriString(getApiBaseUrl() + "/" + getEndpoint() + "/" + uuid.trim())
+                .toUriString();
+
+        ResponseEntity<Map> response;
+        try {
+            response = client.get()
+                    .uri(url)
+                    .header("api-key", getApiKey())
+                    .retrieve()
+                    .toEntity(Map.class)
+                    .block();
+        } catch (org.springframework.web.reactive.function.client.WebClientResponseException.NotFound e) {
+            throw new RuntimeException("Document with UUID '" + uuid + "' not found in Egreta (" + getEndpoint() + ")", e);
+        } catch (Exception e) {
+            throw new RuntimeException("Error fetching document from Egreta API for UUID '" + uuid + "': " + e.getMessage(), e);
+        }
+
+        if (response == null || !response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
+            throw new RuntimeException("Error fetching document from Egreta API for UUID '" + uuid + "': Status " + (response != null ? response.getStatusCode() : "null response"));
+        }
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> rawItem = (Map<String, Object>) response.getBody();
+        Map<String, Object> normalized = normalize(rawItem);
+
+        org.bson.Document bsonDoc = new org.bson.Document(normalized);
+        Query query = new Query(Criteria.where("uuid").is(uuid.trim()));
+        Update update = Update.fromDocument(bsonDoc);
+        mongoTemplate.upsert(query, update, getCollectionName());
+
+        logger.info("[{}] Successfully synced single document with UUID '{}'", getCollectionName(), uuid.trim());
+        return normalized;
+    }
 }

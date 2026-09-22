@@ -179,6 +179,7 @@
         <button id="syncPublishersBtn" class="sync-btn" style="background:#0288d1;">Publishers</button>
         <button id="syncResearchoutputsBtn" class="sync-btn" style="background:#fbc02d; color:#333;">Researchoutputs</button>
         <button id="syncStudentthesesBtn" class="sync-btn" style="background:#7b1fa2;">StudentTheses</button>
+        <button id="syncUsersBtn" class="sync-btn" style="background:#00897b;">Users</button>
     </div>
     <div class="status" id="status"></div>
     <div class="progress-outer" id="progressBar">
@@ -209,6 +210,7 @@
     const btnPublishers = document.getElementById('syncPublishersBtn');
     const btnResearchoutputs = document.getElementById('syncResearchoutputsBtn');
     const btnStudenttheses = document.getElementById('syncStudentthesesBtn');
+    const btnUsers = document.getElementById('syncUsersBtn');
     const status       = document.getElementById('status');
     const progressBar  = document.getElementById('progressBar');
     const progressFill = document.getElementById('progressFill');
@@ -236,7 +238,8 @@
         { button: btnProjects, collection: 'Projects' },
         { button: btnPublishers, collection: 'Publishers' },
         { button: btnResearchoutputs, collection: 'Researchoutputs' },
-        { button: btnStudenttheses, collection: 'StudentTheses' }
+        { button: btnStudenttheses, collection: 'StudentTheses' },
+        { button: btnUsers, collection: 'Users' }
     ];
 
     function renderButtonStats(button, mongoCount, collectionCount) {
@@ -697,6 +700,24 @@
             } catch (e) {
                 setStatus('Error de red.', 'error');
                 btnStudenttheses.disabled = false;
+            }
+        };
+
+        btnUsers.onclick = async () => {
+            btnUsers.disabled = true;
+            setStatus('Sincronitzant Users...');
+            try {
+                const res = await fetch('/egreta/sync/users', { method: 'POST' });
+                if (res.ok) {
+                    setStatus('Sincronització de Users iniciada correctament.');
+                    pollProgress('Users', () => { btnUsers.disabled = false; });
+                } else {
+                    setStatus('Error a l\'iniciar la Sincronització de Users.', 'error');
+                    btnUsers.disabled = false;
+                }
+            } catch (e) {
+                setStatus('Error de red.', 'error');
+                btnUsers.disabled = false;
             }
         };
     btnAwards.onclick = async () => {

@@ -211,17 +211,17 @@
                     <div>
                         <div class="flex items-center justify-between mb-1.5">
                             <span class="font-black text-xs text-amber-900">Camp Català (`ca_ES`)</span>
-                            <span class="text-[11px] font-bold text-amber-800">70.864 registres</span>
+                            <span id="auditCaTotal" class="text-[11px] font-bold text-amber-800">...</span>
                         </div>
                         <div class="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden flex mb-2.5">
-                            <div style="width: 5.9%" class="bg-emerald-500" title="Català real: 5.9%"></div>
-                            <div style="width: 88.2%" class="bg-rose-500" title="Anglès: 88.2%"></div>
-                            <div style="width: 5.7%" class="bg-amber-500" title="Castellà: 5.7%"></div>
+                            <div id="auditCaBarCorrect" style="width: 0%" class="bg-emerald-500 transition-all duration-300" title="Català real"></div>
+                            <div id="auditCaBarEn" style="width: 0%" class="bg-rose-500 transition-all duration-300" title="Anglès"></div>
+                            <div id="auditCaBarEs" style="width: 0%" class="bg-amber-500 transition-all duration-300" title="Castellà"></div>
                         </div>
                         <div class="space-y-1 text-[11px]">
-                            <div class="flex justify-between text-slate-700"><span>✓ Català Real:</span><strong>4.210 (5,9%)</strong></div>
-                            <div class="flex justify-between text-rose-700 font-bold"><span>❌ En Anglès (`en_GB`):</span><strong>62.534 (88,2%)</strong></div>
-                            <div class="flex justify-between text-amber-800"><span>❌ En Castellà (`es_ES`):</span><strong>4.005 (5,7%)</strong></div>
+                            <div class="flex justify-between text-slate-700"><span>✓ Català Real:</span><strong id="auditCaCorrect">...</strong></div>
+                            <div class="flex justify-between text-rose-700 font-bold"><span>❌ En Anglès (`en_GB`):</span><strong id="auditCaWrongEn">...</strong></div>
+                            <div class="flex justify-between text-amber-800"><span>❌ En Castellà (`es_ES`):</span><strong id="auditCaWrongEs">...</strong></div>
                         </div>
                     </div>
                 </div>
@@ -231,17 +231,17 @@
                     <div>
                         <div class="flex items-center justify-between mb-1.5">
                             <span class="font-black text-xs text-rose-900">Camp Castellà (`es_ES`)</span>
-                            <span class="text-[11px] font-bold text-rose-800">76.072 registres</span>
+                            <span id="auditEsTotal" class="text-[11px] font-bold text-rose-800">...</span>
                         </div>
                         <div class="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden flex mb-2.5">
-                            <div style="width: 12.9%" class="bg-emerald-500" title="Castellà real: 12.9%"></div>
-                            <div style="width: 85.0%" class="bg-rose-500" title="Anglès: 85.0%"></div>
-                            <div style="width: 1.8%" class="bg-amber-500" title="Català: 1.8%"></div>
+                            <div id="auditEsBarCorrect" style="width: 0%" class="bg-emerald-500 transition-all duration-300" title="Castellà real"></div>
+                            <div id="auditEsBarEn" style="width: 0%" class="bg-rose-500 transition-all duration-300" title="Anglès"></div>
+                            <div id="auditEsBarCa" style="width: 0%" class="bg-amber-500 transition-all duration-300" title="Català"></div>
                         </div>
                         <div class="space-y-1 text-[11px]">
-                            <div class="flex justify-between text-slate-700"><span>✓ Castellà Real:</span><strong>9.842 (12,9%)</strong></div>
-                            <div class="flex justify-between text-rose-700 font-bold"><span>❌ En Anglès (`en_GB`):</span><strong>64.658 (85,0%)</strong></div>
-                            <div class="flex justify-between text-amber-800"><span>❌ En Català (`ca_ES`):</span><strong>1.398 (1,8%)</strong></div>
+                            <div class="flex justify-between text-slate-700"><span>✓ Castellà Real:</span><strong id="auditEsCorrect">...</strong></div>
+                            <div class="flex justify-between text-rose-700 font-bold"><span>❌ En Anglès (`en_GB`):</span><strong id="auditEsWrongEn">...</strong></div>
+                            <div class="flex justify-between text-amber-800"><span>❌ En Català (`ca_ES`):</span><strong id="auditEsWrongCa">...</strong></div>
                         </div>
                     </div>
                 </div>
@@ -251,17 +251,17 @@
                     <div>
                         <div class="flex items-center justify-between mb-1.5">
                             <span class="font-black text-xs text-indigo-900">Camp Anglès (`en_GB`)</span>
-                            <span class="text-[11px] font-bold text-indigo-800">91.519 registres</span>
+                            <span id="auditEnTotal" class="text-[11px] font-bold text-indigo-800">...</span>
                         </div>
                         <div class="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden flex mb-2.5">
-                            <div style="width: 93.4%" class="bg-emerald-500" title="Anglès real: 93.4%"></div>
-                            <div style="width: 4.2%" class="bg-rose-500" title="Castellà: 4.2%"></div>
-                            <div style="width: 1.7%" class="bg-amber-500" title="Català: 1.7%"></div>
+                            <div id="auditEnBarCorrect" style="width: 0%" class="bg-emerald-500 transition-all duration-300" title="Anglès real"></div>
+                            <div id="auditEnBarEs" style="width: 0%" class="bg-rose-500 transition-all duration-300" title="Castellà"></div>
+                            <div id="auditEnBarCa" style="width: 0%" class="bg-amber-500 transition-all duration-300" title="Català"></div>
                         </div>
                         <div class="space-y-1 text-[11px]">
-                            <div class="flex justify-between text-emerald-800 font-bold"><span>✓ Anglès Real:</span><strong>85.489 (93,4%)</strong></div>
-                            <div class="flex justify-between text-slate-700"><span>❌ En Castellà (`es_ES`):</span><strong>3.818 (4,2%)</strong></div>
-                            <div class="flex justify-between text-slate-700"><span>❌ En Català (`ca_ES`):</span><strong>1.524 (1,7%)</strong></div>
+                            <div class="flex justify-between text-emerald-800 font-bold"><span>✓ Anglès Real:</span><strong id="auditEnCorrect">...</strong></div>
+                            <div class="flex justify-between text-slate-700"><span>❌ En Castellà (`es_ES`):</span><strong id="auditEnWrongEs">...</strong></div>
+                            <div class="flex justify-between text-slate-700"><span>❌ En Català (`ca_ES`):</span><strong id="auditEnWrongCa">...</strong></div>
                         </div>
                     </div>
                 </div>
@@ -391,27 +391,103 @@
 
         </section>
 
-        <!-- Evolution by Year Chart -->
-        <section class="bg-white border border-slate-200 rounded-2xl p-6 premium-shadow mb-8">
-            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+        <!-- Evolution by Year Charts (Publication Year & Submission Year) -->
+        <section class="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-8">
+            
+            <!-- Evolution by Publication Year -->
+            <div class="bg-white border border-slate-200 rounded-2xl p-6 premium-shadow flex flex-col justify-between">
                 <div>
-                    <h2 class="text-lg font-bold text-slate-800 flex items-center gap-2">
-                        <i class="fa-solid fa-chart-line text-indigo-600"></i>
-                        <span>Evolució Temporal per Any de Publicació</span>
-                    </h2>
-                    <p class="text-xs text-slate-400 mt-0.5">Evolució del volum de publicacions, abstracts registrats i grau de duplicació</p>
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+                        <div>
+                            <h2 class="text-base sm:text-lg font-bold text-slate-800 flex items-center gap-2">
+                                <i class="fa-solid fa-calendar-check text-indigo-600"></i>
+                                <span>Evolució per Any de Publicació</span>
+                            </h2>
+                            <p class="text-xs text-slate-400 mt-0.5">Segons l'any de publicació formal de la recerca</p>
+                        </div>
+                        <span class="text-[11px] font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2.5 py-1 rounded-lg self-start sm:self-auto">
+                            <i class="fa-solid fa-book-journal-whills mr-1"></i> Publication Year
+                        </span>
+                    </div>
+                    <div class="relative h-72 w-full">
+                        <canvas id="chartYearsEvolutionPub"></canvas>
+                    </div>
                 </div>
-                <div class="text-xs text-slate-500 font-medium">
-                    Font: Egreta / Pure Research Outputs
+                <div class="text-[11px] text-slate-400 mt-3 pt-3 border-t border-slate-100 flex items-center justify-between">
+                    <span><i class="fa-solid fa-hand-pointer text-indigo-500 mr-1"></i> Clica a una barra per filtrar la taula per Any de Publicació</span>
+                    <span class="text-slate-500 font-medium">Pure / Egreta</span>
                 </div>
             </div>
-            <div class="relative h-72 w-full">
-                <canvas id="chartYearsEvolution"></canvas>
+
+            <!-- Evolution by Submission Year -->
+            <div class="bg-white border border-slate-200 rounded-2xl p-6 premium-shadow flex flex-col justify-between">
+                <div>
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+                        <div>
+                            <h2 class="text-base sm:text-lg font-bold text-slate-800 flex items-center gap-2">
+                                <i class="fa-solid fa-inbox text-amber-600"></i>
+                                <span>Evolució per Any de Submission</span>
+                            </h2>
+                            <p class="text-xs text-slate-400 mt-0.5">Segons l'any d'ingrés/registre al sistema Pure/Egreta</p>
+                        </div>
+                        <span class="text-[11px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-lg self-start sm:self-auto">
+                            <i class="fa-solid fa-cloud-arrow-up mr-1"></i> Submission Year
+                        </span>
+                    </div>
+                    <div class="relative h-72 w-full">
+                        <canvas id="chartYearsEvolutionSub"></canvas>
+                    </div>
+                </div>
+                <div class="text-[11px] text-slate-400 mt-3 pt-3 border-t border-slate-100 flex items-center justify-between">
+                    <span><i class="fa-solid fa-hand-pointer text-amber-500 mr-1"></i> Clica a una barra per filtrar la taula per Any de Submission</span>
+                    <span class="text-slate-500 font-medium">Pure / Egreta</span>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- Stacked Bar Chart: Recognized Languages in Abstracts by Year -->
+        <section class="bg-white border border-slate-200 rounded-2xl p-6 premium-shadow mb-8">
+            <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-4">
+                <div>
+                    <h2 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                        <i class="fa-solid fa-layer-group text-emerald-600"></i>
+                        <span>Distribució d'Idiomes dels Abstracts per Any (Barra Apilada)</span>
+                    </h2>
+                    <p class="text-xs text-slate-400 mt-0.5">Evolució temporal dels idiomes reals introduïts a les publicacions amb abstract (Anglès, Espanyol, Català, Francès, Italià, Portuguès, Alemany, etc.)</p>
+                </div>
+                <div class="flex items-center gap-2 flex-wrap">
+                    <div class="inline-flex rounded-xl border border-slate-200 bg-slate-100 p-1 text-xs font-semibold text-slate-600">
+                        <button id="btnLangYearPub" onclick="canviarDimensioAnyIdiomes('publicationYear')" class="px-2.5 py-1 rounded-lg bg-white text-slate-900 shadow-sm transition font-bold">
+                            <i class="fa-solid fa-calendar-check mr-1 text-indigo-600"></i> Any Publicació
+                        </button>
+                        <button id="btnLangYearSub" onclick="canviarDimensioAnyIdiomes('submissionYear')" class="px-2.5 py-1 rounded-lg text-slate-500 hover:text-slate-900 transition">
+                            <i class="fa-solid fa-inbox mr-1 text-amber-600"></i> Any Submission
+                        </button>
+                    </div>
+                    <div class="inline-flex rounded-xl border border-slate-200 bg-slate-100 p-1 text-xs font-semibold text-slate-600">
+                        <button id="btnViewCounts" onclick="canviarModeGraficIdiomes('count')" class="px-3 py-1 rounded-lg bg-white text-slate-900 shadow-sm transition">
+                            <i class="fa-solid fa-hashtag mr-1 text-slate-400"></i> Nre. Publicacions
+                        </button>
+                        <button id="btnViewPct" onclick="canviarModeGraficIdiomes('percent')" class="px-3 py-1 rounded-lg text-slate-500 hover:text-slate-900 transition">
+                            <i class="fa-solid fa-percent mr-1 text-slate-400"></i> 100% Apilat
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="relative h-80 w-full">
+                <canvas id="chartYearsLanguagesStacked"></canvas>
+            </div>
+
+            <!-- Dynamic language badges summary -->
+            <div id="languagesLegendBadges" class="flex flex-wrap items-center justify-center gap-2.5 mt-4 pt-4 border-t border-slate-100 text-xs">
+                <!-- Dynamically populated -->
             </div>
         </section>
 
         <!-- Interactive Explorer / Table Section -->
-        <section class="bg-white border border-slate-200 rounded-2xl premium-shadow overflow-hidden">
+        <section id="seccioExplorador" class="bg-white border border-slate-200 rounded-2xl premium-shadow overflow-hidden scroll-mt-6">
             
             <!-- Toolbar & Filter Header -->
             <div class="p-6 border-b border-slate-100 bg-slate-50/50">
@@ -429,40 +505,51 @@
                     </div>
                 </div>
 
+                <!-- Active Drilldown Filter Indicator Banner -->
+                <div id="filtreActiuDrilldown" class="hidden items-center justify-between bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-2.5 text-xs text-emerald-900 mt-4 transition-all">
+                    <div class="flex items-center gap-2">
+                        <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                        <span>Filtre actiu des del gràfic: <strong id="drilldownFilterText" class="text-emerald-950 font-bold">...</strong></span>
+                    </div>
+                    <button onclick="netejarFiltreDrilldown()" class="px-2.5 py-1 bg-white hover:bg-emerald-100 border border-emerald-300 rounded-lg text-emerald-800 font-bold transition flex items-center gap-1 shadow-sm">
+                        <i class="fa-solid fa-xmark"></i> Netejar filtre del gràfic
+                    </button>
+                </div>
+
                 <!-- Quick Filter Pills -->
-                <div class="flex flex-wrap gap-2 mt-5">
+                <div class="flex flex-wrap gap-2 mt-4">
                     <button class="pill-btn active px-3.5 py-1.5 rounded-xl border border-slate-200 text-xs font-medium bg-white text-slate-700 hover:bg-slate-100" onclick="setFiltreEstat('all', this)">
-                        <i class="fa-solid fa-list mr-1"></i> Tots
+                        <i class="fa-solid fa-list mr-1"></i> Tots (<span id="pillCountAll">...</span>)
                     </button>
                     <button class="pill-btn px-3.5 py-1.5 rounded-xl border border-rose-200 text-xs font-medium bg-rose-50 text-rose-800 hover:bg-rose-100 font-bold" onclick="setFiltreEstat('wrong_language', this)">
-                        <i class="fa-solid fa-triangle-exclamation text-rose-600 mr-1"></i> ❌ Idioma Incorrecte (74.568)
+                        <i class="fa-solid fa-triangle-exclamation text-rose-600 mr-1"></i> ❌ Idioma Incorrecte (<span id="pillCountWrong">...</span>)
                     </button>
                     <button class="pill-btn px-3.5 py-1.5 rounded-xl border border-amber-200 text-xs font-medium bg-amber-50 text-amber-800 hover:bg-amber-100" onclick="setFiltreEstat('identical_three_langs', this)">
-                        <i class="fa-solid fa-clone text-amber-600 mr-1"></i> ⚠️ 3 Idiomes Idèntics (56.437)
+                        <i class="fa-solid fa-clone text-amber-600 mr-1"></i> ⚠️ 3 Idiomes Idèntics (<span id="pillCountIdentical">...</span>)
                     </button>
                     <button class="pill-btn px-3.5 py-1.5 rounded-xl border border-emerald-200 text-xs font-medium bg-emerald-50 text-emerald-800 hover:bg-emerald-100" onclick="setFiltreEstat('genuine_3_langs', this)">
-                        <i class="fa-solid fa-bullseye text-emerald-600 mr-1"></i> 🎯 3 Idiomes Genuïns (1.448)
+                        <i class="fa-solid fa-bullseye text-emerald-600 mr-1"></i> 🎯 3 Idiomes Genuïns (<span id="pillCountGenuine">...</span>)
                     </button>
                     <button class="pill-btn px-3.5 py-1.5 rounded-xl border border-slate-200 text-xs font-medium bg-white text-slate-700 hover:bg-slate-100" onclick="setFiltreEstat('different_three_langs', this)">
-                        <i class="fa-solid fa-spell-check text-emerald-600 mr-1"></i> ✓ 3 Idiomes Traduïts
+                        <i class="fa-solid fa-spell-check text-emerald-600 mr-1"></i> ✓ 3 Idiomes Traduïts (<span id="pillCountDiff3">...</span>)
                     </button>
                     <button class="pill-btn px-3.5 py-1.5 rounded-xl border border-slate-200 text-xs font-medium bg-white text-slate-700 hover:bg-slate-100" onclick="setFiltreEstat('three_langs', this)">
-                        <i class="fa-solid fa-language text-blue-500 mr-1"></i> En 3 Idiomes
+                        <i class="fa-solid fa-language text-blue-500 mr-1"></i> En 3 Idiomes (<span id="pillCountIn3">...</span>)
                     </button>
                     <button class="pill-btn px-3.5 py-1.5 rounded-xl border border-slate-200 text-xs font-medium bg-white text-slate-700 hover:bg-slate-100" onclick="setFiltreEstat('one_or_two_langs', this)">
-                        <i class="fa-solid fa-bars-staggered text-purple-500 mr-1"></i> En 1 o 2 Idiomes
+                        <i class="fa-solid fa-bars-staggered text-purple-500 mr-1"></i> En 1 o 2 Idiomes (<span id="pillCount1or2">...</span>)
                     </button>
                     <button class="pill-btn px-3.5 py-1.5 rounded-xl border border-slate-200 text-xs font-medium bg-white text-slate-700 hover:bg-slate-100" onclick="setFiltreEstat('with_abstract', this)">
-                        <i class="fa-solid fa-circle-check text-emerald-600 mr-1"></i> Amb Abstract
+                        <i class="fa-solid fa-circle-check text-emerald-600 mr-1"></i> Amb Abstract (<span id="pillCountWithAbs">...</span>)
                     </button>
                     <button class="pill-btn px-3.5 py-1.5 rounded-xl border border-slate-200 text-xs font-medium bg-white text-slate-700 hover:bg-slate-100" onclick="setFiltreEstat('without_abstract', this)">
-                        <i class="fa-solid fa-circle-xmark text-rose-500 mr-1"></i> Sense Abstract
+                        <i class="fa-solid fa-circle-xmark text-rose-500 mr-1"></i> Sense Abstract (<span id="pillCountNoAbs">...</span>)
                     </button>
                 </div>
 
                 <!-- Search and Fine Filters Bar -->
                 <div class="grid grid-cols-1 md:grid-cols-12 gap-3 mt-4">
-                    <div class="md:col-span-6">
+                    <div class="md:col-span-5">
                         <div class="relative">
                             <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 transform -translate-y-1/2 text-slate-400 text-xs"></i>
                             <input type="text" id="inputCerca" oninput="debounceCerca()" placeholder="Cercar per títol, autor, UUID o text del resum..." 
@@ -472,28 +559,17 @@
                     <div class="md:col-span-3">
                         <select id="selectTipologia" onchange="aplicarFiltres()" class="w-full py-2.5 px-3 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
                             <option value="">Totes les tipologies</option>
-                            <option value="Article">Article</option>
-                            <option value="Capítol de llibre">Capítol de llibre</option>
-                            <option value="Llibre">Llibre</option>
-                            <option value="Aportació a congrés">Aportació a congrés</option>
-                            <option value="Document de treball">Document de treball</option>
-                            <option value="Patent">Patent</option>
-                            <option value="Tesi doctoral">Tesi doctoral</option>
                         </select>
                     </div>
-                    <div class="md:col-span-3">
+                    <div class="md:col-span-2">
+                        <select id="selectYearType" onchange="aplicarFiltres()" class="w-full py-2.5 px-3 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                            <option value="publicationYear">Any Publicació</option>
+                            <option value="submissionYear">Any Submission</option>
+                        </select>
+                    </div>
+                    <div class="md:col-span-2">
                         <select id="selectAny" onchange="aplicarFiltres()" class="w-full py-2.5 px-3 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
                             <option value="">Tots els anys</option>
-                            <option value="2026">2026</option>
-                            <option value="2025">2025</option>
-                            <option value="2024">2024</option>
-                            <option value="2023">2023</option>
-                            <option value="2022">2022</option>
-                            <option value="2021">2021</option>
-                            <option value="2020">2020</option>
-                            <option value="2019">2019</option>
-                            <option value="2018">2018</option>
-                            <option value="2017">2017</option>
                         </select>
                     </div>
                 </div>
@@ -505,7 +581,7 @@
                     <thead>
                         <tr class="bg-slate-100 text-slate-600 font-bold border-b border-slate-200">
                             <th class="py-3.5 px-4">Títol i Autors</th>
-                            <th class="py-3.5 px-3 text-center w-20">Any</th>
+                            <th class="py-3.5 px-3 text-center w-28">Anys (Pub / Sub)</th>
                             <th class="py-3.5 px-3 w-36">Tipologia</th>
                             <th class="py-3.5 px-3 text-center w-36">Idiomes & Detecció</th>
                             <th class="py-3.5 px-3 w-52">Estat de l'Abstract</th>
@@ -552,7 +628,8 @@
                     <span id="modalTypeBadge" class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-200 text-slate-700 mb-1.5 inline-block">Tipus</span>
                     <h3 id="modalTitle" class="text-lg sm:text-xl font-black text-slate-900 leading-snug">Títol de la publicació</h3>
                     <div class="flex items-center gap-3 text-xs text-slate-500 mt-1 flex-wrap">
-                        <span><i class="fa-solid fa-calendar mr-1"></i> Any: <strong id="modalYear" class="text-slate-700">-</strong></span>
+                        <span class="inline-flex items-center gap-1 bg-indigo-50 border border-indigo-200 text-indigo-800 px-2 py-0.5 rounded font-semibold"><i class="fa-solid fa-calendar-check text-indigo-600"></i> Any Pub: <strong id="modalPubYear" class="text-indigo-950">-</strong></span>
+                        <span class="inline-flex items-center gap-1 bg-amber-50 border border-amber-200 text-amber-800 px-2 py-0.5 rounded font-semibold"><i class="fa-solid fa-inbox text-amber-600"></i> Any Sub: <strong id="modalSubYear" class="text-amber-950">-</strong></span>
                         <span><i class="fa-solid fa-fingerprint mr-1"></i> UUID: <span id="modalUuid" class="font-mono text-slate-600">...</span></span>
                     </div>
                 </div>
@@ -629,7 +706,11 @@
             </div>
 
             <!-- Modal Footer -->
-            <div class="p-4 border-t border-slate-100 bg-white flex justify-end gap-3">
+            <div class="p-4 border-t border-slate-100 bg-white flex justify-between items-center gap-3">
+                <button id="btnSyncModal" onclick="sincronitzarPublicacioModal()" class="px-4 py-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold transition flex items-center gap-2">
+                    <i id="syncModalIcon" class="fa-solid fa-arrows-rotate"></i>
+                    <span>Sincronitzar des de Pure</span>
+                </button>
                 <button onclick="tancarModal()" class="px-5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-semibold text-slate-700 transition-colors">
                     Tancar
                 </button>
@@ -649,7 +730,15 @@
         let chartDetectedLangsInstance = null;
         let chartLangsInstance = null;
         let chartTypesInstance = null;
-        let chartYearsInstance = null;
+        let chartYearsPubInstance = null;
+        let chartYearsSubInstance = null;
+        let chartYearsLanguagesInstance = null;
+        let modeGraficIdiomes = 'count';
+        let dimensioAnyIdiomes = 'publicationYear';
+        let rawLanguagesByYearData = null;
+        let filtreIdiomaSeleccionat = '';
+        let cachedPubYearsData = null;
+        let cachedSubYearsData = null;
 
         document.addEventListener('DOMContentLoaded', () => {
             carregarTot();
@@ -662,7 +751,9 @@
             try {
                 await Promise.all([
                     carregarKPIsIGrafics(),
-                    carregarEvolucioAnys(),
+                    carregarEvolucioAnysPub(),
+                    carregarEvolucioAnysSub(),
+                    carregarIdiomesPerAny(),
                     carregarTipologies(),
                     carregarTaula()
                 ]);
@@ -676,9 +767,12 @@
         async function carregarKPIsIGrafics() {
             const anySel = document.getElementById('selectAny').value;
             const tipusSel = document.getElementById('selectTipologia').value;
-            let url = '/pure/abstracts/stats?';
-            if (anySel) url += `desde=${anySel}&hasta=${anySel}&`;
+            const yearType = document.getElementById('selectYearType') ? document.getElementById('selectYearType').value : 'publicationYear';
+            let url = `/pure/abstracts/stats?yearType=${encodeURIComponent(yearType)}&`;
+            if (anySel === 'none' || anySel === '0') url += `desde=0&hasta=0&`;
+            else if (anySel) url += `desde=${anySel}&hasta=${anySel}&`;
             if (tipusSel) url += `type=${encodeURIComponent(tipusSel)}&`;
+            if (filtreIdiomaSeleccionat) url += `language=${encodeURIComponent(filtreIdiomaSeleccionat)}&`;
 
             const res = await apiFetch(url);
             const stats = await res.json();
@@ -697,22 +791,118 @@
             const in1or2 = (Number(stats.in1Lang || 0) + Number(stats.in2Langs || 0));
             document.getElementById('kpiIn1or2Langs').innerText = in1or2.toLocaleString();
 
-            document.getElementById('kpiWrongLanguage').innerText = Number(stats.wrongLanguageCount || 74568).toLocaleString();
-            document.getElementById('kpiPctWrongLanguage').innerText = `${stats.pctWrongLanguageOfWithAbstract || 79.4}% dels que tenen`;
+            document.getElementById('kpiWrongLanguage').innerText = Number(stats.wrongLanguageCount || 0).toLocaleString();
+            document.getElementById('kpiPctWrongLanguage').innerText = `${stats.pctWrongLanguageOfWithAbstract || 0}% dels que tenen`;
 
             document.getElementById('kpiIdenticalIn3').innerText = Number(stats.identicalIn3 || 0).toLocaleString();
             document.getElementById('kpiPctIdenticalIn3').innerText = `${stats.pctIdenticalOf3Langs || 0}% dels de 3 idiomes`;
 
-            document.getElementById('kpiGenuine3Langs').innerText = Number(stats.genuine3Langs || 1448).toLocaleString();
-            document.getElementById('kpiPctGenuine3Langs').innerText = `${stats.pctGenuine3Langs || 2.1}% reals dels de 3`;
+            document.getElementById('kpiGenuine3Langs').innerText = Number(stats.genuine3Langs || 0).toLocaleString();
+            document.getElementById('kpiPctGenuine3Langs').innerText = `${stats.pctGenuine3Langs || 0}% reals dels de 3`;
 
             document.getElementById('statHasCa').innerText = Number(stats.hasCa || 0).toLocaleString();
             document.getElementById('statHasEs').innerText = Number(stats.hasEs || 0).toLocaleString();
             document.getElementById('statHasEn').innerText = Number(stats.hasEn || 0).toLocaleString();
 
+            // Update Quick Filter Pill badges
+            if (document.getElementById('pillCountAll')) document.getElementById('pillCountAll').innerText = Number(stats.total || 0).toLocaleString();
+            if (document.getElementById('pillCountWrong')) document.getElementById('pillCountWrong').innerText = Number(stats.wrongLanguageCount || 0).toLocaleString();
+            if (document.getElementById('pillCountIdentical')) document.getElementById('pillCountIdentical').innerText = Number(stats.identicalIn3 || 0).toLocaleString();
+            if (document.getElementById('pillCountGenuine')) document.getElementById('pillCountGenuine').innerText = Number(stats.genuine3Langs || 0).toLocaleString();
+            if (document.getElementById('pillCountDiff3')) document.getElementById('pillCountDiff3').innerText = Number(stats.differentIn3 || 0).toLocaleString();
+            if (document.getElementById('pillCountIn3')) document.getElementById('pillCountIn3').innerText = Number(stats.in3Langs || 0).toLocaleString();
+            if (document.getElementById('pillCount1or2')) document.getElementById('pillCount1or2').innerText = in1or2.toLocaleString();
+            if (document.getElementById('pillCountWithAbs')) document.getElementById('pillCountWithAbs').innerText = Number(stats.withAbstract || 0).toLocaleString();
+            if (document.getElementById('pillCountNoAbs')) document.getElementById('pillCountNoAbs').innerText = Number(stats.noAbstract || 0).toLocaleString();
+
+            actualitzarAuditoriaBanner(stats);
             renderChartPie(stats);
             renderChartDetectedLangs(stats);
             renderChartLangs(stats);
+        }
+
+        function actualitzarAuditoriaBanner(stats) {
+            const ca = stats.caFieldStats || { total: 0, correct: 0, wrongEn: 0, wrongEs: 0, wrongOther: 0, pctWrongEn: 0, pctWrongEs: 0, pctCorrect: 0 };
+            const es = stats.esFieldStats || { total: 0, correct: 0, wrongEn: 0, wrongCa: 0, wrongOther: 0, pctWrongEn: 0, pctWrongCa: 0, pctCorrect: 0 };
+            const en = stats.enFieldStats || { total: 0, correct: 0, wrongEs: 0, wrongCa: 0, wrongOther: 0, pctWrongEs: 0, pctWrongCa: 0, pctCorrect: 0 };
+
+            // Update CA
+            const caTotalEl = document.getElementById('auditCaTotal');
+            if (caTotalEl) caTotalEl.innerText = `${Number(ca.total || 0).toLocaleString()} registres`;
+            const caCorrectEl = document.getElementById('auditCaCorrect');
+            if (caCorrectEl) caCorrectEl.innerText = `${Number(ca.correct || 0).toLocaleString()} (${ca.pctCorrect || 0}%)`;
+            const caWrongEnEl = document.getElementById('auditCaWrongEn');
+            if (caWrongEnEl) caWrongEnEl.innerText = `${Number(ca.wrongEn || 0).toLocaleString()} (${ca.pctWrongEn || 0}%)`;
+            const caWrongEsEl = document.getElementById('auditCaWrongEs');
+            if (caWrongEsEl) caWrongEsEl.innerText = `${Number(ca.wrongEs || 0).toLocaleString()} (${ca.pctWrongEs || 0}%)`;
+            
+            const caBarCorrect = document.getElementById('auditCaBarCorrect');
+            if (caBarCorrect) {
+                caBarCorrect.style.width = `${ca.pctCorrect || 0}%`;
+                caBarCorrect.title = `Català real: ${ca.pctCorrect || 0}%`;
+            }
+            const caBarEn = document.getElementById('auditCaBarEn');
+            if (caBarEn) {
+                caBarEn.style.width = `${ca.pctWrongEn || 0}%`;
+                caBarEn.title = `Anglès: ${ca.pctWrongEn || 0}%`;
+            }
+            const caBarEs = document.getElementById('auditCaBarEs');
+            if (caBarEs) {
+                caBarEs.style.width = `${ca.pctWrongEs || 0}%`;
+                caBarEs.title = `Castellà: ${ca.pctWrongEs || 0}%`;
+            }
+
+            // Update ES
+            const esTotalEl = document.getElementById('auditEsTotal');
+            if (esTotalEl) esTotalEl.innerText = `${Number(es.total || 0).toLocaleString()} registres`;
+            const esCorrectEl = document.getElementById('auditEsCorrect');
+            if (esCorrectEl) esCorrectEl.innerText = `${Number(es.correct || 0).toLocaleString()} (${es.pctCorrect || 0}%)`;
+            const esWrongEnEl = document.getElementById('auditEsWrongEn');
+            if (esWrongEnEl) esWrongEnEl.innerText = `${Number(es.wrongEn || 0).toLocaleString()} (${es.pctWrongEn || 0}%)`;
+            const esWrongCaEl = document.getElementById('auditEsWrongCa');
+            if (esWrongCaEl) esWrongCaEl.innerText = `${Number(es.wrongCa || 0).toLocaleString()} (${es.pctWrongCa || 0}%)`;
+            
+            const esBarCorrect = document.getElementById('auditEsBarCorrect');
+            if (esBarCorrect) {
+                esBarCorrect.style.width = `${es.pctCorrect || 0}%`;
+                esBarCorrect.title = `Castellà real: ${es.pctCorrect || 0}%`;
+            }
+            const esBarEn = document.getElementById('auditEsBarEn');
+            if (esBarEn) {
+                esBarEn.style.width = `${es.pctWrongEn || 0}%`;
+                esBarEn.title = `Anglès: ${es.pctWrongEn || 0}%`;
+            }
+            const esBarCa = document.getElementById('auditEsBarCa');
+            if (esBarCa) {
+                esBarCa.style.width = `${es.pctWrongCa || 0}%`;
+                esBarCa.title = `Català: ${es.pctWrongCa || 0}%`;
+            }
+
+            // Update EN
+            const enTotalEl = document.getElementById('auditEnTotal');
+            if (enTotalEl) enTotalEl.innerText = `${Number(en.total || 0).toLocaleString()} registres`;
+            const enCorrectEl = document.getElementById('auditEnCorrect');
+            if (enCorrectEl) enCorrectEl.innerText = `${Number(en.correct || 0).toLocaleString()} (${en.pctCorrect || 0}%)`;
+            const enWrongEsEl = document.getElementById('auditEnWrongEs');
+            if (enWrongEsEl) enWrongEsEl.innerText = `${Number(en.wrongEs || 0).toLocaleString()} (${en.pctWrongEs || 0}%)`;
+            const enWrongCaEl = document.getElementById('auditEnWrongCa');
+            if (enWrongCaEl) enWrongCaEl.innerText = `${Number(en.wrongCa || 0).toLocaleString()} (${en.pctWrongCa || 0}%)`;
+            
+            const enBarCorrect = document.getElementById('auditEnBarCorrect');
+            if (enBarCorrect) {
+                enBarCorrect.style.width = `${en.pctCorrect || 0}%`;
+                enBarCorrect.title = `Anglès real: ${en.pctCorrect || 0}%`;
+            }
+            const enBarEs = document.getElementById('auditEnBarEs');
+            if (enBarEs) {
+                enBarEs.style.width = `${en.pctWrongEs || 0}%`;
+                enBarEs.title = `Castellà: ${en.pctWrongEs || 0}%`;
+            }
+            const enBarCa = document.getElementById('auditEnBarCa');
+            if (enBarCa) {
+                enBarCa.style.width = `${en.pctWrongCa || 0}%`;
+                enBarCa.title = `Català: ${en.pctWrongCa || 0}%`;
+            }
         }
 
         function renderChartPie(stats) {
@@ -762,9 +952,9 @@
             if (!ctx) return;
             if (chartDetectedLangsInstance) chartDetectedLangsInstance.destroy();
 
-            const ca = stats.caFieldStats || { total: 70864, correct: 4210, wrongEn: 62534, wrongEs: 4005, wrongOther: 115 };
-            const es = stats.esFieldStats || { total: 76072, correct: 9842, wrongEn: 64658, wrongCa: 1398, wrongOther: 174 };
-            const en = stats.enFieldStats || { total: 91519, correct: 85489, wrongEs: 3818, wrongCa: 1524, wrongOther: 688 };
+            const ca = stats.caFieldStats || { total: 0, correct: 0, wrongEn: 0, wrongEs: 0, wrongOther: 0 };
+            const es = stats.esFieldStats || { total: 0, correct: 0, wrongEn: 0, wrongCa: 0, wrongOther: 0 };
+            const en = stats.enFieldStats || { total: 0, correct: 0, wrongEs: 0, wrongCa: 0, wrongOther: 0 };
 
             chartDetectedLangsInstance = new Chart(ctx, {
                 type: 'bar',
@@ -773,25 +963,25 @@
                     datasets: [
                         {
                             label: 'Anglès real (en_GB)',
-                            data: [ca.wrongEn, es.wrongEn, en.correct],
+                            data: [ca.wrongEn || 0, es.wrongEn || 0, en.correct || 0],
                             backgroundColor: '#6366f1',
                             borderRadius: 4
                         },
                         {
                             label: 'Català real (ca_ES)',
-                            data: [ca.correct, es.wrongCa, en.wrongCa],
+                            data: [ca.correct || 0, es.wrongCa || 0, en.wrongCa || 0],
                             backgroundColor: '#10b981',
                             borderRadius: 4
                         },
                         {
                             label: 'Castellà real (es_ES)',
-                            data: [ca.wrongEs, es.correct, en.wrongEs],
+                            data: [ca.wrongEs || 0, es.correct || 0, en.wrongEs || 0],
                             backgroundColor: '#ef4444',
                             borderRadius: 4
                         },
                         {
                             label: 'Altres / Desconegut',
-                            data: [ca.wrongOther, es.wrongOther, en.wrongOther],
+                            data: [ca.wrongOther || 0, es.wrongOther || 0, en.wrongOther || 0],
                             backgroundColor: '#94a3b8',
                             borderRadius: 4
                         }
@@ -871,88 +1061,248 @@
             });
         }
 
-        function poblarSelectAnys(sortedData) {
+        function poblarSelectAnys(data) {
             const selectAny = document.getElementById('selectAny');
-            if (!selectAny) return;
+            if (!selectAny || !data || !Array.isArray(data)) return;
             const currentVal = selectAny.value;
-            const yearsDesc = [...sortedData].map(d => d.year).sort((a, b) => Number(b) - Number(a));
+            const numericYears = data.filter(d => !d.isNoYear && d.year !== 'Sense any' && Number(d.year) > 1900)
+                                     .sort((a, b) => Number(b.year || b) - Number(a.year || a));
+            const noYearItem = data.find(d => d.isNoYear || d.year === 'Sense any' || Number(d.yearValue) === 0);
             
             let options = '<option value="">Tots els anys</option>';
-            yearsDesc.forEach(yr => {
+            if (noYearItem && noYearItem.total > 0) {
+                options += `<option value="none" ${currentVal === 'none' || currentVal === '0' ? 'selected' : ''}>⚠️ Sense any (${Number(noYearItem.total).toLocaleString()})</option>`;
+            }
+            numericYears.forEach(d => {
+                const yr = d.year || d;
                 options += `<option value="${yr}" ${currentVal == yr ? 'selected' : ''}>${yr}</option>`;
             });
             selectAny.innerHTML = options;
         }
 
-        async function carregarEvolucioAnys() {
-            const ctx = document.getElementById('chartYearsEvolution');
+        async function carregarEvolucioAnysPub() {
+            const ctx = document.getElementById('chartYearsEvolutionPub');
             if (!ctx) return;
-            if (chartYearsInstance) chartYearsInstance.destroy();
+            if (chartYearsPubInstance) chartYearsPubInstance.destroy();
 
-            const res = await apiFetch('/pure/abstracts/years');
-            const data = await res.json();
+            try {
+                const res = await apiFetch('/pure/abstracts/years?yearType=publicationYear');
+                const data = await res.json();
+                if (!Array.isArray(data)) {
+                    console.warn("Resposta no vàlida per any de publicació:", data);
+                    return;
+                }
 
-            const sortedData = [...data]
-                .filter(d => d.year != null && !isNaN(d.year) && Number(d.year) > 1900)
-                .sort((a, b) => Number(a.year) - Number(b.year));
+                cachedPubYearsData = data;
 
-            poblarSelectAnys(sortedData);
+                const numericYears = data
+                    .filter(d => !d.isNoYear && d.year !== 'Sense any' && Number(d.year) > 1900)
+                    .sort((a, b) => Number(a.year) - Number(b.year));
+                const noYearItem = data.find(d => d.isNoYear || d.year === 'Sense any' || Number(d.yearValue) === 0);
+                const chartData = (noYearItem && noYearItem.total > 0) ? [...numericYears, noYearItem] : numericYears;
 
-            const labels = sortedData.map(d => d.year);
-            const totals = sortedData.map(d => d.total);
-            const withAbs = sortedData.map(d => d.withAbstract);
-            const in3Langs = sortedData.map(d => d.in3Langs);
-            const identicals = sortedData.map(d => d.identicalIn3);
+                const selectYearType = document.getElementById('selectYearType');
+                if (!selectYearType || selectYearType.value === 'publicationYear') {
+                    poblarSelectAnys(data);
+                }
 
-            chartYearsInstance = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: labels,
-                    datasets: [
-                        {
-                            label: 'Total Publicacions',
-                            data: totals,
-                            backgroundColor: '#e2e8f0',
-                            borderRadius: 6,
-                            order: 3
-                        },
-                        {
-                            label: 'Amb Abstract',
-                            data: withAbs,
-                            backgroundColor: '#10b981',
-                            borderRadius: 6,
-                            order: 2
-                        },
-                        {
-                            label: '⚠️ 3 Idiomes Idèntics',
-                            data: identicals,
-                            backgroundColor: '#f59e0b',
-                            borderRadius: 6,
-                            order: 1
-                        }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { position: 'top', labels: { boxWidth: 12, font: { size: 11 } } },
-                        tooltip: {
-                            mode: 'index',
-                            intersect: false
-                        }
+                const labels = chartData.map(d => (d.isNoYear || d.year === 'Sense any' || d.year === 0) ? 'Sense any' : d.year);
+                const totals = chartData.map(d => d.total);
+                const withAbs = chartData.map(d => d.withAbstract);
+                const identicals = chartData.map(d => d.identicalIn3);
+
+                const totalColors = chartData.map(d => (d.isNoYear || d.year === 'Sense any' || d.year === 0) ? '#cbd5e1' : '#e0e7ff');
+                const withAbsColors = chartData.map(d => (d.isNoYear || d.year === 'Sense any' || d.year === 0) ? '#64748b' : '#6366f1');
+                const identColors = chartData.map(d => (d.isNoYear || d.year === 'Sense any' || d.year === 0) ? '#f59e0b' : '#f59e0b');
+
+                chartYearsPubInstance = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [
+                            {
+                                label: 'Total Publicacions',
+                                data: totals,
+                                backgroundColor: totalColors,
+                                borderRadius: 5,
+                                order: 3
+                            },
+                            {
+                                label: 'Amb Abstract',
+                                data: withAbs,
+                                backgroundColor: withAbsColors,
+                                borderRadius: 5,
+                                order: 2
+                            },
+                            {
+                                label: '⚠️ 3 Idèntics',
+                                data: identicals,
+                                backgroundColor: identColors,
+                                borderRadius: 5,
+                                order: 1
+                            }
+                        ]
                     },
-                    scales: {
-                        x: { stacked: false },
-                        y: {
-                            beginAtZero: true,
-                            ticks: {
-                                callback: function(value) { return value.toLocaleString(); }
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        onClick: function(event, elements) {
+                            if (!elements || elements.length === 0) return;
+                            const index = elements[0].index;
+                            const item = chartData[index];
+                            if (item) {
+                                const yr = (item.isNoYear || item.year === 'Sense any' || item.year === 0) ? 'none' : item.year;
+                                filtrarPerAnyIIdioma(yr, null, 'publicationYear');
+                            }
+                        },
+                        onHover: function(event, chartElement) {
+                            event.native.target.style.cursor = chartElement[0] ? 'pointer' : 'default';
+                        },
+                        plugins: {
+                            legend: { position: 'top', labels: { boxWidth: 10, font: { size: 10, weight: '600' } } },
+                            tooltip: {
+                                mode: 'index',
+                                intersect: false,
+                                callbacks: {
+                                    footer: function(tooltipItems) {
+                                        return '(Clica per filtrar per Any de Publicació)';
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            x: { stacked: false, grid: { display: false } },
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    callback: function(value) { return value >= 1000 ? (value/1000) + 'k' : value; }
+                                }
                             }
                         }
                     }
+                });
+            } catch (err) {
+                console.error("Error carregant evolució per any de publicació:", err);
+            }
+        }
+
+        async function carregarEvolucioAnysSub() {
+            const ctx = document.getElementById('chartYearsEvolutionSub');
+            if (!ctx) return;
+            if (chartYearsSubInstance) chartYearsSubInstance.destroy();
+
+            try {
+                const res = await apiFetch('/pure/abstracts/years-submission');
+                const data = await res.json();
+                if (!Array.isArray(data)) {
+                    console.warn("Resposta no vàlida per any de submission:", data);
+                    return;
+                }
+
+                cachedSubYearsData = data;
+
+                const numericYears = data
+                    .filter(d => !d.isNoYear && d.year !== 'Sense any' && Number(d.year) > 1900)
+                    .sort((a, b) => Number(a.year) - Number(b.year));
+                const noYearItem = data.find(d => d.isNoYear || d.year === 'Sense any' || Number(d.yearValue) === 0);
+                const chartData = (noYearItem && noYearItem.total > 0) ? [...numericYears, noYearItem] : numericYears;
+
+                const selectYearType = document.getElementById('selectYearType');
+                if (selectYearType && selectYearType.value === 'submissionYear') {
+                    poblarSelectAnys(data);
+                }
+
+                const labels = chartData.map(d => (d.isNoYear || d.year === 'Sense any' || d.year === 0) ? 'Sense any' : d.year);
+                const totals = chartData.map(d => d.total);
+                const withAbs = chartData.map(d => d.withAbstract);
+                const identicals = chartData.map(d => d.identicalIn3);
+
+                const totalColors = chartData.map(d => (d.isNoYear || d.year === 'Sense any' || d.year === 0) ? '#cbd5e1' : '#fef3c7');
+                const withAbsColors = chartData.map(d => (d.isNoYear || d.year === 'Sense any' || d.year === 0) ? '#64748b' : '#d97706');
+                const identColors = chartData.map(d => (d.isNoYear || d.year === 'Sense any' || d.year === 0) ? '#f43f5e' : '#f43f5e');
+
+                chartYearsSubInstance = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [
+                            {
+                                label: 'Total Publicacions',
+                                data: totals,
+                                backgroundColor: totalColors,
+                                borderRadius: 5,
+                                order: 3
+                            },
+                            {
+                                label: 'Amb Abstract',
+                                data: withAbs,
+                                backgroundColor: withAbsColors,
+                                borderRadius: 5,
+                                order: 2
+                            },
+                            {
+                                label: '⚠️ 3 Idèntics',
+                                data: identicals,
+                                backgroundColor: identColors,
+                                borderRadius: 5,
+                                order: 1
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        onClick: function(event, elements) {
+                            if (!elements || elements.length === 0) return;
+                            const index = elements[0].index;
+                            const item = chartData[index];
+                            if (item) {
+                                const yr = (item.isNoYear || item.year === 'Sense any' || item.year === 0) ? 'none' : item.year;
+                                filtrarPerAnyIIdioma(yr, null, 'submissionYear');
+                            }
+                        },
+                        onHover: function(event, chartElement) {
+                            event.native.target.style.cursor = chartElement[0] ? 'pointer' : 'default';
+                        },
+                        plugins: {
+                            legend: { position: 'top', labels: { boxWidth: 10, font: { size: 10, weight: '600' } } },
+                            tooltip: {
+                                mode: 'index',
+                                intersect: false,
+                                callbacks: {
+                                    footer: function(tooltipItems) {
+                                        return '(Clica per filtrar per Any de Submission)';
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            x: { stacked: false, grid: { display: false } },
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    callback: function(value) { return value >= 1000 ? (value/1000) + 'k' : value; }
+                                }
+                            }
+                        }
+                    }
+                });
+            } catch (err) {
+                console.error("Error carregant evolució per any de submission:", err);
+            }
+        }
+
+        function poblarSelectTipologies(typesData) {
+            const selectTipologia = document.getElementById('selectTipologia');
+            if (!selectTipologia || !typesData) return;
+            const currentVal = selectTipologia.value;
+            let options = '<option value="">Totes les tipologies</option>';
+            typesData.forEach(d => {
+                if (d.type && d.type !== 'Sense tipus') {
+                    options += `<option value="${escapeHtml(d.type)}" ${currentVal === d.type ? 'selected' : ''}>${escapeHtml(d.type)} (${Number(d.total || 0).toLocaleString()})</option>`;
                 }
             });
+            selectTipologia.innerHTML = options;
         }
 
         async function carregarTipologies() {
@@ -960,8 +1310,11 @@
             if (!ctx) return;
             if (chartTypesInstance) chartTypesInstance.destroy();
 
-            const res = await apiFetch('/pure/abstracts/types');
+            const yearType = document.getElementById('selectYearType') ? document.getElementById('selectYearType').value : 'publicationYear';
+            const res = await apiFetch(`/pure/abstracts/types?yearType=${encodeURIComponent(yearType)}`);
             const data = await res.json();
+
+            poblarSelectTipologies(data);
 
             const topData = data.slice(0, 6);
             const labels = topData.map(d => d.type.length > 20 ? d.type.substring(0, 18) + '...' : d.type);
@@ -1002,6 +1355,291 @@
             });
         }
 
+        function canviarDimensioAnyIdiomes(dim) {
+            dimensioAnyIdiomes = dim;
+            const btnPub = document.getElementById('btnLangYearPub');
+            const btnSub = document.getElementById('btnLangYearSub');
+
+            if (dim === 'publicationYear') {
+                if (btnPub) btnPub.className = 'px-2.5 py-1 rounded-lg bg-white text-slate-900 shadow-sm transition font-bold';
+                if (btnSub) btnSub.className = 'px-2.5 py-1 rounded-lg text-slate-500 hover:text-slate-900 transition font-medium';
+            } else {
+                if (btnSub) btnSub.className = 'px-2.5 py-1 rounded-lg bg-white text-slate-900 shadow-sm transition font-bold';
+                if (btnPub) btnPub.className = 'px-2.5 py-1 rounded-lg text-slate-500 hover:text-slate-900 transition font-medium';
+            }
+
+            carregarIdiomesPerAny();
+        }
+
+        async function carregarIdiomesPerAny() {
+            const ctx = document.getElementById('chartYearsLanguagesStacked');
+            if (!ctx) return;
+
+            const anySel = document.getElementById('selectAny').value;
+            const tipusSel = document.getElementById('selectTipologia').value;
+            let url = `/pure/abstracts/years-languages?yearType=${encodeURIComponent(dimensioAnyIdiomes)}&`;
+            if (anySel === 'none' || anySel === '0') url += `desde=0&hasta=0&`;
+            else if (anySel) url += `desde=${anySel}&hasta=${anySel}&`;
+            if (tipusSel) url += `type=${encodeURIComponent(tipusSel)}&`;
+
+            try {
+                const res = await apiFetch(url);
+                rawLanguagesByYearData = await res.json();
+                renderChartYearsLanguagesStacked(rawLanguagesByYearData);
+                renderLanguagesBadges(rawLanguagesByYearData);
+            } catch (err) {
+                console.error("Error carregant idiomes dels abstracts per any:", err);
+            }
+        }
+
+        function renderChartYearsLanguagesStacked(data) {
+            const ctx = document.getElementById('chartYearsLanguagesStacked');
+            if (!ctx || !data || !data.years || data.years.length === 0) return;
+            if (chartYearsLanguagesInstance) chartYearsLanguagesInstance.destroy();
+
+            const isPct = (modeGraficIdiomes === 'percent');
+            const years = (data.years || []).map(y => (y === 0 || y === '0' || y === 'Sense any') ? 'Sense any' : y);
+            const totalsByYear = data.totalsByYear || [];
+
+            const datasets = (data.series || []).map(s => {
+                const values = isPct ? s.data.map((val, idx) => {
+                    const totalYear = totalsByYear[idx] || 0;
+                    return totalYear > 0 ? Number(((val / totalYear) * 100).toFixed(1)) : 0;
+                }) : s.data;
+
+                return {
+                    label: s.label || s.language,
+                    data: values,
+                    rawCounts: s.data,
+                    backgroundColor: s.color || '#94a3b8',
+                    borderRadius: 3,
+                    borderWidth: 0.5,
+                    borderColor: '#ffffff',
+                    order: 1
+                };
+            });
+
+            chartYearsLanguagesInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: years,
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    onClick: function(event, elements) {
+                        if (!elements || elements.length === 0) return;
+                        const el = elements[0];
+                        const datasetIndex = el.datasetIndex;
+                        const index = el.index;
+                        const clickedYearRaw = years[index];
+                        const clickedYear = (clickedYearRaw === 'Sense any' || clickedYearRaw === 0) ? 'none' : clickedYearRaw;
+                        const clickedDataset = chartYearsLanguagesInstance.data.datasets[datasetIndex];
+                        const clickedLang = clickedDataset.label;
+                        filtrarPerAnyIIdioma(clickedYear, clickedLang, dimensioAnyIdiomes);
+                    },
+                    onHover: function(event, chartElement) {
+                        event.native.target.style.cursor = chartElement[0] ? 'pointer' : 'default';
+                    },
+                    interaction: {
+                        mode: 'index',
+                        intersect: false
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                            labels: {
+                                boxWidth: 12,
+                                font: { size: 11, weight: '600' },
+                                padding: 10
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const dataset = context.dataset;
+                                    const rawCount = dataset.rawCounts ? dataset.rawCounts[context.dataIndex] : context.raw;
+                                    const totalYear = totalsByYear[context.dataIndex] || 1;
+                                    const pct = ((rawCount / totalYear) * 100).toFixed(1);
+                                    if (isPct) {
+                                        return `${dataset.label}: ${context.raw}% (${Number(rawCount).toLocaleString()} docs)`;
+                                    } else {
+                                        return `${dataset.label}: ${Number(rawCount).toLocaleString()} (${pct}%)`;
+                                    }
+                                },
+                                footer: function(tooltipItems) {
+                                    if (tooltipItems.length === 0) return '';
+                                    const index = tooltipItems[0].dataIndex;
+                                    const totalYear = totalsByYear[index] || 0;
+                                    const yearLabel = (dimensioAnyIdiomes === 'submissionYear') ? 'Submission' : 'Publicació';
+                                    const yearVal = years[index];
+                                    const yearDisplay = yearVal === 'Sense any' ? 'Sense any' : `l'Any de ${yearLabel} ${yearVal}`;
+                                    return `Total abstracts ${yearDisplay}: ${Number(totalYear).toLocaleString()} (Clica per filtrar la taula)`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            stacked: true,
+                            grid: { display: false }
+                        },
+                        y: {
+                            stacked: true,
+                            beginAtZero: true,
+                            max: isPct ? 100 : undefined,
+                            ticks: {
+                                callback: function(value) {
+                                    if (isPct) return value + '%';
+                                    return value >= 1000 ? (value / 1000) + 'k' : value;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function renderLanguagesBadges(data) {
+            const container = document.getElementById('languagesLegendBadges');
+            if (!container || !data || !data.series) return;
+
+            const totalAll = (data.totalsByYear || []).reduce((a, b) => a + b, 0) || 1;
+
+            container.innerHTML = data.series.map(s => {
+                const pct = ((s.total / totalAll) * 100).toFixed(1);
+                const isSelected = (filtreIdiomaSeleccionat === s.language);
+                return `
+                    <button onclick="filtrarPerIdioma('${escapeHtml(s.language)}')" title="Clica per filtrar la taula per ${escapeHtml(s.language)}" 
+                            class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border transition cursor-pointer hover:shadow-md hover:scale-105 ${isSelected ? 'bg-emerald-100 border-emerald-400 text-emerald-900 font-bold ring-2 ring-emerald-400' : 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-700 font-medium'}">
+                        <span class="w-2.5 h-2.5 rounded-full" style="background-color: ${s.color};"></span>
+                        <span class="font-bold text-slate-900">${escapeHtml(s.language)}:</span>
+                        <span>${Number(s.total).toLocaleString()}</span>
+                        <span class="text-slate-500 text-[10px]">(${pct}%)</span>
+                    </button>
+                `;
+            }).join('');
+        }
+
+        function canviarModeGraficIdiomes(mode) {
+            modeGraficIdiomes = mode;
+            const btnCounts = document.getElementById('btnViewCounts');
+            const btnPct = document.getElementById('btnViewPct');
+
+            if (mode === 'count') {
+                btnCounts.className = 'px-3 py-1 rounded-lg bg-white text-slate-900 shadow-sm transition';
+                btnPct.className = 'px-3 py-1 rounded-lg text-slate-500 hover:text-slate-900 transition';
+            } else {
+                btnPct.className = 'px-3 py-1 rounded-lg bg-white text-slate-900 shadow-sm transition';
+                btnCounts.className = 'px-3 py-1 rounded-lg text-slate-500 hover:text-slate-900 transition';
+            }
+
+            if (rawLanguagesByYearData) {
+                renderChartYearsLanguagesStacked(rawLanguagesByYearData);
+            }
+        }
+
+        function filtrarPerAnyIIdioma(any, idioma, yearType) {
+            if (yearType) {
+                const selectYearType = document.getElementById('selectYearType');
+                if (selectYearType) {
+                    selectYearType.value = yearType;
+                    if (yearType === 'submissionYear' && cachedSubYearsData) {
+                        poblarSelectAnys(cachedSubYearsData);
+                    } else if (cachedPubYearsData) {
+                        poblarSelectAnys(cachedPubYearsData);
+                    }
+                }
+            }
+            if (any != null) {
+                const selectAny = document.getElementById('selectAny');
+                if (selectAny) {
+                    let valToSet = (any === 'none' || any === 0 || any === 'Sense any') ? 'none' : any;
+                    let exists = false;
+                    for (let i = 0; i < selectAny.options.length; i++) {
+                        if (selectAny.options[i].value == valToSet) { exists = true; break; }
+                    }
+                    if (!exists && valToSet) {
+                        const opt = document.createElement('option');
+                        opt.value = valToSet;
+                        opt.text = (valToSet === 'none') ? '⚠️ Sense any' : valToSet;
+                        selectAny.appendChild(opt);
+                    }
+                    selectAny.value = valToSet;
+                }
+            }
+            if (idioma) {
+                filtreIdiomaSeleccionat = idioma;
+            }
+            actualitzarBannerDrilldown();
+            paginaActual = 0;
+            carregarKPIsIGrafics();
+            carregarIdiomesPerAny();
+            carregarTaula();
+            if (rawLanguagesByYearData) renderLanguagesBadges(rawLanguagesByYearData);
+
+            const el = document.getElementById('seccioExplorador');
+            if (el) el.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function filtrarPerIdioma(idioma) {
+            if (filtreIdiomaSeleccionat === idioma) {
+                filtreIdiomaSeleccionat = '';
+            } else {
+                filtreIdiomaSeleccionat = idioma;
+            }
+            actualitzarBannerDrilldown();
+            paginaActual = 0;
+            carregarKPIsIGrafics();
+            carregarIdiomesPerAny();
+            carregarTaula();
+            if (rawLanguagesByYearData) renderLanguagesBadges(rawLanguagesByYearData);
+
+            const el = document.getElementById('seccioExplorador');
+            if (el) el.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function netejarFiltreDrilldown() {
+            filtreIdiomaSeleccionat = '';
+            const selectAny = document.getElementById('selectAny');
+            if (selectAny) selectAny.value = '';
+            actualitzarBannerDrilldown();
+            paginaActual = 0;
+            carregarKPIsIGrafics();
+            carregarIdiomesPerAny();
+            carregarTaula();
+        }
+
+        function actualitzarBannerDrilldown() {
+            const banner = document.getElementById('filtreActiuDrilldown');
+            const txt = document.getElementById('drilldownFilterText');
+            const selectAny = document.getElementById('selectAny');
+            const anySel = selectAny ? selectAny.value : '';
+            const yearType = document.getElementById('selectYearType') ? document.getElementById('selectYearType').value : 'publicationYear';
+            const yearLabel = (yearType === 'submissionYear') ? 'Any Submission' : 'Any Publicació';
+
+            const parts = [];
+            if (anySel) {
+                const anyDisplay = (anySel === 'none' || anySel === '0') ? 'Sense any' : anySel;
+                parts.push(`${yearLabel}: ${anyDisplay}`);
+            }
+            if (filtreIdiomaSeleccionat) parts.push(`Idioma: ${filtreIdiomaSeleccionat}`);
+
+            if (parts.length > 0) {
+                if (txt) txt.innerText = parts.join(' | ');
+                if (banner) {
+                    banner.classList.remove('hidden');
+                    banner.classList.add('flex');
+                }
+            } else {
+                if (banner) {
+                    banner.classList.add('hidden');
+                    banner.classList.remove('flex');
+                }
+            }
+        }
+
         async function carregarTaula() {
             const tbody = document.getElementById('taulaPublicacions');
             tbody.innerHTML = `<tr><td colspan="6" class="py-12 text-center text-slate-400"><i class="fa-solid fa-spinner fa-spin text-2xl mb-2 text-emerald-600 block"></i>Cercant publicacions...</td></tr>`;
@@ -1009,11 +1647,14 @@
             const cerca = document.getElementById('inputCerca').value.trim();
             const anySel = document.getElementById('selectAny').value;
             const tipusSel = document.getElementById('selectTipologia').value;
+            const yearType = document.getElementById('selectYearType') ? document.getElementById('selectYearType').value : 'publicationYear';
 
-            let url = `/pure/abstracts/list?filter=${filtreEstatActual}&page=${paginaActual}&size=${midaPagina}`;
+            let url = `/pure/abstracts/list?filter=${filtreEstatActual}&page=${paginaActual}&size=${midaPagina}&yearType=${encodeURIComponent(yearType)}`;
             if (cerca) url += `&search=${encodeURIComponent(cerca)}`;
-            if (anySel) url += `&desde=${anySel}&hasta=${anySel}`;
+            if (anySel === 'none' || anySel === '0') url += `&desde=0&hasta=0`;
+            else if (anySel) url += `&desde=${anySel}&hasta=${anySel}`;
             if (tipusSel) url += `&type=${encodeURIComponent(tipusSel)}`;
+            if (filtreIdiomaSeleccionat) url += `&language=${encodeURIComponent(filtreIdiomaSeleccionat)}`;
 
             const res = await apiFetch(url);
             const data = await res.json();
@@ -1058,9 +1699,19 @@
                         <div class="text-xs text-slate-500 italic truncate max-w-xl">${escapeHtml(p.authors)}</div>
                         <div class="text-[11px] text-slate-400 font-mono mt-0.5">${p.uuid}</div>
                     </td>
-                    <td class="py-3 px-3 text-center font-bold text-slate-700">${p.submissionYear || '-'}</td>
+                    <td class="py-3 px-3 text-center">
+                        <div class="flex flex-col items-center gap-1">
+                            <span class="inline-flex items-center gap-1 text-xs font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded" title="Any de Publicació formal">
+                                <i class="fa-solid fa-calendar-check text-[10px]"></i> ${p.publicationYear ? p.publicationYear : '<span class="text-slate-400 font-normal italic">Sense any</span>'}
+                            </span>
+                            <span class="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded" title="Any d\'ingrés al Pure (Submission Year)">
+                                <i class="fa-solid fa-inbox text-[10px]"></i> ${p.submissionYear ? p.submissionYear : '<span class="text-slate-400 font-normal italic">Sense any</span>'}
+                            </span>
+                        </div>
+                    </td>
                     <td class="py-3 px-3">
                         <span class="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 text-xs font-semibold">${escapeHtml(p.typeName)}</span>
+                        <div class="mt-1"><span class="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100" title="Idioma declarat a la publicació"><i class="fa-solid fa-earth-europe mr-1"></i>${escapeHtml(p.publicationLanguage || 'Sense idioma')}</span></div>
                     </td>
                     <td class="py-3 px-3 text-center">
                         <div class="flex items-center justify-center gap-1 flex-wrap">
@@ -1082,7 +1733,6 @@
                     </td>
                 </tr>
                 `;
-            }).join('');
         }
 
         async function obrirModal(uuid) {
@@ -1091,7 +1741,8 @@
 
             document.getElementById('modalTitle').innerText = 'Carregant...';
             document.getElementById('modalTypeBadge').innerText = '...';
-            document.getElementById('modalYear').innerText = '...';
+            document.getElementById('modalPubYear').innerText = '...';
+            document.getElementById('modalSubYear').innerText = '...';
             document.getElementById('modalUuid').innerText = uuid;
 
             document.getElementById('modalAbstractCa').innerText = 'Carregant...';
@@ -1108,7 +1759,8 @@
 
                 document.getElementById('modalTitle').innerText = data.title || 'Sense títol';
                 document.getElementById('modalTypeBadge').innerText = data.type || 'Sense tipus';
-                document.getElementById('modalYear').innerText = data.submissionYear || '-';
+                document.getElementById('modalPubYear').innerText = data.publicationYear || '-';
+                document.getElementById('modalSubYear').innerText = data.submissionYear || '-';
 
                 const ca = data.abstractCa || '';
                 const es = data.abstractEs || '';
@@ -1179,6 +1831,34 @@
             document.getElementById('modalAbstract').classList.add('hidden');
         }
 
+        async function sincronitzarPublicacioModal() {
+            const uuid = document.getElementById('modalUuid').innerText;
+            if (!uuid || uuid === '...') return;
+
+            const btn = document.getElementById('btnSyncModal');
+            const icon = document.getElementById('syncModalIcon');
+            if (btn) btn.disabled = true;
+            if (icon) icon.classList.add('fa-spin');
+
+            try {
+                const res = await apiFetch(`/pure/abstracts/sync/${uuid}`, { method: 'POST' });
+                const result = await res.json();
+                if (result.success || result.status === 'success') {
+                    alert('Publicació sincronitzada correctament des de Pure/Egreta!');
+                    await obrirModal(uuid);
+                    carregarTaula();
+                } else {
+                    alert('Avís en sincronitzar: ' + (result.message || 'Error desconegut'));
+                }
+            } catch (err) {
+                console.error("Error en sincronitzar publicació:", err);
+                alert('Error en connectar amb el servidor per sincronitzar.');
+            } finally {
+                if (btn) btn.disabled = false;
+                if (icon) icon.classList.remove('fa-spin');
+            }
+        }
+
         function setFiltreEstat(filter, btn) {
             filtreEstatActual = filter;
             paginaActual = 0;
@@ -1196,8 +1876,17 @@
         }
 
         function aplicarFiltres() {
+            const selectYearType = document.getElementById('selectYearType');
+            const yt = selectYearType ? selectYearType.value : 'publicationYear';
+            if (yt === 'submissionYear' && cachedSubYearsData) {
+                poblarSelectAnys(cachedSubYearsData);
+            } else if (cachedPubYearsData) {
+                poblarSelectAnys(cachedPubYearsData);
+            }
+            actualitzarBannerDrilldown();
             paginaActual = 0;
             carregarKPIsIGrafics();
+            carregarIdiomesPerAny();
             carregarTaula();
         }
 
@@ -1216,8 +1905,10 @@
         async function exportarCSV() {
             const anySel = document.getElementById('selectAny').value;
             const tipusSel = document.getElementById('selectTipologia').value;
-            let url = `/pure/abstracts/list?filter=${filtreEstatActual}&page=0&size=500`;
-            if (anySel) url += `&desde=${anySel}&hasta=${anySel}`;
+            const yearType = document.getElementById('selectYearType') ? document.getElementById('selectYearType').value : 'publicationYear';
+            let url = `/pure/abstracts/list?filter=${filtreEstatActual}&page=0&size=500&yearType=${encodeURIComponent(yearType)}`;
+            if (anySel === 'none' || anySel === '0') url += `&desde=0&hasta=0`;
+            else if (anySel) url += `&desde=${anySel}&hasta=${anySel}`;
             if (tipusSel) url += `&type=${encodeURIComponent(tipusSel)}`;
 
             const res = await apiFetch(url);
@@ -1230,11 +1921,12 @@
             }
 
             let csvContent = "data:text/csv;charset=utf-8,";
-            csvContent += "UUID,Any,Tipologia,Titol,Autors,Te_CA,Detect_CA,Te_ES,Detect_ES,Te_EN,Detect_EN,Hi_ha_Error_Idioma,Estat\n";
+            csvContent += "UUID,Any_Publicacio,Any_Submission,Tipologia,Titol,Autors,Te_CA,Detect_CA,Te_ES,Detect_ES,Te_EN,Detect_EN,Hi_ha_Error_Idioma,Estat\n";
 
             items.forEach(p => {
                 const row = [
                     p.uuid,
+                    p.publicationYear || '',
                     p.submissionYear || '',
                     `"${(p.typeName || '').replace(/"/g, '""')}"`,
                     `"${(p.title || '').replace(/"/g, '""')}"`,

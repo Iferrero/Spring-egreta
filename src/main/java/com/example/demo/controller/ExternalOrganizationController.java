@@ -90,6 +90,7 @@ public class ExternalOrganizationController {
     // Caché de inferencias AI por nombre (mejora #7: evita llamadas repetidas)
     private final Map<String, CachedInference> countryInferenceCache = new ConcurrentHashMap<>();
     private final Map<String, CachedInference> typeInferenceCache = new ConcurrentHashMap<>();
+    private final Map<String, CachedInference> associatedPersonCache = new ConcurrentHashMap<>();
 
     private final ExternalOrganizationRepository repository;
     private final MongoTemplate mongoTemplate;
@@ -678,11 +679,23 @@ public class ExternalOrganizationController {
     }
 
     // -------------------------------------------------------------------------
-    // GET /external-organizations/stats/suggest-metadata?name=<orgName>
+    // GET /external-organizations/stats/suggest-metadata?name=<orgName>&uuid=<orgUuid>
     // -------------------------------------------------------------------------
     @GetMapping("/stats/suggest-metadata")
-    public Map<String, Object> suggestMetadataByName(@RequestParam String name) {
+    public Map<String, Object> suggestMetadataByName(
+            @RequestParam(required = false) String name,
+            @RequestParam(required = false) String uuid) {
         String orgName = name == null ? "" : name.trim();
+        String orgUuid = uuid == null ? "" : uuid.trim();
+
+        if (orgName.isBlank() && !orgUuid.isBlank()) {
+            ExternalOrganization found = mongoTemplate.findOne(
+                new Query(Criteria.where("uuid").is(orgUuid)), ExternalOrganization.class);
+            if (found != null) {
+                orgName = extractOrgName(found);
+            }
+        }
+
         if (orgName.isBlank()) {
             Map<String, Object> empty = new LinkedHashMap<>();
             empty.put("suggestedCountry", "");
@@ -696,14 +709,18 @@ public class ExternalOrganizationController {
             empty.put("suggestedFundingUri", "");
             empty.put("fundingConfidence", 0.0);
             empty.put("fundingReason", "empty-name");
+            empty.put("associatedPerson", "");
             return empty;
         }
+
+        // Buscar persona externa/investigador asociado en MongoDB
+        String associatedPerson = findAssociatedPersonForOrg(orgUuid, orgName);
 
         // Mejora #4: catálogos cacheados
         List<CountryAggregate> countryCatalog = getCachedCountryCatalog();
         List<TypeAggregate>    typeCatalog    = getCachedTypeCatalog();
 
-        MetadataInferenceResult aiResult = inferMetadataWithLocalAi(orgName, countryCatalog, typeCatalog);
+        MetadataInferenceResult aiResult = inferMetadataWithLocalAi(orgName, associatedPerson, countryCatalog, typeCatalog);
 
         InferenceResult countryResult = null;
         TypeInferenceResult typeResult = null;
@@ -719,7 +736,7 @@ public class ExternalOrganizationController {
 
         // Fallbacks for country
         if (countryResult == null || countryResult.countryLabel.isBlank()) {
-            countryResult = inferCountryWithWebSearch(orgName, countryCatalog);
+            countryResult = inferCountryWithWebSearch(orgName, associatedPerson, countryCatalog);
             if (countryResult == null || countryResult.countryLabel.isBlank()) {
                 countryResult = inferCountryFromName(orgName, countryCatalog);
             }
@@ -728,7 +745,7 @@ public class ExternalOrganizationController {
         // Fallbacks for type
         if (typeResult == null || typeResult.typeLabel.isBlank()) {
             if (!aiCallFailed) {
-                typeResult = inferTypeWithLocalAi(orgName, typeCatalog);
+                typeResult = inferTypeWithLocalAi(orgName, associatedPerson, typeCatalog);
             }
             if (typeResult == null || typeResult.typeLabel.isBlank()) {
                 typeResult = inferTypeFromName(orgName, typeCatalog);
@@ -755,6 +772,7 @@ public class ExternalOrganizationController {
         out.put("suggestedFundingUri", resolveFundingUri(fundingResult.fundingLabel));
         out.put("fundingConfidence", fundingResult.confidence);
         out.put("fundingReason", fundingResult.reason);
+        out.put("associatedPerson", associatedPerson != null ? associatedPerson : "");
         return out;
     }
 
@@ -825,6 +843,7 @@ public class ExternalOrganizationController {
             TypeInferenceResult tr = typeResults.getOrDefault(uuid,    new TypeInferenceResult("", 0.0, "no-signal"));
             FundingInferenceResult fr = fundingResults.getOrDefault(uuid, new FundingInferenceResult("", 0.0, "no-signal"));
             String countryUri      = resolveCountryUriByLabel(cr.countryLabel);
+            String associatedPerson = findAssociatedPersonForOrg(uuid, extractOrgName(org));
 
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("uuid",                uuid);
@@ -840,6 +859,7 @@ public class ExternalOrganizationController {
             row.put("suggestedFundingUri", resolveFundingUri(fr.fundingLabel));
             row.put("fundingConfidence",   fr.confidence);
             row.put("fundingReason",       fr.reason);
+            row.put("associatedPerson",    associatedPerson != null ? associatedPerson : "");
             // Add workflow step if present
             String workflowStep = null;
             if (org.getWorkflow() != null) {
@@ -3160,12 +3180,19 @@ public class ExternalOrganizationController {
     // =========================================================================
 
     private CompletableFuture<String> callWebSearchApiAsync(String orgName) {
+        return callWebSearchApiAsync(orgName, null);
+    }
+
+    private CompletableFuture<String> callWebSearchApiAsync(String orgName, String associatedPerson) {
         if (!websearchCountrySuggestEnabled || websearchCountrySuggestUrl == null || websearchCountrySuggestUrl.isBlank()) {
             return CompletableFuture.completedFuture(null);
         }
 
         try {
-            String query = "\"" + orgName + "\" organization country";
+            String personClean = (associatedPerson != null) ? associatedPerson.replaceAll("\\s*\\([^)]*\\)", "").trim() : "";
+            String query = (personClean.isBlank())
+                ? ("\"" + orgName + "\" organization country")
+                : ("\"" + orgName + "\" \"" + personClean + "\" organization country");
             String baseSearchUrl = resolveWebSearchUrl(websearchCountrySuggestUrl);
             String separator = baseSearchUrl.contains("?") ? "&" : "?";
             String requestUrl = baseSearchUrl
@@ -3203,7 +3230,11 @@ public class ExternalOrganizationController {
     }
 
     private InferenceResult inferCountryWithWebSearch(String orgName, List<CountryAggregate> catalog) {
-        String cacheKey = "country:websearch:" + orgName;
+        return inferCountryWithWebSearch(orgName, null, catalog);
+    }
+
+    private InferenceResult inferCountryWithWebSearch(String orgName, String associatedPerson, List<CountryAggregate> catalog) {
+        String cacheKey = "country:websearch:" + orgName + (associatedPerson != null ? ":" + associatedPerson : "");
         CachedInference cached = countryInferenceCache.get(cacheKey);
         if (cached != null && (System.currentTimeMillis() - cached.timestamp()) < INFERENCE_CACHE_TTL_MS) {
             String cachedBody = cached.result();
@@ -3216,7 +3247,7 @@ public class ExternalOrganizationController {
 
         String body = null;
         try {
-            body = callWebSearchApiAsync(orgName)
+            body = callWebSearchApiAsync(orgName, associatedPerson)
                 .get(websearchCountrySuggestTimeoutMs + 500, TimeUnit.MILLISECONDS);
         } catch (Exception ignored) {
             body = null;
@@ -3353,8 +3384,12 @@ public class ExternalOrganizationController {
     }
 
     private InferenceResult inferCountryWithLocalAi(String orgName, List<CountryAggregate> catalog) {
+        return inferCountryWithLocalAi(orgName, null, catalog);
+    }
+
+    private InferenceResult inferCountryWithLocalAi(String orgName, String associatedPerson, List<CountryAggregate> catalog) {
         // Mejora #7: Caché de inferencias por nombre (TTL 10 minutos)
-        String cacheKey = "country:" + orgName;
+        String cacheKey = "country:" + orgName + (associatedPerson != null ? ":" + associatedPerson : "");
         CachedInference cached = countryInferenceCache.get(cacheKey);
         if (cached != null && (System.currentTimeMillis() - cached.timestamp()) < INFERENCE_CACHE_TTL_MS) {
             String cachedBody = cached.result();
@@ -3382,7 +3417,10 @@ public class ExternalOrganizationController {
         + "  \"reason\": \"Name references Barcelona/UAB.\"\n"
         + "}";
 
-        String userPrompt = "Organization: '" + orgName + "'";
+        String personContext = (associatedPerson != null && !associatedPerson.isBlank())
+            ? (" (Associated researcher: '" + associatedPerson + "')")
+            : "";
+        String userPrompt = "Organization: '" + orgName + "'" + personContext;
 
         String body = null;
         try {
@@ -3413,6 +3451,14 @@ public class ExternalOrganizationController {
             String orgName,
             List<CountryAggregate> countryCatalog,
             List<TypeAggregate> typeCatalog) {
+        return inferMetadataWithLocalAiAsync(orgName, null, countryCatalog, typeCatalog);
+    }
+
+    private CompletableFuture<MetadataInferenceResult> inferMetadataWithLocalAiAsync(
+            String orgName,
+            String associatedPerson,
+            List<CountryAggregate> countryCatalog,
+            List<TypeAggregate> typeCatalog) {
 
         String typeCatalogText = typeCatalog.stream()
                 .limit(20)
@@ -3432,7 +3478,10 @@ public class ExternalOrganizationController {
         + "Reason fields must only describe evidence observed and must be extremely brief (at most 10-15 words). "
         + "No markdown. Start with '{' and end with '}'.";
 
-        String userPrompt = "Organization: '" + orgName + "'. Candidate types: " + typeCatalogText;
+        String personContext = (associatedPerson != null && !associatedPerson.isBlank())
+            ? (" (Associated researcher: '" + associatedPerson + "')")
+            : "";
+        String userPrompt = "Organization: '" + orgName + "'" + personContext + ". Candidate types: " + typeCatalogText;
 
         return callLocalAiApiAsync(systemPrompt, userPrompt,150)
                 .orTimeout(aiCountrySuggestTimeoutMs + AI_TIMEOUT_BUFFER_MS, TimeUnit.MILLISECONDS)
@@ -3467,13 +3516,14 @@ public class ExternalOrganizationController {
             List<CompletableFuture<Void>> futures = batch.stream()
                 .map(org -> {
                     String orgName = extractOrgName(org);
+                    String associatedPerson = findAssociatedPersonForOrg(org.getUuid(), orgName);
                     try {
                         semaphore.acquire();
                     } catch (InterruptedException e) {
                         Thread.currentThread().interrupt();
                         return CompletableFuture.<Void>completedFuture(null);
                     }
-                    return inferMetadataWithLocalAiAsync(orgName, countryCatalog, typeCatalog)
+                    return inferMetadataWithLocalAiAsync(orgName, associatedPerson, countryCatalog, typeCatalog)
                         .whenComplete((result, ex) -> {
                             semaphore.release();
                             if (result != null && org.getUuid() != null) {
@@ -3506,8 +3556,12 @@ public class ExternalOrganizationController {
     }
 
     private TypeInferenceResult inferTypeWithLocalAi(String orgName, List<TypeAggregate> catalog) {
+        return inferTypeWithLocalAi(orgName, null, catalog);
+    }
+
+    private TypeInferenceResult inferTypeWithLocalAi(String orgName, String associatedPerson, List<TypeAggregate> catalog) {
         // Mejora #7: Caché de inferencias por nombre (TTL 10 minutos)
-        String cacheKey = "type:" + orgName;
+        String cacheKey = "type:" + orgName + (associatedPerson != null ? ":" + associatedPerson : "");
         CachedInference cached = typeInferenceCache.get(cacheKey);
         if (cached != null && (System.currentTimeMillis() - cached.timestamp()) < INFERENCE_CACHE_TTL_MS) {
             String cachedBody = cached.result();
@@ -3532,7 +3586,10 @@ public class ExternalOrganizationController {
         + "CRITICAL: Output ONLY the raw JSON object. Do NOT wrap the response in markdown blocks like ```json ... ```. "
         + "Your final response must start with '{' and end with '}'.";
 
-        String userPrompt = "Organization: '" + orgName + "'. Candidate types: " + catalogText;
+        String personContext = (associatedPerson != null && !associatedPerson.isBlank())
+            ? (" (Associated researcher: '" + associatedPerson + "')")
+            : "";
+        String userPrompt = "Organization: '" + orgName + "'" + personContext + ". Candidate types: " + catalogText;
 
         String body = null;
         try {
@@ -3561,6 +3618,14 @@ public class ExternalOrganizationController {
             String orgName,
             List<CountryAggregate> countryCatalog,
             List<TypeAggregate> typeCatalog) {
+        return inferMetadataWithLocalAi(orgName, null, countryCatalog, typeCatalog);
+    }
+
+    private MetadataInferenceResult inferMetadataWithLocalAi(
+            String orgName,
+            String associatedPerson,
+            List<CountryAggregate> countryCatalog,
+            List<TypeAggregate> typeCatalog) {
 
         // Mejora #8: Limitar catálogo a top-20 para reducir tamaño del prompt
         String typeCatalogText = typeCatalog.stream()
@@ -3582,7 +3647,10 @@ public class ExternalOrganizationController {
                 + "CRITICAL: Output ONLY the raw JSON object. Do NOT wrap the response in markdown blocks like ```json ... ```. "
                 + "Your final response must start with '{' and end with '}'.";
 
-        String userPrompt = "Organization: '" + orgName + "'. Candidate types: " + typeCatalogText;
+        String personContext = (associatedPerson != null && !associatedPerson.isBlank())
+            ? (" (Associated researcher: '" + associatedPerson + "')")
+            : "";
+        String userPrompt = "Organization: '" + orgName + "'" + personContext + ". Candidate types: " + typeCatalogText;
 
         String body = null;
         try {
@@ -3600,6 +3668,198 @@ public class ExternalOrganizationController {
         if (body == null) return null;
 
         return parseLocalAiMetadataResponse(body, countryCatalog, typeCatalog);
+    }
+
+    // -------------------------------------------------------------------------
+    // Búsqueda de persona externa / investigadora asociada a la organización
+    // -------------------------------------------------------------------------
+    private String findAssociatedPersonForOrg(String orgUuid, String orgName) {
+        if ((orgUuid == null || orgUuid.isBlank()) && (orgName == null || orgName.isBlank())) {
+            return null;
+        }
+
+        String cacheKey = (orgUuid != null && !orgUuid.isBlank()) ? ("uuid:" + orgUuid.trim()) : ("name:" + orgName.trim().toLowerCase());
+        CachedInference cached = associatedPersonCache.get(cacheKey);
+        if (cached != null && (System.currentTimeMillis() - cached.timestamp()) < INFERENCE_CACHE_TTL_MS) {
+            return cached.result();
+        }
+
+        String result = null;
+
+        try {
+            String targetUuid = (orgUuid != null && !orgUuid.isBlank()) ? orgUuid.trim() : null;
+            if (targetUuid == null && orgName != null && !orgName.isBlank()) {
+                String escaped = Pattern.quote(orgName.trim());
+                Criteria nameCriteria = new Criteria().orOperator(
+                    Criteria.where("name.ca_ES").regex("^" + escaped + "$", "i"),
+                    Criteria.where("name.es_ES").regex("^" + escaped + "$", "i"),
+                    Criteria.where("name.en_GB").regex("^" + escaped + "$", "i")
+                );
+                Query q = new Query(nameCriteria);
+                q.fields().include("uuid");
+                ExternalOrganization found = mongoTemplate.findOne(q, ExternalOrganization.class);
+                if (found != null && found.getUuid() != null) {
+                    targetUuid = found.getUuid();
+                }
+            }
+
+            if (targetUuid != null && !targetUuid.isBlank()) {
+                // 1. Buscar en StudentTheses (únicamente supervisores externos)
+                if (result == null && mongoTemplate.collectionExists("StudentTheses")) {
+                    Query q = new Query(new Criteria().orOperator(
+                        Criteria.where("supervisors.externalOrganizations.uuid").is(targetUuid),
+                        Criteria.where("supervisors.externalOrganization.uuid").is(targetUuid),
+                        Criteria.where("supervisors.affiliations.externalOrganization.uuid").is(targetUuid),
+                        Criteria.where("supervisors.externalOrganizationRef.uuid").is(targetUuid),
+                        Criteria.where("externalOrganizationRef.uuid").is(targetUuid)
+                    ));
+                    q.fields().include("supervisors");
+                    q.limit(1);
+                    Document doc = mongoTemplate.findOne(q, Document.class, "StudentTheses");
+                    if (doc != null) {
+                        List<?> supervisors = doc.get("supervisors", List.class);
+                        if (supervisors != null) {
+                            for (Object item : supervisors) {
+                                if (item instanceof Document sDoc) {
+                                    if (contributorMatchesOrgUuid(sDoc, targetUuid)) {
+                                        boolean isExt = "ExternalSupervisorAssociation".equals(sDoc.getString("typeDiscriminator"))
+                                                || sDoc.containsKey("externalPerson");
+                                        if (isExt) {
+                                            Document nameDoc = sDoc.get("name", Document.class);
+                                            if (nameDoc != null) {
+                                                String first = nameDoc.getString("firstName");
+                                                String last = nameDoc.getString("lastName");
+                                                String full = ((first != null ? first : "") + " " + (last != null ? last : "")).trim();
+                                                if (!full.isBlank()) {
+                                                    result = full + " (Persona externa)";
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 2. Buscar en Activities (únicamente personas externas)
+                if (result == null && mongoTemplate.collectionExists("Activities")) {
+                    Query q = new Query(new Criteria().orOperator(
+                        Criteria.where("consultancyFor.externalOrganization.uuid").is(targetUuid),
+                        Criteria.where("memberOf.externalOrganization.uuid").is(targetUuid),
+                        Criteria.where("editorialWorkFor.externalOrganization.uuid").is(targetUuid),
+                        Criteria.where("hostOrganisations.externalOrganization.uuid").is(targetUuid),
+                        Criteria.where("externalOrganisations.uuid").is(targetUuid),
+                        Criteria.where("collaboratingOrganisations.externalOrganization.uuid").is(targetUuid)
+                    ));
+                    q.fields().include("externalPersons");
+                    q.limit(1);
+                    Document doc = mongoTemplate.findOne(q, Document.class, "Activities");
+                    if (doc != null) {
+                        List<?> extPersons = doc.get("externalPersons", List.class);
+                        if (extPersons != null && !extPersons.isEmpty()) {
+                            for (Object item : extPersons) {
+                                if (item instanceof Document pDoc) {
+                                    Document nameDoc = pDoc.get("name", Document.class);
+                                    if (nameDoc != null) {
+                                        String first = nameDoc.getString("firstName");
+                                        String last = nameDoc.getString("lastName");
+                                        String full = ((first != null ? first : "") + " " + (last != null ? last : "")).trim();
+                                        if (!full.isBlank()) {
+                                            result = full + " (Persona externa)";
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 3. Buscar en Researchoutputs (únicamente coautores externos)
+                if (result == null && mongoTemplate.collectionExists("Researchoutputs")) {
+                    Query q = new Query(new Criteria().orOperator(
+                        Criteria.where("contributors.externalOrganizations.uuid").is(targetUuid),
+                        Criteria.where("contributors.affiliations.externalOrganization.uuid").is(targetUuid),
+                        Criteria.where("contributors.affiliations.uuid").is(targetUuid),
+                        Criteria.where("contributors.externalOrganization.uuid").is(targetUuid),
+                        Criteria.where("contributors.externalPositions.externalOrganization.uuid").is(targetUuid),
+                        Criteria.where("externalOrganizations.uuid").is(targetUuid)
+                    ));
+                    q.fields().include("contributors");
+                    q.limit(1);
+                    Document doc = mongoTemplate.findOne(q, Document.class, "Researchoutputs");
+                    if (doc != null) {
+                        List<?> contributors = doc.get("contributors", List.class);
+                        if (contributors != null) {
+                            for (Object item : contributors) {
+                                if (item instanceof Document cDoc) {
+                                    if (contributorMatchesOrgUuid(cDoc, targetUuid)) {
+                                        boolean isExt = "ExternalContributorAssociation".equals(cDoc.getString("typeDiscriminator"))
+                                                || cDoc.containsKey("externalPerson");
+                                        if (isExt) {
+                                            Document nameDoc = cDoc.get("name", Document.class);
+                                            if (nameDoc != null) {
+                                                String first = nameDoc.getString("firstName");
+                                                String last = nameDoc.getString("lastName");
+                                                String full = ((first != null ? first : "") + " " + (last != null ? last : "")).trim();
+                                                if (!full.isBlank()) {
+                                                    result = full + " (Persona externa)";
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.debug("Error cercant persona associada per a organitzacio UUID '{}': {}", orgUuid, e.getMessage());
+        }
+
+        associatedPersonCache.put(cacheKey, new CachedInference(result, System.currentTimeMillis()));
+        return result;
+    }
+
+    private boolean contributorMatchesOrgUuid(Document cDoc, String targetUuid) {
+        if (cDoc == null || targetUuid == null || targetUuid.isBlank()) return false;
+        List<String> fields = List.of("externalOrganizations", "affiliations", "externalOrganization", "externalPositions", "organisations", "organisationalUnits", "externalOrganizationRef");
+        for (String field : fields) {
+            Object val = cDoc.get(field);
+            if (docContainsUuid(val, targetUuid)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean docContainsUuid(Object obj, String targetUuid) {
+        if (obj == null || targetUuid == null) return false;
+        if (obj instanceof String s) {
+            return targetUuid.equalsIgnoreCase(s.trim());
+        }
+        if (obj instanceof Document d) {
+            String uuid = d.getString("uuid");
+            if (uuid != null && targetUuid.equalsIgnoreCase(uuid.trim())) {
+                return true;
+            }
+            for (String key : d.keySet()) {
+                if (docContainsUuid(d.get(key), targetUuid)) {
+                    return true;
+                }
+            }
+        } else if (obj instanceof List<?> list) {
+            for (Object item : list) {
+                if (docContainsUuid(item, targetUuid)) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     // -------------------------------------------------------------------------
@@ -4225,12 +4485,21 @@ public class ExternalOrganizationController {
                                 return;
                             }
                             
-                            // 1. Coincidencia IA (solo prompt de país)
-                            InferenceResult countryResult = inferCountryWithLocalAi(name, countryCatalog);
+                            // 1. Inferencia heurística rápida por nombre
+                            InferenceResult countryResult = inferCountryFromName(name, countryCatalog);
 
-                            // 2. WebSearch si la IA tampoco encuentra nada
-                            if (countryResult == null || countryResult.countryLabel.isBlank()) {
-                                countryResult = inferCountryWithWebSearch(name, countryCatalog);
+                            // 2. Si no tiene confianza suficiente, buscar persona asociada y consultar a IA local
+                            if (countryResult == null || countryResult.confidence < confidenceThreshold || countryResult.countryLabel.isBlank()) {
+                                String associatedPerson = findAssociatedPersonForOrg(uuid, name);
+                                InferenceResult aiResult = inferCountryWithLocalAi(name, associatedPerson, countryCatalog);
+                                if (aiResult != null && !aiResult.countryLabel.isBlank()) {
+                                    countryResult = aiResult;
+                                }
+
+                                // 3. WebSearch como fallback si sigue sin resultado
+                                if (countryResult == null || countryResult.countryLabel.isBlank()) {
+                                    countryResult = inferCountryWithWebSearch(name, associatedPerson, countryCatalog);
+                                }
                             }
                             
                             if (countryResult == null || countryResult.countryLabel.isBlank()) {
@@ -4459,9 +4728,16 @@ public class ExternalOrganizationController {
                                 return;
                             }
                             
-                            TypeInferenceResult typeResult = inferTypeWithLocalAi(name, typeCatalog);
-                            if (typeResult == null || typeResult.typeLabel.isBlank()) {
-                                typeResult = inferTypeFromName(name, typeCatalog);
+                            // 1. Inferencia heurística rápida por nombre
+                            TypeInferenceResult typeResult = inferTypeFromName(name, typeCatalog);
+
+                            // 2. Si no tiene confianza suficiente, consultar IA con persona asociada
+                            if (typeResult == null || typeResult.confidence < confidenceThreshold || typeResult.typeLabel.isBlank()) {
+                                String associatedPerson = findAssociatedPersonForOrg(uuid, name);
+                                TypeInferenceResult aiResult = inferTypeWithLocalAi(name, associatedPerson, typeCatalog);
+                                if (aiResult != null && !aiResult.typeLabel.isBlank()) {
+                                    typeResult = aiResult;
+                                }
                             }
                             
                             if (typeResult == null || typeResult.typeLabel.isBlank()) {
@@ -4684,9 +4960,10 @@ public class ExternalOrganizationController {
                             }
                             
                             FundingInferenceResult fundingResult = inferFundingFromName(name);
-                            if (fundingResult == null || fundingResult.fundingLabel.isBlank()) {
-                                MetadataInferenceResult aiResult = inferMetadataWithLocalAi(name, countryCatalog, typeCatalog);
-                                if (aiResult != null && aiResult.funding() != null) {
+                            if (fundingResult == null || fundingResult.confidence < confidenceThreshold || fundingResult.fundingLabel.isBlank()) {
+                                String associatedPerson = findAssociatedPersonForOrg(uuid, name);
+                                MetadataInferenceResult aiResult = inferMetadataWithLocalAi(name, associatedPerson, countryCatalog, typeCatalog);
+                                if (aiResult != null && aiResult.funding() != null && !aiResult.funding().fundingLabel.isBlank()) {
                                     fundingResult = aiResult.funding();
                                 }
                             }

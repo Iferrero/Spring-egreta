@@ -32,3 +32,5 @@ build/
 ### VS Code ###
 .vscode/
 .classpath
+logs/auto-apply-country.log
+err.json

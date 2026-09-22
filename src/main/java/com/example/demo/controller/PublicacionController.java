@@ -40,17 +40,20 @@ public class PublicacionController {
     private final MongoTemplate mongoTemplate;
     private final ResearchOutputJournalLinkService researchOutputJournalLinkService;
     private final PublicacionStatsService publicacionStatsService;
+    private final com.example.demo.egreta.ResearchoutputsSyncService researchoutputsSyncService;
 
     @Autowired
     public PublicacionController(
             PublicacionRepository repository,
             MongoTemplate mongoTemplate,
             ResearchOutputJournalLinkService researchOutputJournalLinkService,
-            PublicacionStatsService publicacionStatsService) {
+            PublicacionStatsService publicacionStatsService,
+            com.example.demo.egreta.ResearchoutputsSyncService researchoutputsSyncService) {
         this.repository = repository;
         this.mongoTemplate = mongoTemplate;
         this.researchOutputJournalLinkService = researchOutputJournalLinkService;
         this.publicacionStatsService = publicacionStatsService;
+        this.researchoutputsSyncService = researchoutputsSyncService;
     }
 
     @GetMapping
@@ -85,6 +88,16 @@ public class PublicacionController {
                 Document.class, "Researchoutputs");
         if (doc == null) return ResponseEntity.notFound().build();
         return ResponseEntity.ok(doc.toJson());
+    }
+
+    @PostMapping("/{publicationUuid}/sync")
+    public ResponseEntity<Map<String, Object>> syncOnePublication(@PathVariable String publicationUuid) {
+        try {
+            Map<String, Object> updated = researchoutputsSyncService.syncOne(publicationUuid);
+            return ResponseEntity.ok(updated);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage(), "uuid", publicationUuid));
+        }
     }
 
     @GetMapping("/{publicationUuid}/journal-jcr")

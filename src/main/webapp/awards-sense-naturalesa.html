@@ -1175,8 +1175,7 @@
                 pagination: true,
                 paginationSize: 25,
                 paginationSizeSelector: [15, 25, 50, 100, true],
-                selectableRows: true,
-                selectableRowsRangeMode: "click",
+                selectableRows: false,
                 placeholder: "<span>No hi ha cap ajut que compleixi els filtres seleccionats</span>",
                 columns: [
                     // Columna 0: Checkbox
@@ -1197,11 +1196,16 @@
                                 actualitzarComptadorSeleccionats();
                             }
                         },
+                        cellClick: function(e, cell) {
+                            if (e.target && e.target.tagName !== 'INPUT') {
+                                cell.getRow().toggleSelect();
+                            }
+                        },
                         hozAlign: "center",
                         headerHozAlign: "center",
                         width: 45,
                         headerSort: false,
-                        cssClass: "tabulator-col-checkbox"
+                        cssClass: "tabulator-col-checkbox cursor-pointer"
                     },
 
                     // Columna 1: Codi de Referència (Filtre Excel Tree amb Checkboxes)

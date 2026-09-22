@@ -17,6 +17,7 @@ public class PublicacionAbstractsService {
 
     private final Map<String, CacheEntry> statsCache = new ConcurrentHashMap<>();
     private final Map<String, CacheEntry> yearsCache = new ConcurrentHashMap<>();
+    private final Map<String, CacheEntry> yearsLanguagesCache = new ConcurrentHashMap<>();
     private final Map<String, CacheEntry> typesCache = new ConcurrentHashMap<>();
     private static final long CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -84,6 +85,36 @@ public class PublicacionAbstractsService {
         return entry != null && (System.currentTimeMillis() - entry.timestamp()) < CACHE_TTL_MS;
     }
 
+    public static Document buildPublicationYearExpr() {
+        return new Document("$ifNull", List.of(
+            new Document("$arrayElemAt", List.of("$publicationStatuses.publicationDate.year", 0)),
+            new Document("$ifNull", List.of("$publicationDate.year", "$submissionYear"))
+        ));
+    }
+
+    public static Integer extractPublicationYear(Document doc) {
+        if (doc == null) return null;
+        Object pubStatusesObj = doc.get("publicationStatuses");
+        if (pubStatusesObj instanceof List<?> list && !list.isEmpty()) {
+            Object first = list.get(0);
+            if (first instanceof Document itemDoc) {
+                Object pDate = itemDoc.get("publicationDate");
+                if (pDate instanceof Document dateDoc && dateDoc.get("year") instanceof Number n) {
+                    return n.intValue();
+                }
+            }
+        }
+        Object pubDateObj = doc.get("publicationDate");
+        if (pubDateObj instanceof Document dateDoc && dateDoc.get("year") instanceof Number n) {
+            return n.intValue();
+        }
+        Object subYear = doc.get("submissionYear");
+        if (subYear instanceof Number n) {
+            return n.intValue();
+        }
+        return null;
+    }
+
     /**
      * Language detector based on vocabulary and distinct stopwords
      */
@@ -133,7 +164,19 @@ public class PublicacionAbstractsService {
      * Calcula KPIs globals d'abstracts amb filtres opcionals i diagnòstic lingüístic
      */
     public Map<String, Object> getAbstractStats(Integer desde, Integer hasta, String type) {
-        String cacheKey = "stats_" + desde + "_" + hasta + "_" + (type == null ? "" : type);
+        return getAbstractStats(desde, hasta, type, null, "publicationYear");
+    }
+
+    public Map<String, Object> getAbstractStats(Integer desde, Integer hasta, String type, String language) {
+        return getAbstractStats(desde, hasta, type, language, "publicationYear");
+    }
+
+    /**
+     * Calcula KPIs globals d'abstracts amb filtres opcionals i diagnòstic lingüístic
+     */
+    public Map<String, Object> getAbstractStats(Integer desde, Integer hasta, String type, String language, String yearType) {
+        boolean isSubmissionYear = "submissionYear".equalsIgnoreCase(yearType);
+        String cacheKey = "stats_" + desde + "_" + hasta + "_" + (type == null ? "" : type) + "_" + (language == null ? "" : language) + "_" + (isSubmissionYear ? "sub" : "pub");
         CacheEntry cached = statsCache.get(cacheKey);
         if (isCacheValid(cached)) {
             return (Map<String, Object>) cached.data();
@@ -142,12 +185,6 @@ public class PublicacionAbstractsService {
         List<Document> pipeline = new ArrayList<>();
 
         List<Document> initialMatches = new ArrayList<>();
-        if (desde != null) {
-            initialMatches.add(new Document("submissionYear", new Document("$gte", desde)));
-        }
-        if (hasta != null) {
-            initialMatches.add(new Document("submissionYear", new Document("$lte", hasta)));
-        }
         if (type != null && !type.isBlank()) {
             initialMatches.add(new Document("$or", List.of(
                 new Document("type.term.ca_ES", type),
@@ -155,12 +192,55 @@ public class PublicacionAbstractsService {
                 new Document("type.term.en_GB", type)
             )));
         }
+        if (language != null && !language.isBlank() && !"all".equalsIgnoreCase(language)) {
+            String norm = normalizeRecognizedLanguage(language);
+            if ("Anglès".equalsIgnoreCase(norm)) {
+                initialMatches.add(new Document("language.term.ca_ES", new Document("$regex", "Angl").append("$options", "i")));
+            } else if ("Espanyol".equalsIgnoreCase(norm)) {
+                initialMatches.add(new Document("language.term.ca_ES", new Document("$regex", "Espanyol|Castell").append("$options", "i")));
+            } else if ("Català".equalsIgnoreCase(norm)) {
+                initialMatches.add(new Document("language.term.ca_ES", new Document("$regex", "Catal").append("$options", "i")));
+            } else if ("Francès".equalsIgnoreCase(norm)) {
+                initialMatches.add(new Document("language.term.ca_ES", new Document("$regex", "Franc").append("$options", "i")));
+            } else if ("Italià".equalsIgnoreCase(norm)) {
+                initialMatches.add(new Document("language.term.ca_ES", new Document("$regex", "Itali").append("$options", "i")));
+            } else if ("Portuguès".equalsIgnoreCase(norm)) {
+                initialMatches.add(new Document("language.term.ca_ES", new Document("$regex", "Portugu").append("$options", "i")));
+            } else if ("Alemany".equalsIgnoreCase(norm)) {
+                initialMatches.add(new Document("language.term.ca_ES", new Document("$regex", "Alem").append("$options", "i")));
+            } else if ("Gallec".equalsIgnoreCase(norm)) {
+                initialMatches.add(new Document("language.term.ca_ES", new Document("$regex", "Gallec").append("$options", "i")));
+            } else if ("Rus".equalsIgnoreCase(norm)) {
+                initialMatches.add(new Document("language.term.ca_ES", new Document("$regex", "Rus").append("$options", "i")));
+            } else if ("Basc".equalsIgnoreCase(norm)) {
+                initialMatches.add(new Document("language.term.ca_ES", new Document("$regex", "Basc|usc").append("$options", "i")));
+            } else if ("Múltiples idiomes".equalsIgnoreCase(norm)) {
+                initialMatches.add(new Document("language.term.ca_ES", new Document("$regex", "ltiples").append("$options", "i")));
+            } else if ("Altres / Desconegut".equalsIgnoreCase(norm)) {
+                initialMatches.add(new Document("$or", List.of(
+                    new Document("language", new Document("$exists", false)),
+                    new Document("language", null),
+                    new Document("language.term.ca_ES", new Document("$nin", List.of(
+                        "Anglès", "Anglès nord-americà", "Espanyol", "Català", "Francès", "Italià", "Portuguès", "Portuguès (Brasil)", "Alemany", "Gallec", "Rus", "Basc", "Múltiples idiomes"
+                    )))
+                )));
+            } else {
+                initialMatches.add(new Document("language.term.ca_ES", language));
+            }
+        }
         if (!initialMatches.isEmpty()) {
             pipeline.add(new Document("$match", new Document("$and", initialMatches)));
         }
 
         pipeline.add(new Document("$project", new Document()
-            .append("year", "$submissionYear")
+            .append("year", new Document("$cond", List.of(
+                new Document("$gte", List.of(
+                    new Document("$ifNull", List.of(isSubmissionYear ? "$submissionYear" : buildPublicationYearExpr(), 0)),
+                    1900
+                )),
+                isSubmissionYear ? "$submissionYear" : buildPublicationYearExpr(),
+                0
+            )))
             .append("has_ca", new Document("$cond", List.of(new Document("$gt", List.of(new Document("$strLenCP", new Document("$ifNull", List.of("$abstract.ca_ES", ""))), 0)), 1, 0)))
             .append("has_es", new Document("$cond", List.of(new Document("$gt", List.of(new Document("$strLenCP", new Document("$ifNull", List.of("$abstract.es_ES", ""))), 0)), 1, 0)))
             .append("has_en", new Document("$cond", List.of(new Document("$gt", List.of(new Document("$strLenCP", new Document("$ifNull", List.of("$abstract.en_GB", ""))), 0)), 1, 0)))
@@ -168,6 +248,19 @@ public class PublicacionAbstractsService {
             .append("es", new Document("$ifNull", List.of("$abstract.es_ES", "")))
             .append("en", new Document("$ifNull", List.of("$abstract.en_GB", "")))
         ));
+
+        List<Document> yearFilterList = new ArrayList<>();
+        if (desde != null) {
+            if (desde == 0) {
+                yearFilterList.add(new Document("year", 0));
+            } else {
+                yearFilterList.add(new Document("year", new Document("$gte", desde)));
+            }
+        }
+        if (hasta != null && hasta > 0) yearFilterList.add(new Document("year", new Document("$lte", hasta)));
+        if (!yearFilterList.isEmpty()) {
+            pipeline.add(new Document("$match", new Document("$and", yearFilterList)));
+        }
 
         pipeline.add(new Document("$project", new Document()
             .append("has_ca", 1)
@@ -247,27 +340,9 @@ public class PublicacionAbstractsService {
             resp.put("hasEs", hasEs);
             resp.put("hasEn", hasEn);
 
-            // Detailed Linguistic Mismatch breakdown
-            long wrongLanguageCount = 74568; // Global count
-            resp.put("wrongLanguageCount", wrongLanguageCount);
-            resp.put("pctWrongLanguageOfWithAbstract", withAbstract > 0 ? (double) Math.round((wrongLanguageCount * 1000.0) / withAbstract) / 10.0 : 79.4);
-            resp.put("genuine3Langs", 1448);
-            resp.put("pctGenuine3Langs", in3Langs > 0 ? (double) Math.round((1448 * 1000.0) / in3Langs) / 10.0 : 2.1);
-
-            // Field level accuracy stats
-            Map<String, Object> caStats = Map.of(
-                "total", 70864, "correct", 4210, "wrongEn", 62534, "wrongEs", 4005, "wrongOther", 115, "pctWrong", 94.1, "pctCorrect", 5.9
-            );
-            Map<String, Object> esStats = Map.of(
-                "total", 76072, "correct", 9842, "wrongEn", 64658, "wrongCa", 1398, "wrongOther", 174, "pctWrong", 87.1, "pctCorrect", 12.9
-            );
-            Map<String, Object> enStats = Map.of(
-                "total", 91519, "correct", 85489, "wrongEs", 3818, "wrongCa", 1524, "wrongOther", 688, "pctWrong", 6.6, "pctCorrect", 93.4
-            );
-
-            resp.put("caFieldStats", caStats);
-            resp.put("esFieldStats", esStats);
-            resp.put("enFieldStats", enStats);
+            // Detailed Linguistic Mismatch breakdown computed dynamically
+            Map<String, Object> dynStats = computeDynamicLinguisticStats(desde, hasta, type, language, yearType, withAbstract, in3Langs);
+            resp.putAll(dynStats);
 
         } else {
             resp.put("total", 0);
@@ -293,11 +368,267 @@ public class PublicacionAbstractsService {
         return resp;
     }
 
+    private Map<String, Object> computeDynamicLinguisticStats(Integer desde, Integer hasta, String type, String language, long withAbstract, long in3Langs) {
+        return computeDynamicLinguisticStats(desde, hasta, type, language, "publicationYear", withAbstract, in3Langs);
+    }
+
+    private Map<String, Object> computeDynamicLinguisticStats(Integer desde, Integer hasta, String type, String language, String yearType, long withAbstract, long in3Langs) {
+        boolean isSubmissionYear = "submissionYear".equalsIgnoreCase(yearType);
+        Document query = new Document();
+        List<Document> andList = new ArrayList<>();
+
+        andList.add(new Document("$or", List.of(
+            new Document("abstract.ca_ES", new Document("$exists", true).append("$ne", "")),
+            new Document("abstract.es_ES", new Document("$exists", true).append("$ne", "")),
+            new Document("abstract.en_GB", new Document("$exists", true).append("$ne", ""))
+        )));
+
+        if (isSubmissionYear) {
+            if (desde != null) {
+                if (desde == 0) {
+                    andList.add(new Document("$or", List.of(
+                        new Document("submissionYear", null),
+                        new Document("submissionYear", 0),
+                        new Document("submissionYear", new Document("$exists", false))
+                    )));
+                } else {
+                    andList.add(new Document("submissionYear", new Document("$gte", desde)));
+                }
+            }
+            if (hasta != null && hasta > 0) andList.add(new Document("submissionYear", new Document("$lte", hasta)));
+        } else {
+            if (desde != null) {
+                if (desde == 0) {
+                    andList.add(new Document("$and", List.of(
+                        new Document("publicationStatuses.publicationDate.year", new Document("$exists", false)),
+                        new Document("publicationDate.year", new Document("$exists", false)),
+                        new Document("$or", List.of(
+                            new Document("submissionYear", null),
+                            new Document("submissionYear", 0),
+                            new Document("submissionYear", new Document("$exists", false))
+                        ))
+                    )));
+                } else {
+                    andList.add(new Document("$or", List.of(
+                        new Document("publicationStatuses.publicationDate.year", new Document("$gte", desde)),
+                        new Document("$and", List.of(
+                            new Document("publicationStatuses.publicationDate.year", new Document("$exists", false)),
+                            new Document("publicationDate.year", new Document("$gte", desde))
+                        )),
+                        new Document("$and", List.of(
+                            new Document("publicationStatuses.publicationDate.year", new Document("$exists", false)),
+                            new Document("publicationDate.year", new Document("$exists", false)),
+                            new Document("submissionYear", new Document("$gte", desde))
+                        ))
+                    )));
+                }
+            }
+            if (hasta != null && hasta > 0) {
+                andList.add(new Document("$or", List.of(
+                    new Document("publicationStatuses.publicationDate.year", new Document("$lte", hasta)),
+                    new Document("$and", List.of(
+                        new Document("publicationStatuses.publicationDate.year", new Document("$exists", false)),
+                        new Document("publicationDate.year", new Document("$lte", hasta))
+                    )),
+                    new Document("$and", List.of(
+                        new Document("publicationStatuses.publicationDate.year", new Document("$exists", false)),
+                        new Document("publicationDate.year", new Document("$exists", false)),
+                        new Document("submissionYear", new Document("$lte", hasta))
+                    ))
+                )));
+            }
+        }
+
+        if (type != null && !type.isBlank()) {
+            andList.add(new Document("$or", List.of(
+                new Document("type.term.ca_ES", type),
+                new Document("type.term.es_ES", type),
+                new Document("type.term.en_GB", type)
+            )));
+        }
+        if (language != null && !language.isBlank() && !"all".equalsIgnoreCase(language)) {
+            String norm = normalizeRecognizedLanguage(language);
+            if ("Anglès".equalsIgnoreCase(norm)) {
+                andList.add(new Document("language.term.ca_ES", new Document("$regex", "Angl").append("$options", "i")));
+            } else if ("Espanyol".equalsIgnoreCase(norm)) {
+                andList.add(new Document("language.term.ca_ES", new Document("$regex", "Espanyol|Castell").append("$options", "i")));
+            } else if ("Català".equalsIgnoreCase(norm)) {
+                andList.add(new Document("language.term.ca_ES", new Document("$regex", "Catal").append("$options", "i")));
+            } else if ("Francès".equalsIgnoreCase(norm)) {
+                andList.add(new Document("language.term.ca_ES", new Document("$regex", "Franc").append("$options", "i")));
+            } else if ("Italià".equalsIgnoreCase(norm)) {
+                andList.add(new Document("language.term.ca_ES", new Document("$regex", "Itali").append("$options", "i")));
+            } else if ("Portuguès".equalsIgnoreCase(norm)) {
+                andList.add(new Document("language.term.ca_ES", new Document("$regex", "Portugu").append("$options", "i")));
+            } else if ("Alemany".equalsIgnoreCase(norm)) {
+                andList.add(new Document("language.term.ca_ES", new Document("$regex", "Alem").append("$options", "i")));
+            } else if ("Gallec".equalsIgnoreCase(norm)) {
+                andList.add(new Document("language.term.ca_ES", new Document("$regex", "Gallec").append("$options", "i")));
+            } else if ("Rus".equalsIgnoreCase(norm)) {
+                andList.add(new Document("language.term.ca_ES", new Document("$regex", "Rus").append("$options", "i")));
+            } else if ("Basc".equalsIgnoreCase(norm)) {
+                andList.add(new Document("language.term.ca_ES", new Document("$regex", "Basc|usc").append("$options", "i")));
+            } else if ("Múltiples idiomes".equalsIgnoreCase(norm)) {
+                andList.add(new Document("language.term.ca_ES", new Document("$regex", "ltiples").append("$options", "i")));
+            } else if ("Altres / Desconegut".equalsIgnoreCase(norm)) {
+                andList.add(new Document("$or", List.of(
+                    new Document("language", new Document("$exists", false)),
+                    new Document("language", null),
+                    new Document("language.term.ca_ES", new Document("$nin", List.of(
+                        "Anglès", "Anglès nord-americà", "Espanyol", "Català", "Francès", "Italià", "Portuguès", "Portuguès (Brasil)", "Alemany", "Gallec", "Rus", "Basc", "Múltiples idiomes"
+                    )))
+                )));
+            } else {
+                andList.add(new Document("language.term.ca_ES", language));
+            }
+        }
+
+        query.put("$and", andList);
+
+        Document projection = new Document()
+            .append("abstract.ca_ES", 1)
+            .append("abstract.es_ES", 1)
+            .append("abstract.en_GB", 1);
+
+        long wrongLanguageCount = 0;
+        long genuine3Langs = 0;
+
+        long caTotal = 0, caCorrect = 0, caWrongEn = 0, caWrongEs = 0, caWrongOther = 0;
+        long esTotal = 0, esCorrect = 0, esWrongEn = 0, esWrongCa = 0, esWrongOther = 0;
+        long enTotal = 0, enCorrect = 0, enWrongEs = 0, enWrongCa = 0, enWrongOther = 0;
+
+        int maxScan = 15000;
+        int scanned = 0;
+
+        try (var cursor = mongoTemplate.getCollection("Researchoutputs").find(query).projection(projection).batchSize(5000).iterator()) {
+            while (cursor.hasNext() && scanned < maxScan) {
+                Document doc = cursor.next();
+                scanned++;
+                Document abs = (Document) doc.get("abstract");
+                if (abs == null) continue;
+
+                String ca = abs.getString("ca_ES");
+                String es = abs.getString("es_ES");
+                String en = abs.getString("en_GB");
+
+                boolean hasCa = ca != null && !ca.isBlank();
+                boolean hasEs = es != null && !es.isBlank();
+                boolean hasEn = en != null && !en.isBlank();
+
+                String detCa = hasCa ? detectLanguage(ca) : "none";
+                String detEs = hasEs ? detectLanguage(es) : "none";
+                String detEn = hasEn ? detectLanguage(en) : "none";
+
+                boolean isWrongCa = false;
+                boolean isWrongEs = false;
+                boolean isWrongEn = false;
+
+                if (hasCa) {
+                    caTotal++;
+                    if ("ca_ES".equals(detCa)) {
+                        caCorrect++;
+                    } else {
+                        isWrongCa = true;
+                        if ("en_GB".equals(detCa)) caWrongEn++;
+                        else if ("es_ES".equals(detCa)) caWrongEs++;
+                        else caWrongOther++;
+                    }
+                }
+
+                if (hasEs) {
+                    esTotal++;
+                    if ("es_ES".equals(detEs)) {
+                        esCorrect++;
+                    } else {
+                        isWrongEs = true;
+                        if ("en_GB".equals(detEs)) esWrongEn++;
+                        else if ("ca_ES".equals(detEs)) esWrongCa++;
+                        else esWrongOther++;
+                    }
+                }
+
+                if (hasEn) {
+                    enTotal++;
+                    if ("en_GB".equals(detEn)) {
+                        enCorrect++;
+                    } else {
+                        isWrongEn = true;
+                        if ("es_ES".equals(detEn)) enWrongEs++;
+                        else if ("ca_ES".equals(detEn)) enWrongCa++;
+                        else enWrongOther++;
+                    }
+                }
+
+                if (isWrongCa || isWrongEs || isWrongEn) {
+                    wrongLanguageCount++;
+                }
+
+                if (hasCa && hasEs && hasEn && !isWrongCa && !isWrongEs && !isWrongEn) {
+                    genuine3Langs++;
+                }
+            }
+        }
+
+        double scale = (scanned > 0 && withAbstract > scanned) ? ((double) withAbstract / scanned) : 1.0;
+        long finalWrongLanguageCount = Math.round(wrongLanguageCount * scale);
+        long finalGenuine3Langs = Math.round(genuine3Langs * scale);
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("wrongLanguageCount", finalWrongLanguageCount);
+        result.put("pctWrongLanguageOfWithAbstract", withAbstract > 0 ? (double) Math.round((finalWrongLanguageCount * 1000.0) / withAbstract) / 10.0 : 0.0);
+        result.put("genuine3Langs", finalGenuine3Langs);
+        result.put("pctGenuine3Langs", in3Langs > 0 ? (double) Math.round((finalGenuine3Langs * 1000.0) / in3Langs) / 10.0 : 0.0);
+
+        Map<String, Object> caStats = new LinkedHashMap<>();
+        caStats.put("total", Math.round(caTotal * scale));
+        caStats.put("correct", Math.round(caCorrect * scale));
+        caStats.put("wrongEn", Math.round(caWrongEn * scale));
+        caStats.put("wrongEs", Math.round(caWrongEs * scale));
+        caStats.put("wrongOther", Math.round(caWrongOther * scale));
+        caStats.put("pctWrong", caTotal > 0 ? (double) Math.round(((caTotal - caCorrect) * 1000.0) / caTotal) / 10.0 : 0.0);
+        caStats.put("pctCorrect", caTotal > 0 ? (double) Math.round((caCorrect * 1000.0) / caTotal) / 10.0 : 0.0);
+        caStats.put("pctWrongEn", caTotal > 0 ? (double) Math.round((caWrongEn * 1000.0) / caTotal) / 10.0 : 0.0);
+        caStats.put("pctWrongEs", caTotal > 0 ? (double) Math.round((caWrongEs * 1000.0) / caTotal) / 10.0 : 0.0);
+
+        Map<String, Object> esStats = new LinkedHashMap<>();
+        esStats.put("total", esTotal);
+        esStats.put("correct", esCorrect);
+        esStats.put("wrongEn", esWrongEn);
+        esStats.put("wrongCa", esWrongCa);
+        esStats.put("wrongOther", esWrongOther);
+        esStats.put("pctWrong", esTotal > 0 ? (double) Math.round(((esTotal - esCorrect) * 1000.0) / esTotal) / 10.0 : 0.0);
+        esStats.put("pctCorrect", esTotal > 0 ? (double) Math.round((esCorrect * 1000.0) / esTotal) / 10.0 : 0.0);
+        esStats.put("pctWrongEn", esTotal > 0 ? (double) Math.round((esWrongEn * 1000.0) / esTotal) / 10.0 : 0.0);
+        esStats.put("pctWrongCa", esTotal > 0 ? (double) Math.round((esWrongCa * 1000.0) / esTotal) / 10.0 : 0.0);
+
+        Map<String, Object> enStats = new LinkedHashMap<>();
+        enStats.put("total", enTotal);
+        enStats.put("correct", enCorrect);
+        enStats.put("wrongEs", enWrongEs);
+        enStats.put("wrongCa", enWrongCa);
+        enStats.put("wrongOther", enWrongOther);
+        enStats.put("pctWrong", enTotal > 0 ? (double) Math.round(((enTotal - enCorrect) * 1000.0) / enTotal) / 10.0 : 0.0);
+        enStats.put("pctCorrect", enTotal > 0 ? (double) Math.round((enCorrect * 1000.0) / enTotal) / 10.0 : 0.0);
+        enStats.put("pctWrongEs", enTotal > 0 ? (double) Math.round((enWrongEs * 1000.0) / enTotal) / 10.0 : 0.0);
+        enStats.put("pctWrongCa", enTotal > 0 ? (double) Math.round((enWrongCa * 1000.0) / enTotal) / 10.0 : 0.0);
+
+        result.put("caFieldStats", caStats);
+        result.put("esFieldStats", esStats);
+        result.put("enFieldStats", enStats);
+
+        return result;
+    }
+
     /**
-     * Distribució per any
+     * Distribució per any (Any de Publicació o Any de Submission)
      */
     public List<Map<String, Object>> getAbstractsByYear(Integer desde, Integer hasta) {
-        String cacheKey = "years_" + desde + "_" + hasta;
+        return getAbstractsByYear(desde, hasta, "publicationYear");
+    }
+
+    public List<Map<String, Object>> getAbstractsByYear(Integer desde, Integer hasta, String yearType) {
+        boolean isSubmissionYear = "submissionYear".equalsIgnoreCase(yearType);
+        String cacheKey = "years_" + (isSubmissionYear ? "sub" : "pub") + "_" + desde + "_" + hasta;
         CacheEntry cached = yearsCache.get(cacheKey);
         if (isCacheValid(cached)) {
             return (List<Map<String, Object>>) cached.data();
@@ -305,17 +636,15 @@ public class PublicacionAbstractsService {
 
         List<Document> pipeline = new ArrayList<>();
 
-        List<Document> initialMatches = new ArrayList<>();
-        if (desde != null) initialMatches.add(new Document("submissionYear", new Document("$gte", desde)));
-        if (hasta != null) initialMatches.add(new Document("submissionYear", new Document("$lte", hasta)));
-        if (!initialMatches.isEmpty()) {
-            pipeline.add(new Document("$match", new Document("$and", initialMatches)));
-        } else {
-            pipeline.add(new Document("$match", new Document("submissionYear", new Document("$gte", 1900))));
-        }
-
         pipeline.add(new Document("$project", new Document()
-            .append("year", "$submissionYear")
+            .append("year", new Document("$cond", List.of(
+                new Document("$gte", List.of(
+                    new Document("$ifNull", List.of(isSubmissionYear ? "$submissionYear" : buildPublicationYearExpr(), 0)),
+                    1900
+                )),
+                isSubmissionYear ? "$submissionYear" : buildPublicationYearExpr(),
+                0
+            )))
             .append("has_ca", new Document("$cond", List.of(new Document("$gt", List.of(new Document("$strLenCP", new Document("$ifNull", List.of("$abstract.ca_ES", ""))), 0)), 1, 0)))
             .append("has_es", new Document("$cond", List.of(new Document("$gt", List.of(new Document("$strLenCP", new Document("$ifNull", List.of("$abstract.es_ES", ""))), 0)), 1, 0)))
             .append("has_en", new Document("$cond", List.of(new Document("$gt", List.of(new Document("$strLenCP", new Document("$ifNull", List.of("$abstract.en_GB", ""))), 0)), 1, 0)))
@@ -323,6 +652,19 @@ public class PublicacionAbstractsService {
             .append("es", new Document("$ifNull", List.of("$abstract.es_ES", "")))
             .append("en", new Document("$ifNull", List.of("$abstract.en_GB", "")))
         ));
+
+        List<Document> yearFilterList = new ArrayList<>();
+        if (desde != null) {
+            if (desde == 0) {
+                yearFilterList.add(new Document("year", 0));
+            } else {
+                yearFilterList.add(new Document("year", new Document("$gte", desde)));
+            }
+        }
+        if (hasta != null && hasta > 0) yearFilterList.add(new Document("year", new Document("$lte", hasta)));
+        if (!yearFilterList.isEmpty()) {
+            pipeline.add(new Document("$match", new Document("$and", yearFilterList)));
+        }
 
         pipeline.add(new Document("$project", new Document()
             .append("year", 1)
@@ -358,14 +700,16 @@ public class PublicacionAbstractsService {
 
         for (Document d : rawResults) {
             Object yr = d.get("_id");
-            if (yr == null) continue;
             Map<String, Object> item = new LinkedHashMap<>();
             long total = ((Number) d.getOrDefault("total", 0)).longValue();
             long withAbs = ((Number) d.getOrDefault("with_abstract", 0)).longValue();
             long in3 = ((Number) d.getOrDefault("in_3_langs", 0)).longValue();
             long ident3 = ((Number) d.getOrDefault("identical_in_3", 0)).longValue();
 
-            item.put("year", yr);
+            boolean isNoYear = (yr == null || (yr instanceof Number && ((Number) yr).intValue() == 0));
+            item.put("year", isNoYear ? "Sense any" : yr);
+            item.put("yearValue", isNoYear ? 0 : ((Number) yr).intValue());
+            item.put("isNoYear", isNoYear);
             item.put("total", total);
             item.put("withAbstract", withAbs);
             item.put("noAbstract", ((Number) d.getOrDefault("no_abstract", 0)).longValue());
@@ -383,11 +727,213 @@ public class PublicacionAbstractsService {
         return response;
     }
 
+    private static final List<String> RECOGNIZED_LANGUAGES = List.of(
+        "Anglès",
+        "Espanyol",
+        "Català",
+        "Francès",
+        "Italià",
+        "Portuguès",
+        "Alemany",
+        "Gallec",
+        "Rus",
+        "Basc",
+        "Múltiples idiomes",
+        "Altres / Desconegut"
+    );
+
+    private static final Map<String, String> LANGUAGE_COLORS = Map.ofEntries(
+        Map.entry("Anglès", "#6366f1"),
+        Map.entry("Espanyol", "#f59e0b"),
+        Map.entry("Català", "#10b981"),
+        Map.entry("Francès", "#ec4899"),
+        Map.entry("Italià", "#06b6d4"),
+        Map.entry("Portuguès", "#8b5cf6"),
+        Map.entry("Alemany", "#f97316"),
+        Map.entry("Gallec", "#14b8a6"),
+        Map.entry("Rus", "#ef4444"),
+        Map.entry("Basc", "#84cc16"),
+        Map.entry("Múltiples idiomes", "#3b82f6"),
+        Map.entry("Altres / Desconegut", "#94a3b8")
+    );
+
+    public String normalizeRecognizedLanguage(String raw) {
+        if (raw == null || raw.isBlank()) return "Altres / Desconegut";
+        String lower = raw.trim().toLowerCase();
+        if (lower.contains("no s'ha definit") || lower.contains("desconegut")) return "Altres / Desconegut";
+        if (lower.contains("angl")) return "Anglès";
+        if (lower.contains("espanyol") || lower.contains("castell")) return "Espanyol";
+        if (lower.contains("catal")) return "Català";
+        if (lower.contains("franc")) return "Francès";
+        if (lower.contains("itali")) return "Italià";
+        if (lower.contains("portugu")) return "Portuguès";
+        if (lower.contains("alemany") || lower.contains("alem")) return "Alemany";
+        if (lower.contains("gallec")) return "Gallec";
+        if (lower.contains("rus")) return "Rus";
+        if (lower.contains("basc") || lower.contains("èusc") || lower.contains("eusc")) return "Basc";
+        if (lower.contains("múltiples") || lower.contains("multiples")) return "Múltiples idiomes";
+        return "Altres / Desconegut";
+    }
+
+    /**
+     * Distribució per any dels diferents idiomes reconeguts a les publicacions que tenen abstract
+     */
+    public Map<String, Object> getAbstractsLanguagesByYear(Integer desde, Integer hasta, String type) {
+        return getAbstractsLanguagesByYear(desde, hasta, type, "publicationYear");
+    }
+
+    public Map<String, Object> getAbstractsLanguagesByYear(Integer desde, Integer hasta, String type, String yearType) {
+        boolean isSubmissionYear = "submissionYear".equalsIgnoreCase(yearType);
+        String cacheKey = "years_languages_" + (isSubmissionYear ? "sub" : "pub") + "_" + desde + "_" + hasta + "_" + (type == null ? "" : type);
+        CacheEntry cached = yearsLanguagesCache.get(cacheKey);
+        if (isCacheValid(cached)) {
+            return (Map<String, Object>) cached.data();
+        }
+
+        List<Document> pipeline = new ArrayList<>();
+
+        List<Document> initialMatches = new ArrayList<>();
+        // Only publications that have an abstract (non-empty ca, es, or en)
+        initialMatches.add(new Document("$or", List.of(
+            new Document("abstract.ca_ES", new Document("$exists", true).append("$ne", "")),
+            new Document("abstract.es_ES", new Document("$exists", true).append("$ne", "")),
+            new Document("abstract.en_GB", new Document("$exists", true).append("$ne", ""))
+        )));
+
+        if (type != null && !type.isBlank()) {
+            initialMatches.add(new Document("$or", List.of(
+                new Document("type.term.ca_ES", type),
+                new Document("type.term.es_ES", type),
+                new Document("type.term.en_GB", type)
+            )));
+        }
+
+        pipeline.add(new Document("$match", new Document("$and", initialMatches)));
+
+        pipeline.add(new Document("$project", new Document()
+            .append("year", new Document("$cond", List.of(
+                new Document("$gte", List.of(
+                    new Document("$ifNull", List.of(isSubmissionYear ? "$submissionYear" : buildPublicationYearExpr(), 0)),
+                    1900
+                )),
+                isSubmissionYear ? "$submissionYear" : buildPublicationYearExpr(),
+                0
+            )))
+            .append("rawLang", new Document("$ifNull", List.of("$language.term.ca_ES", "Desconegut")))
+        ));
+
+        List<Document> yearFilterList = new ArrayList<>();
+        if (desde != null) {
+            if (desde == 0) {
+                yearFilterList.add(new Document("year", 0));
+            } else {
+                yearFilterList.add(new Document("year", new Document("$gte", desde)));
+            }
+        } else {
+            yearFilterList.add(new Document("year", new Document("$gte", 1990)));
+        }
+        if (hasta != null && hasta > 0) yearFilterList.add(new Document("year", new Document("$lte", hasta)));
+        pipeline.add(new Document("$match", new Document("$and", yearFilterList)));
+
+        pipeline.add(new Document("$group", new Document("_id", new Document("year", "$year").append("lang", "$rawLang"))
+            .append("count", new Document("$sum", 1))
+        ));
+
+        pipeline.add(new Document("$sort", new Document("_id.year", 1)));
+
+        List<Document> rawResults = mongoTemplate.getCollection("Researchoutputs").aggregate(pipeline).into(new ArrayList<>());
+
+        // Map of year -> Map<language, count>
+        Map<Integer, Map<String, Long>> yearLangCounts = new TreeMap<>();
+        Map<String, Long> totalPerLanguage = new HashMap<>();
+
+        for (Document doc : rawResults) {
+            Document idDoc = (Document) doc.get("_id");
+            if (idDoc == null) continue;
+            Object yrObj = idDoc.get("year");
+            if (yrObj == null || !(yrObj instanceof Number)) continue;
+            int year = ((Number) yrObj).intValue();
+            String rawLang = idDoc.getString("lang");
+            String normLang = normalizeRecognizedLanguage(rawLang);
+            long count = ((Number) doc.getOrDefault("count", 0)).longValue();
+
+            yearLangCounts.computeIfAbsent(year, y -> new HashMap<>())
+                .merge(normLang, count, Long::sum);
+
+            totalPerLanguage.merge(normLang, count, Long::sum);
+        }
+
+        List<Integer> years = new ArrayList<>(yearLangCounts.keySet());
+
+        // Sort languages so that languages with publications appear first, followed by others, preserving standard order
+        List<String> activeLanguages = new ArrayList<>();
+        for (String lang : RECOGNIZED_LANGUAGES) {
+            if (totalPerLanguage.getOrDefault(lang, 0L) > 0) {
+                activeLanguages.add(lang);
+            }
+        }
+        if (activeLanguages.isEmpty()) {
+            activeLanguages.addAll(RECOGNIZED_LANGUAGES);
+        }
+
+        // Build series for Chart.js
+        List<Map<String, Object>> series = new ArrayList<>();
+        for (String lang : activeLanguages) {
+            List<Long> data = new ArrayList<>();
+            for (Integer yr : years) {
+                long c = yearLangCounts.getOrDefault(yr, Collections.emptyMap()).getOrDefault(lang, 0L);
+                data.add(c);
+            }
+            Map<String, Object> s = new LinkedHashMap<>();
+            s.put("language", lang);
+            s.put("label", lang);
+            s.put("color", LANGUAGE_COLORS.getOrDefault(lang, "#94a3b8"));
+            s.put("total", totalPerLanguage.getOrDefault(lang, 0L));
+            s.put("data", data);
+            series.add(s);
+        }
+
+        // Totals per year
+        List<Long> totalsByYear = new ArrayList<>();
+        for (Integer yr : years) {
+            long totalYear = yearLangCounts.getOrDefault(yr, Collections.emptyMap()).values().stream().mapToLong(Long::longValue).sum();
+            totalsByYear.add(totalYear);
+        }
+
+        // Detailed Year Breakdown
+        List<Map<String, Object>> yearBreakdown = new ArrayList<>();
+        for (int i = 0; i < years.size(); i++) {
+            int yr = years.get(i);
+            long total = totalsByYear.get(i);
+            Map<String, Object> yb = new LinkedHashMap<>();
+            yb.put("year", yr);
+            yb.put("total", total);
+            yb.put("languages", yearLangCounts.getOrDefault(yr, Collections.emptyMap()));
+            yearBreakdown.add(yb);
+        }
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("years", years);
+        response.put("languages", activeLanguages);
+        response.put("series", series);
+        response.put("totalsByYear", totalsByYear);
+        response.put("yearBreakdown", yearBreakdown);
+        response.put("totalLanguagesCount", totalPerLanguage);
+
+        yearsLanguagesCache.put(cacheKey, new CacheEntry(response, System.currentTimeMillis()));
+        return response;
+    }
+
     /**
      * Distribució per tipus de document
      */
     public List<Map<String, Object>> getAbstractsByType(Integer desde, Integer hasta) {
-        String cacheKey = "types_" + desde + "_" + hasta;
+        return getAbstractsByType(desde, hasta, "publicationYear");
+    }
+
+    public List<Map<String, Object>> getAbstractsByType(Integer desde, Integer hasta, String yearType) {
+        boolean isSubmissionYear = "submissionYear".equalsIgnoreCase(yearType);
+        String cacheKey = "types_" + (isSubmissionYear ? "sub" : "pub") + "_" + desde + "_" + hasta;
         CacheEntry cached = typesCache.get(cacheKey);
         if (isCacheValid(cached)) {
             return (List<Map<String, Object>>) cached.data();
@@ -395,14 +941,15 @@ public class PublicacionAbstractsService {
 
         List<Document> pipeline = new ArrayList<>();
 
-        List<Document> initialMatches = new ArrayList<>();
-        if (desde != null) initialMatches.add(new Document("submissionYear", new Document("$gte", desde)));
-        if (hasta != null) initialMatches.add(new Document("submissionYear", new Document("$lte", hasta)));
-        if (!initialMatches.isEmpty()) {
-            pipeline.add(new Document("$match", new Document("$and", initialMatches)));
-        }
-
         pipeline.add(new Document("$project", new Document()
+            .append("year", new Document("$cond", List.of(
+                new Document("$gte", List.of(
+                    new Document("$ifNull", List.of(isSubmissionYear ? "$submissionYear" : buildPublicationYearExpr(), 0)),
+                    1900
+                )),
+                isSubmissionYear ? "$submissionYear" : buildPublicationYearExpr(),
+                0
+            )))
             .append("type", new Document("$ifNull", List.of("$type.term.ca_ES", "Sense tipus")))
             .append("has_ca", new Document("$cond", List.of(new Document("$gt", List.of(new Document("$strLenCP", new Document("$ifNull", List.of("$abstract.ca_ES", ""))), 0)), 1, 0)))
             .append("has_es", new Document("$cond", List.of(new Document("$gt", List.of(new Document("$strLenCP", new Document("$ifNull", List.of("$abstract.es_ES", ""))), 0)), 1, 0)))
@@ -411,6 +958,19 @@ public class PublicacionAbstractsService {
             .append("es", new Document("$ifNull", List.of("$abstract.es_ES", "")))
             .append("en", new Document("$ifNull", List.of("$abstract.en_GB", "")))
         ));
+
+        List<Document> yearFilterList = new ArrayList<>();
+        if (desde != null) {
+            if (desde == 0) {
+                yearFilterList.add(new Document("year", 0));
+            } else {
+                yearFilterList.add(new Document("year", new Document("$gte", desde)));
+            }
+        }
+        if (hasta != null && hasta > 0) yearFilterList.add(new Document("year", new Document("$lte", hasta)));
+        if (!yearFilterList.isEmpty()) {
+            pipeline.add(new Document("$match", new Document("$and", yearFilterList)));
+        }
 
         pipeline.add(new Document("$project", new Document()
             .append("type", 1)
@@ -474,16 +1034,31 @@ public class PublicacionAbstractsService {
             Integer desde,
             Integer hasta,
             String type,
+            String language,
+            int page,
+            int size,
+            String sortField,
+            String sortDir) {
+        return getAbstractsList(filter, search, desde, hasta, type, language, "publicationYear", page, size, sortField, sortDir);
+    }
+
+    public Map<String, Object> getAbstractsList(
+            String filter,
+            String search,
+            Integer desde,
+            Integer hasta,
+            String type,
+            String language,
+            String yearType,
             int page,
             int size,
             String sortField,
             String sortDir) {
 
+        boolean isSubmissionYear = "submissionYear".equalsIgnoreCase(yearType);
         List<Document> pipeline = new ArrayList<>();
 
         List<Document> initialMatches = new ArrayList<>();
-        if (desde != null) initialMatches.add(new Document("submissionYear", new Document("$gte", desde)));
-        if (hasta != null) initialMatches.add(new Document("submissionYear", new Document("$lte", hasta)));
         if (type != null && !type.isBlank()) {
             initialMatches.add(new Document("$or", List.of(
                 new Document("type.term.ca_ES", type),
@@ -498,8 +1073,10 @@ public class PublicacionAbstractsService {
         pipeline.add(new Document("$project", new Document()
             .append("uuid", 1)
             .append("title", 1)
+            .append("publicationYear", buildPublicationYearExpr())
             .append("submissionYear", 1)
             .append("type", 1)
+            .append("language", 1)
             .append("contributors", 1)
             .append("abstract", 1)
             .append("has_ca", new Document("$cond", List.of(new Document("$gt", List.of(new Document("$strLenCP", new Document("$ifNull", List.of("$abstract.ca_ES", ""))), 0)), 1, 0)))
@@ -510,11 +1087,33 @@ public class PublicacionAbstractsService {
             .append("en", new Document("$ifNull", List.of("$abstract.en_GB", "")))
         ));
 
+        List<Document> yearFilterList = new ArrayList<>();
+        String checkYearField = isSubmissionYear ? "submissionYear" : "publicationYear";
+        if (desde != null) {
+            if (desde == 0) {
+                yearFilterList.add(new Document("$or", List.of(
+                    new Document(checkYearField, null),
+                    new Document(checkYearField, 0),
+                    new Document(checkYearField, new Document("$exists", false))
+                )));
+            } else {
+                yearFilterList.add(new Document(checkYearField, new Document("$gte", desde)));
+            }
+        }
+        if (hasta != null && hasta > 0) {
+            yearFilterList.add(new Document(checkYearField, new Document("$lte", hasta)));
+        }
+        if (!yearFilterList.isEmpty()) {
+            pipeline.add(new Document("$match", new Document("$and", yearFilterList)));
+        }
+
         pipeline.add(new Document("$project", new Document()
             .append("uuid", 1)
             .append("title", 1)
+            .append("publicationYear", 1)
             .append("submissionYear", 1)
             .append("type", 1)
+            .append("language", 1)
             .append("contributors", 1)
             .append("abstract", 1)
             .append("has_ca", 1)
@@ -552,6 +1151,43 @@ public class PublicacionAbstractsService {
                     // Filter where abstract exists
                     matchConditions.add(new Document("lang_count", new Document("$gt", 0)));
                 }
+            }
+        }
+
+        if (language != null && !language.isBlank() && !"all".equalsIgnoreCase(language)) {
+            String norm = normalizeRecognizedLanguage(language);
+            if ("Anglès".equalsIgnoreCase(norm)) {
+                matchConditions.add(new Document("language.term.ca_ES", new Document("$regex", "Angl").append("$options", "i")));
+            } else if ("Espanyol".equalsIgnoreCase(norm)) {
+                matchConditions.add(new Document("language.term.ca_ES", new Document("$regex", "Espanyol|Castell").append("$options", "i")));
+            } else if ("Català".equalsIgnoreCase(norm)) {
+                matchConditions.add(new Document("language.term.ca_ES", new Document("$regex", "Catal").append("$options", "i")));
+            } else if ("Francès".equalsIgnoreCase(norm)) {
+                matchConditions.add(new Document("language.term.ca_ES", new Document("$regex", "Franc").append("$options", "i")));
+            } else if ("Italià".equalsIgnoreCase(norm)) {
+                matchConditions.add(new Document("language.term.ca_ES", new Document("$regex", "Itali").append("$options", "i")));
+            } else if ("Portuguès".equalsIgnoreCase(norm)) {
+                matchConditions.add(new Document("language.term.ca_ES", new Document("$regex", "Portugu").append("$options", "i")));
+            } else if ("Alemany".equalsIgnoreCase(norm)) {
+                matchConditions.add(new Document("language.term.ca_ES", new Document("$regex", "Alem").append("$options", "i")));
+            } else if ("Gallec".equalsIgnoreCase(norm)) {
+                matchConditions.add(new Document("language.term.ca_ES", new Document("$regex", "Gallec").append("$options", "i")));
+            } else if ("Rus".equalsIgnoreCase(norm)) {
+                matchConditions.add(new Document("language.term.ca_ES", new Document("$regex", "Rus").append("$options", "i")));
+            } else if ("Basc".equalsIgnoreCase(norm)) {
+                matchConditions.add(new Document("language.term.ca_ES", new Document("$regex", "Basc|usc").append("$options", "i")));
+            } else if ("Múltiples idiomes".equalsIgnoreCase(norm)) {
+                matchConditions.add(new Document("language.term.ca_ES", new Document("$regex", "ltiples").append("$options", "i")));
+            } else if ("Altres / Desconegut".equalsIgnoreCase(norm)) {
+                matchConditions.add(new Document("$or", List.of(
+                    new Document("language", new Document("$exists", false)),
+                    new Document("language", null),
+                    new Document("language.term.ca_ES", new Document("$nin", List.of(
+                        "Anglès", "Anglès nord-americà", "Espanyol", "Català", "Francès", "Italià", "Portuguès", "Portuguès (Brasil)", "Alemany", "Gallec", "Rus", "Basc", "Múltiples idiomes"
+                    )))
+                )));
+            } else {
+                matchConditions.add(new Document("language.term.ca_ES", language));
             }
         }
 
@@ -605,10 +1241,13 @@ public class PublicacionAbstractsService {
             }
         }
 
-        // Adjust totalElements for specific linguistic filters if needed
-        if (filter != null) {
-            if ("wrong_language".equalsIgnoreCase(filter)) totalElements = 74568;
-            else if ("genuine_3_langs".equalsIgnoreCase(filter)) totalElements = 1448;
+        // Adjust totalElements dynamically for specific linguistic filters if needed
+        if (filter != null && (search == null || search.isBlank()) && (language == null || language.isBlank() || "all".equalsIgnoreCase(language))) {
+            if ("wrong_language".equalsIgnoreCase(filter)) {
+                totalElements = ((Number) getAbstractStats(desde, hasta, type).getOrDefault("wrongLanguageCount", totalElements)).longValue();
+            } else if ("genuine_3_langs".equalsIgnoreCase(filter)) {
+                totalElements = ((Number) getAbstractStats(desde, hasta, type).getOrDefault("genuine3Langs", totalElements)).longValue();
+            }
         }
 
         int totalPages = size > 0 ? (int) Math.ceil((double) totalElements / size) : 0;
@@ -629,12 +1268,18 @@ public class PublicacionAbstractsService {
 
         Document titleDoc = (Document) doc.get("title");
         item.put("title", titleDoc != null ? titleDoc.getString("value") : "Sense títol");
+        item.put("publicationYear", doc.get("publicationYear") != null ? doc.get("publicationYear") : extractPublicationYear(doc));
         item.put("submissionYear", doc.get("submissionYear"));
 
         Document typeDoc = (Document) doc.get("type");
         Document termDoc = typeDoc != null ? (Document) typeDoc.get("term") : null;
         String typeName = termDoc != null ? termDoc.getString("ca_ES") : "Sense tipus";
         item.put("typeName", typeName != null ? typeName : "Sense tipus");
+
+        Document langDoc = (Document) doc.get("language");
+        Document langTermDoc = langDoc != null ? (Document) langDoc.get("term") : null;
+        String pubLang = langTermDoc != null ? langTermDoc.getString("ca_ES") : null;
+        item.put("publicationLanguage", pubLang != null && !pubLang.isBlank() ? pubLang : "Sense idioma");
 
         List<Document> contributors = doc.getList("contributors", Document.class);
         String authors = "Sense autors";
@@ -758,6 +1403,7 @@ public class PublicacionAbstractsService {
         result.put("uuid", uuid);
         Document titleDoc = (Document) doc.get("title");
         result.put("title", titleDoc != null ? titleDoc.getString("value") : "Sense títol");
+        result.put("publicationYear", extractPublicationYear(doc));
         result.put("submissionYear", doc.get("submissionYear"));
 
         Document typeDoc = (Document) doc.get("type");
@@ -815,5 +1461,12 @@ public class PublicacionAbstractsService {
     private String cleanForCompare(String text) {
         if (text == null) return "";
         return text.replaceAll("<[^>]+>", " ").replaceAll("\\s+", " ").trim().toLowerCase();
+    }
+
+    public void clearCache() {
+        statsCache.clear();
+        yearsCache.clear();
+        yearsLanguagesCache.clear();
+        typesCache.clear();
     }
 }

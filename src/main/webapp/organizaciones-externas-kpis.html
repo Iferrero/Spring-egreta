@@ -531,6 +531,7 @@
             }
 
             const emptyBundle = {
+                associatedPerson: '',
                 country: { country: '', uri: '', confidence: 0, reason: '' },
                 type: { type: '', confidence: 0, reason: '' },
                 funding: { funding: '', confidence: 0, reason: '' }
@@ -540,10 +541,12 @@
                 let bundle = { ...emptyBundle };
                 let success = false;
                 try {
-                    const res = await apiFetch('/external-organizations/stats/suggest-metadata?name=' + encodeURIComponent(orgName), { signal: combinedSignal });
+                    const uuidParam = (org && org.uuid) ? '&uuid=' + encodeURIComponent(org.uuid) : '';
+                    const res = await apiFetch('/external-organizations/stats/suggest-metadata?name=' + encodeURIComponent(orgName) + uuidParam, { signal: combinedSignal });
                     if (res.ok) {
                         const data = await res.json();
                         bundle = {
+                            associatedPerson: String((data && data.associatedPerson) || '').trim(),
                             country: {
                                 country: String((data && data.suggestedCountry) || '').trim(),
                                 uri: String((data && data.suggestedCountryUri) || '').trim(),
@@ -615,7 +618,7 @@
             // Lanzar todas las peticiones en paralelo y actualizar el DOM a medida que resuelven
             const fetchPromises = needsFetch.map(org => {
                 return fetchSuggestionBundle(org, signal)
-                    .then(() => {
+                    .then((bundle) => {
                         // Petición completada con éxito — actualizar celdas de esta fila
                         uuidsBeingFetched.delete(org.uuid);
                         if (loadId !== currentLoadId) return;
@@ -627,6 +630,16 @@
                         if (typeCell) typeCell.innerHTML = getSuggestedTypeHtml(org);
                         if (fundingCell) fundingCell.innerHTML = getSuggestedFundingHtml(org);
                         if (countryCell) countryCell.innerHTML = getSuggestedCountryHtml(org);
+
+                        if (bundle && bundle.associatedPerson) {
+                            const nameCell = rowEl.querySelector('td[data-cell="org-name"]');
+                            if (nameCell && !nameCell.querySelector('.associated-person-info')) {
+                                const personDiv = document.createElement('div');
+                                personDiv.className = 'associated-person-info text-[11px] text-slate-500 font-normal mt-1 flex items-center gap-1.5';
+                                personDiv.innerHTML = '<i class="fa-solid fa-user-tag text-indigo-500 text-[10px]"></i> <span>' + esc(bundle.associatedPerson) + '</span>';
+                                nameCell.appendChild(personDiv);
+                            }
+                        }
                     })
                     .catch(err => {
                         // Siempre limpiar el Set, incluso en error o AbortError
@@ -1115,10 +1128,17 @@
                 const suggestedFundingCell = getSuggestedFundingHtml(org);
                 const suggestedCountryCell = getSuggestedCountryHtml(org);
 
+                const key = getOrgSuggestionKey(org);
+                const cachedBundle = suggestionBundleCache.get(key);
+                const associatedPerson = (cachedBundle && cachedBundle.associatedPerson) || '';
+                const personSubtext = associatedPerson
+                    ? '<div class="associated-person-info text-[11px] text-slate-500 font-normal mt-1 flex items-center gap-1.5"><i class="fa-solid fa-user-tag text-indigo-500 text-[10px]"></i> <span>' + esc(associatedPerson) + '</span></div>'
+                    : '';
+
                 const wf = workflowCell(org);
                 return `
         <tr data-uuid="${esc(org.uuid)}" class="hover:bg-slate-50 transition-colors">
-            <td class="px-6 py-3 font-semibold text-slate-800">${name}</td>
+            <td data-cell="org-name" class="px-6 py-3 font-semibold text-slate-800">${name}${personSubtext}</td>
             <td class="px-6 py-3 text-slate-600">${type}</td>
             <td data-cell="suggested-type" class="px-6 py-3 text-slate-600">${suggestedTypeCell}</td>
             <td class="px-6 py-3 text-slate-600">${funding}</td>
