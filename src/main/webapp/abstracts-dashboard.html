@@ -70,7 +70,7 @@
                 </div>
             </div>
             <div class="flex items-center gap-3 flex-wrap">
-                <button onclick="carregarTot()" class="px-4 py-2 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-all flex items-center gap-2 premium-shadow">
+                <button onclick="forcarRecalculTot()" class="px-4 py-2 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-all flex items-center gap-2 premium-shadow">
                     <i class="fa-solid fa-rotate" id="refreshIcon"></i>
                     <span>Actualitzar dades</span>
                 </button>
@@ -744,6 +744,20 @@
             carregarTot();
         });
 
+        async function forcarRecalculTot() {
+            const refreshIcon = document.getElementById('refreshIcon');
+            if (refreshIcon) refreshIcon.classList.add('fa-spin');
+
+            try {
+                // Clear backend in-memory cache to force 100% fresh recalculation
+                await apiFetch('/pure/abstracts/cache/clear', { method: 'POST' });
+            } catch (err) {
+                console.warn("Avís al netejar la memòria cau:", err);
+            }
+
+            await carregarTot();
+        }
+
         async function carregarTot() {
             const refreshIcon = document.getElementById('refreshIcon');
             if (refreshIcon) refreshIcon.classList.add('fa-spin');
@@ -1357,6 +1371,16 @@
 
         function canviarDimensioAnyIdiomes(dim) {
             dimensioAnyIdiomes = dim;
+            const selectYearType = document.getElementById('selectYearType');
+            if (selectYearType && selectYearType.value !== dim) {
+                selectYearType.value = dim;
+                if (dim === 'submissionYear' && cachedSubYearsData) {
+                    poblarSelectAnys(cachedSubYearsData);
+                } else if (cachedPubYearsData) {
+                    poblarSelectAnys(cachedPubYearsData);
+                }
+            }
+
             const btnPub = document.getElementById('btnLangYearPub');
             const btnSub = document.getElementById('btnLangYearSub');
 
@@ -1677,18 +1701,21 @@
                 let caBadge = `<span class="lang-tag lang-missing">-</span>`;
                 if (p.hasCa) {
                     if (p.detectedCa === 'ca_ES') caBadge = `<span class="lang-tag lang-ok" title="Català genuí">CA ✓</span>`;
+                    else if (p.detectedCa === 'unknown' || !p.isWrongCa) caBadge = `<span class="lang-tag bg-slate-100 text-slate-700 border border-slate-200" title="Català (Vocabulari tècnic / científic)">CA ~</span>`;
                     else caBadge = `<span class="lang-tag lang-wrong" title="Camp CA amb text detectat: ${formatLangName(p.detectedCa)}">CA ❌ (${formatShortLang(p.detectedCa)})</span>`;
                 }
 
                 let esBadge = `<span class="lang-tag lang-missing">-</span>`;
                 if (p.hasEs) {
                     if (p.detectedEs === 'es_ES') esBadge = `<span class="lang-tag lang-ok" title="Castellà genuí">ES ✓</span>`;
+                    else if (p.detectedEs === 'unknown' || !p.isWrongEs) esBadge = `<span class="lang-tag bg-slate-100 text-slate-700 border border-slate-200" title="Castellà (Vocabulari tècnic / científic)">ES ~</span>`;
                     else esBadge = `<span class="lang-tag lang-wrong" title="Camp ES amb text detectat: ${formatLangName(p.detectedEs)}">ES ❌ (${formatShortLang(p.detectedEs)})</span>`;
                 }
 
                 let enBadge = `<span class="lang-tag lang-missing">-</span>`;
                 if (p.hasEn) {
                     if (p.detectedEn === 'en_GB') enBadge = `<span class="lang-tag lang-ok" title="Anglès genuí">EN ✓</span>`;
+                    else if (p.detectedEn === 'unknown' || !p.isWrongEn) enBadge = `<span class="lang-tag bg-slate-100 text-slate-700 border border-slate-200" title="Anglès (Vocabulari tècnic / científic)">EN ~</span>`;
                     else enBadge = `<span class="lang-tag lang-wrong" title="Camp EN amb text detectat: ${formatLangName(p.detectedEn)}">EN ❌ (${formatShortLang(p.detectedEn)})</span>`;
                 }
 
@@ -1733,6 +1760,7 @@
                     </td>
                 </tr>
                 `;
+            }).join('');
         }
 
         async function obrirModal(uuid) {
@@ -1777,18 +1805,21 @@
                 // Language detection tags
                 if (data.hasCa) {
                     const ok = data.detectedCa === 'ca_ES';
-                    document.getElementById('modalDetectCa').className = `ml-1 text-[10px] font-bold px-1.5 py-0.5 rounded ${ok ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`;
-                    document.getElementById('modalDetectCa').innerText = ok ? '✓ Català real' : `❌ Detectat: ${formatLangName(data.detectedCa)}`;
+                    const wrong = data.isWrongCa;
+                    document.getElementById('modalDetectCa').className = `ml-1 text-[10px] font-bold px-1.5 py-0.5 rounded ${ok ? 'bg-emerald-100 text-emerald-800' : (wrong ? 'bg-rose-100 text-rose-800' : 'bg-slate-100 text-slate-700')}`;
+                    document.getElementById('modalDetectCa').innerText = ok ? '✓ Català real' : (wrong ? `❌ Detectat: ${formatLangName(data.detectedCa)}` : '~ Vocabulari tècnic');
                 }
                 if (data.hasEs) {
                     const ok = data.detectedEs === 'es_ES';
-                    document.getElementById('modalDetectEs').className = `ml-1 text-[10px] font-bold px-1.5 py-0.5 rounded ${ok ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`;
-                    document.getElementById('modalDetectEs').innerText = ok ? '✓ Castellà real' : `❌ Detectat: ${formatLangName(data.detectedEs)}`;
+                    const wrong = data.isWrongEs;
+                    document.getElementById('modalDetectEs').className = `ml-1 text-[10px] font-bold px-1.5 py-0.5 rounded ${ok ? 'bg-emerald-100 text-emerald-800' : (wrong ? 'bg-rose-100 text-rose-800' : 'bg-slate-100 text-slate-700')}`;
+                    document.getElementById('modalDetectEs').innerText = ok ? '✓ Castellà real' : (wrong ? `❌ Detectat: ${formatLangName(data.detectedEs)}` : '~ Vocabulari tècnic');
                 }
                 if (data.hasEn) {
                     const ok = data.detectedEn === 'en_GB';
-                    document.getElementById('modalDetectEn').className = `ml-1 text-[10px] font-bold px-1.5 py-0.5 rounded ${ok ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`;
-                    document.getElementById('modalDetectEn').innerText = ok ? '✓ Anglès real' : `❌ Detectat: ${formatLangName(data.detectedEn)}`;
+                    const wrong = data.isWrongEn;
+                    document.getElementById('modalDetectEn').className = `ml-1 text-[10px] font-bold px-1.5 py-0.5 rounded ${ok ? 'bg-emerald-100 text-emerald-800' : (wrong ? 'bg-rose-100 text-rose-800' : 'bg-slate-100 text-slate-700')}`;
+                    document.getElementById('modalDetectEn').innerText = ok ? '✓ Anglès real' : (wrong ? `❌ Detectat: ${formatLangName(data.detectedEn)}` : '~ Vocabulari tècnic');
                 }
 
                 // Alert banner
@@ -1878,6 +1909,18 @@
         function aplicarFiltres() {
             const selectYearType = document.getElementById('selectYearType');
             const yt = selectYearType ? selectYearType.value : 'publicationYear';
+            dimensioAnyIdiomes = yt;
+
+            const btnPub = document.getElementById('btnLangYearPub');
+            const btnSub = document.getElementById('btnLangYearSub');
+            if (yt === 'publicationYear') {
+                if (btnPub) btnPub.className = 'px-2.5 py-1 rounded-lg bg-white text-slate-900 shadow-sm transition font-bold';
+                if (btnSub) btnSub.className = 'px-2.5 py-1 rounded-lg text-slate-500 hover:text-slate-900 transition font-medium';
+            } else {
+                if (btnSub) btnSub.className = 'px-2.5 py-1 rounded-lg bg-white text-slate-900 shadow-sm transition font-bold';
+                if (btnPub) btnPub.className = 'px-2.5 py-1 rounded-lg text-slate-500 hover:text-slate-900 transition font-medium';
+            }
+
             if (yt === 'submissionYear' && cachedSubYearsData) {
                 poblarSelectAnys(cachedSubYearsData);
             } else if (cachedPubYearsData) {

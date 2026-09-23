@@ -5,7 +5,9 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.example.demo.model.ExternalOrganization;
+import com.example.demo.model.ExternalOrganizationDifferent;
 import com.example.demo.repository.ExternalOrganizationRepository;
+import com.example.demo.repository.ExternalOrganizationDifferentRepository;
 import org.bson.Document;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
@@ -18,6 +20,7 @@ import org.springframework.data.mongodb.core.aggregation.AggregationResults;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -37,6 +40,8 @@ import java.nio.charset.StandardCharsets;
 import java.text.Normalizer;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -92,7 +97,20 @@ public class ExternalOrganizationController {
     private final Map<String, CachedInference> typeInferenceCache = new ConcurrentHashMap<>();
     private final Map<String, CachedInference> associatedPersonCache = new ConcurrentHashMap<>();
 
+    @Value("${app.ror.suggest.enabled:true}")
+    private boolean rorSuggestEnabled;
+
+    @Value("${app.ror.suggest.url:https://api.ror.org/v2/organizations}")
+    private String rorSuggestUrl;
+
+    @Value("${app.ror.suggest.timeout-ms:3500}")
+    private int rorSuggestTimeoutMs;
+
+    private record CachedMetadataInference(MetadataInferenceResult result, long timestamp) {}
+    private final Map<String, CachedMetadataInference> rorInferenceCache = new ConcurrentHashMap<>();
+
     private final ExternalOrganizationRepository repository;
+    private final ExternalOrganizationDifferentRepository differentRepository;
     private final MongoTemplate mongoTemplate;
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
@@ -191,8 +209,10 @@ public class ExternalOrganizationController {
     @Autowired
     public ExternalOrganizationController(
             ExternalOrganizationRepository repository,
+            ExternalOrganizationDifferentRepository differentRepository,
             MongoTemplate mongoTemplate) {
         this.repository = repository;
+        this.differentRepository = differentRepository;
         this.mongoTemplate = mongoTemplate;
         this.objectMapper = new ObjectMapper();
         this.httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
@@ -720,58 +740,81 @@ public class ExternalOrganizationController {
         List<CountryAggregate> countryCatalog = getCachedCountryCatalog();
         List<TypeAggregate>    typeCatalog    = getCachedTypeCatalog();
 
-        MetadataInferenceResult aiResult = inferMetadataWithLocalAi(orgName, associatedPerson, countryCatalog, typeCatalog);
-
         InferenceResult countryResult = null;
         TypeInferenceResult typeResult = null;
         FundingInferenceResult fundingResult = null;
 
-        boolean aiCallFailed = (aiResult == null);
+        // 1. Paso ROR (Research Organization Registry) - Determinista, instantáneo y sin coste
+        MetadataInferenceResult rorResult = inferMetadataWithRor(orgName, countryCatalog, typeCatalog);
+        if (rorResult != null) {
+            if (rorResult.country() != null && !rorResult.country().countryLabel().isBlank() && rorResult.country().confidence() >= 0.85) {
+                countryResult = rorResult.country();
+            }
+            if (rorResult.type() != null && !rorResult.type().typeLabel().isBlank() && rorResult.type().confidence() >= 0.85) {
+                typeResult = rorResult.type();
+            }
+            if (rorResult.funding() != null && !rorResult.funding().fundingLabel().isBlank() && rorResult.funding().confidence() >= 0.85) {
+                fundingResult = rorResult.funding();
+            }
+        }
 
-        if (aiResult != null) {
-            countryResult = aiResult.country();
-            typeResult = aiResult.type();
-            fundingResult = aiResult.funding();
+        // 2. Si falta alguno de los 3 campos, consultar a IA Local
+        MetadataInferenceResult aiResult = null;
+        boolean aiCallFailed = false;
+        if (countryResult == null || typeResult == null || fundingResult == null) {
+            aiResult = inferMetadataWithLocalAi(orgName, associatedPerson, countryCatalog, typeCatalog);
+            aiCallFailed = (aiResult == null);
+            if (aiResult != null) {
+                if (countryResult == null && aiResult.country() != null && !aiResult.country().countryLabel().isBlank()) {
+                    countryResult = aiResult.country();
+                }
+                if (typeResult == null && aiResult.type() != null && !aiResult.type().typeLabel().isBlank()) {
+                    typeResult = aiResult.type();
+                }
+                if (fundingResult == null && aiResult.funding() != null && !aiResult.funding().fundingLabel().isBlank()) {
+                    fundingResult = aiResult.funding();
+                }
+            }
         }
 
         // Fallbacks for country
-        if (countryResult == null || countryResult.countryLabel.isBlank()) {
+        if (countryResult == null || countryResult.countryLabel().isBlank()) {
             countryResult = inferCountryWithWebSearch(orgName, associatedPerson, countryCatalog);
-            if (countryResult == null || countryResult.countryLabel.isBlank()) {
+            if (countryResult == null || countryResult.countryLabel().isBlank()) {
                 countryResult = inferCountryFromName(orgName, countryCatalog);
             }
         }
 
         // Fallbacks for type
-        if (typeResult == null || typeResult.typeLabel.isBlank()) {
-            if (!aiCallFailed) {
+        if (typeResult == null || typeResult.typeLabel().isBlank()) {
+            if (!aiCallFailed && aiResult == null) {
                 typeResult = inferTypeWithLocalAi(orgName, associatedPerson, typeCatalog);
             }
-            if (typeResult == null || typeResult.typeLabel.isBlank()) {
+            if (typeResult == null || typeResult.typeLabel().isBlank()) {
                 typeResult = inferTypeFromName(orgName, typeCatalog);
             }
         }
 
         // Fallbacks for funding
-        if (fundingResult == null || fundingResult.fundingLabel.isBlank()) {
+        if (fundingResult == null || fundingResult.fundingLabel().isBlank()) {
             fundingResult = inferFundingFromName(orgName);
         }
         
 
-        String suggestedCountryUri = resolveCountryUriByLabel(countryResult.countryLabel);
+        String suggestedCountryUri = resolveCountryUriByLabel(countryResult.countryLabel());
 
         Map<String, Object> out = new LinkedHashMap<>();
-        out.put("suggestedCountry", countryResult.countryLabel);
+        out.put("suggestedCountry", countryResult.countryLabel());
         out.put("suggestedCountryUri", suggestedCountryUri);
-        out.put("countryConfidence", countryResult.confidence);
-        out.put("countryReason", countryResult.reason);
-        out.put("suggestedType", typeResult.typeLabel);
-        out.put("typeConfidence", typeResult.confidence);
-        out.put("typeReason", typeResult.reason);
-        out.put("suggestedFunding", fundingResult.fundingLabel);
-        out.put("suggestedFundingUri", resolveFundingUri(fundingResult.fundingLabel));
-        out.put("fundingConfidence", fundingResult.confidence);
-        out.put("fundingReason", fundingResult.reason);
+        out.put("countryConfidence", countryResult.confidence());
+        out.put("countryReason", countryResult.reason());
+        out.put("suggestedType", typeResult.typeLabel());
+        out.put("typeConfidence", typeResult.confidence());
+        out.put("typeReason", typeResult.reason());
+        out.put("suggestedFunding", fundingResult.fundingLabel());
+        out.put("suggestedFundingUri", resolveFundingUri(fundingResult.fundingLabel()));
+        out.put("fundingConfidence", fundingResult.confidence());
+        out.put("fundingReason", fundingResult.reason());
         out.put("associatedPerson", associatedPerson != null ? associatedPerson : "");
         return out;
     }
@@ -795,25 +838,41 @@ public class ExternalOrganizationController {
         List<CountryAggregate> countryCatalog = getCachedCountryCatalog();
         List<TypeAggregate>    typeCatalog    = getCachedTypeCatalog();
 
-        // Inferencia local (sin AI) para todas
+        // 1. Paso ROR (Research Organization Registry) en paralelo para todas las organizaciones
         Map<String, InferenceResult>     countryResults = new ConcurrentHashMap<>();
         Map<String, TypeInferenceResult> typeResults    = new ConcurrentHashMap<>();
         Map<String, FundingInferenceResult> fundingResults = new ConcurrentHashMap<>();
-        for (ExternalOrganization org : organizations) {
-            String uuid    = org.getUuid();
-            String orgName = extractOrgName(org);
-            countryResults.put(uuid, inferCountryFromName(orgName, countryCatalog));
-            typeResults.put(uuid,    inferTypeFromName(orgName, typeCatalog));
-            fundingResults.put(uuid, inferFundingFromName(orgName));
+
+        if (rorSuggestEnabled) {
+            Map<String, CompletableFuture<MetadataInferenceResult>> rorFutures = new HashMap<>();
+            for (ExternalOrganization org : organizations) {
+                rorFutures.put(org.getUuid(), inferMetadataWithRorAsync(extractOrgName(org), countryCatalog, typeCatalog));
+            }
+            rorFutures.forEach((uuid, future) -> {
+                try {
+                    MetadataInferenceResult rorRes = future.get(rorSuggestTimeoutMs + AI_TIMEOUT_BUFFER_MS, TimeUnit.MILLISECONDS);
+                    if (rorRes != null) {
+                        if (rorRes.country() != null && !rorRes.country().countryLabel().isBlank() && rorRes.country().confidence() >= 0.85) {
+                            countryResults.put(uuid, rorRes.country());
+                        }
+                        if (rorRes.type() != null && !rorRes.type().typeLabel().isBlank() && rorRes.type().confidence() >= 0.85) {
+                            typeResults.put(uuid, rorRes.type());
+                        }
+                        if (rorRes.funding() != null && !rorRes.funding().fundingLabel().isBlank() && rorRes.funding().confidence() >= 0.85) {
+                            fundingResults.put(uuid, rorRes.funding());
+                        }
+                    }
+                } catch (Exception ignored) {}
+            });
         }
 
-        // Batch AI para los que no tienen resultado local
+        // 2. Paso Batch AI para los que sigan teniendo algún campo pendiente
         List<ExternalOrganization> needsAi = organizations.stream()
             .filter(org -> {
                 String uuid = org.getUuid();
-                return countryResults.getOrDefault(uuid, new InferenceResult("", 0.0, "")).countryLabel.isBlank()
-                    || typeResults.getOrDefault(uuid,    new TypeInferenceResult("", 0.0, "")).typeLabel.isBlank()
-                    || fundingResults.getOrDefault(uuid, new FundingInferenceResult("", 0.0, "")).fundingLabel.isBlank();
+                return countryResults.getOrDefault(uuid, new InferenceResult("", 0.0, "")).countryLabel().isBlank()
+                    || typeResults.getOrDefault(uuid,    new TypeInferenceResult("", 0.0, "")).typeLabel().isBlank()
+                    || fundingResults.getOrDefault(uuid, new FundingInferenceResult("", 0.0, "")).fundingLabel().isBlank();
             })
             .collect(Collectors.toList());
 
@@ -821,19 +880,34 @@ public class ExternalOrganizationController {
             Map<String, MetadataInferenceResult> aiResults =
                 inferMetadataBatch(needsAi, countryCatalog, typeCatalog);
             aiResults.forEach((uuid, aiResult) -> {
-                if (aiResult.country() != null && !aiResult.country().countryLabel.isBlank()
-                        && countryResults.getOrDefault(uuid, new InferenceResult("", 0.0, "")).countryLabel.isBlank()) {
+                if (aiResult.country() != null && !aiResult.country().countryLabel().isBlank()
+                        && countryResults.getOrDefault(uuid, new InferenceResult("", 0.0, "")).countryLabel().isBlank()) {
                     countryResults.put(uuid, aiResult.country());
                 }
-                if (aiResult.type() != null && !aiResult.type().typeLabel.isBlank()
-                        && typeResults.getOrDefault(uuid, new TypeInferenceResult("", 0.0, "")).typeLabel.isBlank()) {
+                if (aiResult.type() != null && !aiResult.type().typeLabel().isBlank()
+                        && typeResults.getOrDefault(uuid, new TypeInferenceResult("", 0.0, "")).typeLabel().isBlank()) {
                     typeResults.put(uuid, aiResult.type());
                 }
-                if (aiResult.funding() != null && !aiResult.funding().fundingLabel.isBlank()
-                        && fundingResults.getOrDefault(uuid, new FundingInferenceResult("", 0.0, "")).fundingLabel.isBlank()) {
+                if (aiResult.funding() != null && !aiResult.funding().fundingLabel().isBlank()
+                        && fundingResults.getOrDefault(uuid, new FundingInferenceResult("", 0.0, "")).fundingLabel().isBlank()) {
                     fundingResults.put(uuid, aiResult.funding());
                 }
             });
+        }
+
+        // 3. Paso final de Heurística Local de nombre (como último recurso de fallback)
+        for (ExternalOrganization org : organizations) {
+            String uuid    = org.getUuid();
+            String orgName = extractOrgName(org);
+            if (countryResults.getOrDefault(uuid, new InferenceResult("", 0.0, "")).countryLabel().isBlank()) {
+                countryResults.put(uuid, inferCountryFromName(orgName, countryCatalog));
+            }
+            if (typeResults.getOrDefault(uuid, new TypeInferenceResult("", 0.0, "")).typeLabel().isBlank()) {
+                typeResults.put(uuid, inferTypeFromName(orgName, typeCatalog));
+            }
+            if (fundingResults.getOrDefault(uuid, new FundingInferenceResult("", 0.0, "")).fundingLabel().isBlank()) {
+                fundingResults.put(uuid, inferFundingFromName(orgName));
+            }
         }
 
         // Construir respuesta
@@ -868,6 +942,44 @@ public class ExternalOrganizationController {
             row.put("workflow", workflowStep);
             return row;
         }).collect(Collectors.toList());
+    }
+
+    @PostMapping("/stats/clear-cache")
+    public Map<String, Object> clearCache() {
+        int rorCount = rorInferenceCache.size();
+        int countryCount = countryInferenceCache.size();
+        int typeCount = typeInferenceCache.size();
+        int personCount = associatedPersonCache.size();
+        int graphCount = graphSimilarityCache.size() + pairsSimilarityCache.size();
+
+        rorInferenceCache.clear();
+        countryInferenceCache.clear();
+        typeInferenceCache.clear();
+        associatedPersonCache.clear();
+        graphSimilarityCache.clear();
+        pairsSimilarityCache.clear();
+        cachedCountryCatalog.set(null);
+        cachedTypeCatalog.set(null);
+        cachedExternalOrgUuids.set(null);
+        cachedReferencedExternalOrgUuids.set(null);
+        containsWordCache.clear();
+
+        log.info("Caches de ExternalOrganization netejades manualment (ROR: {}, País: {}, Tipus: {}, Persones: {}, Grafs: {})",
+                rorCount, countryCount, typeCount, personCount, graphCount);
+
+        Map<String, Object> resp = new LinkedHashMap<>();
+        resp.put("success", true);
+        resp.put("message", "S'han buidat totes les memòries cau correctament");
+        resp.put("clearedEntries", Map.of(
+            "rorInferences", rorCount,
+            "countryInferences", countryCount,
+            "typeInferences", typeCount,
+            "associatedPersons", personCount,
+            "graphs", graphCount
+        ));
+        resp.put("timestamp", System.currentTimeMillis());
+
+        return resp;
     }
 
     @GetMapping("/stats/country-catalog")
@@ -2030,6 +2142,200 @@ public class ExternalOrganizationController {
         return result;
     }
 
+    private Set<String> getIgnoredPairKeys() {
+        try {
+            List<ExternalOrganizationDifferent> all = differentRepository.findAll();
+            Set<String> keys = new HashSet<>(all.size());
+            for (ExternalOrganizationDifferent diff : all) {
+                String u1 = diff.getOrg1Uuid();
+                String u2 = diff.getOrg2Uuid();
+                if (u1 != null && u2 != null) {
+                    String key = u1.compareTo(u2) < 0 ? u1 + "|" + u2 : u2 + "|" + u1;
+                    keys.add(key);
+                }
+            }
+            return keys;
+        } catch (Exception ex) {
+            log.warn("Error llegint organitzacions marcades com a diferents: {}", ex.getMessage());
+            return Collections.emptySet();
+        }
+    }
+
+    @PostMapping("/similarity/different")
+    public Map<String, Object> markDifferentOrganizations(@RequestBody Map<String, Object> payload) {
+        List<ExternalOrganizationDifferent> toSave = new ArrayList<>();
+
+        // 1. Single pair { "from": "uuid1", "to": "uuid2", "fromName": "...", "toName": "..." } or { "org1": "...", "org2": "..." }
+        String from = Objects.toString(payload.get("from") != null ? payload.get("from") : payload.get("org1"), "").trim();
+        String to = Objects.toString(payload.get("to") != null ? payload.get("to") : payload.get("org2"), "").trim();
+        String fromName = Objects.toString(payload.get("fromName") != null ? payload.get("fromName") : payload.get("org1Name"), "").trim();
+        String toName = Objects.toString(payload.get("toName") != null ? payload.get("toName") : payload.get("org2Name"), "").trim();
+
+        if (!from.isBlank() && !to.isBlank() && !from.equals(to)) {
+            toSave.add(new ExternalOrganizationDifferent(from, to, fromName, toName));
+        }
+
+        // 2. Cluster UUIDs { "clusterUuids": ["u1", "u2", "u3"] }
+        if (payload.get("clusterUuids") instanceof List<?> clusterList) {
+            List<String> uuids = clusterList.stream()
+                .filter(Objects::nonNull)
+                .map(Object::toString)
+                .map(String::trim)
+                .filter(s -> !s.isBlank())
+                .distinct()
+                .toList();
+
+            for (int i = 0; i < uuids.size(); i++) {
+                for (int j = i + 1; j < uuids.size(); j++) {
+                    toSave.add(new ExternalOrganizationDifferent(uuids.get(i), uuids.get(j), null, null));
+                }
+            }
+        }
+
+        // 3. List of pairs { "pairs": [ {"from": "u1", "to": "u2"}, ... ] }
+        if (payload.get("pairs") instanceof List<?> pairsList) {
+            for (Object item : pairsList) {
+                if (item instanceof Map<?, ?> pairMap) {
+                    String pFrom = Objects.toString(pairMap.get("from") != null ? pairMap.get("from") : pairMap.get("org1"), "").trim();
+                    String pTo = Objects.toString(pairMap.get("to") != null ? pairMap.get("to") : pairMap.get("org2"), "").trim();
+                    String pFromName = Objects.toString(pairMap.get("fromName") != null ? pairMap.get("fromName") : pairMap.get("org1Name"), "").trim();
+                    String pToName = Objects.toString(pairMap.get("toName") != null ? pairMap.get("toName") : pairMap.get("org2Name"), "").trim();
+                    if (!pFrom.isBlank() && !pTo.isBlank() && !pFrom.equals(pTo)) {
+                        toSave.add(new ExternalOrganizationDifferent(pFrom, pTo, pFromName, pToName));
+                    }
+                }
+            }
+        }
+
+        if (toSave.isEmpty()) {
+            return Map.of("success", false, "savedCount", 0, "message", "No s'han rebut parelles vàlides");
+        }
+
+        // Resolve any missing organization names from ExternalOrganizations collection
+        Set<String> missingUuids = new HashSet<>();
+        for (ExternalOrganizationDifferent diff : toSave) {
+            if (diff.getOrg1Name() == null || diff.getOrg1Name().isBlank()) {
+                if (diff.getOrg1Uuid() != null && !diff.getOrg1Uuid().isBlank()) {
+                    missingUuids.add(diff.getOrg1Uuid());
+                }
+            }
+            if (diff.getOrg2Name() == null || diff.getOrg2Name().isBlank()) {
+                if (diff.getOrg2Uuid() != null && !diff.getOrg2Uuid().isBlank()) {
+                    missingUuids.add(diff.getOrg2Uuid());
+                }
+            }
+        }
+
+        if (!missingUuids.isEmpty()) {
+            Query query = new Query(new Criteria().orOperator(
+                Criteria.where("uuid").in(missingUuids),
+                Criteria.where("id").in(missingUuids)
+            ));
+            query.fields().include("uuid").include("id").include("displayName").include("name");
+            List<ExternalOrganization> orgs = mongoTemplate.find(query, ExternalOrganization.class);
+            Map<String, String> nameMap = new HashMap<>();
+            for (ExternalOrganization org : orgs) {
+                String name = getOrgDisplayName(org);
+                if (org.getUuid() != null && !org.getUuid().isBlank()) nameMap.put(org.getUuid(), name);
+                if (org.getId() != null && !org.getId().isBlank()) nameMap.put(org.getId(), name);
+            }
+
+            for (ExternalOrganizationDifferent diff : toSave) {
+                if ((diff.getOrg1Name() == null || diff.getOrg1Name().isBlank()) && nameMap.containsKey(diff.getOrg1Uuid())) {
+                    diff.setOrg1Name(nameMap.get(diff.getOrg1Uuid()));
+                }
+                if ((diff.getOrg2Name() == null || diff.getOrg2Name().isBlank()) && nameMap.containsKey(diff.getOrg2Uuid())) {
+                    diff.setOrg2Name(nameMap.get(diff.getOrg2Uuid()));
+                }
+            }
+        }
+
+        differentRepository.saveAll(toSave);
+
+        // Clear cached results
+        pairsSimilarityCache.clear();
+        graphSimilarityCache.clear();
+
+        return Map.of("success", true, "savedCount", toSave.size());
+    }
+
+    private void backfillMissingDifferentNames() {
+        try {
+            Query query = new Query(new Criteria().orOperator(
+                Criteria.where("org1Name").is(null),
+                Criteria.where("org1Name").is(""),
+                Criteria.where("org2Name").is(null),
+                Criteria.where("org2Name").is("")
+            )).limit(500);
+
+            List<ExternalOrganizationDifferent> list = mongoTemplate.find(query, ExternalOrganizationDifferent.class);
+            if (list.isEmpty()) return;
+
+            Set<String> uuids = new HashSet<>();
+            for (ExternalOrganizationDifferent diff : list) {
+                if (diff.getOrg1Uuid() != null && !diff.getOrg1Uuid().isBlank()) uuids.add(diff.getOrg1Uuid());
+                if (diff.getOrg2Uuid() != null && !diff.getOrg2Uuid().isBlank()) uuids.add(diff.getOrg2Uuid());
+            }
+
+            Query orgQuery = new Query(new Criteria().orOperator(
+                Criteria.where("uuid").in(uuids),
+                Criteria.where("id").in(uuids)
+            ));
+            orgQuery.fields().include("uuid").include("id").include("displayName").include("name");
+            List<ExternalOrganization> orgs = mongoTemplate.find(orgQuery, ExternalOrganization.class);
+            Map<String, String> nameMap = new HashMap<>();
+            for (ExternalOrganization org : orgs) {
+                String name = getOrgDisplayName(org);
+                if (org.getUuid() != null && !org.getUuid().isBlank()) nameMap.put(org.getUuid(), name);
+                if (org.getId() != null && !org.getId().isBlank()) nameMap.put(org.getId(), name);
+            }
+
+            for (ExternalOrganizationDifferent diff : list) {
+                boolean changed = false;
+                if ((diff.getOrg1Name() == null || diff.getOrg1Name().isBlank()) && nameMap.containsKey(diff.getOrg1Uuid())) {
+                    diff.setOrg1Name(nameMap.get(diff.getOrg1Uuid()));
+                    changed = true;
+                }
+                if ((diff.getOrg2Name() == null || diff.getOrg2Name().isBlank()) && nameMap.containsKey(diff.getOrg2Uuid())) {
+                    diff.setOrg2Name(nameMap.get(diff.getOrg2Uuid()));
+                    changed = true;
+                }
+                if (changed) {
+                    differentRepository.save(diff);
+                }
+            }
+        } catch (Exception ex) {
+            log.warn("Error rellenant noms d'organitzacions diferents: {}", ex.getMessage());
+        }
+    }
+
+    @GetMapping("/similarity/different")
+    public Map<String, Object> listDifferentOrganizations(
+            @RequestParam(name = "page", defaultValue = "0") int page,
+            @RequestParam(name = "size", defaultValue = "100") int size) {
+        backfillMissingDifferentNames();
+        Page<ExternalOrganizationDifferent> resultPage = differentRepository.findAll(PageRequest.of(Math.max(0, page), Math.max(1, size)));
+        return Map.of(
+            "total", resultPage.getTotalElements(),
+            "totalPages", resultPage.getTotalPages(),
+            "currentPage", resultPage.getNumber(),
+            "items", resultPage.getContent()
+        );
+    }
+
+    @DeleteMapping("/similarity/different")
+    public Map<String, Object> removeDifferentPair(
+            @RequestParam(name = "org1") String org1,
+            @RequestParam(name = "org2") String org2) {
+        String u1 = org1.trim();
+        String u2 = org2.trim();
+        String id = u1.compareTo(u2) < 0 ? u1 + ":" + u2 : u2 + ":" + u1;
+        differentRepository.deleteById(id);
+        pairsSimilarityCache.clear();
+        graphSimilarityCache.clear();
+        return Map.of("success", true, "deletedId", id);
+    }
+
     // =========================================================================
     // GET /external-organizations/graph/similarity
     // Returns graph nodes (organizations) and edges (similarity links)
@@ -2252,6 +2558,8 @@ public class ExternalOrganizationController {
         state.progress = 16;
         state.message = "Comparant noms";
 
+        Set<String> ignoredKeys = getIgnoredPairKeys();
+
         SimilarityPairResult pairResult = buildSimilarityPairs(
             profiles,
             threshold,
@@ -2259,7 +2567,8 @@ public class ExternalOrganizationController {
             value -> {
                 state.progress = Math.max(16, Math.min(98, value));
                 state.message = "Comparant noms";
-            }
+            },
+            ignoredKeys
         );
 
         Map<String, Object> result = Map.of(
@@ -2349,10 +2658,10 @@ public class ExternalOrganizationController {
     }
 
     private SimilarityPairResult buildSimilarityPairs(List<OrgSimilarityProfile> profiles, double threshold, int maxPairs) {
-        return buildSimilarityPairs(profiles, threshold, maxPairs, null);
+        return buildSimilarityPairs(profiles, threshold, maxPairs, null, getIgnoredPairKeys());
     }
 
-    private SimilarityPairResult buildSimilarityPairs(List<OrgSimilarityProfile> profiles, double threshold, int maxPairs, java.util.function.IntConsumer progressCallback) {
+    private SimilarityPairResult buildSimilarityPairs(List<OrgSimilarityProfile> profiles, double threshold, int maxPairs, java.util.function.IntConsumer progressCallback, Set<String> ignoredKeys) {
         List<Map<String, Object>> pairs = new ArrayList<>();
         Set<String> edgeIds = new HashSet<>();
         Set<String> connectedNodeIds = new HashSet<>();
@@ -2388,6 +2697,9 @@ public class ExternalOrganizationController {
                 String id1 = p1.id();
                 String id2 = p2.id();
                 String edgeId = id1.compareTo(id2) < 0 ? id1 + "|" + id2 : id2 + "|" + id1;
+                if (ignoredKeys != null && ignoredKeys.contains(edgeId)) {
+                    continue;
+                }
                 if (!edgeIds.add(edgeId)) {
                     continue;
                 }
@@ -2898,25 +3210,35 @@ public class ExternalOrganizationController {
         Map.entry("association", List.of("association", "associacio", "asociacion", "society", "societat"))
     );
 
-    private static final List<String> FUNDING_PUBLIC_HINTS = List.of(
-        "universitat", "universidad", "university",
+    private static final List<String> FUNDING_STRONG_PUBLIC_HINTS = List.of(
         "ministeri", "ministerio", "ministry",
-        "govern", "government", "governo",
-        "ajuntament", "ayuntamiento", "city council",
-        "diputacio", "diputacion",
-        "conselleria", "agencia publica", "agencia estatal",
+        "govern", "government", "governo", "gouvernement",
+        "generalitat", "ajuntament", "ayuntamiento", "city council",
+        "diputacio", "diputacion", "conselleria", "consejeria",
+        "csic", "cnrs", "conicet", "inserm", "ciber", "isciii",
+        "instituto nacional", "institut nacional", "national institute",
+        "agencia publica", "agencia estatal"
+    );
+
+    private static final List<String> FUNDING_PUBLIC_HINTS = List.of(
+        "universitat", "universidad", "university", "universite", "universita",
         "institut public", "instituto publico",
-        "hospital public", "servicio de salud", "servei de salut",
-        "csic", "cnrs"
+        "hospital universitari", "hospital universitario", "hospital clinic", "hospital general",
+        "servei de salut", "servicio de salud", "catsalut", "sergas", "sacyl", "sescam", "osakidetza",
+        "irb", "idibaps", "vhio", "iisc", "max planck", "helmholtz", "fraunhofer", "inria", "inrae"
+    );
+
+    private static final List<String> FUNDING_STRONG_PRIVATE_HINTS = List.of(
+        "s l", "slu", "slp", "s a", "sa", "s l u", "s a u",
+        "ltd", "llc", "inc", "corp", "corporation",
+        "gmbh", "bv", "nv", "plc", "srl", "spa", "kgaa", "sas", "sarl",
+        "fundacio privada", "fundacion privada"
     );
 
     private static final List<String> FUNDING_PRIVATE_HINTS = List.of(
-        "s l", "slu", "slp", "s a", "sa",
-        "ltd", "llc", "inc", "corp", "corporation",
-        "company", "empresa", "startup",
-        "holding", "ventures", "capital",
-        "gmbh", "bv", "nv", "plc",
-        "fundacio privada", "fundacion privada"
+        "company", "empresa", "startup", "holding", "ventures", "capital",
+        "pharma", "pharmaceuticals", "biotech", "laboratories", "laboratorios",
+        "therapeutics", "technologies", "consulting", "solutions", "software"
     );
 
     // =========================================================================
@@ -3099,15 +3421,31 @@ public class ExternalOrganizationController {
             return new FundingInferenceResult("", 0.0, "no-signal");
         }
 
+        int strongPublicHits = 0;
+        int strongPrivateHits = 0;
         int publicHits = 0;
         int privateHits = 0;
         String publicHit = "";
         String privateHit = "";
 
+        for (String hint : FUNDING_STRONG_PUBLIC_HINTS) {
+            if (containsWord(normalized, hint)) {
+                strongPublicHits++;
+                publicHits += 2;
+                if (publicHit.isBlank()) publicHit = hint;
+            }
+        }
         for (String hint : FUNDING_PUBLIC_HINTS) {
             if (containsWord(normalized, hint)) {
                 publicHits++;
                 if (publicHit.isBlank()) publicHit = hint;
+            }
+        }
+        for (String hint : FUNDING_STRONG_PRIVATE_HINTS) {
+            if (containsWord(normalized, hint)) {
+                strongPrivateHits++;
+                privateHits += 2;
+                if (privateHit.isBlank()) privateHit = hint;
             }
         }
         for (String hint : FUNDING_PRIVATE_HINTS) {
@@ -3132,8 +3470,11 @@ public class ExternalOrganizationController {
         int major = isPublic ? publicHits : privateHits;
         int minor = isPublic ? privateHits : publicHits;
         int diff = major - minor;
-        double confidence = clamp(0.58 + (diff * 0.11) + (major * 0.03));
-        confidence = Math.min(0.95, confidence);
+        boolean hasStrongSignal = isPublic ? (strongPublicHits > 0) : (strongPrivateHits > 0);
+
+        double baseConfidence = hasStrongSignal ? 0.92 : 0.85;
+        double confidence = clamp(baseConfidence + (diff * 0.03) + (major * 0.01));
+        confidence = Math.min(0.97, confidence);
 
         String reason = isPublic ? publicHit : privateHit;
         if (reason == null || reason.isBlank()) reason = "keyword-hint";
@@ -3173,6 +3514,325 @@ public class ExternalOrganizationController {
             .filter(t -> t.normalizedLabel.equals(target))
             .map(TypeAggregate::count)
             .findFirst().orElse(0);
+    }
+
+    // =========================================================================
+    // Inferencia ROR (Research Organization Registry)
+    // =========================================================================
+
+    public CompletableFuture<MetadataInferenceResult> inferMetadataWithRorAsync(
+            String orgName,
+            List<CountryAggregate> countryCatalog,
+            List<TypeAggregate> typeCatalog) {
+        if (!rorSuggestEnabled || orgName == null || orgName.isBlank()) {
+            return CompletableFuture.completedFuture(null);
+        }
+
+        String cacheKey = normalizeText(orgName);
+        CachedMetadataInference cached = rorInferenceCache.get(cacheKey);
+        if (cached != null && (System.currentTimeMillis() - cached.timestamp()) < INFERENCE_CACHE_TTL_MS) {
+            return CompletableFuture.completedFuture(cached.result());
+        }
+
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                String baseUrl = (rorSuggestUrl == null || rorSuggestUrl.isBlank())
+                        ? "https://api.ror.org/v2/organizations"
+                        : rorSuggestUrl.trim();
+                String encodedName = URLEncoder.encode(orgName.trim(), StandardCharsets.UTF_8);
+                String targetUrl = baseUrl + (baseUrl.contains("?") ? "&" : "?") + "query=" + encodedName;
+
+                HttpRequest req = HttpRequest.newBuilder()
+                        .uri(URI.create(targetUrl))
+                        .timeout(Duration.ofMillis(Math.max(1000, rorSuggestTimeoutMs)))
+                        .header("Accept", "application/json")
+                        .header("User-Agent", "Spring-egreta/1.0 (UAB)")
+                        .GET()
+                        .build();
+
+                HttpResponse<String> resp = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
+                if (resp.statusCode() == 200) {
+                    MetadataInferenceResult res = parseRorResponse(orgName, resp.body(), countryCatalog, typeCatalog);
+                    if (res != null) {
+                        rorInferenceCache.put(cacheKey, new CachedMetadataInference(res, System.currentTimeMillis()));
+                    }
+                    return res;
+                }
+            } catch (Exception e) {
+                log.debug("ROR API lookup error for '{}': {}", orgName, e.getMessage());
+            }
+            return null;
+        }, aiExecutor != null ? aiExecutor : asyncExecutor);
+    }
+
+    public MetadataInferenceResult inferMetadataWithRor(
+            String orgName,
+            List<CountryAggregate> countryCatalog,
+            List<TypeAggregate> typeCatalog) {
+        if (!rorSuggestEnabled || orgName == null || orgName.isBlank()) return null;
+        try {
+            return inferMetadataWithRorAsync(orgName, countryCatalog, typeCatalog)
+                    .get(rorSuggestTimeoutMs + AI_TIMEOUT_BUFFER_MS, TimeUnit.MILLISECONDS);
+        } catch (Exception e) {
+            log.debug("ROR synchronous lookup failed for '{}': {}", orgName, e.getMessage());
+            return null;
+        }
+    }
+
+    private MetadataInferenceResult parseRorResponse(
+            String queryOrgName,
+            String jsonBody,
+            List<CountryAggregate> countryCatalog,
+            List<TypeAggregate> typeCatalog) {
+        if (jsonBody == null || jsonBody.isBlank()) return null;
+
+        try {
+            JsonNode root = objectMapper.readTree(jsonBody);
+            JsonNode items = root.path("items");
+            if (!items.isArray() || items.isEmpty()) return null;
+
+            String queryNorm = normalizeText(queryOrgName);
+            if (queryNorm.isBlank()) return null;
+
+            JsonNode bestItem = null;
+            double bestScore = 0.0;
+
+            // Evaluate top items from ROR
+            int maxInspect = Math.min(items.size(), 5);
+            for (int i = 0; i < maxInspect; i++) {
+                JsonNode item = items.get(i);
+                JsonNode namesNode = item.path("names");
+                if (namesNode.isArray()) {
+                    for (JsonNode nameObj : namesNode) {
+                        String val = nameObj.path("value").asText("");
+                        if (val.isBlank()) continue;
+                        boolean isAcronym = false;
+                        JsonNode typesNode = nameObj.path("types");
+                        if (typesNode.isArray()) {
+                            for (JsonNode t : typesNode) {
+                                if ("acronym".equalsIgnoreCase(t.asText())) {
+                                    isAcronym = true;
+                                    break;
+                                }
+                            }
+                        }
+                        double score = calculateNameMatchScore(queryNorm, normalizeText(val), isAcronym);
+                        if (score > bestScore) {
+                            bestScore = score;
+                            bestItem = item;
+                        }
+                    }
+                }
+            }
+
+            // If best score is below confidence threshold (0.78), do not trust ROR result
+            if (bestItem == null || bestScore < 0.78) {
+                return null;
+            }
+
+            String rorId = bestItem.path("id").asText("");
+
+            // 1. Resolve Country
+            InferenceResult countryResult = resolveCountryFromRorItem(bestItem, countryCatalog, bestScore, rorId);
+
+            // 2. Resolve Type
+            TypeInferenceResult typeResult = resolveTypeFromRorItem(bestItem, typeCatalog, bestScore, rorId);
+
+            // 3. Resolve Funding (Public / Private)
+            FundingInferenceResult fundingResult = resolveFundingFromRorItem(bestItem, queryOrgName, bestScore, rorId);
+
+            return new MetadataInferenceResult(countryResult, typeResult, fundingResult);
+        } catch (Exception e) {
+            log.warn("Error parsing ROR response for '{}': {}", queryOrgName, e.getMessage());
+            return null;
+        }
+    }
+
+    private double calculateNameMatchScore(String queryNorm, String candidateNorm, boolean isAcronym) {
+        if (queryNorm.isBlank() || candidateNorm.isBlank()) return 0.0;
+        if (queryNorm.equals(candidateNorm)) {
+            return 1.0;
+        }
+        if (isAcronym && queryNorm.equalsIgnoreCase(candidateNorm)) {
+            return 0.95;
+        }
+
+        // Clean punctuation & compare words
+        String[] queryTokens = queryNorm.split("\\s+");
+        String[] candTokens = candidateNorm.split("\\s+");
+        Set<String> querySet = new HashSet<>(Arrays.asList(queryTokens));
+        Set<String> candSet = new HashSet<>(Arrays.asList(candTokens));
+
+        // Remove stop words
+        Set<String> stopWords = Set.of(
+            "de", "del", "la", "el", "les", "los", "las", "d", "l", "i", "y", "and", "of", "the",
+            "for", "in", "a", "at", "on", "to", "und", "et", "du", "des", "von", "van", "der", "die", "das"
+        );
+        querySet.removeAll(stopWords);
+        candSet.removeAll(stopWords);
+
+        if (querySet.isEmpty() || candSet.isEmpty()) {
+            return 0.0;
+        }
+
+        int intersection = 0;
+        for (String q : querySet) {
+            if (candSet.contains(q)) intersection++;
+        }
+
+        if (intersection == 0) return 0.0;
+
+        double precision = (double) intersection / candSet.size();
+        double recall = (double) intersection / querySet.size();
+        double f1 = (2.0 * precision * recall) / (precision + recall);
+
+        // Substring check only if high token coverage and significant length ratio
+        int maxLen = Math.max(queryNorm.length(), candidateNorm.length());
+        double lenRatio = (double) Math.min(queryNorm.length(), candidateNorm.length()) / maxLen;
+
+        if ((candidateNorm.contains(queryNorm) || queryNorm.contains(candidateNorm)) && lenRatio >= 0.65 && f1 >= 0.70) {
+            return Math.max(f1, 0.90);
+        }
+
+        return f1;
+    }
+
+    private InferenceResult resolveCountryFromRorItem(
+            JsonNode item,
+            List<CountryAggregate> countryCatalog,
+            double matchScore,
+            String rorId) {
+        JsonNode locations = item.path("locations");
+        if (locations.isArray() && !locations.isEmpty()) {
+            JsonNode loc = locations.get(0).path("geonames_details");
+            String countryName = loc.path("country_name").asText("").trim();
+            String countryCode = loc.path("country_code").asText("").trim();
+
+            String resolved = "";
+            if (!countryCode.isBlank()) {
+                resolved = resolveAliasCountry(countryCode.toLowerCase(), countryCatalog);
+            }
+            if (resolved.isBlank() && !countryName.isBlank()) {
+                resolved = resolveAliasCountry(countryName.toLowerCase(), countryCatalog);
+            }
+            if (resolved.isBlank() && !countryName.isBlank()) {
+                String target = normalizeText(countryName);
+                resolved = countryCatalog.stream()
+                        .filter(c -> c.normalizedLabel.equals(target))
+                        .map(CountryAggregate::label)
+                        .findFirst()
+                        .orElse("");
+            }
+
+            if (!resolved.isBlank()) {
+                double confidence = Math.min(0.99, matchScore * 0.98);
+                String reason = "ror-match:" + (rorId.isBlank() ? "found" : rorId);
+                return new InferenceResult(resolved, confidence, reason);
+            }
+        }
+        return new InferenceResult("", 0.0, "no-ror-country");
+    }
+
+    private TypeInferenceResult resolveTypeFromRorItem(
+            JsonNode item,
+            List<TypeAggregate> typeCatalog,
+            double matchScore,
+            String rorId) {
+        JsonNode typesNode = item.path("types");
+        List<String> rorTypes = new ArrayList<>();
+        if (typesNode.isArray()) {
+            for (JsonNode t : typesNode) {
+                rorTypes.add(t.asText().toLowerCase().trim());
+            }
+        }
+
+        String resolvedType = "";
+        String matchedRorType = "";
+
+        for (String rType : rorTypes) {
+            List<String> hints = switch (rType) {
+                case "education" -> List.of("universitat", "universidad", "ensenyament superior", "educacio", "academic");
+                case "facility" -> List.of("centre de recerca", "instituts universitaris de recerca", "investigacio", "cientific", "recerca");
+                case "company" -> List.of("empresa", "sector empresarial", "companyia", "corporacio");
+                case "government" -> List.of("administracio publica", "organisme public", "entitats publiques", "govern");
+                case "nonprofit" -> List.of("fundacio", "associacio", "entitats sense anim de lucre", "ong");
+                case "healthcare" -> List.of("hospital", "institucions sanitaries", "sanitari", "salut");
+                case "funder" -> List.of("agencia de financament", "entitat financadora");
+                case "archive" -> List.of("arxiu", "biblioteca", "museu");
+                default -> List.of();
+            };
+
+            if (!hints.isEmpty()) {
+                resolvedType = resolveTypeByHint(hints, typeCatalog);
+                if (!resolvedType.isBlank()) {
+                    matchedRorType = rType;
+                    break;
+                }
+            }
+        }
+
+        if (!resolvedType.isBlank()) {
+            double confidence = Math.min(0.96, matchScore * 0.95);
+            String reason = "ror-type:" + matchedRorType + " (" + (rorId.isBlank() ? "found" : rorId) + ")";
+            return new TypeInferenceResult(resolvedType, confidence, reason);
+        }
+
+        return new TypeInferenceResult("", 0.0, "no-ror-type");
+    }
+
+    private FundingInferenceResult resolveFundingFromRorItem(
+            JsonNode item,
+            String orgName,
+            double matchScore,
+            String rorId) {
+        JsonNode typesNode = item.path("types");
+        List<String> rorTypes = new ArrayList<>();
+        if (typesNode.isArray()) {
+            for (JsonNode t : typesNode) {
+                rorTypes.add(t.asText().toLowerCase().trim());
+            }
+        }
+
+        String reasonSuffix = rorId.isBlank() ? "" : ":" + rorId;
+
+        if (rorTypes.contains("government")) {
+            return new FundingInferenceResult("Publica", Math.min(0.98, Math.max(0.92, matchScore * 0.98)), "ror-government" + reasonSuffix);
+        }
+        if (rorTypes.contains("company")) {
+            return new FundingInferenceResult("Privada", Math.min(0.98, Math.max(0.92, matchScore * 0.98)), "ror-company" + reasonSuffix);
+        }
+        if (rorTypes.contains("nonprofit")) {
+            return new FundingInferenceResult("Privada", Math.min(0.92, Math.max(0.85, matchScore * 0.92)), "ror-nonprofit" + reasonSuffix);
+        }
+        if (rorTypes.contains("healthcare")) {
+            String norm = normalizeText(orgName);
+            if (norm.contains("privat") || norm.contains("privado") || norm.contains("private")
+                    || norm.contains("clinica") || norm.contains("quiron") || norm.contains("dexeus")) {
+                return new FundingInferenceResult("Privada", Math.min(0.95, Math.max(0.88, matchScore * 0.95)), "ror-healthcare-private" + reasonSuffix);
+            }
+            return new FundingInferenceResult("Publica", Math.min(0.95, Math.max(0.90, matchScore * 0.95)), "ror-healthcare-public" + reasonSuffix);
+        }
+        if (rorTypes.contains("facility") || rorTypes.contains("archive")) {
+            return new FundingInferenceResult("Publica", Math.min(0.95, Math.max(0.90, matchScore * 0.95)), "ror-facility" + reasonSuffix);
+        }
+        if (rorTypes.contains("education")) {
+            String norm = normalizeText(orgName);
+            if (norm.contains("publica") || norm.contains("nacional") || norm.contains("autonoma")
+                    || norm.contains("estatal") || norm.contains("state") || norm.contains("politecnica")
+                    || norm.contains("ub") || norm.contains("uab") || norm.contains("upc") || norm.contains("upf")) {
+                return new FundingInferenceResult("Publica", Math.min(0.98, Math.max(0.94, matchScore * 0.98)), "ror-education-public" + reasonSuffix);
+            }
+            if (norm.contains("privada") || norm.contains("private") || norm.contains("catholic")
+                    || norm.contains("catolica") || norm.contains("esade") || norm.contains("ie university")
+                    || norm.contains("uoc") || norm.contains("ramon llull") || norm.contains("vic")) {
+                return new FundingInferenceResult("Privada", Math.min(0.96, Math.max(0.92, matchScore * 0.96)), "ror-education-private" + reasonSuffix);
+            }
+            // Default for universities/education recognized by ROR
+            return new FundingInferenceResult("Publica", Math.min(0.94, Math.max(0.90, matchScore * 0.94)), "ror-education" + reasonSuffix);
+        }
+
+        // Fallback to name heuristic
+        return inferFundingFromName(orgName);
     }
 
     // =========================================================================
@@ -3977,7 +4637,7 @@ public class ExternalOrganizationController {
             resolvedFunding = resolveModelFundingLabel(node.path("funding").asText("").trim());
         }
         if (!resolvedFunding.isBlank()) {
-            double confidence = firstNumberNode(node, "fundingConfidence", "confidence", 0.75);
+            double confidence = firstNumberNode(node, "fundingConfidence", "confidence", 0.85);
             String reason = firstTextNode(node, "fundingReason", "reason", "model-inference");
             fundingResult = new FundingInferenceResult(resolvedFunding, clamp(confidence), source + ":" + reason);
         }
@@ -4445,6 +5105,7 @@ public class ExternalOrganizationController {
                 logMessage("S'han trobat " + autoApplyTotal + " organitzacions sense pais. Processant en paral·lel (Confiança >= " + Math.round(confidenceThreshold * 100) + "%)...");
                 
                 List<CountryAggregate> countryCatalog = getCachedCountryCatalog();
+                List<TypeAggregate>    typeCatalog    = getCachedTypeCatalog();
                 
                 // Concurrencia de 16 peticiones paralelas (óptimo para la LS40)
                 int concurrencyLimit = 16;
@@ -4485,20 +5146,39 @@ public class ExternalOrganizationController {
                                 return;
                             }
                             
-                            // 1. Inferencia heurística rápida por nombre
-                            InferenceResult countryResult = inferCountryFromName(name, countryCatalog);
+                            // 1. Consulta ROR (fuente primaria de alta precisión y coste cero)
+                            InferenceResult countryResult = null;
+                            MetadataInferenceResult rorResult = inferMetadataWithRor(name, countryCatalog, typeCatalog);
+                            if (rorResult != null && rorResult.country() != null && !rorResult.country().countryLabel().isBlank()) {
+                                countryResult = rorResult.country();
+                            }
 
-                            // 2. Si no tiene confianza suficiente, buscar persona asociada y consultar a IA local
-                            if (countryResult == null || countryResult.confidence < confidenceThreshold || countryResult.countryLabel.isBlank()) {
-                                String associatedPerson = findAssociatedPersonForOrg(uuid, name);
+                            // 2. Si no hay resultado o la confianza es insuficiente, consultar IA local con persona asociada
+                            String associatedPerson = null;
+                            if (countryResult == null || countryResult.confidence() < confidenceThreshold || countryResult.countryLabel().isBlank()) {
+                                associatedPerson = findAssociatedPersonForOrg(uuid, name);
                                 InferenceResult aiResult = inferCountryWithLocalAi(name, associatedPerson, countryCatalog);
-                                if (aiResult != null && !aiResult.countryLabel.isBlank()) {
+                                if (aiResult != null && !aiResult.countryLabel().isBlank()) {
                                     countryResult = aiResult;
                                 }
+                            }
 
-                                // 3. WebSearch como fallback si sigue sin resultado
-                                if (countryResult == null || countryResult.countryLabel.isBlank()) {
-                                    countryResult = inferCountryWithWebSearch(name, associatedPerson, countryCatalog);
+                            // 3. WebSearch como fallback secundario si sigue sin resultado o baja confianza
+                            if (countryResult == null || countryResult.confidence() < confidenceThreshold || countryResult.countryLabel().isBlank()) {
+                                if (associatedPerson == null) {
+                                    associatedPerson = findAssociatedPersonForOrg(uuid, name);
+                                }
+                                InferenceResult webResult = inferCountryWithWebSearch(name, associatedPerson, countryCatalog);
+                                if (webResult != null && !webResult.countryLabel().isBlank()) {
+                                    countryResult = webResult;
+                                }
+                            }
+
+                            // 4. Heurística local por nombre como último recurso (fallback de seguridad)
+                            if (countryResult == null || countryResult.confidence() < confidenceThreshold || countryResult.countryLabel().isBlank()) {
+                                InferenceResult heuristicResult = inferCountryFromName(name, countryCatalog);
+                                if (heuristicResult != null && !heuristicResult.countryLabel().isBlank()) {
+                                    countryResult = heuristicResult;
                                 }
                             }
                             
@@ -4688,7 +5368,8 @@ public class ExternalOrganizationController {
                 
                 logTypeMessage("S'han trobat " + autoApplyTypeTotal + " organitzacions sense tipus. Processant en paral·lel (Confiança >= " + Math.round(confidenceThreshold * 100) + "%)...");
                 
-                List<TypeAggregate> typeCatalog = getCachedTypeCatalog();
+                List<CountryAggregate> countryCatalog = getCachedCountryCatalog();
+                List<TypeAggregate>    typeCatalog    = getCachedTypeCatalog();
                 
                 int concurrencyLimit = 16;
                 java.util.concurrent.Semaphore sem = new java.util.concurrent.Semaphore(concurrencyLimit);
@@ -4728,15 +5409,27 @@ public class ExternalOrganizationController {
                                 return;
                             }
                             
-                            // 1. Inferencia heurística rápida por nombre
-                            TypeInferenceResult typeResult = inferTypeFromName(name, typeCatalog);
+                            // 1. Consulta ROR (fuente primaria de alta precisión y coste cero)
+                            TypeInferenceResult typeResult = null;
+                            MetadataInferenceResult rorResult = inferMetadataWithRor(name, countryCatalog, typeCatalog);
+                            if (rorResult != null && rorResult.type() != null && !rorResult.type().typeLabel().isBlank()) {
+                                typeResult = rorResult.type();
+                            }
 
-                            // 2. Si no tiene confianza suficiente, consultar IA con persona asociada
-                            if (typeResult == null || typeResult.confidence < confidenceThreshold || typeResult.typeLabel.isBlank()) {
+                            // 2. Si no hay resultado o la confianza es insuficiente, consultar IA local con persona asociada
+                            if (typeResult == null || typeResult.confidence() < confidenceThreshold || typeResult.typeLabel().isBlank()) {
                                 String associatedPerson = findAssociatedPersonForOrg(uuid, name);
                                 TypeInferenceResult aiResult = inferTypeWithLocalAi(name, associatedPerson, typeCatalog);
-                                if (aiResult != null && !aiResult.typeLabel.isBlank()) {
+                                if (aiResult != null && !aiResult.typeLabel().isBlank()) {
                                     typeResult = aiResult;
+                                }
+                            }
+
+                            // 3. Heurística local por nombre como último recurso (fallback de seguridad)
+                            if (typeResult == null || typeResult.confidence() < confidenceThreshold || typeResult.typeLabel().isBlank()) {
+                                TypeInferenceResult heuristicResult = inferTypeFromName(name, typeCatalog);
+                                if (heuristicResult != null && !heuristicResult.typeLabel().isBlank()) {
+                                    typeResult = heuristicResult;
                                 }
                             }
                             
@@ -4959,12 +5652,27 @@ public class ExternalOrganizationController {
                                 return;
                             }
                             
-                            FundingInferenceResult fundingResult = inferFundingFromName(name);
-                            if (fundingResult == null || fundingResult.confidence < confidenceThreshold || fundingResult.fundingLabel.isBlank()) {
+                            // 1. Consulta ROR (fuente primaria de alta precisión y coste cero)
+                            FundingInferenceResult fundingResult = null;
+                            MetadataInferenceResult rorResult = inferMetadataWithRor(name, countryCatalog, typeCatalog);
+                            if (rorResult != null && rorResult.funding() != null && !rorResult.funding().fundingLabel().isBlank()) {
+                                fundingResult = rorResult.funding();
+                            }
+
+                            // 2. Si no hay resultado o la confianza es insuficiente, consultar IA local con persona asociada
+                            if (fundingResult == null || fundingResult.confidence() < confidenceThreshold || fundingResult.fundingLabel().isBlank()) {
                                 String associatedPerson = findAssociatedPersonForOrg(uuid, name);
                                 MetadataInferenceResult aiResult = inferMetadataWithLocalAi(name, associatedPerson, countryCatalog, typeCatalog);
-                                if (aiResult != null && aiResult.funding() != null && !aiResult.funding().fundingLabel.isBlank()) {
+                                if (aiResult != null && aiResult.funding() != null && !aiResult.funding().fundingLabel().isBlank()) {
                                     fundingResult = aiResult.funding();
+                                }
+                            }
+
+                            // 3. Heurística local por nombre como último recurso (fallback de seguridad)
+                            if (fundingResult == null || fundingResult.confidence() < confidenceThreshold || fundingResult.fundingLabel().isBlank()) {
+                                FundingInferenceResult heuristicResult = inferFundingFromName(name);
+                                if (heuristicResult != null && !heuristicResult.fundingLabel().isBlank()) {
+                                    fundingResult = heuristicResult;
                                 }
                             }
                             

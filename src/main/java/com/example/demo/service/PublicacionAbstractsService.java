@@ -23,55 +23,56 @@ public class PublicacionAbstractsService {
 
     public record CacheEntry(Object data, long timestamp) {}
 
-    // NLP Stop words for language classification
-    private static final Set<String> CA_WORDS = Set.of(
-        "de", "la", "el", "a", "i", "en", "que", "del", "les", "per", "un", "amb", "els", "una",
-        "al", "no", "perque", "perquè", "com", "es", "és", "se", "mes", "més", "dels", "aquest", "aquesta",
-        "pel", "pels", "tot", "tots", "tota", "totes", "seu", "seva", "seus", "seves", "tambe", "també",
-        "ha", "han", "fet", "estudi", "objectiu", "resultats", "conclusions", "metodologia", "investigacio", "investigació",
-        "desenvolupament", "aquestes", "aquests", "entre", "sobre", "on", "quan", "molt", "poc", "altres",
-        "mateix", "mateixa", "qual", "quals", "nostre", "nostra", "durant", "mentre", "despres", "després"
-    );
-
-    private static final Set<String> ES_WORDS = Set.of(
-        "de", "la", "el", "en", "y", "a", "que", "los", "del", "se", "las", "por", "un", "con",
-        "para", "una", "no", "al", "es", "su", "algunos", "como", "mas", "más", "pero", "sus", "le",
-        "ya", "o", "fue", "este", "ha", "si", "porque", "esta", "son", "entre", "estudio", "objetivo",
-        "resultados", "conclusiones", "investigacion", "investigación", "desarrollo", "estos", "estas", "tambien", "también",
-        "analisis", "análisis", "durante", "sobre", "todo", "todos", "toda", "todas", "nuestro", "nuestra", "desde",
-        "hacia", "hasta", "mismo", "misma", "mismos", "mismas", "despues", "después", "sido", "han", "habia", "había"
-    );
-
-    private static final Set<String> EN_WORDS = Set.of(
-        "the", "of", "and", "a", "to", "in", "is", "you", "that", "it", "he", "was", "for", "on",
-        "are", "as", "with", "his", "they", "i", "at", "be", "this", "have", "from", "or", "one",
-        "had", "by", "word", "but", "not", "what", "all", "were", "we", "when", "your", "can",
-        "said", "there", "use", "an", "each", "which", "she", "do", "how", "their", "if", "will",
-        "up", "other", "about", "out", "many", "then", "them", "these", "so", "some", "her", "would",
-        "make", "like", "him", "into", "time", "has", "look", "two", "more", "write", "go", "see",
-        "number", "no", "way", "could", "people", "my", "than", "first", "water", "been", "call",
-        "who", "oil", "its", "now", "find", "study", "results", "aim", "objective", "background",
-        "conclusion", "conclusions", "methods", "method", "paper", "research", "analysis", "data",
-        "present", "using", "between", "during", "showed", "found", "demonstrated", "based"
-    );
-
-    private static final Set<String> CA_ONLY = Set.of(
+    // NLP Stop words and distinctive markers for language classification
+    private static final Set<String> CA_DISTINCT = Set.of(
         "amb", "dels", "pels", "aquest", "aquesta", "aquests", "aquestes", "perque", "perquè", "seva",
         "seus", "seves", "tambe", "també", "gairebe", "gairebé", "gaire", "quelcom", "adhuc", "àdhuc",
-        "nomes", "només", "doncs", "mateix", "mateixa", "qualque", "llur", "llurs", "despres", "després",
-        "mentre", "sovint", "tanmateix", "hom", "cadascu", "cadascú", "cadascun", "cadascuna", "aleshores"
+        "nomes", "només", "doncs", "mateix", "mateixa", "mateixos", "mateixes", "qualque", "llur", "llurs",
+        "despres", "després", "mentre", "sovint", "tanmateix", "hom", "cadascu", "cadascú", "cadascun", "cadascuna",
+        "aleshores", "aixi", "així", "sense", "fins", "segons", "mitjançant", "envers", "sigui", "siguin",
+        "essent", "estat", "estats", "estada", "estades", "fet", "feta", "fets", "fetes", "millorar", "aconseguir",
+        "coneixement", "coneixements", "desenvolupament", "recerca", "poblacio", "població", "qualitat", "activitat"
     );
 
-    private static final Set<String> ES_ONLY = Set.of(
-        "los", "las", "por", "para", "con", "sus", "este", "esta", "estos", "estas", "tambien", "también",
-        "hacia", "hasta", "despues", "después", "entonces", "ademas", "además", "mientras", "aunque",
-        "donde", "desde", "sobre", "mismo", "misma", "cada", "estudio", "analisis", "análisis", "objetivo"
+    private static final Set<String> CA_COMMON = Set.of(
+        "de", "la", "el", "a", "i", "en", "que", "del", "les", "per", "un", "els", "una", "uns", "unes",
+        "al", "als", "pel", "no", "com", "es", "és", "se", "mes", "més", "tot", "tots", "tota", "totes",
+        "ha", "han", "estudi", "objectiu", "resultats", "conclusions", "metodologia", "metode", "mètode",
+        "investigacio", "investigació", "entre", "sobre", "on", "quan", "molt", "molta", "molts", "moltes",
+        "poc", "pocs", "poca", "poques", "altre", "altres", "altra", "nostre", "nostra", "nostres", "durant",
+        "hi", "ho", "li", "son", "són", "era", "eren", "va", "van", "ja", "fa", "fan"
     );
 
-    private static final Set<String> EN_ONLY = Set.of(
-        "the", "and", "of", "in", "to", "is", "for", "with", "that", "this", "from", "which", "by", "as",
-        "are", "was", "were", "their", "they", "our", "we", "study", "results", "paper", "aim", "methods",
-        "between", "these", "been", "have", "has", "background", "conclusion"
+    private static final Set<String> ES_DISTINCT = Set.of(
+        "los", "las", "por", "para", "con", "sus", "este", "esta", "estos", "estas", "esto", "ese", "esa", "esos", "esas",
+        "aquel", "aquella", "aquellos", "aquellas", "tambien", "también", "hacia", "hasta", "desde", "despues", "después",
+        "entonces", "ademas", "además", "mientras", "aunque", "donde", "cuando", "mismo", "misma", "mismos", "mismas",
+        "cada", "nuestro", "nuestra", "nuestros", "nuestras", "suyo", "suya", "suyos", "suyas", "hecho", "hecha", "hechos", "hechas",
+        "hace", "hacen", "hizo", "sido", "habia", "había", "hubo", "hay", "desarrollo", "conocimiento", "mediante",
+        "acerca", "cuanto", "tanto", "poblacion", "población", "calidad", "actividad", "sociedad", "universidad"
+    );
+
+    private static final Set<String> ES_COMMON = Set.of(
+        "de", "la", "el", "en", "y", "a", "que", "del", "se", "un", "una", "unos", "unas", "no", "al", "es", "su",
+        "algunos", "como", "mas", "más", "pero", "le", "les", "ya", "o", "fue", "ha", "han", "si", "porque", "por",
+        "son", "era", "eran", "entre", "estudio", "objetivo", "resultados", "conclusiones", "investigacion", "investigación",
+        "analisis", "análisis", "durante", "sobre", "todo", "todos", "toda", "todas", "muy", "mucho", "muchos", "mucha",
+        "muchas", "poco", "pocos", "poca", "pocas", "otro", "otros", "otra", "otras", "solo", "solamente"
+    );
+
+    private static final Set<String> EN_DISTINCT = Set.of(
+        "the", "this", "that", "these", "those", "with", "from", "which", "were", "have", "been", "their", "our",
+        "they", "them", "between", "through", "within", "should", "could", "would", "where", "when", "what",
+        "who", "whose", "whom", "why", "how", "both", "each", "other", "others", "such", "also", "than", "then",
+        "after", "before", "during", "while", "without", "about", "into", "onto", "under", "above", "more", "most",
+        "many", "much", "some", "any", "few", "paper", "aims", "findings", "discuss", "discusses", "used", "using",
+        "background", "approach", "based", "showed", "demonstrated", "provides", "significant", "however", "although", "furthermore"
+    );
+
+    private static final Set<String> EN_COMMON = Set.of(
+        "and", "of", "to", "in", "is", "are", "was", "for", "on", "as", "at", "by", "an", "be", "it", "its",
+        "we", "you", "your", "he", "she", "his", "her", "not", "but", "or", "if", "so", "can", "will", "has",
+        "had", "do", "does", "did", "study", "results", "aim", "methods", "method", "research", "analysis", "data", "conclusion", "conclusions"
     );
 
     private static final Pattern WORD_PATTERN = Pattern.compile("\\b[a-zA-Zà-ÿÀ-ß'-]+\\b");
@@ -116,47 +117,64 @@ public class PublicacionAbstractsService {
     }
 
     /**
-     * Language detector based on vocabulary and distinct stopwords
+     * Language detector based on vocabulary, distinctive stopwords, character discriminators and elision handling
      */
     public static String detectLanguage(String text) {
         if (text == null || text.trim().length() < 10) return "unknown";
-        String clean = text.replaceAll("<[^>]+>", " ").toLowerCase();
+        String raw = text.replaceAll("<[^>]+>", " ");
+
+        int caSpecificBonus = 0;
+        int esSpecificBonus = 0;
+
+        // Character-level unique features
+        if (raw.contains("ñ") || raw.contains("Ñ") || raw.contains("¿") || raw.contains("¡")) {
+            esSpecificBonus += 6;
+        }
+        if (raw.contains("ç") || raw.contains("Ç") || raw.contains("·") || raw.contains("l·l") || raw.contains("L·L") || raw.contains("L.L") || raw.contains("l.l")) {
+            caSpecificBonus += 6;
+        }
+
+        // Separate Catalan elisions: d', l', s', m', t', n', c', qu'
+        String clean = raw.toLowerCase()
+                .replaceAll("\\b([dlstmnc]|qu)['’]", "$1' ")
+                .replaceAll("['-]", " ");
+
         Matcher matcher = WORD_PATTERN.matcher(clean);
 
         int totalWords = 0;
         int scoreEn = 0;
-        int scoreEs = 0;
-        int scoreCa = 0;
-        int enDistinct = 0;
-        int esDistinct = 0;
-        int caDistinct = 0;
+        int scoreEs = esSpecificBonus;
+        int scoreCa = caSpecificBonus;
 
         while (matcher.find()) {
             String w = matcher.group();
             totalWords++;
-            if (EN_WORDS.contains(w)) scoreEn++;
-            if (ES_WORDS.contains(w)) scoreEs++;
-            if (CA_WORDS.contains(w)) scoreCa++;
-            if (EN_ONLY.contains(w)) enDistinct += 2;
-            if (ES_ONLY.contains(w)) esDistinct += 2;
-            if (CA_ONLY.contains(w)) caDistinct += 2;
+
+            if (EN_DISTINCT.contains(w)) scoreEn += 3;
+            else if (EN_COMMON.contains(w)) scoreEn += 1;
+
+            if (ES_DISTINCT.contains(w)) scoreEs += 3;
+            else if (ES_COMMON.contains(w)) scoreEs += 1;
+
+            if (CA_DISTINCT.contains(w)) scoreCa += 3;
+            else if (CA_COMMON.contains(w)) scoreCa += 1;
+
+            if ("d'".equals(w) || "l'".equals(w) || "s'".equals(w) || "m'".equals(w) || "t'".equals(w) || "n'".equals(w)) {
+                scoreCa += 3;
+            }
+            if ("i".equals(w)) scoreCa += 2;
+            if ("y".equals(w)) scoreEs += 2;
         }
 
         if (totalWords == 0) return "unknown";
 
-        int totalEn = scoreEn + enDistinct;
-        int totalEs = scoreEs + esDistinct;
-        int totalCa = scoreCa + caDistinct;
+        int maxScore = Math.max(scoreEn, Math.max(scoreEs, scoreCa));
+        if (maxScore < 4 && totalWords > 5) return "unknown";
 
-        int maxScore = Math.max(totalEn, Math.max(totalEs, totalCa));
-        if (maxScore < 3 && totalWords > 5) return "unknown";
+        if (scoreEn > scoreEs && scoreEn > scoreCa && scoreEn >= (maxScore * 0.6)) return "en_GB";
+        if (scoreCa > scoreEs && scoreCa > scoreEn) return "ca_ES";
+        if (scoreEs > scoreCa && scoreEs > scoreEn) return "es_ES";
 
-        if (totalEn > totalEs && totalEn > totalCa) return "en_GB";
-        if (totalCa > totalEs && totalCa > totalEn) return "ca_ES";
-        if (totalEs > totalCa && totalEs > totalEn) return "es_ES";
-        if (totalCa == totalEs && totalCa > totalEn) {
-            return caDistinct > esDistinct ? "ca_ES" : "es_ES";
-        }
         return "unknown";
     }
 
@@ -497,13 +515,9 @@ public class PublicacionAbstractsService {
         long esTotal = 0, esCorrect = 0, esWrongEn = 0, esWrongCa = 0, esWrongOther = 0;
         long enTotal = 0, enCorrect = 0, enWrongEs = 0, enWrongCa = 0, enWrongOther = 0;
 
-        int maxScan = 15000;
-        int scanned = 0;
-
         try (var cursor = mongoTemplate.getCollection("Researchoutputs").find(query).projection(projection).batchSize(5000).iterator()) {
-            while (cursor.hasNext() && scanned < maxScan) {
+            while (cursor.hasNext()) {
                 Document doc = cursor.next();
-                scanned++;
                 Document abs = (Document) doc.get("abstract");
                 if (abs == null) continue;
 
@@ -519,16 +533,15 @@ public class PublicacionAbstractsService {
                 String detEs = hasEs ? detectLanguage(es) : "none";
                 String detEn = hasEn ? detectLanguage(en) : "none";
 
-                boolean isWrongCa = false;
-                boolean isWrongEs = false;
-                boolean isWrongEn = false;
+                boolean isWrongCa = hasCa && ("en_GB".equals(detCa) || "es_ES".equals(detCa));
+                boolean isWrongEs = hasEs && ("en_GB".equals(detEs) || "ca_ES".equals(detEs));
+                boolean isWrongEn = hasEn && ("ca_ES".equals(detEn) || "es_ES".equals(detEn));
 
                 if (hasCa) {
                     caTotal++;
-                    if ("ca_ES".equals(detCa)) {
+                    if (!isWrongCa) {
                         caCorrect++;
                     } else {
-                        isWrongCa = true;
                         if ("en_GB".equals(detCa)) caWrongEn++;
                         else if ("es_ES".equals(detCa)) caWrongEs++;
                         else caWrongOther++;
@@ -537,10 +550,9 @@ public class PublicacionAbstractsService {
 
                 if (hasEs) {
                     esTotal++;
-                    if ("es_ES".equals(detEs)) {
+                    if (!isWrongEs) {
                         esCorrect++;
                     } else {
-                        isWrongEs = true;
                         if ("en_GB".equals(detEs)) esWrongEn++;
                         else if ("ca_ES".equals(detEs)) esWrongCa++;
                         else esWrongOther++;
@@ -549,10 +561,9 @@ public class PublicacionAbstractsService {
 
                 if (hasEn) {
                     enTotal++;
-                    if ("en_GB".equals(detEn)) {
+                    if (!isWrongEn) {
                         enCorrect++;
                     } else {
-                        isWrongEn = true;
                         if ("es_ES".equals(detEn)) enWrongEs++;
                         else if ("ca_ES".equals(detEn)) enWrongCa++;
                         else enWrongOther++;
@@ -569,22 +580,18 @@ public class PublicacionAbstractsService {
             }
         }
 
-        double scale = (scanned > 0 && withAbstract > scanned) ? ((double) withAbstract / scanned) : 1.0;
-        long finalWrongLanguageCount = Math.round(wrongLanguageCount * scale);
-        long finalGenuine3Langs = Math.round(genuine3Langs * scale);
-
         Map<String, Object> result = new LinkedHashMap<>();
-        result.put("wrongLanguageCount", finalWrongLanguageCount);
-        result.put("pctWrongLanguageOfWithAbstract", withAbstract > 0 ? (double) Math.round((finalWrongLanguageCount * 1000.0) / withAbstract) / 10.0 : 0.0);
-        result.put("genuine3Langs", finalGenuine3Langs);
-        result.put("pctGenuine3Langs", in3Langs > 0 ? (double) Math.round((finalGenuine3Langs * 1000.0) / in3Langs) / 10.0 : 0.0);
+        result.put("wrongLanguageCount", wrongLanguageCount);
+        result.put("pctWrongLanguageOfWithAbstract", withAbstract > 0 ? (double) Math.round((wrongLanguageCount * 1000.0) / withAbstract) / 10.0 : 0.0);
+        result.put("genuine3Langs", genuine3Langs);
+        result.put("pctGenuine3Langs", in3Langs > 0 ? (double) Math.round((genuine3Langs * 1000.0) / in3Langs) / 10.0 : 0.0);
 
         Map<String, Object> caStats = new LinkedHashMap<>();
-        caStats.put("total", Math.round(caTotal * scale));
-        caStats.put("correct", Math.round(caCorrect * scale));
-        caStats.put("wrongEn", Math.round(caWrongEn * scale));
-        caStats.put("wrongEs", Math.round(caWrongEs * scale));
-        caStats.put("wrongOther", Math.round(caWrongOther * scale));
+        caStats.put("total", caTotal);
+        caStats.put("correct", caCorrect);
+        caStats.put("wrongEn", caWrongEn);
+        caStats.put("wrongEs", caWrongEs);
+        caStats.put("wrongOther", caWrongOther);
         caStats.put("pctWrong", caTotal > 0 ? (double) Math.round(((caTotal - caCorrect) * 1000.0) / caTotal) / 10.0 : 0.0);
         caStats.put("pctCorrect", caTotal > 0 ? (double) Math.round((caCorrect * 1000.0) / caTotal) / 10.0 : 0.0);
         caStats.put("pctWrongEn", caTotal > 0 ? (double) Math.round((caWrongEn * 1000.0) / caTotal) / 10.0 : 0.0);
@@ -829,11 +836,11 @@ public class PublicacionAbstractsService {
             } else {
                 yearFilterList.add(new Document("year", new Document("$gte", desde)));
             }
-        } else {
-            yearFilterList.add(new Document("year", new Document("$gte", 1990)));
         }
         if (hasta != null && hasta > 0) yearFilterList.add(new Document("year", new Document("$lte", hasta)));
-        pipeline.add(new Document("$match", new Document("$and", yearFilterList)));
+        if (!yearFilterList.isEmpty()) {
+            pipeline.add(new Document("$match", new Document("$and", yearFilterList)));
+        }
 
         pipeline.add(new Document("$group", new Document("_id", new Document("year", "$year").append("lang", "$rawLang"))
             .append("count", new Document("$sum", 1))
@@ -844,7 +851,7 @@ public class PublicacionAbstractsService {
         List<Document> rawResults = mongoTemplate.getCollection("Researchoutputs").aggregate(pipeline).into(new ArrayList<>());
 
         // Map of year -> Map<language, count>
-        Map<Integer, Map<String, Long>> yearLangCounts = new TreeMap<>();
+        Map<Integer, Map<String, Long>> yearLangCounts = new HashMap<>();
         Map<String, Long> totalPerLanguage = new HashMap<>();
 
         for (Document doc : rawResults) {
@@ -863,7 +870,20 @@ public class PublicacionAbstractsService {
             totalPerLanguage.merge(normLang, count, Long::sum);
         }
 
-        List<Integer> years = new ArrayList<>(yearLangCounts.keySet());
+        List<Integer> numericYears = new ArrayList<>();
+        boolean hasNoYear = false;
+        for (Integer yr : yearLangCounts.keySet()) {
+            if (yr != null && yr > 0) {
+                numericYears.add(yr);
+            } else if (yr != null && yr == 0) {
+                hasNoYear = true;
+            }
+        }
+        Collections.sort(numericYears);
+        List<Integer> years = new ArrayList<>(numericYears);
+        if (hasNoYear) {
+            years.add(0);
+        }
 
         // Sort languages so that languages with publications appear first, followed by others, preserving standard order
         List<String> activeLanguages = new ArrayList<>();
@@ -1207,46 +1227,67 @@ public class PublicacionAbstractsService {
             pipeline.add(new Document("$match", new Document("$and", matchConditions)));
         }
 
+        boolean isLinguisticFilter = filter != null && Set.of("wrong_language", "wrong_ca", "wrong_es", "wrong_en", "genuine_3_langs")
+                .contains(filter.toLowerCase());
+
         String sortProperty = (sortField != null && !sortField.isBlank()) ? sortField : "submissionYear";
         int sortOrder = "asc".equalsIgnoreCase(sortDir) ? 1 : -1;
-
-        List<Document> dataPipeline = new ArrayList<>();
-        dataPipeline.add(new Document("$sort", new Document(sortProperty, sortOrder).append("uuid", 1)));
-        dataPipeline.add(new Document("$skip", Math.max(0, page) * Math.max(1, size)));
-        dataPipeline.add(new Document("$limit", Math.max(1, size)));
-
-        pipeline.add(new Document("$facet", new Document()
-            .append("totalCount", List.of(new Document("$count", "count")))
-            .append("data", dataPipeline)
-        ));
-
-        List<Document> facetResult = mongoTemplate.getCollection("Researchoutputs").aggregate(pipeline).into(new ArrayList<>());
 
         long totalElements = 0;
         List<Map<String, Object>> items = new ArrayList<>();
 
-        if (!facetResult.isEmpty()) {
-            Document first = facetResult.get(0);
-            List<Document> countList = first.getList("totalCount", Document.class);
-            if (countList != null && !countList.isEmpty()) {
-                totalElements = ((Number) countList.get(0).getOrDefault("count", 0)).longValue();
-            }
+        if (isLinguisticFilter) {
+            pipeline.add(new Document("$sort", new Document(sortProperty, sortOrder).append("uuid", 1)));
+            List<Document> allDocs = mongoTemplate.getCollection("Researchoutputs").aggregate(pipeline).into(new ArrayList<>());
+            List<Map<String, Object>> matchedItems = new ArrayList<>();
+            String f = filter.toLowerCase();
 
-            List<Document> dataList = first.getList("data", Document.class);
-            if (dataList != null) {
-                for (Document doc : dataList) {
-                    Map<String, Object> item = formatPublicationItem(doc);
-                    items.add(item);
+            for (Document doc : allDocs) {
+                Map<String, Object> item = formatPublicationItem(doc);
+                boolean matches = false;
+                switch (f) {
+                    case "wrong_language" -> matches = Boolean.TRUE.equals(item.get("hasAnyWrongLanguage"));
+                    case "genuine_3_langs" -> matches = Boolean.TRUE.equals(item.get("isGenuine3Langs"));
+                    case "wrong_ca" -> matches = Boolean.TRUE.equals(item.get("isWrongCa"));
+                    case "wrong_es" -> matches = Boolean.TRUE.equals(item.get("isWrongEs"));
+                    case "wrong_en" -> matches = Boolean.TRUE.equals(item.get("isWrongEn"));
+                }
+                if (matches) {
+                    matchedItems.add(item);
                 }
             }
-        }
 
-        // Adjust totalElements dynamically for specific linguistic filters if needed
-        if (filter != null && (search == null || search.isBlank()) && (language == null || language.isBlank() || "all".equalsIgnoreCase(language))) {
-            if ("wrong_language".equalsIgnoreCase(filter)) {
-                totalElements = ((Number) getAbstractStats(desde, hasta, type).getOrDefault("wrongLanguageCount", totalElements)).longValue();
-            } else if ("genuine_3_langs".equalsIgnoreCase(filter)) {
-                totalElements = ((Number) getAbstractStats(desde, hasta, type).getOrDefault("genuine3Langs", totalElements)).longValue();
+            totalElements = matchedItems.size();
+            int fromIndex = Math.min(Math.max(0, page) * Math.max(1, size), matchedItems.size());
+            int toIndex = Math.min(fromIndex + Math.max(1, size), matchedItems.size());
+            items = matchedItems.subList(fromIndex, toIndex);
+        } else {
+            List<Document> dataPipeline = new ArrayList<>();
+            dataPipeline.add(new Document("$sort", new Document(sortProperty, sortOrder).append("uuid", 1)));
+            dataPipeline.add(new Document("$skip", Math.max(0, page) * Math.max(1, size)));
+            dataPipeline.add(new Document("$limit", Math.max(1, size)));
+
+            pipeline.add(new Document("$facet", new Document()
+                .append("totalCount", List.of(new Document("$count", "count")))
+                .append("data", dataPipeline)
+            ));
+
+            List<Document> facetResult = mongoTemplate.getCollection("Researchoutputs").aggregate(pipeline).into(new ArrayList<>());
+
+            if (!facetResult.isEmpty()) {
+                Document first = facetResult.get(0);
+                List<Document> countList = first.getList("totalCount", Document.class);
+                if (countList != null && !countList.isEmpty()) {
+                    totalElements = ((Number) countList.get(0).getOrDefault("count", 0)).longValue();
+                }
+
+                List<Document> dataList = first.getList("data", Document.class);
+                if (dataList != null) {
+                    for (Document doc : dataList) {
+                        Map<String, Object> item = formatPublicationItem(doc);
+                        items.add(item);
+                    }
+                }
             }
         }
 
@@ -1314,11 +1355,11 @@ public class PublicacionAbstractsService {
         String detectedEs = hasEs ? detectLanguage(esText) : "none";
         String detectedEn = hasEn ? detectLanguage(enText) : "none";
 
-        boolean isWrongCa = hasCa && !"ca_ES".equals(detectedCa);
-        boolean isWrongEs = hasEs && !"es_ES".equals(detectedEs);
-        boolean isWrongEn = hasEn && !"en_GB".equals(detectedEn);
+        boolean isWrongCa = hasCa && ("en_GB".equals(detectedCa) || "es_ES".equals(detectedCa));
+        boolean isWrongEs = hasEs && ("en_GB".equals(detectedEs) || "ca_ES".equals(detectedEs));
+        boolean isWrongEn = hasEn && ("ca_ES".equals(detectedEn) || "es_ES".equals(detectedEn));
         boolean hasAnyWrongLanguage = isWrongCa || isWrongEs || isWrongEn;
-        boolean isGenuine3Langs = hasCa && hasEs && hasEn && !isWrongCa && !isWrongEs && !isWrongEn;
+        boolean isGenuine3Langs = hasCa && hasEs && hasEn && !isWrongCa && !isWrongEs && !isWrongEn && !isIdentical3;
 
         List<String> langsPresent = new ArrayList<>();
         if (hasCa) langsPresent.add("ca_ES");
@@ -1431,9 +1472,9 @@ public class PublicacionAbstractsService {
         result.put("detectedEs", detectedEs);
         result.put("detectedEn", detectedEn);
 
-        boolean isWrongCa = hasCa && !"ca_ES".equals(detectedCa);
-        boolean isWrongEs = hasEs && !"es_ES".equals(detectedEs);
-        boolean isWrongEn = hasEn && !"en_GB".equals(detectedEn);
+        boolean isWrongCa = hasCa && ("en_GB".equals(detectedCa) || "es_ES".equals(detectedCa));
+        boolean isWrongEs = hasEs && ("en_GB".equals(detectedEs) || "ca_ES".equals(detectedEs));
+        boolean isWrongEn = hasEn && ("ca_ES".equals(detectedEn) || "es_ES".equals(detectedEn));
         boolean hasAnyWrongLanguage = isWrongCa || isWrongEs || isWrongEn;
 
         result.put("isWrongCa", isWrongCa);

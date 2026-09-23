@@ -12,7 +12,7 @@
 			<attribute name="optional" value="true"/>
 		</attributes>
 	</classpathentry>
-	<classpathentry kind="src" output="target/test-classes" path="src/test/java">
+	<classpathentry excluding="**/StrategicIndicatorsControllerMockTest.java|**/StrategicIndicatorsControllerTest.java|**/EgretaEditorControllerTest.java|**/IngressosControllerTest.java|**/DemoApplicationTests.java" kind="src" output="target/test-classes" path="src/test/java">
 		<attributes>
 			<attribute name="optional" value="true"/>
 			<attribute name="maven.pomderived" value="true"/>

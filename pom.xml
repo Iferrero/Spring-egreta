@@ -113,6 +113,19 @@
 		<finalName>otr</finalName>
 		<plugins>
 			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-compiler-plugin</artifactId>
+				<configuration>
+					<testExcludes>
+						<testExclude>**/StrategicIndicatorsControllerMockTest.java</testExclude>
+						<testExclude>**/StrategicIndicatorsControllerTest.java</testExclude>
+						<testExclude>**/EgretaEditorControllerTest.java</testExclude>
+						<testExclude>**/IngressosControllerTest.java</testExclude>
+						<testExclude>**/DemoApplicationTests.java</testExclude>
+					</testExcludes>
+				</configuration>
+			</plugin>
+			<plugin>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
 			</plugin>

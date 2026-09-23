@@ -66,27 +66,21 @@
 
 <body class="bg-slate-50 min-h-screen">
     <div class="mx-auto w-[95%] px-4 py-10">
-        <header class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5 mb-8">
-            <a href="index-orgaext.html" class="hover:opacity-80 transition-opacity">
-                <div class="hidden">
-                    <h1 class="text-2xl font-extrabold text-slate-800 tracking-tight">Gestio d'organitzacions externes
-                    </h1>
-                    <p class="text-sm text-slate-500 mt-1">KPIs de qualitat de dades i llistat detallat per cada KPI</p>
+        <header class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+            <a href="index-orgaext.html" class="hover:opacity-80 transition-opacity flex items-center gap-3">
+                <span class="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-indigo-600 text-white shadow-md shadow-indigo-100">
+                    <i class="fa-solid fa-chart-pie text-base"></i>
+                </span>
+                <div>
+                    <h1 class="text-xl font-extrabold text-slate-800 tracking-tight">Qualitat d'Organitzacions Externes</h1>
+                    <p class="text-xs text-slate-500">KPIs de qualitat de dades i inferència de metadades (ROR &amp; IA)</p>
                 </div>
             </a>
-            <div class="flex gap-3 hidden">
-                <a href="organizaciones-externas.html"
-                    class="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-sm text-slate-600 shadow-sm">
-                    <i class="fa-solid fa-list"></i> Llistat complet
-                </a>
-                <a href="organizaciones-externas-grafo.html"
-                    class="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-sm text-slate-600 shadow-sm">
-                    <i class="fa-solid fa-diagram-project"></i> Similitud entre organitzacions
-                </a>
-                <a href="organizaciones-externas-stats.html"
-                    class="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-sm text-slate-600 shadow-sm">
-                    <i class="fa-solid fa-chart-column"></i> Estadistiques
-                </a>
+            <div class="flex items-center gap-2">
+                <button id="btnClearCache" type="button" title="Esborra totes les memòries cau en memòria (ROR, IA, Catàlegs de països i tipus)"
+                    class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 active:scale-95 text-xs font-semibold text-slate-700 shadow-sm transition-all hover:border-slate-300">
+                    <i class="fa-solid fa-broom text-amber-500"></i> Borrar memòria cau
+                </button>
             </div>
         </header>
 
@@ -673,6 +667,12 @@
         async function preloadTypeSuggestions(rows) {
             // Ya cubierto por preloadSuggestionsForPage, no hace nada extra
         }
+        function extractRorUrl(reason) {
+            const str = String(reason || '');
+            const match = str.match(/https?:\/\/ror\.org\/[a-z0-9]+/i);
+            return match ? match[0] : null;
+        }
+
         function buildConfidenceChip(label, confidence, reason, metricLabel) {
             const safeLabel = String(label || '').trim();
             if (!safeLabel) return '<span class="text-slate-400">—</span>';
@@ -689,9 +689,19 @@
             }
 
             const safeReason = String(reason || '').trim() || 'n/a';
-            const tooltip = 'Motiu IA: ' + safeReason;
+            const rorUrl = extractRorUrl(safeReason);
+            const isRor = !!rorUrl || safeReason.startsWith('ror-');
+            
+            let rorBadge = '';
+            if (rorUrl) {
+                rorBadge = '<a href="' + esc(rorUrl) + '" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 bg-indigo-100 hover:bg-indigo-200 text-indigo-800 font-bold px-1.5 py-0.5 rounded text-[9px] mr-1 transition-colors cursor-pointer shadow-xs" title="Obrir fitxa oficial ROR (' + esc(rorUrl) + ')" onclick="event.stopPropagation();">ROR <i class="fa-solid fa-arrow-up-right-from-square text-[8px]"></i></a>';
+            } else if (isRor) {
+                rorBadge = '<span class="bg-indigo-100 text-indigo-700 font-bold px-1 rounded text-[9px] mr-1">ROR</span>';
+            }
 
-            return '<span tabindex="0" class="ai-tooltip inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-semibold ' + chipClasses + '" data-tooltip="' + esc(tooltip) + '" title="' + esc(tooltip) + '">' + esc(safeLabel) + '<span class="text-[10px] ' + pctClasses + '">' + esc(String(confidencePct)) + '%</span></span>';
+            const tooltip = (isRor ? 'Font oficial ROR: ' : 'Motiu IA: ') + safeReason;
+
+            return '<span tabindex="0" class="ai-tooltip inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-semibold ' + chipClasses + '" data-tooltip="' + esc(tooltip) + '" title="' + esc(tooltip) + '">' + rorBadge + esc(safeLabel) + '<span class="text-[10px] ' + pctClasses + '">' + esc(String(confidencePct)) + '%</span></span>';
         }
 
         async function ensureTypeCatalogOptions() {
@@ -1437,6 +1447,46 @@
                     } else {
                         icon.className = 'fa-solid fa-sort-down ml-1 text-indigo-600';
                     }
+                }
+            });
+        }
+
+        const btnClearCache = document.getElementById('btnClearCache');
+        if (btnClearCache) {
+            btnClearCache.addEventListener('click', async () => {
+                const origHtml = btnClearCache.innerHTML;
+                btnClearCache.disabled = true;
+                btnClearCache.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-amber-500"></i> Buidant memòria cau...';
+                try {
+                    const res = await apiFetch('/external-organizations/stats/clear-cache', { method: 'POST' });
+                    if (!res.ok) throw new Error('HTTP ' + res.status);
+                    const data = await res.json();
+                    
+                    // Reset cache local de la UI
+                    typeSuggestionCache.clear();
+                    countrySuggestionCache.clear();
+                    fundingSuggestionCache.clear();
+                    suggestionBundleCache.clear();
+                    suggestionBundleInFlight.clear();
+                    typeCatalogOptions = null;
+                    countryCatalogOptions = null;
+                    fundingCatalogOptions = null;
+                    
+                    btnClearCache.innerHTML = '<i class="fa-solid fa-check text-emerald-500"></i> Memòria cau buidada!';
+                    setTimeout(() => {
+                        btnClearCache.disabled = false;
+                        btnClearCache.innerHTML = origHtml;
+                    }, 2500);
+
+                    // Recarregar la taula i KPIs
+                    loadTable();
+                } catch (e) {
+                    btnClearCache.disabled = false;
+                    btnClearCache.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-rose-500"></i> Error';
+                    setTimeout(() => {
+                        btnClearCache.innerHTML = origHtml;
+                    }, 3000);
+                    alert('Error en buidar la memòria cau: ' + e.message);
                 }
             });
         }

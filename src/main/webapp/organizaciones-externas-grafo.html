@@ -627,9 +627,13 @@ function renderTable() {
         const EGRETA_EXTERNAL_ORG_BASE = 'https://egreta.uab.cat/admin/editor/dk/atira/pure/api/shared/model/ueo/externalorganisation/editor/ueoexternalorganisationeditor.xhtml?scheme=&type=&id=';
         const leftUrl = p.leftPureId ? EGRETA_EXTERNAL_ORG_BASE + encodeURIComponent(p.leftPureId) : '#';
         const rightUrl = p.rightPureId ? EGRETA_EXTERNAL_ORG_BASE + encodeURIComponent(p.rightPureId) : '#';
-        const leftChip  = `<a href=\"${leftUrl}\" class=\"sim-chip\" style=\"background:${leftGreen ? '#4ade80' : '#e0f2fe'};color:${leftGreen ? '#14532d' : '#0c4a6e'};text-decoration:none;\" target=\"_blank\" onclick=\"window.open('${leftUrl}','egreta','width=900,height=700,scrollbars=yes');return false;\">${safeHtml(leftBase)}${leftPureId}</a>`;
-        const rightChip = `<a href=\"${rightUrl}\" class=\"sim-chip\" style=\"background:${rightGreen ? '#4ade80' : '#e0f2fe'};color:${rightGreen ? '#14532d' : '#0c4a6e'};text-decoration:none;\" target=\"_blank\" onclick=\"window.open('${rightUrl}','egreta','width=900,height=700,scrollbars=yes');return false;\">${safeHtml(rightBase)}${rightPureId}</a>`;
-        const ignoreBtn = `<button class="px-2 py-1 rounded bg-slate-500 hover:bg-slate-600 text-white text-xs" onclick="ignorePair('${p.from}', '${p.to}')">Diferents</button>`;
+        const leftChip  = `<a href="${leftUrl}" class="sim-chip" style="background:${leftGreen ? '#4ade80' : '#e0f2fe'};color:${leftGreen ? '#14532d' : '#0c4a6e'};text-decoration:none;" target="_blank" onclick="window.open('${leftUrl}','egreta','width=900,height=700,scrollbars=yes');return false;">${safeHtml(leftBase)}${leftPureId}</a>`;
+        const rightChip = `<a href="${rightUrl}" class="sim-chip" style="background:${rightGreen ? '#4ade80' : '#e0f2fe'};color:${rightGreen ? '#14532d' : '#0c4a6e'};text-decoration:none;" target="_blank" onclick="window.open('${rightUrl}','egreta','width=900,height=700,scrollbars=yes');return false;">${safeHtml(rightBase)}${rightPureId}</a>`;
+        const fromEnc = encodeURIComponent(p.from || '');
+        const toEnc = encodeURIComponent(p.to || '');
+        const leftEnc = encodeURIComponent(leftBase || '');
+        const rightEnc = encodeURIComponent(rightBase || '');
+        const ignoreBtn = `<button class="px-2 py-1 rounded bg-slate-500 hover:bg-slate-600 text-white text-xs" onclick="ignorePair(decodeURIComponent('${fromEnc}'), decodeURIComponent('${toEnc}'), decodeURIComponent('${leftEnc}'), decodeURIComponent('${rightEnc}'))">Diferents</button>`;
         return '<tr>'
             + '<td>' + leftChip  + '</td>'
             + '<td>' + rightChip + '</td>'
@@ -771,8 +775,23 @@ function handleOrgsMerged(targetId, sourceIds) {
 }
 
 // ── Ignorar cluster (marcar com a diferents) ───────────────────────────────
-function ignoreCluster(uuids) {
+async function ignoreCluster(uuids) {
     if (!Array.isArray(uuids) || !uuids.length) return;
+
+    // Netejar la memòria cau de consultes locals
+    queryCache.clear();
+
+    // Guardar a MongoDB com a diferents en segon pla
+    try {
+        fetch('/api/external-organizations/similarity/different', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ clusterUuids: uuids })
+        }).catch(err => console.error('Error guardant cluster com a diferent al servidor:', err));
+    } catch (e) {
+        console.error('Error enviant petició de cluster diferent:', e);
+    }
+
     if (!currentData || !Array.isArray(currentData.pairs)) return;
 
     const uuidSet = new Set(uuids);
@@ -802,7 +821,28 @@ function ignoreCluster(uuids) {
 }
 
 // ── Ignorar parella (marcar com a diferents) ───────────────────────────────
-function ignorePair(fromUuid, toUuid) {
+async function ignorePair(fromUuid, toUuid, fromName, toName) {
+    if (!fromUuid || !toUuid) return;
+
+    // Netejar la memòria cau de consultes locals
+    queryCache.clear();
+
+    // Guardar a MongoDB com a diferents en segon pla
+    try {
+        fetch('/api/external-organizations/similarity/different', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                from: fromUuid,
+                to: toUuid,
+                fromName: fromName || '',
+                toName: toName || ''
+            })
+        }).catch(err => console.error('Error guardant parella com a diferent al servidor:', err));
+    } catch (e) {
+        console.error('Error enviant petició de parella diferent:', e);
+    }
+
     if (!currentData || !Array.isArray(currentData.pairs)) return;
 
     // Filtrar la parella específica

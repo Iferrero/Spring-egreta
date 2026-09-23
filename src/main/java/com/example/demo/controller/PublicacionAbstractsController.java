@@ -99,6 +99,13 @@ public class PublicacionAbstractsController {
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
+    @PostMapping("/cache/clear")
+    @Operation(summary = "Neteja la memòria cau per forçar el recàlcul complet de tots els indicadors i gràfics")
+    public ResponseEntity<Map<String, Object>> clearCache() {
+        abstractsService.clearCache();
+        return ResponseEntity.ok(Map.of("status", "ok", "message", "Caché neta correctament"));
+    }
+
     @PostMapping("/sync/{uuid}")
     @Operation(summary = "Sincronitza i actualitza des de Pure/Egreta una única publicació pel seu UUID")
     public ResponseEntity<Map<String, Object>> syncOne(@PathVariable String uuid) {
