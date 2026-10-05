@@ -18,13 +18,16 @@ public class PublicacionAbstractsController {
 
     private final PublicacionAbstractsService abstractsService;
     private final com.example.demo.egreta.ResearchoutputsSyncService researchoutputsSyncService;
+    private final com.example.demo.service.ResearchoutputsAiAbstractsService aiAbstractsService;
 
     @Autowired
     public PublicacionAbstractsController(
             PublicacionAbstractsService abstractsService,
-            com.example.demo.egreta.ResearchoutputsSyncService researchoutputsSyncService) {
+            com.example.demo.egreta.ResearchoutputsSyncService researchoutputsSyncService,
+            @org.springframework.context.annotation.Lazy com.example.demo.service.ResearchoutputsAiAbstractsService aiAbstractsService) {
         this.abstractsService = abstractsService;
         this.researchoutputsSyncService = researchoutputsSyncService;
+        this.aiAbstractsService = aiAbstractsService;
     }
 
     @GetMapping("/stats")
@@ -89,6 +92,60 @@ public class PublicacionAbstractsController {
             @RequestParam(defaultValue = "publicationYear") String sortField,
             @RequestParam(defaultValue = "desc") String sortDir) {
         return ResponseEntity.ok(abstractsService.getAbstractsList(filter, search, desde, hasta, type, language, yearType, page, size, sortField, sortDir));
+    }
+
+    @GetMapping("/discrepancies/stats")
+    @Operation(summary = "Obté estadístiques i KPIs de discrepàncies de longitud entre abstracts")
+    public ResponseEntity<Map<String, Object>> getDiscrepanciesStats(
+            @RequestParam(required = false) Integer desde,
+            @RequestParam(required = false) Integer hasta,
+            @RequestParam(required = false) String type,
+            @RequestParam(required = false, defaultValue = "publicationYear") String yearType,
+            @RequestParam(required = false, defaultValue = "50") Integer minDiff,
+            @RequestParam(required = false, defaultValue = "1.5") Double minRatio,
+            @RequestParam(required = false, defaultValue = "2") Integer minLangs,
+            @RequestParam(required = false) String source) {
+        if ("raw".equalsIgnoreCase(source)) {
+            return ResponseEntity.ok(abstractsService.getDiscrepanciesStats(desde, hasta, type, yearType, minDiff, minRatio, minLangs));
+        }
+        if (aiAbstractsService.hasDiscrepanciesPopulated()) {
+            return ResponseEntity.ok(aiAbstractsService.getDiscrepanciesStatsFromAi(desde, hasta, type, yearType, minDiff, minRatio, minLangs));
+        }
+        return ResponseEntity.ok(abstractsService.getDiscrepanciesStats(desde, hasta, type, yearType, minDiff, minRatio, minLangs));
+    }
+
+    @GetMapping("/discrepancies/list")
+    @Operation(summary = "Llistat paginat de publicacions amb discrepàncies de longitud entre abstracts")
+    public ResponseEntity<Map<String, Object>> getDiscrepanciesList(
+            @RequestParam(required = false) Integer desde,
+            @RequestParam(required = false) Integer hasta,
+            @RequestParam(required = false) String type,
+            @RequestParam(required = false, defaultValue = "publicationYear") String yearType,
+            @RequestParam(required = false, defaultValue = "50") Integer minDiff,
+            @RequestParam(required = false, defaultValue = "1.5") Double minRatio,
+            @RequestParam(required = false, defaultValue = "2") Integer minLangs,
+            @RequestParam(required = false) String shortestLang,
+            @RequestParam(required = false) String longestLang,
+            @RequestParam(required = false) String severity,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String source,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "15") int size,
+            @RequestParam(defaultValue = "diffWords") String sortField,
+            @RequestParam(defaultValue = "desc") String sortDir) {
+        if ("raw".equalsIgnoreCase(source)) {
+            return ResponseEntity.ok(abstractsService.getDiscrepanciesList(
+                    desde, hasta, type, yearType, minDiff, minRatio, minLangs,
+                    shortestLang, longestLang, severity, search, page, size, sortField, sortDir));
+        }
+        if (aiAbstractsService.hasDiscrepanciesPopulated()) {
+            return ResponseEntity.ok(aiAbstractsService.getDiscrepanciesListFromAi(
+                    desde, hasta, type, yearType, minDiff, minRatio, minLangs,
+                    shortestLang, longestLang, severity, search, page, size, sortField, sortDir));
+        }
+        return ResponseEntity.ok(abstractsService.getDiscrepanciesList(
+                desde, hasta, type, yearType, minDiff, minRatio, minLangs,
+                shortestLang, longestLang, severity, search, page, size, sortField, sortDir));
     }
 
     @GetMapping("/{uuid}")

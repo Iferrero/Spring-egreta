@@ -1175,7 +1175,7 @@
                 pagination: true,
                 paginationSize: 25,
                 paginationSizeSelector: [15, 25, 50, 100, true],
-                selectableRows: false,
+                selectableRows: "highlight",
                 placeholder: "<span>No hi ha cap ajut que compleixi els filtres seleccionats</span>",
                 columns: [
                     // Columna 0: Checkbox
@@ -1185,16 +1185,24 @@
                             return `<input type="checkbox" id="tabulator-select-all-checkbox" class="w-3.5 h-3.5 rounded border-slate-400 text-indigo-600 focus:ring-indigo-500 cursor-pointer" title="Seleccionar/Deseleccionar tots els ajuts filtrats">`;
                         },
                         headerClick: function(e, column) {
+                            const headerCb = document.getElementById('tabulator-select-all-checkbox');
+                            if (!headerCb) return;
+
+                            let checked;
                             if (e.target && e.target.id === 'tabulator-select-all-checkbox') {
-                                const checked = e.target.checked;
-                                const activeRows = excelTable.getRows("active");
-                                if (checked) {
-                                    excelTable.selectRow(activeRows);
-                                } else {
-                                    excelTable.deselectRow(activeRows);
-                                }
-                                actualitzarComptadorSeleccionats();
+                                checked = e.target.checked;
+                            } else {
+                                checked = !headerCb.checked;
+                                headerCb.checked = checked;
                             }
+
+                            const activeRows = excelTable.getRows("active");
+                            if (checked) {
+                                excelTable.selectRow(activeRows);
+                            } else {
+                                excelTable.deselectRow(activeRows);
+                            }
+                            actualitzarComptadorSeleccionats();
                         },
                         cellClick: function(e, cell) {
                             if (e.target && e.target.tagName !== 'INPUT') {

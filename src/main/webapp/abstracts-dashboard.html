@@ -70,6 +70,14 @@
                 </div>
             </div>
             <div class="flex items-center gap-3 flex-wrap">
+                <a href="abstracts-discrepancies.html" class="px-4 py-2 rounded-xl border border-amber-200 bg-amber-50/50 text-xs sm:text-sm font-semibold text-amber-700 hover:bg-amber-100 transition-all flex items-center gap-2 premium-shadow">
+                    <i class="fa-solid fa-scale-unbalanced text-amber-600"></i>
+                    <span>Discrepàncies</span>
+                </a>
+                <a href="ai-abstracts-dashboard.html" class="px-4 py-2 rounded-xl border border-indigo-200 bg-indigo-50/50 text-xs sm:text-sm font-semibold text-indigo-700 hover:bg-indigo-100 transition-all flex items-center gap-2 premium-shadow">
+                    <i class="fa-solid fa-wand-magic-sparkles text-indigo-600"></i>
+                    <span>Abstracts IA (Salamandra)</span>
+                </a>
                 <button onclick="forcarRecalculTot()" class="px-4 py-2 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-all flex items-center gap-2 premium-shadow">
                     <i class="fa-solid fa-rotate" id="refreshIcon"></i>
                     <span>Actualitzar dades</span>
@@ -660,8 +668,9 @@
                         </div>
                         <div id="modalAbstractCa" class="text-xs sm:text-sm text-slate-700 leading-relaxed max-h-80 overflow-y-auto whitespace-pre-wrap">Sense text en català</div>
                     </div>
-                    <div class="text-[11px] text-slate-400 mt-3 pt-2 border-t border-slate-100 flex justify-between">
-                        <span>Caràcters: <strong id="charCountCa" class="text-slate-600">0</strong></span>
+                    <div class="text-[11px] text-slate-500 mt-3 pt-2 border-t border-slate-100 flex justify-between items-center font-medium">
+                        <span>Paraules: <strong id="wordCountCa" class="text-slate-800 font-bold">0</strong></span>
+                        <span class="text-[10px] text-slate-400">(<span id="charCountCa">0</span> caràcters)</span>
                     </div>
                 </div>
 
@@ -679,8 +688,9 @@
                         </div>
                         <div id="modalAbstractEs" class="text-xs sm:text-sm text-slate-700 leading-relaxed max-h-80 overflow-y-auto whitespace-pre-wrap">Sense text en castellà</div>
                     </div>
-                    <div class="text-[11px] text-slate-400 mt-3 pt-2 border-t border-slate-100 flex justify-between">
-                        <span>Caràcters: <strong id="charCountEs" class="text-slate-600">0</strong></span>
+                    <div class="text-[11px] text-slate-500 mt-3 pt-2 border-t border-slate-100 flex justify-between items-center font-medium">
+                        <span>Paraules: <strong id="wordCountEs" class="text-slate-800 font-bold">0</strong></span>
+                        <span class="text-[10px] text-slate-400">(<span id="charCountEs">0</span> caràcters)</span>
                     </div>
                 </div>
 
@@ -698,8 +708,9 @@
                         </div>
                         <div id="modalAbstractEn" class="text-xs sm:text-sm text-slate-700 leading-relaxed max-h-80 overflow-y-auto whitespace-pre-wrap">Sense text en anglès</div>
                     </div>
-                    <div class="text-[11px] text-slate-400 mt-3 pt-2 border-t border-slate-100 flex justify-between">
-                        <span>Caràcters: <strong id="charCountEn" class="text-slate-600">0</strong></span>
+                    <div class="text-[11px] text-slate-500 mt-3 pt-2 border-t border-slate-100 flex justify-between items-center font-medium">
+                        <span>Paraules: <strong id="wordCountEn" class="text-slate-800 font-bold">0</strong></span>
+                        <span class="text-[10px] text-slate-400">(<span id="charCountEn">0</span> caràcters)</span>
                     </div>
                 </div>
 
@@ -748,91 +759,121 @@
             const refreshIcon = document.getElementById('refreshIcon');
             if (refreshIcon) refreshIcon.classList.add('fa-spin');
 
+            // Reset frontend caches
+            cachedPubYearsData = null;
+            cachedSubYearsData = null;
+            rawLanguagesByYearData = null;
+
             try {
                 // Clear backend in-memory cache to force 100% fresh recalculation
-                await apiFetch('/pure/abstracts/cache/clear', { method: 'POST' });
+                await apiFetch(`/pure/abstracts/cache/clear?_t=${Date.now()}`, { 
+                    method: 'POST',
+                    cache: 'no-store',
+                    headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
+                });
             } catch (err) {
                 console.warn("Avís al netejar la memòria cau:", err);
             }
 
-            await carregarTot();
+            await carregarTot(true);
         }
 
-        async function carregarTot() {
+        async function carregarTot(isForced = false) {
             const refreshIcon = document.getElementById('refreshIcon');
             if (refreshIcon) refreshIcon.classList.add('fa-spin');
 
+            // Feedback visual: atenuar tots els gràfics mentre es refresquen les dades
+            const canvases = document.querySelectorAll('canvas');
+            canvases.forEach(c => {
+                if (c.parentElement) c.parentElement.classList.add('opacity-40', 'transition-opacity', 'duration-300');
+            });
+
             try {
-                await Promise.all([
-                    carregarKPIsIGrafics(),
-                    carregarEvolucioAnysPub(),
-                    carregarEvolucioAnysSub(),
-                    carregarIdiomesPerAny(),
-                    carregarTipologies(),
-                    carregarTaula()
+                const results = await Promise.allSettled([
+                    carregarKPIsIGrafics(isForced),
+                    carregarEvolucioAnysPub(isForced),
+                    carregarEvolucioAnysSub(isForced),
+                    carregarIdiomesPerAny(isForced),
+                    carregarTipologies(isForced),
+                    carregarTaula(isForced)
                 ]);
+
+                results.forEach((res, idx) => {
+                    if (res.status === 'rejected') {
+                        console.error(`Error en refrescar component #${idx}:`, res.reason);
+                    }
+                });
             } catch (err) {
                 console.error("Error carregant dades del dashboard:", err);
             } finally {
                 if (refreshIcon) refreshIcon.classList.remove('fa-spin');
+                canvases.forEach(c => {
+                    if (c.parentElement) c.parentElement.classList.remove('opacity-40');
+                });
             }
         }
 
-        async function carregarKPIsIGrafics() {
-            const anySel = document.getElementById('selectAny').value;
-            const tipusSel = document.getElementById('selectTipologia').value;
+        async function carregarKPIsIGrafics(isForced = false) {
+            const anySel = document.getElementById('selectAny')?.value;
+            const tipusSel = document.getElementById('selectTipologia')?.value;
             const yearType = document.getElementById('selectYearType') ? document.getElementById('selectYearType').value : 'publicationYear';
             let url = `/pure/abstracts/stats?yearType=${encodeURIComponent(yearType)}&`;
             if (anySel === 'none' || anySel === '0') url += `desde=0&hasta=0&`;
             else if (anySel) url += `desde=${anySel}&hasta=${anySel}&`;
             if (tipusSel) url += `type=${encodeURIComponent(tipusSel)}&`;
             if (filtreIdiomaSeleccionat) url += `language=${encodeURIComponent(filtreIdiomaSeleccionat)}&`;
+            if (isForced) url += `_t=${Date.now()}&`;
 
-            const res = await apiFetch(url);
-            const stats = await res.json();
+            try {
+                const fetchOpts = isForced ? { cache: 'no-store', headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } } : undefined;
+                const res = await apiFetch(url, fetchOpts);
+                const stats = await res.json();
 
-            // Set KPI numbers
-            document.getElementById('kpiTotal').innerText = Number(stats.total || 0).toLocaleString();
-            document.getElementById('kpiWithAbstract').innerText = Number(stats.withAbstract || 0).toLocaleString();
-            document.getElementById('kpiPctWithAbstract').innerText = `${stats.pctWithAbstract || 0}% del total`;
-            
-            document.getElementById('kpiNoAbstract').innerText = Number(stats.noAbstract || 0).toLocaleString();
-            document.getElementById('kpiPctNoAbstract').innerText = `${stats.pctNoAbstract || 0}% del total`;
+                // Set KPI numbers
+                document.getElementById('kpiTotal').innerText = Number(stats.total || 0).toLocaleString();
+                document.getElementById('kpiWithAbstract').innerText = Number(stats.withAbstract || 0).toLocaleString();
+                document.getElementById('kpiPctWithAbstract').innerText = `${stats.pctWithAbstract || 0}% del total`;
+                
+                document.getElementById('kpiNoAbstract').innerText = Number(stats.noAbstract || 0).toLocaleString();
+                document.getElementById('kpiPctNoAbstract').innerText = `${stats.pctNoAbstract || 0}% del total`;
 
-            document.getElementById('kpiIn3Langs').innerText = Number(stats.in3Langs || 0).toLocaleString();
-            document.getElementById('kpiPctIn3Langs').innerText = `${stats.pctIn3LangsOfTotal || 0}% del total`;
+                document.getElementById('kpiIn3Langs').innerText = Number(stats.in3Langs || 0).toLocaleString();
+                document.getElementById('kpiPctIn3Langs').innerText = `${stats.pctIn3LangsOfTotal || 0}% del total`;
 
-            const in1or2 = (Number(stats.in1Lang || 0) + Number(stats.in2Langs || 0));
-            document.getElementById('kpiIn1or2Langs').innerText = in1or2.toLocaleString();
+                const in1or2 = (Number(stats.in1Lang || 0) + Number(stats.in2Langs || 0));
+                document.getElementById('kpiIn1or2Langs').innerText = in1or2.toLocaleString();
 
-            document.getElementById('kpiWrongLanguage').innerText = Number(stats.wrongLanguageCount || 0).toLocaleString();
-            document.getElementById('kpiPctWrongLanguage').innerText = `${stats.pctWrongLanguageOfWithAbstract || 0}% dels que tenen`;
+                document.getElementById('kpiWrongLanguage').innerText = Number(stats.wrongLanguageCount || 0).toLocaleString();
+                document.getElementById('kpiPctWrongLanguage').innerText = `${stats.pctWrongLanguageOfWithAbstract || 0}% dels que tenen`;
 
-            document.getElementById('kpiIdenticalIn3').innerText = Number(stats.identicalIn3 || 0).toLocaleString();
-            document.getElementById('kpiPctIdenticalIn3').innerText = `${stats.pctIdenticalOf3Langs || 0}% dels de 3 idiomes`;
+                document.getElementById('kpiIdenticalIn3').innerText = Number(stats.identicalIn3 || 0).toLocaleString();
+                document.getElementById('kpiPctIdenticalIn3').innerText = `${stats.pctIdenticalOf3Langs || 0}% dels de 3 idiomes`;
 
-            document.getElementById('kpiGenuine3Langs').innerText = Number(stats.genuine3Langs || 0).toLocaleString();
-            document.getElementById('kpiPctGenuine3Langs').innerText = `${stats.pctGenuine3Langs || 0}% reals dels de 3`;
+                document.getElementById('kpiGenuine3Langs').innerText = Number(stats.genuine3Langs || 0).toLocaleString();
+                document.getElementById('kpiPctGenuine3Langs').innerText = `${stats.pctGenuine3Langs || 0}% reals dels de 3`;
 
-            document.getElementById('statHasCa').innerText = Number(stats.hasCa || 0).toLocaleString();
-            document.getElementById('statHasEs').innerText = Number(stats.hasEs || 0).toLocaleString();
-            document.getElementById('statHasEn').innerText = Number(stats.hasEn || 0).toLocaleString();
+                document.getElementById('statHasCa').innerText = Number(stats.hasCa || 0).toLocaleString();
+                document.getElementById('statHasEs').innerText = Number(stats.hasEs || 0).toLocaleString();
+                document.getElementById('statHasEn').innerText = Number(stats.hasEn || 0).toLocaleString();
 
-            // Update Quick Filter Pill badges
-            if (document.getElementById('pillCountAll')) document.getElementById('pillCountAll').innerText = Number(stats.total || 0).toLocaleString();
-            if (document.getElementById('pillCountWrong')) document.getElementById('pillCountWrong').innerText = Number(stats.wrongLanguageCount || 0).toLocaleString();
-            if (document.getElementById('pillCountIdentical')) document.getElementById('pillCountIdentical').innerText = Number(stats.identicalIn3 || 0).toLocaleString();
-            if (document.getElementById('pillCountGenuine')) document.getElementById('pillCountGenuine').innerText = Number(stats.genuine3Langs || 0).toLocaleString();
-            if (document.getElementById('pillCountDiff3')) document.getElementById('pillCountDiff3').innerText = Number(stats.differentIn3 || 0).toLocaleString();
-            if (document.getElementById('pillCountIn3')) document.getElementById('pillCountIn3').innerText = Number(stats.in3Langs || 0).toLocaleString();
-            if (document.getElementById('pillCount1or2')) document.getElementById('pillCount1or2').innerText = in1or2.toLocaleString();
-            if (document.getElementById('pillCountWithAbs')) document.getElementById('pillCountWithAbs').innerText = Number(stats.withAbstract || 0).toLocaleString();
-            if (document.getElementById('pillCountNoAbs')) document.getElementById('pillCountNoAbs').innerText = Number(stats.noAbstract || 0).toLocaleString();
+                // Update Quick Filter Pill badges
+                if (document.getElementById('pillCountAll')) document.getElementById('pillCountAll').innerText = Number(stats.total || 0).toLocaleString();
+                if (document.getElementById('pillCountWrong')) document.getElementById('pillCountWrong').innerText = Number(stats.wrongLanguageCount || 0).toLocaleString();
+                if (document.getElementById('pillCountIdentical')) document.getElementById('pillCountIdentical').innerText = Number(stats.identicalIn3 || 0).toLocaleString();
+                if (document.getElementById('pillCountGenuine')) document.getElementById('pillCountGenuine').innerText = Number(stats.genuine3Langs || 0).toLocaleString();
+                if (document.getElementById('pillCountDiff3')) document.getElementById('pillCountDiff3').innerText = Number(stats.differentIn3 || 0).toLocaleString();
+                if (document.getElementById('pillCountIn3')) document.getElementById('pillCountIn3').innerText = Number(stats.in3Langs || 0).toLocaleString();
+                if (document.getElementById('pillCount1or2')) document.getElementById('pillCount1or2').innerText = in1or2.toLocaleString();
+                if (document.getElementById('pillCountWithAbs')) document.getElementById('pillCountWithAbs').innerText = Number(stats.withAbstract || 0).toLocaleString();
+                if (document.getElementById('pillCountNoAbs')) document.getElementById('pillCountNoAbs').innerText = Number(stats.noAbstract || 0).toLocaleString();
 
-            actualitzarAuditoriaBanner(stats);
-            renderChartPie(stats);
-            renderChartDetectedLangs(stats);
-            renderChartLangs(stats);
+                actualitzarAuditoriaBanner(stats);
+                renderChartPie(stats);
+                renderChartDetectedLangs(stats);
+                renderChartLangs(stats);
+            } catch (err) {
+                console.error("Error carregant KPIs i gràfics de resum:", err);
+            }
         }
 
         function actualitzarAuditoriaBanner(stats) {
@@ -1092,15 +1133,19 @@
                 options += `<option value="${yr}" ${currentVal == yr ? 'selected' : ''}>${yr}</option>`;
             });
             selectAny.innerHTML = options;
+            if (currentVal) selectAny.value = currentVal;
         }
 
-        async function carregarEvolucioAnysPub() {
+        async function carregarEvolucioAnysPub(isForced = false) {
             const ctx = document.getElementById('chartYearsEvolutionPub');
             if (!ctx) return;
-            if (chartYearsPubInstance) chartYearsPubInstance.destroy();
 
             try {
-                const res = await apiFetch('/pure/abstracts/years?yearType=publicationYear');
+                let url = '/pure/abstracts/years?yearType=publicationYear';
+                if (isForced) url += `&_t=${Date.now()}`;
+                const fetchOpts = isForced ? { cache: 'no-store', headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } } : undefined;
+
+                const res = await apiFetch(url, fetchOpts);
                 const data = await res.json();
                 if (!Array.isArray(data)) {
                     console.warn("Resposta no vàlida per any de publicació:", data);
@@ -1120,13 +1165,28 @@
                     poblarSelectAnys(data);
                 }
 
+                if (chartYearsPubInstance) chartYearsPubInstance.destroy();
+
+                const currentSelectedAny = document.getElementById('selectAny')?.value;
+                const isThisYearTypeSelected = (!selectYearType || selectYearType.value === 'publicationYear');
+
                 const labels = chartData.map(d => (d.isNoYear || d.year === 'Sense any' || d.year === 0) ? 'Sense any' : d.year);
                 const totals = chartData.map(d => d.total);
                 const withAbs = chartData.map(d => d.withAbstract);
                 const identicals = chartData.map(d => d.identicalIn3);
 
-                const totalColors = chartData.map(d => (d.isNoYear || d.year === 'Sense any' || d.year === 0) ? '#cbd5e1' : '#e0e7ff');
-                const withAbsColors = chartData.map(d => (d.isNoYear || d.year === 'Sense any' || d.year === 0) ? '#64748b' : '#6366f1');
+                const totalColors = chartData.map(d => {
+                    const yr = (d.isNoYear || d.year === 'Sense any' || d.year === 0) ? 'none' : String(d.year);
+                    const isSelected = isThisYearTypeSelected && currentSelectedAny && (currentSelectedAny === yr || (currentSelectedAny === 'none' && yr === 'none'));
+                    if (isSelected) return '#a5b4fc';
+                    return (yr === 'none') ? '#cbd5e1' : '#e0e7ff';
+                });
+                const withAbsColors = chartData.map(d => {
+                    const yr = (d.isNoYear || d.year === 'Sense any' || d.year === 0) ? 'none' : String(d.year);
+                    const isSelected = isThisYearTypeSelected && currentSelectedAny && (currentSelectedAny === yr || (currentSelectedAny === 'none' && yr === 'none'));
+                    if (isSelected) return '#4338ca';
+                    return (yr === 'none') ? '#64748b' : '#6366f1';
+                });
                 const identColors = chartData.map(d => (d.isNoYear || d.year === 'Sense any' || d.year === 0) ? '#f59e0b' : '#f59e0b');
 
                 chartYearsPubInstance = new Chart(ctx, {
@@ -1200,13 +1260,16 @@
             }
         }
 
-        async function carregarEvolucioAnysSub() {
+        async function carregarEvolucioAnysSub(isForced = false) {
             const ctx = document.getElementById('chartYearsEvolutionSub');
             if (!ctx) return;
-            if (chartYearsSubInstance) chartYearsSubInstance.destroy();
 
             try {
-                const res = await apiFetch('/pure/abstracts/years-submission');
+                let url = '/pure/abstracts/years-submission';
+                if (isForced) url += `?_t=${Date.now()}`;
+                const fetchOpts = isForced ? { cache: 'no-store', headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } } : undefined;
+
+                const res = await apiFetch(url, fetchOpts);
                 const data = await res.json();
                 if (!Array.isArray(data)) {
                     console.warn("Resposta no vàlida per any de submission:", data);
@@ -1226,13 +1289,28 @@
                     poblarSelectAnys(data);
                 }
 
+                if (chartYearsSubInstance) chartYearsSubInstance.destroy();
+
+                const currentSelectedAny = document.getElementById('selectAny')?.value;
+                const isThisYearTypeSelected = (selectYearType && selectYearType.value === 'submissionYear');
+
                 const labels = chartData.map(d => (d.isNoYear || d.year === 'Sense any' || d.year === 0) ? 'Sense any' : d.year);
                 const totals = chartData.map(d => d.total);
                 const withAbs = chartData.map(d => d.withAbstract);
                 const identicals = chartData.map(d => d.identicalIn3);
 
-                const totalColors = chartData.map(d => (d.isNoYear || d.year === 'Sense any' || d.year === 0) ? '#cbd5e1' : '#fef3c7');
-                const withAbsColors = chartData.map(d => (d.isNoYear || d.year === 'Sense any' || d.year === 0) ? '#64748b' : '#d97706');
+                const totalColors = chartData.map(d => {
+                    const yr = (d.isNoYear || d.year === 'Sense any' || d.year === 0) ? 'none' : String(d.year);
+                    const isSelected = isThisYearTypeSelected && currentSelectedAny && (currentSelectedAny === yr || (currentSelectedAny === 'none' && yr === 'none'));
+                    if (isSelected) return '#fde68a';
+                    return (yr === 'none') ? '#cbd5e1' : '#fef3c7';
+                });
+                const withAbsColors = chartData.map(d => {
+                    const yr = (d.isNoYear || d.year === 'Sense any' || d.year === 0) ? 'none' : String(d.year);
+                    const isSelected = isThisYearTypeSelected && currentSelectedAny && (currentSelectedAny === yr || (currentSelectedAny === 'none' && yr === 'none'));
+                    if (isSelected) return '#b45309';
+                    return (yr === 'none') ? '#64748b' : '#d97706';
+                });
                 const identColors = chartData.map(d => (d.isNoYear || d.year === 'Sense any' || d.year === 0) ? '#f43f5e' : '#f43f5e');
 
                 chartYearsSubInstance = new Chart(ctx, {
@@ -1308,7 +1386,7 @@
 
         function poblarSelectTipologies(typesData) {
             const selectTipologia = document.getElementById('selectTipologia');
-            if (!selectTipologia || !typesData) return;
+            if (!selectTipologia || !typesData || !Array.isArray(typesData)) return;
             const currentVal = selectTipologia.value;
             let options = '<option value="">Totes les tipologies</option>';
             typesData.forEach(d => {
@@ -1317,56 +1395,73 @@
                 }
             });
             selectTipologia.innerHTML = options;
+            if (currentVal) selectTipologia.value = currentVal;
         }
 
-        async function carregarTipologies() {
+        async function carregarTipologies(isForced = false) {
             const ctx = document.getElementById('chartTypesBar');
             if (!ctx) return;
-            if (chartTypesInstance) chartTypesInstance.destroy();
 
+            const anySel = document.getElementById('selectAny')?.value;
             const yearType = document.getElementById('selectYearType') ? document.getElementById('selectYearType').value : 'publicationYear';
-            const res = await apiFetch(`/pure/abstracts/types?yearType=${encodeURIComponent(yearType)}`);
-            const data = await res.json();
+            
+            let url = `/pure/abstracts/types?yearType=${encodeURIComponent(yearType)}&`;
+            if (anySel === 'none' || anySel === '0') url += `desde=0&hasta=0&`;
+            else if (anySel) url += `desde=${anySel}&hasta=${anySel}&`;
+            if (isForced) url += `_t=${Date.now()}&`;
 
-            poblarSelectTipologies(data);
+            try {
+                const fetchOpts = isForced ? { cache: 'no-store', headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } } : undefined;
+                const res = await apiFetch(url, fetchOpts);
+                const data = await res.json();
 
-            const topData = data.slice(0, 6);
-            const labels = topData.map(d => d.type.length > 20 ? d.type.substring(0, 18) + '...' : d.type);
-            const withAbs = topData.map(d => d.withAbstract);
-            const noAbs = topData.map(d => d.noAbstract);
-
-            chartTypesInstance = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: labels,
-                    datasets: [
-                        {
-                            label: 'Amb Abstract',
-                            data: withAbs,
-                            backgroundColor: '#10b981',
-                            borderRadius: 4
-                        },
-                        {
-                            label: 'Sense Abstract',
-                            data: noAbs,
-                            backgroundColor: '#f43f5e',
-                            borderRadius: 4
-                        }
-                    ]
-                },
-                options: {
-                    indexAxis: 'y',
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { position: 'top', labels: { boxWidth: 10, font: { size: 10 } } }
-                    },
-                    scales: {
-                        x: { stacked: true },
-                        y: { stacked: true, ticks: { font: { size: 10 } } }
-                    }
+                // Només repoblem les opcions del select si no s'ha triat cap tipologia prèviament o si estem en recàrrega forçada
+                if (!document.getElementById('selectTipologia')?.value) {
+                    poblarSelectTipologies(data);
                 }
-            });
+
+                if (chartTypesInstance) chartTypesInstance.destroy();
+
+                const topData = Array.isArray(data) ? data.slice(0, 6) : [];
+                const labels = topData.map(d => d.type && d.type.length > 20 ? d.type.substring(0, 18) + '...' : (d.type || 'Sense tipus'));
+                const withAbs = topData.map(d => d.withAbstract || 0);
+                const noAbs = topData.map(d => d.noAbstract || 0);
+
+                chartTypesInstance = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [
+                            {
+                                label: 'Amb Abstract',
+                                data: withAbs,
+                                backgroundColor: '#10b981',
+                                borderRadius: 4
+                            },
+                            {
+                                label: 'Sense Abstract',
+                                data: noAbs,
+                                backgroundColor: '#f43f5e',
+                                borderRadius: 4
+                            }
+                        ]
+                    },
+                    options: {
+                        indexAxis: 'y',
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { position: 'top', labels: { boxWidth: 10, font: { size: 10 } } }
+                        },
+                        scales: {
+                            x: { stacked: true },
+                            y: { stacked: true, ticks: { font: { size: 10 } } }
+                        }
+                    }
+                });
+            } catch (err) {
+                console.error("Error carregant tipologies:", err);
+            }
         }
 
         function canviarDimensioAnyIdiomes(dim) {
@@ -1395,19 +1490,21 @@
             carregarIdiomesPerAny();
         }
 
-        async function carregarIdiomesPerAny() {
+        async function carregarIdiomesPerAny(isForced = false) {
             const ctx = document.getElementById('chartYearsLanguagesStacked');
             if (!ctx) return;
 
-            const anySel = document.getElementById('selectAny').value;
-            const tipusSel = document.getElementById('selectTipologia').value;
+            const anySel = document.getElementById('selectAny')?.value;
+            const tipusSel = document.getElementById('selectTipologia')?.value;
             let url = `/pure/abstracts/years-languages?yearType=${encodeURIComponent(dimensioAnyIdiomes)}&`;
             if (anySel === 'none' || anySel === '0') url += `desde=0&hasta=0&`;
             else if (anySel) url += `desde=${anySel}&hasta=${anySel}&`;
             if (tipusSel) url += `type=${encodeURIComponent(tipusSel)}&`;
+            if (isForced) url += `_t=${Date.now()}&`;
 
             try {
-                const res = await apiFetch(url);
+                const fetchOpts = isForced ? { cache: 'no-store', headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } } : undefined;
+                const res = await apiFetch(url, fetchOpts);
                 rawLanguagesByYearData = await res.json();
                 renderChartYearsLanguagesStacked(rawLanguagesByYearData);
                 renderLanguagesBadges(rawLanguagesByYearData);
@@ -1418,8 +1515,12 @@
 
         function renderChartYearsLanguagesStacked(data) {
             const ctx = document.getElementById('chartYearsLanguagesStacked');
-            if (!ctx || !data || !data.years || data.years.length === 0) return;
-            if (chartYearsLanguagesInstance) chartYearsLanguagesInstance.destroy();
+            if (!ctx) return;
+            if (chartYearsLanguagesInstance) {
+                chartYearsLanguagesInstance.destroy();
+                chartYearsLanguagesInstance = null;
+            }
+            if (!data || !data.years || data.years.length === 0) return;
 
             const isPct = (modeGraficIdiomes === 'percent');
             const years = (data.years || []).map(y => (y === 0 || y === '0' || y === 'Sense any') ? 'Sense any' : y);
@@ -1600,6 +1701,9 @@
             paginaActual = 0;
             carregarKPIsIGrafics();
             carregarIdiomesPerAny();
+            carregarTipologies();
+            carregarEvolucioAnysPub();
+            carregarEvolucioAnysSub();
             carregarTaula();
             if (rawLanguagesByYearData) renderLanguagesBadges(rawLanguagesByYearData);
 
@@ -1617,6 +1721,7 @@
             paginaActual = 0;
             carregarKPIsIGrafics();
             carregarIdiomesPerAny();
+            carregarTipologies();
             carregarTaula();
             if (rawLanguagesByYearData) renderLanguagesBadges(rawLanguagesByYearData);
 
@@ -1632,6 +1737,9 @@
             paginaActual = 0;
             carregarKPIsIGrafics();
             carregarIdiomesPerAny();
+            carregarTipologies();
+            carregarEvolucioAnysPub();
+            carregarEvolucioAnysSub();
             carregarTaula();
         }
 
@@ -1664,13 +1772,13 @@
             }
         }
 
-        async function carregarTaula() {
+        async function carregarTaula(isForced = false) {
             const tbody = document.getElementById('taulaPublicacions');
-            tbody.innerHTML = `<tr><td colspan="6" class="py-12 text-center text-slate-400"><i class="fa-solid fa-spinner fa-spin text-2xl mb-2 text-emerald-600 block"></i>Cercant publicacions...</td></tr>`;
+            if (tbody) tbody.innerHTML = `<tr><td colspan="6" class="py-12 text-center text-slate-400"><i class="fa-solid fa-spinner fa-spin text-2xl mb-2 text-emerald-600 block"></i>Cercant publicacions...</td></tr>`;
 
-            const cerca = document.getElementById('inputCerca').value.trim();
-            const anySel = document.getElementById('selectAny').value;
-            const tipusSel = document.getElementById('selectTipologia').value;
+            const cerca = document.getElementById('inputCerca') ? document.getElementById('inputCerca').value.trim() : '';
+            const anySel = document.getElementById('selectAny')?.value;
+            const tipusSel = document.getElementById('selectTipologia')?.value;
             const yearType = document.getElementById('selectYearType') ? document.getElementById('selectYearType').value : 'publicationYear';
 
             let url = `/pure/abstracts/list?filter=${filtreEstatActual}&page=${paginaActual}&size=${midaPagina}&yearType=${encodeURIComponent(yearType)}`;
@@ -1679,9 +1787,12 @@
             else if (anySel) url += `&desde=${anySel}&hasta=${anySel}`;
             if (tipusSel) url += `&type=${encodeURIComponent(tipusSel)}`;
             if (filtreIdiomaSeleccionat) url += `&language=${encodeURIComponent(filtreIdiomaSeleccionat)}`;
+            if (isForced) url += `&_t=${Date.now()}`;
 
-            const res = await apiFetch(url);
-            const data = await res.json();
+            try {
+                const fetchOpts = isForced ? { cache: 'no-store', headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } } : undefined;
+                const res = await apiFetch(url, fetchOpts);
+                const data = await res.json();
 
             const items = data.items || [];
             document.getElementById('filteredCountBadge').innerText = `${Number(data.totalElements || 0).toLocaleString()} resultats`;
@@ -1699,21 +1810,21 @@
 
             tbody.innerHTML = items.map(p => {
                 let caBadge = `<span class="lang-tag lang-missing">-</span>`;
-                if (p.hasCa) {
+                if (p.hasCa && !isHtmlEmpty(p.abstractCa)) {
                     if (p.detectedCa === 'ca_ES') caBadge = `<span class="lang-tag lang-ok" title="Català genuí">CA ✓</span>`;
                     else if (p.detectedCa === 'unknown' || !p.isWrongCa) caBadge = `<span class="lang-tag bg-slate-100 text-slate-700 border border-slate-200" title="Català (Vocabulari tècnic / científic)">CA ~</span>`;
                     else caBadge = `<span class="lang-tag lang-wrong" title="Camp CA amb text detectat: ${formatLangName(p.detectedCa)}">CA ❌ (${formatShortLang(p.detectedCa)})</span>`;
                 }
 
                 let esBadge = `<span class="lang-tag lang-missing">-</span>`;
-                if (p.hasEs) {
+                if (p.hasEs && !isHtmlEmpty(p.abstractEs)) {
                     if (p.detectedEs === 'es_ES') esBadge = `<span class="lang-tag lang-ok" title="Castellà genuí">ES ✓</span>`;
                     else if (p.detectedEs === 'unknown' || !p.isWrongEs) esBadge = `<span class="lang-tag bg-slate-100 text-slate-700 border border-slate-200" title="Castellà (Vocabulari tècnic / científic)">ES ~</span>`;
                     else esBadge = `<span class="lang-tag lang-wrong" title="Camp ES amb text detectat: ${formatLangName(p.detectedEs)}">ES ❌ (${formatShortLang(p.detectedEs)})</span>`;
                 }
 
                 let enBadge = `<span class="lang-tag lang-missing">-</span>`;
-                if (p.hasEn) {
+                if (p.hasEn && !isHtmlEmpty(p.abstractEn)) {
                     if (p.detectedEn === 'en_GB') enBadge = `<span class="lang-tag lang-ok" title="Anglès genuí">EN ✓</span>`;
                     else if (p.detectedEn === 'unknown' || !p.isWrongEn) enBadge = `<span class="lang-tag bg-slate-100 text-slate-700 border border-slate-200" title="Anglès (Vocabulari tècnic / científic)">EN ~</span>`;
                     else enBadge = `<span class="lang-tag lang-wrong" title="Camp EN amb text detectat: ${formatLangName(p.detectedEn)}">EN ❌ (${formatShortLang(p.detectedEn)})</span>`;
@@ -1761,6 +1872,10 @@
                 </tr>
                 `;
             }).join('');
+            } catch (err) {
+                console.error("Error carregant taula de publicacions:", err);
+                if (tbody) tbody.innerHTML = `<tr><td colspan="6" class="py-12 text-center text-rose-500"><i class="fa-solid fa-triangle-exclamation text-2xl mb-2 text-rose-400 block"></i>Error en carregar les publicacions. Si us plau, torna-ho a provar.</td></tr>`;
+            }
         }
 
         async function obrirModal(uuid) {
@@ -1790,17 +1905,31 @@
                 document.getElementById('modalPubYear').innerText = data.publicationYear || '-';
                 document.getElementById('modalSubYear').innerText = data.submissionYear || '-';
 
-                const ca = data.abstractCa || '';
-                const es = data.abstractEs || '';
-                const en = data.abstractEn || '';
+                const ca = (!isHtmlEmpty(data.abstractCa) && data.hasCa) ? data.abstractCa : '';
+                const es = (!isHtmlEmpty(data.abstractEs) && data.hasEs) ? data.abstractEs : '';
+                const en = (!isHtmlEmpty(data.abstractEn) && data.hasEn) ? data.abstractEn : '';
 
                 document.getElementById('modalAbstractCa').innerText = ca || 'Sense resum en català.';
                 document.getElementById('modalAbstractEs').innerText = es || 'Sense resum en castellà.';
                 document.getElementById('modalAbstractEn').innerText = en || 'Sense resum en anglès.';
 
-                document.getElementById('charCountCa').innerText = ca.length.toLocaleString();
-                document.getElementById('charCountEs').innerText = es.length.toLocaleString();
-                document.getElementById('charCountEn').innerText = en.length.toLocaleString();
+                const wordsCa = (data.wordsCa != null) ? data.wordsCa : countWordsJs(ca);
+                const wordsEs = (data.wordsEs != null) ? data.wordsEs : countWordsJs(es);
+                const wordsEn = (data.wordsEn != null) ? data.wordsEn : countWordsJs(en);
+
+                const elWordCa = document.getElementById('wordCountCa');
+                const elWordEs = document.getElementById('wordCountEs');
+                const elWordEn = document.getElementById('wordCountEn');
+                if (elWordCa) elWordCa.innerText = (data.hasCa && ca) ? wordsCa.toLocaleString() : '0';
+                if (elWordEs) elWordEs.innerText = (data.hasEs && es) ? wordsEs.toLocaleString() : '0';
+                if (elWordEn) elWordEn.innerText = (data.hasEn && en) ? wordsEn.toLocaleString() : '0';
+
+                const elCharCa = document.getElementById('charCountCa');
+                const elCharEs = document.getElementById('charCountEs');
+                const elCharEn = document.getElementById('charCountEn');
+                if (elCharCa) elCharCa.innerText = (data.hasCa && ca) ? ca.length.toLocaleString() : '0';
+                if (elCharEs) elCharEs.innerText = (data.hasEs && es) ? es.length.toLocaleString() : '0';
+                if (elCharEn) elCharEn.innerText = (data.hasEn && en) ? en.length.toLocaleString() : '0';
 
                 // Language detection tags
                 if (data.hasCa) {
@@ -1838,10 +1967,22 @@
                     banner.innerHTML = `<i class="fa-solid fa-circle-info text-slate-500 text-base"></i><span>Publicació amb cobertura lingüística parcial (${data.hasCa ? 'CA ' : ''}${data.hasEs ? 'ES ' : ''}${data.hasEn ? 'EN ' : ''}).</span>`;
                 }
 
+                if (data.diffWords >= 50 || (data.ratioWords && data.ratioWords >= 2.0)) {
+                    banner.innerHTML += `<span class="ml-auto px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">Asimetria: Δ ${data.diffWords} paraules (${data.ratioWords}x)</span>`;
+                }
+
             } catch (e) {
                 console.error("Error carregant detall:", e);
                 document.getElementById('modalAbstractCa').innerText = 'Error al carregar les dades.';
             }
+        }
+
+        function countWordsJs(text) {
+            if (!text) return 0;
+            const plain = text.replace(/<[^>]+>/g, ' ').replace(/&(?:nbsp|#160|amp;nbsp);?/gi, ' ').trim();
+            if (!plain) return 0;
+            const tokens = plain.split(/\s+/).filter(w => /\p{L}|\p{N}/u.test(w));
+            return tokens.length;
         }
 
         function formatLangName(code) {
@@ -1877,7 +2018,7 @@
                 if (result.success || result.status === 'success') {
                     alert('Publicació sincronitzada correctament des de Pure/Egreta!');
                     await obrirModal(uuid);
-                    carregarTaula();
+                    await forcarRecalculTot();
                 } else {
                     alert('Avís en sincronitzar: ' + (result.message || 'Error desconegut'));
                 }
@@ -1930,6 +2071,9 @@
             paginaActual = 0;
             carregarKPIsIGrafics();
             carregarIdiomesPerAny();
+            carregarTipologies();
+            carregarEvolucioAnysPub();
+            carregarEvolucioAnysSub();
             carregarTaula();
         }
 
@@ -1974,11 +2118,11 @@
                     `"${(p.typeName || '').replace(/"/g, '""')}"`,
                     `"${(p.title || '').replace(/"/g, '""')}"`,
                     `"${(p.authors || '').replace(/"/g, '""')}"`,
-                    p.hasCa ? 'SI' : 'NO',
+                    (p.hasCa && !isHtmlEmpty(p.abstractCa)) ? 'SI' : 'NO',
                     p.detectedCa || '',
-                    p.hasEs ? 'SI' : 'NO',
+                    (p.hasEs && !isHtmlEmpty(p.abstractEs)) ? 'SI' : 'NO',
                     p.detectedEs || '',
-                    p.hasEn ? 'SI' : 'NO',
+                    (p.hasEn && !isHtmlEmpty(p.abstractEn)) ? 'SI' : 'NO',
                     p.detectedEn || '',
                     p.hasAnyWrongLanguage ? 'SI' : 'NO',
                     `"${(p.statusLabel || '').replace(/"/g, '""')}"`
@@ -1993,6 +2137,15 @@
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
+        }
+
+        function isHtmlEmpty(text) {
+            if (!text) return true;
+            const stripped = text.replace(/<[^>]*>/g, ' ')
+                                 .replace(/&(?:nbsp|#160|#xA0|#xa0|ensp|emsp|thinsp|zwnj|zwj|amp;nbsp);?/gi, ' ')
+                                 .replace(/[\s\u00a0\ufeff]+/g, ' ')
+                                 .trim();
+            return stripped.length === 0;
         }
 
         function escapeHtml(text) {

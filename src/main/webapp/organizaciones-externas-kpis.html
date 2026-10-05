@@ -333,6 +333,7 @@
         const countrySuggestionCache = new Map();
         const typeSuggestionCache = new Map();
         const fundingSuggestionCache = new Map();
+        const nameSuggestionCache = new Map();
         const suggestionBundleCache = new Map();
         // In-flight promise deduplication: evita peticiones duplicadas para la misma org
         const suggestionBundleInFlight = new Map();
@@ -504,9 +505,9 @@
                 return emptyBundle;
             }
 
-            // Crear señal combinada: timeout de 90 s + señal de abort externa
+            // Crear señal combinada: timeout de 180 s + señal de abort externa
             const timeoutController = new AbortController();
-            const timeoutId = setTimeout(() => timeoutController.abort(), 90000);
+            const timeoutId = setTimeout(() => timeoutController.abort(), 180000);
 
             // Combinar señales: abortar si cualquiera de las dos lo hace
             let combinedSignal = timeoutController.signal;
@@ -528,7 +529,8 @@
                 associatedPerson: '',
                 country: { country: '', uri: '', confidence: 0, reason: '' },
                 type: { type: '', confidence: 0, reason: '' },
-                funding: { funding: '', confidence: 0, reason: '' }
+                funding: { funding: '', confidence: 0, reason: '' },
+                name: { suggestedName: '', similarity: 0, rorId: '', reason: '', rawAffiliation: '' }
             };
 
             const fetchPromise = (async () => {
@@ -557,6 +559,14 @@
                                 uri: String((data && data.suggestedFundingUri) || '').trim(),
                                 confidence: Number((data && data.fundingConfidence) || 0),
                                 reason: String((data && data.fundingReason) || '').trim()
+                            },
+                            name: {
+                                suggestedName: String((data && data.suggestedName) || '').trim(),
+                                similarity: Number((data && data.nameSimilarity) || 0),
+                                rorId: String((data && data.nameRorId) || '').trim(),
+                                reason: String((data && data.nameReason) || '').trim(),
+                                rawAffiliation: String((data && (data.nameRawAffiliation || data.rawAffiliation)) || '').trim(),
+                                proposals: Array.isArray(data && data.proposals) ? data.proposals : []
                             }
                         };
                         success = true;
@@ -567,20 +577,19 @@
                     clearTimeout(timeoutId);
                     suggestionBundleInFlight.delete(key);
                     if (isExternalAbort) throw err; // Propagar abort externo
-                    // Timeout u otro error: devolver bundle vacío sin cachear
+                    // Timeout u otro error: devolver bundle vacío
                     console.warn('fetchSuggestionBundle error for key:', key, err);
-                    return bundle;
                 }
 
                 clearTimeout(timeoutId);
                 suggestionBundleInFlight.delete(key);
 
-                if (success) {
-                    suggestionBundleCache.set(key, bundle);
-                    countrySuggestionCache.set(key, bundle.country);
-                    typeSuggestionCache.set(key, bundle.type);
-                    fundingSuggestionCache.set(key, bundle.funding);
-                }
+                // Cachear sempre (fins i tot si és buit o error) per no repetir peticions inútilment
+                suggestionBundleCache.set(key, bundle);
+                countrySuggestionCache.set(key, bundle.country);
+                typeSuggestionCache.set(key, bundle.type);
+                fundingSuggestionCache.set(key, bundle.funding);
+                nameSuggestionCache.set(key, bundle.name);
                 return bundle;
             })();
 
@@ -609,15 +618,20 @@
                 renderTable(targets);
             }
 
-            // Lanzar todas las peticiones en paralelo y actualizar el DOM a medida que resuelven
-            const fetchPromises = needsFetch.map(org => {
-                return fetchSuggestionBundle(org, signal)
-                    .then((bundle) => {
-                        // Petición completada con éxito — actualizar celdas de esta fila
+            // Procesar con límite de concurrencia (máximo 2 a la vez) para no saturar vLLM / rate limit
+            const CONCURRENCY_LIMIT = 2;
+            let currentIndex = 0;
+
+            async function worker() {
+                while (currentIndex < needsFetch.length) {
+                    if (signal && signal.aborted) break;
+                    const org = needsFetch[currentIndex++];
+                    try {
+                        const bundle = await fetchSuggestionBundle(org, signal);
                         uuidsBeingFetched.delete(org.uuid);
                         if (loadId !== currentLoadId) return;
                         const rowEl = document.querySelector(`tr[data-uuid="${org.uuid}"]`);
-                        if (!rowEl) return;
+                        if (!rowEl) continue;
                         const typeCell = rowEl.querySelector('td[data-cell="suggested-type"]');
                         const fundingCell = rowEl.querySelector('td[data-cell="suggested-funding"]');
                         const countryCell = rowEl.querySelector('td[data-cell="suggested-country"]');
@@ -625,39 +639,49 @@
                         if (fundingCell) fundingCell.innerHTML = getSuggestedFundingHtml(org);
                         if (countryCell) countryCell.innerHTML = getSuggestedCountryHtml(org);
 
-                        if (bundle && bundle.associatedPerson) {
-                            const nameCell = rowEl.querySelector('td[data-cell="org-name"]');
-                            if (nameCell && !nameCell.querySelector('.associated-person-info')) {
-                                const personDiv = document.createElement('div');
-                                personDiv.className = 'associated-person-info text-[11px] text-slate-500 font-normal mt-1 flex items-center gap-1.5';
-                                personDiv.innerHTML = '<i class="fa-solid fa-user-tag text-indigo-500 text-[10px]"></i> <span>' + esc(bundle.associatedPerson) + '</span>';
-                                nameCell.appendChild(personDiv);
+                        const nameCell = rowEl.querySelector('td[data-cell="org-name"]');
+                        if (nameCell) {
+                            if (bundle && bundle.associatedPerson) {
+                                if (!nameCell.querySelector('.associated-person-info')) {
+                                    const personDiv = document.createElement('div');
+                                    personDiv.className = 'associated-person-info text-[11px] text-slate-500 font-normal mt-1 flex items-center gap-1.5';
+                                    personDiv.innerHTML = '<i class="fa-solid fa-user-tag text-indigo-500 text-[10px]"></i> <span>' + esc(bundle.associatedPerson) + '</span>';
+                                    nameCell.appendChild(personDiv);
+                                }
+                            }
+                            const existingSuggestedName = nameCell.querySelector('.suggested-name-block');
+                            if (existingSuggestedName) {
+                                existingSuggestedName.remove();
+                            }
+                            const suggestedNameHtml = getSuggestedNameHtml(org);
+                            if (suggestedNameHtml) {
+                                const wrapper = document.createElement('div');
+                                wrapper.innerHTML = suggestedNameHtml;
+                                if (wrapper.firstElementChild) {
+                                    nameCell.appendChild(wrapper.firstElementChild);
+                                }
                             }
                         }
-                    })
-                    .catch(err => {
-                        // Siempre limpiar el Set, incluso en error o AbortError
+                    } catch (err) {
                         uuidsBeingFetched.delete(org.uuid);
-                        if (err && err.name === 'AbortError') {
-                            // Petición cancelada: no tocar el DOM
-                            return;
-                        }
-                        // Error de red u otro: actualizar celdas con el estado vacío del caché
+                        if (err && err.name === 'AbortError') return;
                         console.warn('Error fetching suggestion for org', org.uuid, err);
                         if (loadId !== currentLoadId) return;
                         const rowEl = document.querySelector(`tr[data-uuid="${org.uuid}"]`);
-                        if (!rowEl) return;
+                        if (!rowEl) continue;
                         const typeCell = rowEl.querySelector('td[data-cell="suggested-type"]');
                         const fundingCell = rowEl.querySelector('td[data-cell="suggested-funding"]');
                         const countryCell = rowEl.querySelector('td[data-cell="suggested-country"]');
                         if (typeCell) typeCell.innerHTML = getSuggestedTypeHtml(org);
                         if (fundingCell) fundingCell.innerHTML = getSuggestedFundingHtml(org);
                         if (countryCell) countryCell.innerHTML = getSuggestedCountryHtml(org);
-                    });
-            });
+                    }
+                }
+            }
 
-            // Usar allSettled para que un fallo individual no aborte el resto
-            await Promise.allSettled(fetchPromises);
+            const workerCount = Math.min(CONCURRENCY_LIMIT, needsFetch.length);
+            const workers = Array.from({ length: workerCount }, () => worker());
+            await Promise.all(workers);
         }
 
         async function preloadCountrySuggestions(rows, loadId, signal) {
@@ -673,7 +697,128 @@
             return match ? match[0] : null;
         }
 
-        function buildConfidenceChip(label, confidence, reason, metricLabel) {
+        function extractOpenAlexUrl(reason) {
+            const str = String(reason || '');
+            const match = str.match(/https?:\/\/openalex\.org\/(?:[a-z0-9_-]+\/)?[a-z0-9]+/i);
+            return match ? match[0] : null;
+        }
+
+        function extractCrossrefDoi(reason) {
+            const str = String(reason || '');
+            const match = str.match(/10\.\d{4,9}\/[-._;()/:A-Z0-9]+/i);
+            return match ? match[0] : null;
+        }
+
+        function extractRawAffiliation(reason, explicitRawAff) {
+            if (explicitRawAff && String(explicitRawAff).trim()) return String(explicitRawAff).trim();
+            const str = String(reason || '');
+            const match = str.match(/\[raw_affiliation:\s*([^\]]+)\]/i) || str.match(/raw_affiliation:\s*([^|;\n]+)/i);
+            return match ? match[1].trim() : '';
+        }
+
+        function cleanRawAffiliationWithoutCityCountry(rawAff) {
+            if (!rawAff || !rawAff.trim()) return '';
+            let text = rawAff.trim();
+            text = text.replace(/https?:\/\/\S+/gi, '').replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/gi, '').trim();
+
+            const rawSegments = text.split(/\s*[,;]\s*/);
+            if (!rawSegments.length) return text;
+
+            const validSegments = rawSegments.map(s => s.trim()).filter(Boolean);
+
+            const countryTokens = new Set([
+                'spain', 'espana', 'espanya', 'france', 'francia', 'franca', 'germany', 'deutschland', 'alemania', 'alemanya',
+                'italy', 'italia', 'portugal', 'united kingdom', 'uk', 'great britain', 'england', 'scotland', 'wales',
+                'united states', 'usa', 'us', 'u s a', 'eeuu', 'estados unidos', 'switzerland', 'suiza', 'suissa', 'suisse',
+                'netherlands', 'holland', 'holanda', 'paises bajos', 'paisos baixos', 'belgium', 'belgica', 'belgique',
+                'austria', 'osterreich', 'ireland', 'irlanda', 'denmark', 'dinamarca', 'sweden', 'suecia', 'sverige',
+                'norway', 'noruega', 'norge', 'finland', 'finlandia', 'suomi', 'poland', 'polonia', 'polska',
+                'czech republic', 'czechia', 'republica checa', 'greece', 'grecia', 'japan', 'japon', 'japo',
+                'china', 'south korea', 'korea', 'corea', 'australia', 'canada', 'brazil', 'brasil', 'mexico', 'mexic',
+                'argentina', 'chile', 'colombia', 'peru', 'india', 'israel', 'turkey', 'turquia',
+                'es', 'esp', 'fr', 'fra', 'de', 'deu', 'it', 'ita', 'pt', 'prt', 'gb', 'gbr', 'nl', 'nld', 'be', 'bel', 'ch', 'che', 'at', 'aut', 'se', 'swe', 'no', 'nor', 'fi', 'fin', 'dk', 'dnk', 'pl', 'pol'
+            ]);
+
+            const cityTokens = new Set([
+                'barcelona', 'madrid', 'bellaterra', 'cerdanyola del valles', 'cerdanyola', 'sabadell', 'terrassa', 'badalona',
+                'girona', 'lleida', 'tarragona', 'manresa', 'vic', 'reus', 'sant cugat del valles', 'sant cugat', 'mataro',
+                'santa coloma de gramenet', "l'hospitalet de llobregat", 'hospitalet de llobregat', 'hospitalet', 'granollers',
+                'castelldefels', 'viladecans', 'el prat de llobregat', 'rubi', 'gava', 'cornella de llobregat', 'esplugues de llobregat',
+                'sant boi de llobregat', 'mollet del valles', 'valencia', 'sevilla', 'zaragoza', 'malaga', 'murcia',
+                'palma', 'palma de mallorca', 'bilbao', 'alicante', 'alacant', 'cordoba', 'valladolid', 'vigo', 'gijon', 'vitoria',
+                'vitoria gasteiz', 'a coruna', 'la coruna', 'granada', 'elche', 'elx', 'oviedo', 'cartagena', 'jerez de la frontera',
+                'pamplona', 'irunea', 'almeria', 'san sebastian', 'donostia', 'santander', 'castellon', 'castello', 'burgos',
+                'salamanca', 'albacete', 'huelva', 'logrono', 'badajoz', 'huesca', 'segovia', 'cuenca', 'soria', 'teruel',
+                'avila', 'zamora', 'palencia', 'ciudad real', 'toledo', 'caceres', 'lugo', 'ourense', 'pontevedra', 'jaen',
+                'cadiz', 'paris', 'rome', 'roma', 'london', 'berlin', 'munich', 'muenchen', 'frankfurt', 'amsterdam',
+                'brussels', 'bruxelles', 'geneva', 'geneve', 'zurich', 'zuerich', 'vienna', 'wien', 'milan', 'milano',
+                'florence', 'firenze', 'naples', 'napoli', 'turin', 'torino', 'lisbon', 'lisboa', 'porto', 'athens', 'dublin',
+                'stockholm', 'oslo', 'copenhagen', 'helsinki', 'warsaw', 'prague', 'budapest', 'tokyo', 'beijing', 'shanghai',
+                'seoul', 'singapore', 'sydney', 'melbourne', 'new york', 'boston', 'chicago', 'los angeles', 'san francisco',
+                'washington', 'cambridge', 'oxford', 'toronto', 'montreal', 'vancouver', 'buenos aires', 'santiago', 'bogota', 'mexico city'
+            ]);
+
+            function isLocationSeg(seg) {
+                if (!seg || !seg.trim()) return true;
+                const s = seg.trim();
+                const norm = normalizeText(s);
+
+                // 1. Pure postal code: 3 to 8 digits (e.g. 639798, 08193, 28040, 75005, 100000)
+                if (/^\d{3,8}$/.test(s)) return true;
+
+                // 2. Postal code with prefix/suffix, county or city (e.g. "639798", "Essex CM1 7ET", "CM1 7ET", "08193 Bellaterra", "D-80333 Munich", "EC1A 1BB", "CA 94305")
+                if (/(?:\b[A-Z]{1,2}\d{1,2}[A-Z]?\s*\d[A-Z]{2}\b|\b[A-Z]\d[A-Z]\s*\d[A-Z]\d\b)/i.test(s)) return true;
+                if (/^(?:[A-Z]{1,3}[-\s]?)?\d{3,8}(?:\s+[A-Za-zÀ-ÿ\s'.-]+)?$/i.test(s)) return true;
+                if (/(?:\b[A-Z]{2}\s+\d{4,6}(?:-\d{4})?\b)/i.test(s)) return true;
+                if (/^(?:CP|C\.P\.|BP|Cedex|Apartado|P\.?O\.?\s*Box|Postal Code|Zip Code|Zip|Casilla|Boite Postale)\b/i.test(s)) return true;
+                if (/^[A-Z0-9]{2,4}\s+[A-Z0-9]{2,4}(?:\s+[A-Za-zÀ-ÿ\s'-]+)?$/i.test(s)) return true;
+
+                // 3. Street address:
+                // 3a. Starts with street keyword
+                if (/^(?:c\/|carrer|calle|avda\.?|avenida|avinguda|passeig|paseo|pza\.?|plaça|plaza|rúa|via|rue|street|st\.?|road|rd\.?|ave\.?|avenue|boulevard|blvd\.?|drive|dr\.?|lane|ln\.?|way|place|pl\.?|court|ct\.?|square|sq\.?|building|edifici|edificio|campus\b|apartado\b|p\.?o\.?\s*box\b|bp\s*\d+|cp\s*\d+|casilla\b|dr\.\s+[a-z]+|doctor\s+[a-z]+|gran\s+via|bloque|blq\.?|nau|nave|piso|planta)\b/i.test(s)) return true;
+
+                // 3b. Starts with street number, e.g. "50 Nanyang Avenue", "10 Downing Street", "353 Serra Mall"
+                if (/^\d+[-A-Za-z0-9/\s,.-]*\b(?:avenue|ave\.?|street|st\.?|road|rd\.?|drive|dr\.?|boulevard|blvd\.?|lane|ln\.?|way|place|pl\.?|court|ct\.?|square|sq\.?|circle|cir\.?|terrace|ter\.?|parkway|pkwy\.?|highway|hwy\.?|close|cres\.?|crescent|walk|row|alley|path|mall|campus|building|edifici|edificio|block|tower|weg|str\.?|strasse|straße|allee|platz)\b/i.test(s)) return true;
+
+                // 3c. Ends with street keyword / number, e.g. "Court Road", "Nanyang Avenue 50", "Ackermannweg 10", "Piazzale Aldo Moro 5"
+                if (/.*\b(?:avenue|ave\.?|street|st\.?|road|rd\.?|drive|dr\.?|boulevard|blvd\.?|lane|ln\.?|way|place|court|carrer|calle|avinguda|avenida|passeig|paseo|via|rue|str\.?|strasse|straße|platz|allee|weg|mall|walk)\s*(?:\d+[-/\d\w]*)?$/i.test(s)) return true;
+
+                // 4. Country check
+                if (countryTokens.has(norm)) return true;
+
+                // 5. City check
+                if (cityTokens.has(norm)) return true;
+
+                const withoutParens = norm.replace(/\([^)]+\)/g, '').trim();
+                if (cityTokens.has(withoutParens) || countryTokens.has(withoutParens)) return true;
+
+                // 6. Generic trailing location without organization keywords
+                const hasOrgKeyword = /.*\b(?:hospital|clinic|universit|college|school|faculty|facultat|facultad|institut|departm|centre|center|laborat|unit|service|servei|servicio|fundaci|foundat|associat|societ|agenc|organi|group|grup|grupo|consejo|consell|council|consort|board|govern|minister).*/i.test(s);
+                if (!hasOrgKeyword && (s.split(/\s+/).length <= 2 || /.*(?:shire|ford|borough|burg|ville|city|town|region|district|county|province)\b.*/i.test(s))) {
+                    return true;
+                }
+                return false;
+            }
+
+            while (validSegments.length > 1) {
+                const last = validSegments[validSegments.length - 1];
+                if (isLocationSeg(last)) {
+                    validSegments.pop();
+                } else {
+                    break;
+                }
+            }
+
+            let res = validSegments.join(', ').trim();
+            res = res.replace(/\s*\((?:Spain|Espanya|España|France|Germany|Italy|UK|USA|Singapore|Barcelona|Madrid|Bellaterra)\)\s*$/i, '');
+            res = res.replace(/,?\s*\d+[-A-Za-z0-9/\s,.-]*\b(?:Avenue|Ave|Street|St|Road|Rd|Drive|Dr|Boulevard|Blvd|Lane|Ln|Way|Carrer|Calle|Avenida|Avinguda|Passeig|Paseo|Rue|Via|Strasse|Weg)\b(?:\s*\d+)?.*$/i, '');
+            res = res.replace(/,?\s*(?:\b\d{3,8}\b|[A-Z]{1,2}-\d{3,8})\s+[A-Za-zÀ-ÿ\s'.-]+$/i, '');
+            res = res.replace(/,?\s*\b\d{3,8}\b$/i, '');
+            res = res.replace(/^[,;.\s]+|[,;.\s]+$/g, '').trim();
+            return res || text;
+        }
+
+        function buildConfidenceChip(label, confidence, reason, metricLabel, rawAffiliation) {
             const safeLabel = String(label || '').trim();
             if (!safeLabel) return '<span class="text-slate-400">—</span>';
 
@@ -691,17 +836,35 @@
             const safeReason = String(reason || '').trim() || 'n/a';
             const rorUrl = extractRorUrl(safeReason);
             const isRor = !!rorUrl || safeReason.startsWith('ror-');
+
+            const openAlexUrl = extractOpenAlexUrl(safeReason);
+            const isOpenAlex = !isRor && (!!openAlexUrl || safeReason.includes('openalex'));
+
+            const crossrefDoi = extractCrossrefDoi(safeReason);
+            const isCrossref = !isRor && !isOpenAlex && (safeReason.includes('crossref') || !!crossrefDoi);
             
-            let rorBadge = '';
+            let sourceBadge = '';
             if (rorUrl) {
-                rorBadge = '<a href="' + esc(rorUrl) + '" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 bg-indigo-100 hover:bg-indigo-200 text-indigo-800 font-bold px-1.5 py-0.5 rounded text-[9px] mr-1 transition-colors cursor-pointer shadow-xs" title="Obrir fitxa oficial ROR (' + esc(rorUrl) + ')" onclick="event.stopPropagation();">ROR <i class="fa-solid fa-arrow-up-right-from-square text-[8px]"></i></a>';
+                sourceBadge = '<a href="' + esc(rorUrl) + '" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 bg-indigo-100 hover:bg-indigo-200 text-indigo-800 font-bold px-1.5 py-0.5 rounded text-[9px] mr-1 transition-colors cursor-pointer shadow-xs" title="Obrir fitxa oficial ROR (' + esc(rorUrl) + ')" onclick="event.stopPropagation();">ROR <i class="fa-solid fa-arrow-up-right-from-square text-[8px]"></i></a>';
             } else if (isRor) {
-                rorBadge = '<span class="bg-indigo-100 text-indigo-700 font-bold px-1 rounded text-[9px] mr-1">ROR</span>';
+                sourceBadge = '<span class="bg-indigo-100 text-indigo-700 font-bold px-1 rounded text-[9px] mr-1">ROR</span>';
+            } else if (openAlexUrl) {
+                sourceBadge = '<a href="' + esc(openAlexUrl) + '" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 bg-sky-100 hover:bg-sky-200 text-sky-800 font-bold px-1.5 py-0.5 rounded text-[9px] mr-1 transition-colors cursor-pointer shadow-xs" title="Obrir fitxa oficial OpenAlex (' + esc(openAlexUrl) + ')" onclick="event.stopPropagation();">OpenAlex <i class="fa-solid fa-arrow-up-right-from-square text-[8px]"></i></a>';
+            } else if (isOpenAlex) {
+                sourceBadge = '<span class="bg-sky-100 text-sky-700 font-bold px-1 rounded text-[9px] mr-1">OpenAlex</span>';
+            } else if (isCrossref && crossrefDoi) {
+                sourceBadge = '<a href="https://doi.org/' + esc(crossrefDoi) + '" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 bg-amber-100 hover:bg-amber-200 text-amber-800 font-bold px-1.5 py-0.5 rounded text-[9px] mr-1 transition-colors cursor-pointer shadow-xs" title="Obrir publicació DOI a Crossref (' + esc(crossrefDoi) + ')" onclick="event.stopPropagation();">Crossref <i class="fa-solid fa-arrow-up-right-from-square text-[8px]"></i></a>';
+            } else if (isCrossref) {
+                sourceBadge = '<span class="bg-amber-100 text-amber-700 font-bold px-1 rounded text-[9px] mr-1">Crossref</span>';
             }
 
-            const tooltip = (isRor ? 'Font oficial ROR: ' : 'Motiu IA: ') + safeReason;
+            const rawAffStr = extractRawAffiliation(safeReason, rawAffiliation);
+            let tooltip = (isRor ? 'Font oficial ROR: ' : (isOpenAlex ? 'Font OpenAlex (Afiliació investigador): ' : (isCrossref ? 'Font Crossref (Publicació/Afiliació): ' : 'Motiu IA: '))) + safeReason;
+            if (rawAffStr) {
+                tooltip += ' | Afiliació original (raw_affiliation): ' + rawAffStr;
+            }
 
-            return '<span tabindex="0" class="ai-tooltip inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-semibold ' + chipClasses + '" data-tooltip="' + esc(tooltip) + '" title="' + esc(tooltip) + '">' + rorBadge + esc(safeLabel) + '<span class="text-[10px] ' + pctClasses + '">' + esc(String(confidencePct)) + '%</span></span>';
+            return '<span tabindex="0" class="ai-tooltip inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-semibold ' + chipClasses + '" data-tooltip="' + esc(tooltip) + '" title="' + esc(tooltip) + '">' + sourceBadge + esc(safeLabel) + '<span class="text-[10px] ' + pctClasses + '">' + esc(String(confidencePct)) + '%</span></span>';
         }
 
         async function ensureTypeCatalogOptions() {
@@ -935,6 +1098,26 @@
                 if (cells[4]) cells[4].innerHTML = updatedChip;
             }
 
+            if (kind === 'name') {
+                const appliedName = String((result && result.appliedName) || payload.suggestedName || '').trim();
+                const nameCell = rowEl.querySelector('td[data-cell="org-name"]');
+                if (nameCell) {
+                    const egretaBtn = nameCell.querySelector('.open-egreta-org');
+                    if (egretaBtn) {
+                        egretaBtn.textContent = appliedName;
+                    } else {
+                        const firstChild = nameCell.firstChild;
+                        if (firstChild && firstChild.nodeType === Node.TEXT_NODE) {
+                            firstChild.textContent = appliedName;
+                        }
+                    }
+                    const suggestedNameBlock = nameCell.querySelector('.suggested-name-block');
+                    if (suggestedNameBlock) {
+                        suggestedNameBlock.innerHTML = updatedChip;
+                    }
+                }
+            }
+
             if (buttonEl) {
                 buttonEl.disabled = true;
                 buttonEl.innerHTML = '<i class="fa-solid fa-circle-check"></i> Actualitzat';
@@ -1036,6 +1219,66 @@
                         }
                     });
             });
+        }
+
+        function getSuggestedNameHtml(org) {
+            const key = getOrgSuggestionKey(org);
+            const cachedNameSuggestion = nameSuggestionCache.get(key) || (suggestionBundleCache.get(key) && suggestionBundleCache.get(key).name) || { suggestedName: '', similarity: 0, rorId: '', reason: '', rawAffiliation: '', proposals: [] };
+            const currentName = String(getOrgNameLabel(org) || '').trim();
+            let suggestedName = String(cachedNameSuggestion.suggestedName || '').trim();
+
+            const safeReason = String(cachedNameSuggestion.reason || '').toLowerCase();
+            const rawAff = extractRawAffiliation(cachedNameSuggestion.reason, cachedNameSuggestion.rawAffiliation);
+
+            // Si el backend no ha proporcionat un nom suggerit net però tenim rawAff, apliquem fallback JS
+            if (!suggestedName && rawAff) {
+                suggestedName = cleanRawAffiliationWithoutCityCountry(rawAff);
+            }
+
+            const rawProposals = (Array.isArray(cachedNameSuggestion.proposals) && cachedNameSuggestion.proposals.length > 0)
+                ? cachedNameSuggestion.proposals
+                : (suggestedName ? [{
+                    suggestedName: suggestedName,
+                    similarity: cachedNameSuggestion.similarity,
+                    rorId: cachedNameSuggestion.rorId,
+                    reason: cachedNameSuggestion.reason,
+                    rawAffiliation: rawAff
+                }] : []);
+
+            // Deduplicar i filtrar propostes diferents al nom actual
+            const distinctProposals = [];
+            const seen = new Set();
+            for (const p of rawProposals) {
+                const pName = String(p.suggestedName || '').trim();
+                if (!pName) continue;
+                const norm = normalizeText(pName);
+                if (norm === normalizeText(currentName)) continue;
+                if (seen.has(norm)) continue;
+                seen.add(norm);
+                distinctProposals.push(p);
+            }
+
+            if (!distinctProposals.length) {
+                return '';
+            }
+
+            const renderedRows = distinctProposals.map((p, idx) => {
+                const pName = String(p.suggestedName || '').trim();
+                const pSim = Number(p.similarity || cachedNameSuggestion.similarity || 0);
+                const pReason = String(p.reason || cachedNameSuggestion.reason || '');
+                const pRaw = String(p.rawAffiliation || rawAff || '');
+                const pRor = String(p.rorId || '');
+
+                const nameChip = buildConfidenceChip(pName, pSim, pReason, 'nom', pRaw);
+                const optionBadge = distinctProposals.length > 1
+                    ? `<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">Opció ${idx + 1}</span>`
+                    : '';
+                const applyNameBtn = `<button type="button" class="apply-suggestion-btn inline-flex items-center gap-1 px-2 py-0.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-[11px] font-semibold text-slate-700 cursor-pointer shadow-xs" data-kind="name" data-uuid="${esc(org.uuid)}" data-suggested="${esc(pName)}" data-ror-id="${esc(pRor)}"><i class="fa-solid fa-floppy-disk"></i> Aplicar</button>`;
+
+                return `<div class="flex flex-wrap items-center gap-1.5">${optionBadge} ${nameChip} ${applyNameBtn}</div>`;
+            }).join('');
+
+            return `<div class="suggested-name-block mt-1.5 flex flex-col gap-1.5">${renderedRows}</div>`;
         }
 
         function getSuggestedTypeHtml(org) {
@@ -1144,11 +1387,12 @@
                 const personSubtext = associatedPerson
                     ? '<div class="associated-person-info text-[11px] text-slate-500 font-normal mt-1 flex items-center gap-1.5"><i class="fa-solid fa-user-tag text-indigo-500 text-[10px]"></i> <span>' + esc(associatedPerson) + '</span></div>'
                     : '';
+                const suggestedNameHtml = getSuggestedNameHtml(org);
 
                 const wf = workflowCell(org);
                 return `
         <tr data-uuid="${esc(org.uuid)}" class="hover:bg-slate-50 transition-colors">
-            <td data-cell="org-name" class="px-6 py-3 font-semibold text-slate-800">${name}${personSubtext}</td>
+            <td data-cell="org-name" class="px-6 py-3 font-semibold text-slate-800">${name}${personSubtext}${suggestedNameHtml}</td>
             <td class="px-6 py-3 text-slate-600">${type}</td>
             <td data-cell="suggested-type" class="px-6 py-3 text-slate-600">${suggestedTypeCell}</td>
             <td class="px-6 py-3 text-slate-600">${funding}</td>
@@ -1210,11 +1454,22 @@
                     showToast('Selecciona un finançament abans d\'aplicar.', 'error');
                     return;
                 }
+            } else if (kind === 'name') {
+                endpoint = '/external-organizations/stats/apply-suggested-name';
+                payload.suggestedName = String(suggested || '').trim();
+                payload.applyName = true;
+                payload.rorId = String(buttonEl && buttonEl.getAttribute('data-ror-id') || '').trim();
+                const select = document.getElementById('autoApplyEnv');
+                payload.env = select ? select.value : 'test';
+                if (!payload.suggestedName) {
+                    showToast('No hi ha cap nom suggerit per aplicar.', 'error');
+                    return;
+                }
             } else {
                 return;
             }
 
-            if (!payload.uuid || (!payload.suggestedTypeUri && !payload.suggestedCountryUri && !payload.suggestedCountry && !payload.suggestedFundingUri && !payload.suggestedFunding)) return;
+            if (!payload.uuid || (kind !== 'name' && !payload.suggestedTypeUri && !payload.suggestedCountryUri && !payload.suggestedCountry && !payload.suggestedFundingUri && !payload.suggestedFunding) || (kind === 'name' && !payload.suggestedName)) return;
 
             const originalHtml = buttonEl ? buttonEl.innerHTML : '';
             if (buttonEl) {
@@ -1238,6 +1493,7 @@
                 countrySuggestionCache.delete(key);
                 typeSuggestionCache.delete(key);
                 fundingSuggestionCache.delete(key);
+                nameSuggestionCache.delete(key);
                 suggestionBundleCache.delete(key);
 
                 const rowEl = buttonEl ? buttonEl.closest('tr') : null;
@@ -1466,6 +1722,7 @@
                     typeSuggestionCache.clear();
                     countrySuggestionCache.clear();
                     fundingSuggestionCache.clear();
+                    nameSuggestionCache.clear();
                     suggestionBundleCache.clear();
                     suggestionBundleInFlight.clear();
                     typeCatalogOptions = null;

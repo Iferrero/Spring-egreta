@@ -2,6 +2,7 @@ package com.example.demo.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import org.springframework.data.annotation.Id;
+import org.springframework.data.annotation.Transient;
 import org.springframework.data.mongodb.core.mapping.Document;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.index.CompoundIndex;
@@ -56,11 +57,11 @@ public class ExternalOrganization {
 
     private WorkflowStatus workflow;
 
-
     // -------------------------------------------------------------------------
     // Convenience helpers
     // -------------------------------------------------------------------------
 
+    @Transient
     public String getDisplayName() {
         if (name == null) return null;
         return name.getOrDefault("ca_ES",
@@ -68,6 +69,7 @@ public class ExternalOrganization {
                name.getOrDefault("en_GB", null)));
     }
 
+    @Transient
     public String getTypeName() {
         if (type == null || type.getTerm() == null) return null;
         Map<String, String> term = type.getTerm();
@@ -76,6 +78,7 @@ public class ExternalOrganization {
                term.getOrDefault("en_GB", null)));
     }
 
+    @Transient
     public String getCountryName() {
         if (address == null || address.getCountry() == null
                 || address.getCountry().getTerm() == null) return null;
@@ -98,6 +101,14 @@ public class ExternalOrganization {
         public void setUri(String uri) { this.uri = uri; }
         public Map<String, String> getTerm() { return term; }
         public void setTerm(Map<String, String> term) { this.term = term; }
+
+        public String getEffectiveTerm() {
+            if (term == null || term.isEmpty()) return "";
+            return term.getOrDefault("ca_ES",
+                   term.getOrDefault("es_ES",
+                   term.getOrDefault("en_GB",
+                   term.values().stream().findFirst().orElse(""))));
+        }
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)

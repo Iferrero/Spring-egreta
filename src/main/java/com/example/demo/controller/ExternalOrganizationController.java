@@ -27,6 +27,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.web.bind.annotation.RestController;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
@@ -100,18 +101,51 @@ public class ExternalOrganizationController {
     @Value("${app.ror.suggest.enabled:true}")
     private boolean rorSuggestEnabled;
 
+    @Value("${app.ror.mongodb.database:Ror}")
+    private String rorDatabase;
+
+    @Value("${app.ror.mongodb.collection:ror_data}")
+    private String rorCollectionName;
+
     @Value("${app.ror.suggest.url:https://api.ror.org/v2/organizations}")
     private String rorSuggestUrl;
 
     @Value("${app.ror.suggest.timeout-ms:3500}")
     private int rorSuggestTimeoutMs;
 
+    @Value("${app.openalex.author-suggest.enabled:true}")
+    private boolean openAlexAuthorSuggestEnabled;
+
+    @Value("${app.openalex.author-suggest.url:https://api.openalex.org/authors}")
+    private String openAlexAuthorSuggestUrl;
+
+    @Value("${app.openalex.author-suggest.timeout-ms:3500}")
+    private int openAlexAuthorSuggestTimeoutMs;
+
+    @Value("${app.openalex.api-key:}")
+    private String openAlexApiKey;
+
+    @Value("${app.crossref.suggest.enabled:true}")
+    private boolean crossrefSuggestEnabled;
+
+    @Value("${app.crossref.suggest.url:https://api.crossref.org/works}")
+    private String crossrefSuggestUrl;
+
+    @Value("${app.crossref.suggest.timeout-ms:3500}")
+    private int crossrefSuggestTimeoutMs;
+
+    @Value("${app.crossref.mailto:egreta@uab.cat}")
+    private String crossrefMailto;
+
     private record CachedMetadataInference(MetadataInferenceResult result, long timestamp) {}
     private final Map<String, CachedMetadataInference> rorInferenceCache = new ConcurrentHashMap<>();
+    private final Map<String, CachedMetadataInference> openAlexInferenceCache = new ConcurrentHashMap<>();
+    private final Map<String, CachedMetadataInference> crossrefInferenceCache = new ConcurrentHashMap<>();
 
     private final ExternalOrganizationRepository repository;
     private final ExternalOrganizationDifferentRepository differentRepository;
     private final MongoTemplate mongoTemplate;
+    private final MongoTemplate rorMongoTemplate;
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
     private final HttpClient aiHttpClient;
@@ -195,6 +229,16 @@ public class ExternalOrganizationController {
     private final List<String> autoApplyFundingLogs = new java.util.Vector<>();
     private final String autoApplyFundingLogFilePath = "logs/auto-apply-funding.log";
 
+    // State variables for auto-apply name process
+    private final Object autoApplyNameLock = new Object();
+    private boolean autoApplyNameRunning = false;
+    private int autoApplyNameTotal = 0;
+    private int autoApplyNameProcessed = 0;
+    private int autoApplyNameApplied = 0;
+    private double autoApplyNameSimilarityThreshold = 0.90;
+    private final List<String> autoApplyNameLogs = new java.util.Vector<>();
+    private final String autoApplyNameLogFilePath = "logs/auto-apply-name.log";
+
     // State variables for auto-validate process
     private final Object autoValidateLock = new Object();
     private boolean autoValidateRunning = false;
@@ -204,16 +248,30 @@ public class ExternalOrganizationController {
     private final List<String> autoValidateLogs = new java.util.Vector<>();
     private final String autoValidateLogFilePath = "logs/auto-validate.log";
 
+    private final Map<String, CachedInference> rorRawCache = new ConcurrentHashMap<>();
+
     private final ExecutorService aiExecutor;
+
+    @Autowired(required = false)
+    private com.example.demo.service.VllmAffiliationService vllmAffiliationService;
+
+    public ExternalOrganizationController(
+            ExternalOrganizationRepository repository,
+            ExternalOrganizationDifferentRepository differentRepository,
+            MongoTemplate mongoTemplate) {
+        this(repository, differentRepository, mongoTemplate, null);
+    }
 
     @Autowired
     public ExternalOrganizationController(
             ExternalOrganizationRepository repository,
             ExternalOrganizationDifferentRepository differentRepository,
-            MongoTemplate mongoTemplate) {
+            MongoTemplate mongoTemplate,
+            @Autowired(required = false) @Qualifier("rorMongoTemplate") MongoTemplate rorMongoTemplate) {
         this.repository = repository;
         this.differentRepository = differentRepository;
         this.mongoTemplate = mongoTemplate;
+        this.rorMongoTemplate = rorMongoTemplate != null ? rorMongoTemplate : mongoTemplate;
         this.objectMapper = new ObjectMapper();
         this.httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
         ThreadFactory tf = r -> {
@@ -698,13 +756,190 @@ public class ExternalOrganizationController {
         return suggestTypePayload(name);
     }
 
+    private InferenceResult pickBestCountry(List<InferenceResult> candidates) {
+        if (candidates == null || candidates.isEmpty()) {
+            return new InferenceResult("", 0.0, "no-signal");
+        }
+        return candidates.stream()
+            .filter(Objects::nonNull)
+            .filter(c -> c.countryLabel() != null && !c.countryLabel().isBlank())
+            .max(Comparator.comparingDouble(InferenceResult::confidence))
+            .orElse(new InferenceResult("", 0.0, "no-signal"));
+    }
+
+    private TypeInferenceResult pickBestType(List<TypeInferenceResult> candidates) {
+        if (candidates == null || candidates.isEmpty()) {
+            return new TypeInferenceResult("", 0.0, "no-signal");
+        }
+        return candidates.stream()
+            .filter(Objects::nonNull)
+            .filter(c -> c.typeLabel() != null && !c.typeLabel().isBlank())
+            .max(Comparator.comparingDouble(TypeInferenceResult::confidence))
+            .orElse(new TypeInferenceResult("", 0.0, "no-signal"));
+    }
+
+    private FundingInferenceResult pickBestFunding(List<FundingInferenceResult> candidates) {
+        if (candidates == null || candidates.isEmpty()) {
+            return new FundingInferenceResult("", 0.0, "no-signal");
+        }
+        return candidates.stream()
+            .filter(Objects::nonNull)
+            .filter(c -> c.fundingLabel() != null && !c.fundingLabel().isBlank())
+            .max(Comparator.comparingDouble(FundingInferenceResult::confidence))
+            .orElse(new FundingInferenceResult("", 0.0, "no-signal"));
+    }
+
+    public MetadataInferenceResult inferBestMetadata(
+            String orgUuid,
+            String orgName,
+            String explicitAssociatedPerson,
+            List<CountryAggregate> countryCatalog,
+            List<TypeAggregate> typeCatalog) {
+
+        if (orgName == null || orgName.isBlank()) {
+            return new MetadataInferenceResult(
+                new InferenceResult("", 0.0, "empty-name"),
+                new TypeInferenceResult("", 0.0, "empty-name"),
+                new FundingInferenceResult("", 0.0, "empty-name")
+            );
+        }
+
+        List<InferenceResult> countryCandidates = new ArrayList<>();
+        List<TypeInferenceResult> typeCandidates = new ArrayList<>();
+        List<FundingInferenceResult> fundingCandidates = new ArrayList<>();
+
+        // 1. Fast-path: ROR (Instantani, d'alta precisió i sense cost)
+        MetadataInferenceResult rorResult = null;
+        if (rorSuggestEnabled) {
+            rorResult = inferMetadataWithRor(orgName, countryCatalog, typeCatalog);
+            if (rorResult != null) {
+                if (rorResult.country() != null && !rorResult.country().countryLabel().isBlank()) {
+                    countryCandidates.add(rorResult.country());
+                }
+                if (rorResult.type() != null && !rorResult.type().typeLabel().isBlank()) {
+                    typeCandidates.add(rorResult.type());
+                }
+                if (rorResult.funding() != null && !rorResult.funding().fundingLabel().isBlank()) {
+                    fundingCandidates.add(rorResult.funding());
+                }
+            }
+        }
+
+        // Si ROR ja ha resolt amb alta confiança (>= 85%) tots els camps, retornem immediatament
+        boolean countryResolved = rorResult != null && rorResult.country() != null && rorResult.country().confidence() >= 0.85 && !rorResult.country().countryLabel().isBlank();
+        boolean typeResolved    = rorResult != null && rorResult.type() != null && rorResult.type().confidence() >= 0.85 && !rorResult.type().typeLabel().isBlank();
+        boolean fundingResolved = rorResult != null && rorResult.funding() != null && rorResult.funding().confidence() >= 0.85 && !rorResult.funding().fundingLabel().isBlank();
+
+        if (countryResolved && typeResolved && fundingResolved) {
+            return new MetadataInferenceResult(rorResult.country(), rorResult.type(), rorResult.funding());
+        }
+
+        // 2. Si algun camp falta o té confiança baixa/mitjana, executar en paral·lel OpenAlex (sobre l'article d'Egreta) i Local AI
+        String associatedPerson = (explicitAssociatedPerson != null && !explicitAssociatedPerson.isBlank())
+            ? explicitAssociatedPerson.trim()
+            : findAssociatedPersonForOrg(orgUuid, orgName);
+
+        List<CompletableFuture<MetadataInferenceResult>> slowFutures = new ArrayList<>();
+
+        // Publicació vinculada a l'organització externa a Egreta (Researchoutputs a Mongo)
+        RelatedPublicationInfo pubInfo = findRelatedPublicationInfoForOrg(orgUuid, orgName);
+        if (pubInfo != null) {
+            // OpenAlex Publication (mira exclusivament l'article recollit a Egreta i l'afiliació de l'autor en aquest article)
+            if (openAlexAuthorSuggestEnabled) {
+                slowFutures.add(inferMetadataWithOpenAlexPublicationAsync(orgName, pubInfo, countryCatalog, typeCatalog));
+            }
+
+            // Crossref Publication (mira l'article recollit a Egreta)
+            if (crossrefSuggestEnabled) {
+                slowFutures.add(inferMetadataWithCrossrefPublicationAsync(orgName, pubInfo, countryCatalog, typeCatalog));
+            }
+        }
+
+        // Local AI
+        if (aiCountrySuggestEnabled) {
+            slowFutures.add(inferMetadataWithLocalAiAsync(orgName, associatedPerson, countryCatalog, typeCatalog));
+        }
+
+        if (!slowFutures.isEmpty()) {
+            try {
+                long maxTimeout = Math.max(
+                    Math.max(openAlexAuthorSuggestTimeoutMs, crossrefSuggestTimeoutMs),
+                    aiCountrySuggestTimeoutMs
+                ) + AI_TIMEOUT_BUFFER_MS;
+                CompletableFuture.allOf(slowFutures.toArray(new CompletableFuture[0]))
+                    .get(maxTimeout, TimeUnit.MILLISECONDS);
+            } catch (Exception ignored) {
+                // Les fonts finalitzades a temps es processaran avall
+            }
+        }
+
+        for (CompletableFuture<MetadataInferenceResult> future : slowFutures) {
+            if (future.isDone() && !future.isCompletedExceptionally()) {
+                try {
+                    MetadataInferenceResult res = future.getNow(null);
+                    if (res != null) {
+                        if (res.country() != null && !res.country().countryLabel().isBlank()) {
+                            countryCandidates.add(res.country());
+                        }
+                        if (res.type() != null && !res.type().typeLabel().isBlank()) {
+                            typeCandidates.add(res.type());
+                        }
+                        if (res.funding() != null && !res.funding().fundingLabel().isBlank()) {
+                            fundingCandidates.add(res.funding());
+                        }
+                    }
+                } catch (Exception ignored) {}
+            }
+        }
+
+        // Fallback WebSearch (si país té confiança <= 50% o no hi ha candidats)
+        InferenceResult currentBestCountry = pickBestCountry(countryCandidates);
+        if (currentBestCountry.confidence() <= 0.50) {
+            try {
+                InferenceResult webRes = inferCountryWithWebSearch(orgName, associatedPerson, countryCatalog);
+                if (webRes != null && !webRes.countryLabel().isBlank()) {
+                    countryCandidates.add(webRes);
+                }
+            } catch (Exception ignored) {}
+        }
+
+        // Baselines per heurística local de nom
+        try {
+            InferenceResult hCountry = inferCountryFromName(orgName, countryCatalog);
+            if (hCountry != null && !hCountry.countryLabel().isBlank()) {
+                countryCandidates.add(hCountry);
+            }
+        } catch (Exception ignored) {}
+
+        try {
+            TypeInferenceResult hType = inferTypeFromName(orgName, typeCatalog);
+            if (hType != null && !hType.typeLabel().isBlank()) {
+                typeCandidates.add(hType);
+            }
+        } catch (Exception ignored) {}
+
+        try {
+            FundingInferenceResult hFunding = inferFundingFromName(orgName);
+            if (hFunding != null && !hFunding.fundingLabel().isBlank()) {
+                fundingCandidates.add(hFunding);
+            }
+        } catch (Exception ignored) {}
+
+        InferenceResult bestCountry = pickBestCountry(countryCandidates);
+        TypeInferenceResult bestType = pickBestType(typeCandidates);
+        FundingInferenceResult bestFunding = pickBestFunding(fundingCandidates);
+
+        return new MetadataInferenceResult(bestCountry, bestType, bestFunding);
+    }
+
     // -------------------------------------------------------------------------
     // GET /external-organizations/stats/suggest-metadata?name=<orgName>&uuid=<orgUuid>
     // -------------------------------------------------------------------------
     @GetMapping("/stats/suggest-metadata")
     public Map<String, Object> suggestMetadataByName(
             @RequestParam(required = false) String name,
-            @RequestParam(required = false) String uuid) {
+            @RequestParam(required = false) String uuid,
+            @RequestParam(required = false) String associatedPerson) {
         String orgName = name == null ? "" : name.trim();
         String orgUuid = uuid == null ? "" : uuid.trim();
 
@@ -730,76 +965,63 @@ public class ExternalOrganizationController {
             empty.put("fundingConfidence", 0.0);
             empty.put("fundingReason", "empty-name");
             empty.put("associatedPerson", "");
+            empty.put("suggestedName", "");
+            empty.put("nameSimilarity", 0.0);
+            empty.put("nameRorId", "");
+            empty.put("nameReason", "empty-name");
             return empty;
         }
 
-        // Buscar persona externa/investigador asociado en MongoDB
-        String associatedPerson = findAssociatedPersonForOrg(orgUuid, orgName);
-
-        // Mejora #4: catálogos cacheados
         List<CountryAggregate> countryCatalog = getCachedCountryCatalog();
         List<TypeAggregate>    typeCatalog    = getCachedTypeCatalog();
 
-        InferenceResult countryResult = null;
-        TypeInferenceResult typeResult = null;
-        FundingInferenceResult fundingResult = null;
-
-        // 1. Paso ROR (Research Organization Registry) - Determinista, instantáneo y sin coste
-        MetadataInferenceResult rorResult = inferMetadataWithRor(orgName, countryCatalog, typeCatalog);
-        if (rorResult != null) {
-            if (rorResult.country() != null && !rorResult.country().countryLabel().isBlank() && rorResult.country().confidence() >= 0.85) {
-                countryResult = rorResult.country();
-            }
-            if (rorResult.type() != null && !rorResult.type().typeLabel().isBlank() && rorResult.type().confidence() >= 0.85) {
-                typeResult = rorResult.type();
-            }
-            if (rorResult.funding() != null && !rorResult.funding().fundingLabel().isBlank() && rorResult.funding().confidence() >= 0.85) {
-                fundingResult = rorResult.funding();
-            }
-        }
-
-        // 2. Si falta alguno de los 3 campos, consultar a IA Local
-        MetadataInferenceResult aiResult = null;
-        boolean aiCallFailed = false;
-        if (countryResult == null || typeResult == null || fundingResult == null) {
-            aiResult = inferMetadataWithLocalAi(orgName, associatedPerson, countryCatalog, typeCatalog);
-            aiCallFailed = (aiResult == null);
-            if (aiResult != null) {
-                if (countryResult == null && aiResult.country() != null && !aiResult.country().countryLabel().isBlank()) {
-                    countryResult = aiResult.country();
-                }
-                if (typeResult == null && aiResult.type() != null && !aiResult.type().typeLabel().isBlank()) {
-                    typeResult = aiResult.type();
-                }
-                if (fundingResult == null && aiResult.funding() != null && !aiResult.funding().fundingLabel().isBlank()) {
-                    fundingResult = aiResult.funding();
+        RorNameProposal nameProposal = null;
+        try {
+            Long pureId = null;
+            if (!orgUuid.isBlank()) {
+                ExternalOrganization found = mongoTemplate.findOne(
+                    new Query(Criteria.where("uuid").is(orgUuid)), ExternalOrganization.class);
+                if (found != null) {
+                    pureId = found.getPureId();
                 }
             }
+            nameProposal = findRorNameProposal(orgUuid, pureId, orgName);
+        } catch (Exception e) {
+            log.debug("Error generating name proposal for '{}': {}", orgName, e.getMessage());
         }
 
-        // Fallbacks for country
-        if (countryResult == null || countryResult.countryLabel().isBlank()) {
-            countryResult = inferCountryWithWebSearch(orgName, associatedPerson, countryCatalog);
-            if (countryResult == null || countryResult.countryLabel().isBlank()) {
-                countryResult = inferCountryFromName(orgName, countryCatalog);
+        // Si tenim un nom net suggerit per vLLM / ROR / OpenAlex, utilitzem aquest nom net per inferir les metadades
+        String effectiveName = (nameProposal != null && nameProposal.suggestedName() != null && !nameProposal.suggestedName().isBlank())
+            ? nameProposal.suggestedName().trim()
+            : orgName;
+
+        MetadataInferenceResult best = inferBestMetadata(orgUuid, effectiveName, associatedPerson, countryCatalog, typeCatalog);
+
+        InferenceResult countryResult = best.country();
+        TypeInferenceResult typeResult = best.type();
+        FundingInferenceResult fundingResult = best.funding();
+
+        // Si nameProposal té país o tipus deduït amb alta confiança, prioritzar-lo
+        if (nameProposal != null) {
+            if (nameProposal.country() != null && !nameProposal.country().isBlank() && (countryResult.countryLabel().isBlank() || countryResult.confidence() < 0.85)) {
+                countryResult = new InferenceResult(nameProposal.country(), Math.max(countryResult.confidence(), nameProposal.similarity()), nameProposal.reason());
+            }
+            if (nameProposal.type() != null && !nameProposal.type().isBlank() && (typeResult.typeLabel().isBlank() || typeResult.confidence() < 0.85)) {
+                typeResult = new TypeInferenceResult(nameProposal.type(), Math.max(typeResult.confidence(), nameProposal.similarity()), nameProposal.reason());
             }
         }
 
-        // Fallbacks for type
-        if (typeResult == null || typeResult.typeLabel().isBlank()) {
-            if (!aiCallFailed && aiResult == null) {
-                typeResult = inferTypeWithLocalAi(orgName, associatedPerson, typeCatalog);
-            }
-            if (typeResult == null || typeResult.typeLabel().isBlank()) {
-                typeResult = inferTypeFromName(orgName, typeCatalog);
+        // Si cal millorar la inferència de finançament a partir del nom net o del tipus
+        if (fundingResult == null || fundingResult.fundingLabel().isBlank() || fundingResult.confidence() < 0.85) {
+            FundingInferenceResult fRes = inferFundingFromName(effectiveName);
+            if (fRes != null && !fRes.fundingLabel().isBlank() && (fundingResult == null || fRes.confidence() >= fundingResult.confidence())) {
+                fundingResult = fRes;
             }
         }
 
-        // Fallbacks for funding
-        if (fundingResult == null || fundingResult.fundingLabel().isBlank()) {
-            fundingResult = inferFundingFromName(orgName);
-        }
-        
+        String resolvedPerson = (associatedPerson != null && !associatedPerson.isBlank())
+            ? associatedPerson.trim()
+            : findAssociatedPersonForOrg(orgUuid, orgName);
 
         String suggestedCountryUri = resolveCountryUriByLabel(countryResult.countryLabel());
 
@@ -811,11 +1033,26 @@ public class ExternalOrganizationController {
         out.put("suggestedType", typeResult.typeLabel());
         out.put("typeConfidence", typeResult.confidence());
         out.put("typeReason", typeResult.reason());
-        out.put("suggestedFunding", fundingResult.fundingLabel());
-        out.put("suggestedFundingUri", resolveFundingUri(fundingResult.fundingLabel()));
-        out.put("fundingConfidence", fundingResult.confidence());
-        out.put("fundingReason", fundingResult.reason());
-        out.put("associatedPerson", associatedPerson != null ? associatedPerson : "");
+        out.put("suggestedFunding", fundingResult != null ? fundingResult.fundingLabel() : "");
+        out.put("suggestedFundingUri", resolveFundingUri(fundingResult != null ? fundingResult.fundingLabel() : ""));
+        out.put("fundingConfidence", fundingResult != null ? fundingResult.confidence() : 0.0);
+        out.put("fundingReason", fundingResult != null ? fundingResult.reason() : "no-signal");
+        out.put("associatedPerson", resolvedPerson != null ? resolvedPerson : "");
+        if (nameProposal != null && nameProposal.suggestedName() != null && !nameProposal.suggestedName().isBlank()) {
+            out.put("suggestedName", nameProposal.suggestedName());
+            out.put("nameSimilarity", nameProposal.similarity());
+            out.put("nameRorId", nameProposal.rorId() != null ? nameProposal.rorId() : "");
+            out.put("nameReason", nameProposal.reason() != null ? nameProposal.reason() : "");
+            out.put("nameRawAffiliation", nameProposal.rawAffiliation() != null ? nameProposal.rawAffiliation() : "");
+            out.put("proposals", nameProposal.candidates() != null ? nameProposal.candidates() : List.of());
+        } else {
+            out.put("suggestedName", "");
+            out.put("nameSimilarity", 0.0);
+            out.put("nameRorId", "");
+            out.put("nameReason", "no-proposal");
+            out.put("nameRawAffiliation", "");
+            out.put("proposals", List.of());
+        }
         return out;
     }
 
@@ -828,7 +1065,6 @@ public class ExternalOrganizationController {
         List<String> uuids = body == null ? List.of() : body.getOrDefault("uuids", List.of());
         if (uuids.isEmpty()) return List.of();
 
-        // Cargar las organizaciones correspondientes a los UUIDs recibidos
         List<ExternalOrganization> organizations = mongoTemplate.find(
             new Query(Criteria.where("uuid").in(uuids)),
             ExternalOrganization.class
@@ -838,10 +1074,8 @@ public class ExternalOrganizationController {
         List<CountryAggregate> countryCatalog = getCachedCountryCatalog();
         List<TypeAggregate>    typeCatalog    = getCachedTypeCatalog();
 
-        // 1. Paso ROR (Research Organization Registry) en paralelo para todas las organizaciones
-        Map<String, InferenceResult>     countryResults = new ConcurrentHashMap<>();
-        Map<String, TypeInferenceResult> typeResults    = new ConcurrentHashMap<>();
-        Map<String, FundingInferenceResult> fundingResults = new ConcurrentHashMap<>();
+        Map<String, MetadataInferenceResult> bestResults = new ConcurrentHashMap<>();
+        List<ExternalOrganization> needsDeepInference = new ArrayList<>();
 
         if (rorSuggestEnabled) {
             Map<String, CompletableFuture<MetadataInferenceResult>> rorFutures = new HashMap<>();
@@ -851,90 +1085,65 @@ public class ExternalOrganizationController {
             rorFutures.forEach((uuid, future) -> {
                 try {
                     MetadataInferenceResult rorRes = future.get(rorSuggestTimeoutMs + AI_TIMEOUT_BUFFER_MS, TimeUnit.MILLISECONDS);
-                    if (rorRes != null) {
-                        if (rorRes.country() != null && !rorRes.country().countryLabel().isBlank() && rorRes.country().confidence() >= 0.85) {
-                            countryResults.put(uuid, rorRes.country());
-                        }
-                        if (rorRes.type() != null && !rorRes.type().typeLabel().isBlank() && rorRes.type().confidence() >= 0.85) {
-                            typeResults.put(uuid, rorRes.type());
-                        }
-                        if (rorRes.funding() != null && !rorRes.funding().fundingLabel().isBlank() && rorRes.funding().confidence() >= 0.85) {
-                            fundingResults.put(uuid, rorRes.funding());
-                        }
+                    if (rorRes != null 
+                            && rorRes.country() != null && rorRes.country().confidence() >= 0.85 && !rorRes.country().countryLabel().isBlank()
+                            && rorRes.type() != null && rorRes.type().confidence() >= 0.85 && !rorRes.type().typeLabel().isBlank()
+                            && rorRes.funding() != null && rorRes.funding().confidence() >= 0.85 && !rorRes.funding().fundingLabel().isBlank()) {
+                        bestResults.put(uuid, rorRes);
                     }
                 } catch (Exception ignored) {}
             });
         }
 
-        // 2. Paso Batch AI para los que sigan teniendo algún campo pendiente
-        List<ExternalOrganization> needsAi = organizations.stream()
-            .filter(org -> {
-                String uuid = org.getUuid();
-                return countryResults.getOrDefault(uuid, new InferenceResult("", 0.0, "")).countryLabel().isBlank()
-                    || typeResults.getOrDefault(uuid,    new TypeInferenceResult("", 0.0, "")).typeLabel().isBlank()
-                    || fundingResults.getOrDefault(uuid, new FundingInferenceResult("", 0.0, "")).fundingLabel().isBlank();
-            })
-            .collect(Collectors.toList());
-
-        if (!needsAi.isEmpty() && aiCountrySuggestEnabled) {
-            Map<String, MetadataInferenceResult> aiResults =
-                inferMetadataBatch(needsAi, countryCatalog, typeCatalog);
-            aiResults.forEach((uuid, aiResult) -> {
-                if (aiResult.country() != null && !aiResult.country().countryLabel().isBlank()
-                        && countryResults.getOrDefault(uuid, new InferenceResult("", 0.0, "")).countryLabel().isBlank()) {
-                    countryResults.put(uuid, aiResult.country());
-                }
-                if (aiResult.type() != null && !aiResult.type().typeLabel().isBlank()
-                        && typeResults.getOrDefault(uuid, new TypeInferenceResult("", 0.0, "")).typeLabel().isBlank()) {
-                    typeResults.put(uuid, aiResult.type());
-                }
-                if (aiResult.funding() != null && !aiResult.funding().fundingLabel().isBlank()
-                        && fundingResults.getOrDefault(uuid, new FundingInferenceResult("", 0.0, "")).fundingLabel().isBlank()) {
-                    fundingResults.put(uuid, aiResult.funding());
-                }
-            });
-        }
-
-        // 3. Paso final de Heurística Local de nombre (como último recurso de fallback)
         for (ExternalOrganization org : organizations) {
-            String uuid    = org.getUuid();
-            String orgName = extractOrgName(org);
-            if (countryResults.getOrDefault(uuid, new InferenceResult("", 0.0, "")).countryLabel().isBlank()) {
-                countryResults.put(uuid, inferCountryFromName(orgName, countryCatalog));
-            }
-            if (typeResults.getOrDefault(uuid, new TypeInferenceResult("", 0.0, "")).typeLabel().isBlank()) {
-                typeResults.put(uuid, inferTypeFromName(orgName, typeCatalog));
-            }
-            if (fundingResults.getOrDefault(uuid, new FundingInferenceResult("", 0.0, "")).fundingLabel().isBlank()) {
-                fundingResults.put(uuid, inferFundingFromName(orgName));
+            if (!bestResults.containsKey(org.getUuid())) {
+                needsDeepInference.add(org);
             }
         }
 
-        // Construir respuesta
+        if (!needsDeepInference.isEmpty()) {
+            List<CompletableFuture<Void>> batchFutures = needsDeepInference.stream()
+                .map(org -> CompletableFuture.runAsync(() -> {
+                    String uuid = org.getUuid();
+                    String orgName = extractOrgName(org);
+                    MetadataInferenceResult best = inferBestMetadata(uuid, orgName, null, countryCatalog, typeCatalog);
+                    bestResults.put(uuid, best);
+                }, asyncExecutor))
+                .collect(Collectors.toList());
+
+            CompletableFuture.allOf(batchFutures.toArray(new CompletableFuture[0])).join();
+        }
+
         return organizations.stream().map(org -> {
-            String uuid          = org.getUuid();
-            InferenceResult     cr = countryResults.getOrDefault(uuid, new InferenceResult("", 0.0, "no-signal"));
-            TypeInferenceResult tr = typeResults.getOrDefault(uuid,    new TypeInferenceResult("", 0.0, "no-signal"));
-            FundingInferenceResult fr = fundingResults.getOrDefault(uuid, new FundingInferenceResult("", 0.0, "no-signal"));
-            String countryUri      = resolveCountryUriByLabel(cr.countryLabel);
+            String uuid = org.getUuid();
+            MetadataInferenceResult best = bestResults.getOrDefault(uuid,
+                new MetadataInferenceResult(
+                    new InferenceResult("", 0.0, "no-signal"),
+                    new TypeInferenceResult("", 0.0, "no-signal"),
+                    new FundingInferenceResult("", 0.0, "no-signal")
+                )
+            );
+            InferenceResult cr = best.country();
+            TypeInferenceResult tr = best.type();
+            FundingInferenceResult fr = best.funding();
+            String countryUri = resolveCountryUriByLabel(cr.countryLabel());
             String associatedPerson = findAssociatedPersonForOrg(uuid, extractOrgName(org));
 
             Map<String, Object> row = new LinkedHashMap<>();
-            row.put("uuid",                uuid);
-            row.put("name",                extractOrgName(org));
-            row.put("suggestedCountry",    cr.countryLabel);
+            row.put("uuid", uuid);
+            row.put("name", extractOrgName(org));
+            row.put("suggestedCountry", cr.countryLabel());
             row.put("suggestedCountryUri", countryUri);
-            row.put("countryConfidence",   cr.confidence);
-            row.put("countryReason",       cr.reason);
-            row.put("suggestedType",       tr.typeLabel);
-            row.put("typeConfidence",       tr.confidence);
-            row.put("typeReason",          tr.reason);
-            row.put("suggestedFunding",    fr.fundingLabel);
-            row.put("suggestedFundingUri", resolveFundingUri(fr.fundingLabel));
-            row.put("fundingConfidence",   fr.confidence);
-            row.put("fundingReason",       fr.reason);
-            row.put("associatedPerson",    associatedPerson != null ? associatedPerson : "");
-            // Add workflow step if present
+            row.put("countryConfidence", cr.confidence());
+            row.put("countryReason", cr.reason());
+            row.put("suggestedType", tr.typeLabel());
+            row.put("typeConfidence", tr.confidence());
+            row.put("typeReason", tr.reason());
+            row.put("suggestedFunding", fr.fundingLabel());
+            row.put("suggestedFundingUri", resolveFundingUri(fr.fundingLabel()));
+            row.put("fundingConfidence", fr.confidence());
+            row.put("fundingReason", fr.reason());
+            row.put("associatedPerson", associatedPerson != null ? associatedPerson : "");
             String workflowStep = null;
             if (org.getWorkflow() != null) {
                 workflowStep = org.getWorkflow().getStep();
@@ -947,12 +1156,18 @@ public class ExternalOrganizationController {
     @PostMapping("/stats/clear-cache")
     public Map<String, Object> clearCache() {
         int rorCount = rorInferenceCache.size();
+        int openAlexCount = openAlexInferenceCache.size();
+        int crossrefCount = crossrefInferenceCache.size();
+        int relatedPubCount = relatedPublicationCache.size();
         int countryCount = countryInferenceCache.size();
         int typeCount = typeInferenceCache.size();
         int personCount = associatedPersonCache.size();
         int graphCount = graphSimilarityCache.size() + pairsSimilarityCache.size();
 
         rorInferenceCache.clear();
+        openAlexInferenceCache.clear();
+        crossrefInferenceCache.clear();
+        relatedPublicationCache.clear();
         countryInferenceCache.clear();
         typeInferenceCache.clear();
         associatedPersonCache.clear();
@@ -964,19 +1179,22 @@ public class ExternalOrganizationController {
         cachedReferencedExternalOrgUuids.set(null);
         containsWordCache.clear();
 
-        log.info("Caches de ExternalOrganization netejades manualment (ROR: {}, País: {}, Tipus: {}, Persones: {}, Grafs: {})",
-                rorCount, countryCount, typeCount, personCount, graphCount);
+        log.info("Caches de ExternalOrganization netejades manualment (ROR: {}, OpenAlex: {}, Crossref: {}, Pubs: {}, País: {}, Tipus: {}, Persones: {}, Grafs: {})",
+                rorCount, openAlexCount, crossrefCount, relatedPubCount, countryCount, typeCount, personCount, graphCount);
 
         Map<String, Object> resp = new LinkedHashMap<>();
         resp.put("success", true);
         resp.put("message", "S'han buidat totes les memòries cau correctament");
-        resp.put("clearedEntries", Map.of(
-            "rorInferences", rorCount,
-            "countryInferences", countryCount,
-            "typeInferences", typeCount,
-            "associatedPersons", personCount,
-            "graphs", graphCount
-        ));
+        Map<String, Object> cleared = new LinkedHashMap<>();
+        cleared.put("rorInferences", rorCount);
+        cleared.put("openAlexInferences", openAlexCount);
+        cleared.put("crossrefInferences", crossrefCount);
+        cleared.put("relatedPublications", relatedPubCount);
+        cleared.put("countryInferences", countryCount);
+        cleared.put("typeInferences", typeCount);
+        cleared.put("associatedPersons", personCount);
+        cleared.put("graphs", graphCount);
+        resp.put("clearedEntries", cleared);
         resp.put("timestamp", System.currentTimeMillis());
 
         return resp;
@@ -1740,6 +1958,390 @@ public class ExternalOrganizationController {
         }
     }
 
+    private Map<String, Object> syncExternalOrganizationRorIdentifierToEgreta(
+            ExternalOrganization org,
+            String rorId,
+            String targetEnv) {
+        return syncExternalOrganizationRorIdentifierToEgreta(org, rorId, null, null, targetEnv);
+    }
+
+    private Map<String, Object> syncExternalOrganizationRorIdentifierToEgreta(
+            ExternalOrganization org,
+            String rorId,
+            ExternalOrganization.UriTerm updatedCountry,
+            String targetEnv) {
+        return syncExternalOrganizationRorIdentifierToEgreta(org, rorId, updatedCountry, null, targetEnv);
+    }
+
+    private Map<String, Object> syncExternalOrganizationRorIdentifierToEgreta(
+            ExternalOrganization org,
+            String rorId,
+            ExternalOrganization.UriTerm updatedCountry,
+            String newName,
+            String targetEnv) {
+        if (!egretaExternalOrgEnabled) {
+            return Map.of("updated", false, "reason", "egreta-sync-disabled");
+        }
+        if (org == null || org.getUuid() == null || org.getUuid().isBlank()) {
+            return Map.of("updated", false, "reason", "missing-uuid");
+        }
+        boolean hasRor = rorId != null && !rorId.isBlank();
+        boolean hasName = newName != null && !newName.isBlank();
+        boolean hasCountry = updatedCountry != null;
+
+        if (!hasRor && !hasName && !hasCountry) {
+            return Map.of("updated", false, "reason", "missing-update-payload");
+        }
+
+        String normalizedRor = null;
+        if (hasRor) {
+            normalizedRor = rorId.trim();
+            if (!normalizedRor.startsWith("http://") && !normalizedRor.startsWith("https://")) {
+                normalizedRor = "https://ror.org/" + normalizedRor;
+            }
+        }
+
+        String orgUuid = org.getUuid().trim();
+        String getUrl = resolveEgretaUrl(egretaExternalOrgGetUrlTemplate, orgUuid);
+        String putUrl = resolveEgretaUrl(egretaExternalOrgPutUrlTemplate, orgUuid);
+
+        if (getUrl.isBlank()) {
+            getUrl = resolveEgretaUrl(egretaExternalOrgBaseUrl + "/{uuid}", orgUuid);
+        }
+        if (putUrl.isBlank()) {
+            putUrl = resolveEgretaUrl(egretaExternalOrgBaseUrl + "/{uuid}", orgUuid);
+        }
+
+        if ("test".equalsIgnoreCase(targetEnv)) {
+            getUrl = getUrl.replace("egreta.uab.cat", "egretat.uab.cat");
+            putUrl = putUrl.replace("egreta.uab.cat", "egretat.uab.cat");
+        } else if ("prod".equalsIgnoreCase(targetEnv)) {
+            getUrl = getUrl.replace("egretat.uab.cat", "egreta.uab.cat");
+            putUrl = putUrl.replace("egretat.uab.cat", "egreta.uab.cat");
+        }
+
+        if (putUrl.isBlank()) {
+            return Map.of("updated", false, "reason", "missing-put-url-template");
+        }
+
+        try {
+            ObjectNode payloadNode;
+
+            if (!getUrl.isBlank()) {
+                HttpRequest.Builder getBuilder = HttpRequest.newBuilder()
+                    .uri(URI.create(getUrl))
+                    .timeout(Duration.ofMillis(Math.max(1000, egretaExternalOrgTimeoutMs)))
+                    .header("Accept", "application/json; charset=utf-8")
+                    .GET();
+                appendEgretaAuth(getBuilder);
+
+                HttpResponse<String> getResponse = httpClient.send(getBuilder.build(), HttpResponse.BodyHandlers.ofString());
+                if (getResponse.statusCode() < 200 || getResponse.statusCode() >= 300) {
+                    return Map.of(
+                        "updated", false,
+                        "reason", "egreta-get-failed",
+                        "status", getResponse.statusCode(),
+                        "body", trimResponseBody(getResponse.body())
+                    );
+                }
+
+                JsonNode root = objectMapper.readTree(getResponse.body());
+                if (root == null || !root.isObject()) {
+                    return Map.of("updated", false, "reason", "egreta-get-invalid-payload");
+                }
+                payloadNode = (ObjectNode) root;
+            } else {
+                payloadNode = objectMapper.valueToTree(org);
+            }
+
+            if (hasRor) {
+                upsertRorIdentifierInPayload(payloadNode, normalizedRor);
+            }
+
+            if (hasName) {
+                JsonNode nameNode = payloadNode.path("name");
+                ObjectNode nameObject;
+                if (nameNode == null || !nameNode.isObject()) {
+                    nameObject = objectMapper.createObjectNode();
+                    payloadNode.set("name", nameObject);
+                } else {
+                    nameObject = (ObjectNode) nameNode;
+                }
+                String cleanNewName = newName.trim();
+                nameObject.put("en_GB", cleanNewName);
+                nameObject.put("es_ES", cleanNewName);
+                nameObject.put("ca_ES", cleanNewName);
+                nameObject.put("value", cleanNewName);
+            }
+
+            if (updatedCountry != null) {
+                JsonNode addressNode = payloadNode.path("address");
+                ObjectNode addressObject;
+                if (addressNode == null || !addressNode.isObject()) {
+                    addressObject = objectMapper.createObjectNode();
+                    payloadNode.set("address", addressObject);
+                } else {
+                    addressObject = (ObjectNode) addressNode;
+                }
+                addressObject.set("country", objectMapper.valueToTree(updatedCountry));
+            }
+
+            HttpRequest.Builder putBuilder = HttpRequest.newBuilder()
+                .uri(URI.create(putUrl))
+                .timeout(Duration.ofMillis(Math.max(1000, egretaExternalOrgTimeoutMs)))
+                .header("Content-Type", "application/json")
+                .header("Accept", "application/json")
+                .PUT(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(payloadNode)));
+            appendEgretaAuth(putBuilder);
+
+            HttpResponse<String> putResponse = httpClient.send(putBuilder.build(), HttpResponse.BodyHandlers.ofString());
+            if (putResponse.statusCode() < 200 || putResponse.statusCode() >= 300) {
+                return Map.of(
+                    "updated", false,
+                    "reason", "egreta-put-failed",
+                    "status", putResponse.statusCode(),
+                    "body", trimResponseBody(putResponse.body())
+                );
+            }
+
+            return Map.of(
+                "updated", true,
+                "uuid", orgUuid,
+                "status", putResponse.statusCode()
+            );
+        } catch (Exception e) {
+            return Map.of(
+                "updated", false,
+                "reason", "egreta-sync-exception",
+                "message", e.getMessage() == null ? "unknown" : e.getMessage()
+            );
+        }
+    }
+
+    private void upsertRorIdentifierInPayload(ObjectNode payloadNode, String rorUrl) {
+        com.fasterxml.jackson.databind.node.ArrayNode idArray;
+        JsonNode existingIds = payloadNode.path("identifiers");
+        if (existingIds == null || !existingIds.isArray()) {
+            idArray = objectMapper.createArrayNode();
+            payloadNode.set("identifiers", idArray);
+        } else {
+            idArray = (com.fasterxml.jackson.databind.node.ArrayNode) existingIds;
+        }
+
+        ObjectNode rorNode = null;
+        for (JsonNode node : idArray) {
+            if (!node.isObject()) continue;
+            String typeUri = node.path("type").path("uri").asText("").toLowerCase();
+            String idSource = node.path("idSource").asText("").toLowerCase();
+            String idVal = node.path("id").asText("").toLowerCase();
+            String valVal = node.path("value").asText("").toLowerCase();
+            if (typeUri.contains("ror") || idSource.contains("ror") || idVal.contains("ror.org") || valVal.contains("ror.org")) {
+                rorNode = (ObjectNode) node;
+                break;
+            }
+        }
+
+        if (rorNode == null) {
+            rorNode = objectMapper.createObjectNode();
+            idArray.add(rorNode);
+        }
+
+        rorNode.put("typeDiscriminator", "ClassifiedId");
+        rorNode.put("id", rorUrl);
+        rorNode.put("value", rorUrl);
+        rorNode.put("idSource", "ror");
+
+        ObjectNode typeNode = objectMapper.createObjectNode();
+        typeNode.put("uri", "/dk/atira/pure/ueoexternalorganisation/ueoexternalorganisationsources/ror");
+        ObjectNode termNode = objectMapper.createObjectNode();
+        termNode.put("ca_ES", "ROR");
+        termNode.put("es_ES", "ROR");
+        termNode.put("en_GB", "ROR");
+        typeNode.set("term", termNode);
+        rorNode.set("type", typeNode);
+    }
+
+    private void applyRorIdentifierToOrganization(ExternalOrganization org, String rorId) {
+        applyRorIdentifierToOrganization(org, rorId, null);
+    }
+
+    private void applyRorIdentifierToOrganization(ExternalOrganization org, String rorId, ExternalOrganization.UriTerm updatedCountry) {
+        if (org == null || rorId == null || rorId.isBlank()) return;
+        String normalizedRor = rorId.trim();
+        if (!normalizedRor.startsWith("http://") && !normalizedRor.startsWith("https://")) {
+            normalizedRor = "https://ror.org/" + normalizedRor;
+        }
+
+        List<ExternalOrganization.Identifier> identifiers = org.getIdentifiers();
+        if (identifiers == null) {
+            identifiers = new ArrayList<>();
+            org.setIdentifiers(identifiers);
+        }
+
+        ExternalOrganization.Identifier rorIdent = null;
+        for (ExternalOrganization.Identifier id : identifiers) {
+            if (id == null) continue;
+            if (id.getIdSource() != null && id.getIdSource().toLowerCase().contains("ror")) {
+                rorIdent = id;
+                break;
+            }
+            if (id.getType() != null && id.getType().getUri() != null && id.getType().getUri().toLowerCase().contains("ror")) {
+                rorIdent = id;
+                break;
+            }
+            String val = id.getEffectiveValue();
+            if (val != null && val.toLowerCase().contains("ror.org")) {
+                rorIdent = id;
+                break;
+            }
+        }
+
+        if (rorIdent == null) {
+            rorIdent = new ExternalOrganization.Identifier();
+            identifiers.add(rorIdent);
+        }
+
+        rorIdent.setTypeDiscriminator("ClassifiedId");
+        rorIdent.setId(normalizedRor);
+        rorIdent.setValue(normalizedRor);
+        rorIdent.setIdSource("ror");
+
+        ExternalOrganization.UriTerm uriTerm = rorIdent.getType();
+        if (uriTerm == null) {
+            uriTerm = new ExternalOrganization.UriTerm();
+            rorIdent.setType(uriTerm);
+        }
+        uriTerm.setUri("/dk/atira/pure/ueoexternalorganisation/ueoexternalorganisationsources/ror");
+        Map<String, String> termMap = uriTerm.getTerm();
+        if (termMap == null) {
+            termMap = new LinkedHashMap<>();
+            uriTerm.setTerm(termMap);
+        }
+        termMap.put("ca_ES", "ROR");
+        termMap.put("es_ES", "ROR");
+        termMap.put("en_GB", "ROR");
+
+        if (updatedCountry != null) {
+            if (org.getAddress() == null) {
+                org.setAddress(new ExternalOrganization.Address());
+            }
+            org.getAddress().setCountry(updatedCountry);
+        }
+    }
+
+    @PostMapping(value = {"/stats/apply-suggested-name", "/stats/apply-suggested-ror"})
+    public Map<String, Object> applySuggestedName(@RequestBody Map<String, Object> payload) {
+        String uuid = payload == null ? "" : Objects.toString(payload.get("uuid"), "").trim();
+        String rorId = payload == null ? "" : Objects.toString(payload.get("rorId"), "").trim();
+        String suggestedName = payload == null ? "" : Objects.toString(payload.get("suggestedName"), "").trim();
+        boolean applyName = false;
+        if (payload != null) {
+            Object applyNameObj = payload.get("applyName");
+            if (applyNameObj instanceof Boolean b) {
+                applyName = b;
+            } else if (applyNameObj != null) {
+                applyName = "true".equalsIgnoreCase(applyNameObj.toString().trim());
+            } else if (payload.containsKey("changeName")) {
+                applyName = "true".equalsIgnoreCase(String.valueOf(payload.get("changeName")).trim());
+            }
+        }
+        String env = payload == null ? "test" : Objects.toString(payload.get("env"), "test").trim();
+
+        if (uuid.isBlank()) {
+            return Map.of("updated", false, "reason", "missing-uuid");
+        }
+
+        Query q = new Query(Criteria.where("uuid").is(uuid));
+        ExternalOrganization org = mongoTemplate.findOne(q, ExternalOrganization.class);
+        if (org == null) {
+            return Map.of("updated", false, "reason", "organization-not-found", "uuid", uuid);
+        }
+
+        RorNameProposal proposal = null;
+        if (rorId.isBlank() || isMissingCountry(org) || (applyName && suggestedName.isBlank())) {
+            String searchName = suggestedName.isBlank() ? extractOrgName(org) : suggestedName;
+            proposal = findRorNameProposal(uuid, searchName);
+            if (rorId.isBlank() && proposal != null && proposal.rorId() != null && !proposal.rorId().isBlank()) {
+                rorId = proposal.rorId();
+            }
+            if (suggestedName.isBlank() && proposal != null && proposal.suggestedName() != null && !proposal.suggestedName().isBlank()) {
+                suggestedName = proposal.suggestedName();
+            }
+        }
+
+        if (rorId.isBlank() && (!applyName || suggestedName.isBlank())) {
+            return Map.of("updated", false, "reason", "missing-ror-id");
+        }
+
+        ExternalOrganization.UriTerm updatedCountry = null;
+        String appliedCountry = null;
+        if (isMissingCountry(org)) {
+            String countryCandidate = payload == null ? "" : Objects.toString(payload.get("suggestedCountry"), "").trim();
+            String countryUriCandidate = payload == null ? "" : Objects.toString(payload.get("suggestedCountryUri"), "").trim();
+            if (countryCandidate.isBlank() && countryUriCandidate.isBlank() && proposal != null && proposal.country() != null && !proposal.country().isBlank()) {
+                countryCandidate = proposal.country();
+            }
+            if (!countryCandidate.isBlank() || !countryUriCandidate.isBlank()) {
+                updatedCountry = resolveCountryUriTermFromPayload(countryUriCandidate, countryCandidate, null);
+                if (updatedCountry != null) {
+                    appliedCountry = !countryCandidate.isBlank() ? countryCandidate : updatedCountry.getEffectiveTerm();
+                }
+            }
+        }
+
+        String nameToApply = (applyName && !suggestedName.isBlank()) ? suggestedName.trim() : null;
+
+        Map<String, Object> egretaSync = syncExternalOrganizationRorIdentifierToEgreta(org, rorId, updatedCountry, nameToApply, env);
+        boolean egretaUpdated = Boolean.TRUE.equals(egretaSync.get("updated"));
+        if (!egretaUpdated) {
+            return Map.of(
+                "updated", false,
+                "reason", Objects.toString(egretaSync.get("reason"), "egreta-sync-failed"),
+                "uuid", uuid,
+                "details", egretaSync
+            );
+        }
+
+        if (nameToApply != null) {
+            if (org.getName() == null) {
+                org.setName(new java.util.HashMap<>());
+            }
+            org.getName().put("ca_ES", nameToApply);
+            org.getName().put("es_ES", nameToApply);
+            org.getName().put("en_GB", nameToApply);
+        }
+
+        if (!rorId.isBlank()) {
+            applyRorIdentifierToOrganization(org, rorId, updatedCountry);
+        } else if (updatedCountry != null) {
+            if (org.getAddress() == null) {
+                org.setAddress(new ExternalOrganization.Address());
+            }
+            org.getAddress().setCountry(updatedCountry);
+        }
+
+        repository.save(org);
+        if (updatedCountry != null || nameToApply != null) {
+            invalidateMetadataCatalogCaches();
+        }
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("updated", true);
+        response.put("uuid", uuid);
+        if (nameToApply != null) {
+            response.put("appliedName", nameToApply);
+        }
+        if (!rorId.isBlank()) {
+            response.put("appliedRor", rorId);
+        }
+        if (appliedCountry != null) {
+            response.put("appliedCountry", appliedCountry);
+            response.put("appliedCountryUri", updatedCountry != null ? Objects.toString(updatedCountry.getUri(), "") : "");
+        }
+        response.put("egreta", egretaSync);
+        return response;
+    }
+
     private void upsertFundingKeywordGroupInPayload(ObjectNode payloadNode, String normalizedFunding) {
         com.fasterxml.jackson.databind.node.ArrayNode groups;
         JsonNode existingGroups = payloadNode.path("keywordGroups");
@@ -2231,7 +2833,7 @@ public class ExternalOrganizationController {
                 Criteria.where("uuid").in(missingUuids),
                 Criteria.where("id").in(missingUuids)
             ));
-            query.fields().include("uuid").include("id").include("displayName").include("name");
+            query.fields().include("uuid").include("id").include("name");
             List<ExternalOrganization> orgs = mongoTemplate.find(query, ExternalOrganization.class);
             Map<String, String> nameMap = new HashMap<>();
             for (ExternalOrganization org : orgs) {
@@ -2281,7 +2883,7 @@ public class ExternalOrganizationController {
                 Criteria.where("uuid").in(uuids),
                 Criteria.where("id").in(uuids)
             ));
-            orgQuery.fields().include("uuid").include("id").include("displayName").include("name");
+            orgQuery.fields().include("uuid").include("id").include("name");
             List<ExternalOrganization> orgs = mongoTemplate.find(orgQuery, ExternalOrganization.class);
             Map<String, String> nameMap = new HashMap<>();
             for (ExternalOrganization org : orgs) {
@@ -2648,7 +3250,6 @@ public class ExternalOrganizationController {
         query.fields()
              .include("uuid")
              .include("id")
-             .include("displayName")
              .include("name")
              .include("pureId")
              .include("type")
@@ -3004,6 +3605,18 @@ public class ExternalOrganizationController {
         return dp[bLen];
     }
 
+    private double calculateStringSimilarity(String s1, String s2) {
+        if (s1 == null || s2 == null) return 0.0;
+        String n1 = normalizeText(s1).replaceAll("\\s+", "");
+        String n2 = normalizeText(s2).replaceAll("\\s+", "");
+        if (n1.isEmpty() && n2.isEmpty()) return 1.0;
+        if (n1.isEmpty() || n2.isEmpty()) return 0.0;
+        if (n1.equals(n2)) return 1.0;
+        int maxLen = Math.max(n1.length(), n2.length());
+        int dist = levenshteinDistance(n1, n2);
+        return Math.max(0.0, (double) (maxLen - dist) / maxLen);
+    }
+
     // =========================================================================
     // Helpers — suggest payloads
     // Mejora #5: lógica de suggest extraída a un método genérico para eliminar
@@ -3165,23 +3778,32 @@ public class ExternalOrganizationController {
     );
 
     private static final Map<String, String> KEYWORD_HINTS = Map.ofEntries(
-        Map.entry("espana",    "spain"),
-        Map.entry("espanya",   "spain"),
-        Map.entry("spanish",   "spain"),
-        Map.entry("frances",   "france"),
-        Map.entry("french",    "france"),
-        Map.entry("deutsch",   "germany"),
-        Map.entry("german",    "germany"),
-        Map.entry("italian",   "italy"),
-        Map.entry("portugues", "portugal"),
-        Map.entry("british",   "united_kingdom"),
-        Map.entry("english",   "united_kingdom"),
-        Map.entry("american",  "united_states"),
-        Map.entry("eeuu",      "united_states"),
-        Map.entry("dutch",     "netherlands"),
-        Map.entry("swiss",     "switzerland"),
-        Map.entry("japanese",  "japan"),
-        Map.entry("korean",    "south_korea")
+        Map.entry("espana",         "spain"),
+        Map.entry("espanya",        "spain"),
+        Map.entry("spanish",        "spain"),
+        Map.entry("frances",        "france"),
+        Map.entry("french",         "france"),
+        Map.entry("deutsch",        "germany"),
+        Map.entry("german",         "germany"),
+        Map.entry("deutschland",    "germany"),
+        Map.entry("wirtschaft",     "germany"),
+        Map.entry("wirstschaft",    "germany"),
+        Map.entry("gesellschaft",   "germany"),
+        Map.entry("bundes",         "germany"),
+        Map.entry("stiftung",       "germany"),
+        Map.entry("hochschule",     "germany"),
+        Map.entry("fachhochschule", "germany"),
+        Map.entry("universitaet",   "germany"),
+        Map.entry("italian",        "italy"),
+        Map.entry("portugues",      "portugal"),
+        Map.entry("british",        "united_kingdom"),
+        Map.entry("english",        "united_kingdom"),
+        Map.entry("american",       "united_states"),
+        Map.entry("eeuu",           "united_states"),
+        Map.entry("dutch",          "netherlands"),
+        Map.entry("swiss",          "switzerland"),
+        Map.entry("japanese",       "japan"),
+        Map.entry("korean",         "south_korea")
     );
 
     private static final Map<String, String> INSTITUTION_HINTS = Map.ofEntries(
@@ -3222,10 +3844,10 @@ public class ExternalOrganizationController {
 
     private static final List<String> FUNDING_PUBLIC_HINTS = List.of(
         "universitat", "universidad", "university", "universite", "universita",
-        "institut public", "instituto publico",
+        "institut public", "instituto publico", "institut d'investigacio", "instituto de investigacion", "research institute", "institute", "institut", "center for research", "centre de recerca", "centro de investigacion",
         "hospital universitari", "hospital universitario", "hospital clinic", "hospital general",
         "servei de salut", "servicio de salud", "catsalut", "sergas", "sacyl", "sescam", "osakidetza",
-        "irb", "idibaps", "vhio", "iisc", "max planck", "helmholtz", "fraunhofer", "inria", "inrae"
+        "irb", "idibaps", "vhio", "iisc", "max planck", "helmholtz", "fraunhofer", "leibniz", "inria", "inrae"
     );
 
     private static final List<String> FUNDING_STRONG_PRIVATE_HINTS = List.of(
@@ -3367,10 +3989,132 @@ public class ExternalOrganizationController {
             .findFirst().orElse(0);
     }
 
-    private String resolveAliasCountry(String aliasKey, List<CountryAggregate> catalog) {
-        List<String> aliases = COUNTRY_ALIASES.getOrDefault(aliasKey, List.of());
-        if (aliases.isEmpty() || catalog.isEmpty()) return "";
+    private String resolveCountryFromCode(String countryCode, List<CountryAggregate> catalog) {
+        if (countryCode == null || countryCode.isBlank() || catalog == null || catalog.isEmpty()) return "";
+        String code = countryCode.trim().toUpperCase();
 
+        // 1. Direct standard ISO2 map to COUNTRY_ALIASES canonical key
+        String canonicalKey = switch (code) {
+            case "ES" -> "spain";
+            case "FR" -> "france";
+            case "DE" -> "germany";
+            case "IT" -> "italy";
+            case "PT" -> "portugal";
+            case "GB", "UK" -> "united_kingdom";
+            case "US", "USA" -> "united_states";
+            case "NL" -> "netherlands";
+            case "BE" -> "belgium";
+            case "CH" -> "switzerland";
+            case "AT" -> "austria";
+            case "IE" -> "ireland";
+            case "DK" -> "denmark";
+            case "SE" -> "sweden";
+            case "NO" -> "norway";
+            case "FI" -> "finland";
+            case "PL" -> "poland";
+            case "CZ" -> "czech_republic";
+            case "CN" -> "china";
+            case "JP" -> "japan";
+            case "KR" -> "south_korea";
+            case "IN" -> "india";
+            case "MX" -> "mexico";
+            case "BR" -> "brazil";
+            case "AR" -> "argentina";
+            case "CL" -> "chile";
+            case "CO" -> "colombia";
+            case "CA" -> "canada";
+            case "AU" -> "australia";
+            case "NZ" -> "new_zealand";
+            case "IL" -> "israel";
+            case "SG" -> "singapore";
+            case "GR" -> "greece";
+            case "TR" -> "turkey";
+            case "ZA" -> "south_africa";
+            case "RU" -> "russia";
+            case "UA" -> "ukraine";
+            case "RO" -> "romania";
+            case "HU" -> "hungary";
+            case "BG" -> "bulgaria";
+            case "HR" -> "croatia";
+            case "SI" -> "slovenia";
+            case "SK" -> "slovakia";
+            case "EE" -> "estonia";
+            case "LV" -> "latvia";
+            case "LT" -> "lithuania";
+            case "LU" -> "luxembourg";
+            case "IS" -> "iceland";
+            case "UY" -> "uruguay";
+            case "PE" -> "peru";
+            case "EC" -> "ecuador";
+            case "VE" -> "venezuela";
+            case "CU" -> "cuba";
+            case "CR" -> "costa_rica";
+            case "PA" -> "panama";
+            case "DO" -> "dominican_republic";
+            case "PR" -> "puerto_rico";
+            case "TW" -> "taiwan";
+            case "HK" -> "hong_kong";
+            case "SA" -> "saudi_arabia";
+            case "AE" -> "united_arab_emirates";
+            case "EG" -> "egypt";
+            case "MA" -> "morocco";
+            case "TN" -> "tunisia";
+            case "DZ" -> "algeria";
+            case "NG" -> "nigeria";
+            case "KE" -> "kenya";
+            case "TH" -> "thailand";
+            case "VN" -> "vietnam";
+            case "ID" -> "indonesia";
+            case "MY" -> "malaysia";
+            case "PH" -> "philippines";
+            case "PK" -> "pakistan";
+            case "BD" -> "bangladesh";
+            case "IR" -> "iran";
+            case "IQ" -> "iraq";
+            case "LB" -> "lebanon";
+            case "JO" -> "jordan";
+            default -> null;
+        };
+
+        if (canonicalKey != null) {
+            String resolved = resolveAliasCountryDirect(canonicalKey, catalog);
+            if (!resolved.isBlank()) return resolved;
+        }
+
+        // 2. Locale display names in Catalan, Spanish, English
+        try {
+            Locale loc = Locale.of("", code);
+            String caName = loc.getDisplayCountry(Locale.forLanguageTag("ca"));
+            String esName = loc.getDisplayCountry(Locale.forLanguageTag("es"));
+            String enName = loc.getDisplayCountry(Locale.ENGLISH);
+
+            for (String candidateName : List.of(caName, esName, enName)) {
+                if (candidateName != null && !candidateName.isBlank()) {
+                    String normCand = normalizeText(candidateName);
+                    for (CountryAggregate c : catalog) {
+                        if (c.normalizedLabel.equals(normCand)) {
+                            return c.label;
+                        }
+                    }
+                }
+            }
+            for (String candidateName : List.of(caName, esName, enName)) {
+                if (candidateName != null && !candidateName.isBlank()) {
+                    String normCand = normalizeText(candidateName);
+                    for (CountryAggregate c : catalog) {
+                        if (c.normalizedLabel.contains(normCand) || normCand.contains(c.normalizedLabel)) {
+                            return c.label;
+                        }
+                    }
+                }
+            }
+        } catch (Exception ignored) {}
+
+        return "";
+    }
+
+    private String resolveAliasCountryDirect(String aliasKey, List<CountryAggregate> catalog) {
+        List<String> aliases = COUNTRY_ALIASES.getOrDefault(aliasKey.trim().toLowerCase(), List.of());
         String normalizedAliasKey = normalizeText(aliasKey.replace('_', ' '));
 
         return catalog.stream()
@@ -3385,6 +4129,17 @@ public class ExternalOrganizationController {
             .orElse("");
     }
 
+    private String resolveAliasCountry(String aliasKey, List<CountryAggregate> catalog) {
+        if (aliasKey == null || aliasKey.isBlank() || catalog == null || catalog.isEmpty()) return "";
+        String trimmed = aliasKey.trim();
+        if (trimmed.length() == 2) {
+            String fromCode = resolveCountryFromCode(trimmed, catalog);
+            if (!fromCode.isBlank()) return fromCode;
+        }
+
+        return resolveAliasCountryDirect(trimmed, catalog);
+    }
+
     // =========================================================================
     // Inferencia de tipo
     // =========================================================================
@@ -3397,22 +4152,11 @@ public class ExternalOrganizationController {
 
         for (TypeAggregate t : catalog) {
             if (!t.normalizedLabel.isBlank() && normalizedName.contains(t.normalizedLabel)) {
-                return new TypeInferenceResult(t.label, confidenceFromCount(0.88, t.count), "direct-type-match");
+                return new TypeInferenceResult(t.label, confidenceFromCount(0.90, t.count), "direct-type-match");
             }
         }
 
-        for (Map.Entry<String, List<String>> hint : TYPE_HINTS.entrySet()) {
-            boolean matched = hint.getValue().stream().anyMatch(k -> containsWord(normalizedName, k));
-            if (!matched) continue;
-
-            String resolved = resolveTypeByHint(hint.getValue(), catalog);
-            if (!resolved.isBlank()) {
-                int count = typeCountByLabel(resolved, catalog);
-                return new TypeInferenceResult(resolved, confidenceFromCount(0.78, count), "keyword-hint:" + hint.getKey());
-            }
-        }
-
-        return new TypeInferenceResult("", 0.0, "no-signal");
+        return resolvePreciseEgretaType(orgName, "", "", catalog, 0.88, "keyword-hint");
     }
 
     private FundingInferenceResult inferFundingFromName(String orgName) {
@@ -3520,6 +4264,982 @@ public class ExternalOrganizationController {
     // Inferencia ROR (Research Organization Registry)
     // =========================================================================
 
+    public record RorCandidateProposal(
+        String suggestedName,
+        double similarity,
+        String rorId,
+        String country,
+        String type,
+        String reason,
+        String rawAffiliation
+    ) {}
+
+    public record RorNameProposal(
+        String uuid,
+        Long pureId,
+        String currentName,
+        String suggestedName,
+        double similarity,
+        String rorId,
+        String country,
+        String type,
+        String reason,
+        String rawAffiliation,
+        List<RorCandidateProposal> candidates
+    ) {
+        public RorNameProposal(String uuid, Long pureId, String currentName, String suggestedName, double similarity, String rorId, String country, String type, String reason, String rawAffiliation) {
+            this(uuid, pureId, currentName, suggestedName, similarity, rorId, country, type, reason, rawAffiliation, List.of());
+        }
+
+        public RorNameProposal(String uuid, Long pureId, String currentName, String suggestedName, double similarity, String rorId, String country, String type, String reason) {
+            this(uuid, pureId, currentName, suggestedName, similarity, rorId, country, type, reason, "", List.of());
+        }
+    }
+
+    private static final Set<String> ROR_GENERIC_WORDS = Set.of(
+        "universitat", "universidad", "university", "universite", "universitaet", "universitad",
+        "institut", "instituto", "institute", "institution", "fondation", "fundacion", "fundacio", "foundation",
+        "centre", "centro", "center", "hospital", "facultat", "facultad", "faculty",
+        "departament", "departamento", "department", "de", "del", "la", "el", "les", "los", "las",
+        "d", "l", "i", "y", "and", "of", "the", "for", "in", "a", "at", "on", "to", "und", "et", "du", "des",
+        "fur", "der", "die", "das", "sa", "sl", "gmbh", "inc", "llc", "corp", "ltd"
+    );
+
+    public String fetchRorRawJson(String orgName) {
+        if (!rorSuggestEnabled || orgName == null || orgName.isBlank()) return null;
+        String cacheKey = normalizeText(orgName);
+        CachedInference cached = rorRawCache.get(cacheKey);
+        if (cached != null && (System.currentTimeMillis() - cached.timestamp()) < INFERENCE_CACHE_TTL_MS) {
+            return cached.result();
+        }
+
+        String result = queryRorFromMongo(orgName);
+        if ((result == null || !hasRorItems(result)) && rorSuggestUrl != null && !rorSuggestUrl.isBlank() && rorSuggestUrl.startsWith("http")) {
+            String cleaned = cleanQueryForRor(orgName);
+            if (!cleaned.isBlank()) {
+                result = executeRorQuery(cleaned);
+            }
+            if (result == null || !hasRorItems(result)) {
+                result = executeRorQuery(orgName.trim());
+            }
+        }
+
+        if (result != null && hasRorItems(result)) {
+            rorRawCache.put(cacheKey, new CachedInference(result, System.currentTimeMillis()));
+            return result;
+        }
+
+        if (result != null) {
+            rorRawCache.put(cacheKey, new CachedInference(result, System.currentTimeMillis()));
+            return result;
+        }
+        return null;
+    }
+
+    public String queryRorFromMongo(String orgName) {
+        if (orgName == null || orgName.isBlank()) return null;
+        MongoTemplate template = rorMongoTemplate != null ? rorMongoTemplate : mongoTemplate;
+        if (template == null) return null;
+
+        String colName = (rorCollectionName == null || rorCollectionName.isBlank()) ? "ror_data" : rorCollectionName.trim();
+        com.mongodb.client.MongoCollection<Document> collection;
+        try {
+            collection = template.getCollection(colName);
+        } catch (Exception e) {
+            log.debug("Error accessing ROR collection '{}': {}", colName, e.getMessage());
+            return null;
+        }
+
+        Map<String, Document> candidates = new LinkedHashMap<>();
+        String norm = normalizeText(orgName);
+        String[] rawTokens = norm.split("\\s+");
+        List<String> tokens = Arrays.stream(rawTokens).filter(t -> !t.isBlank()).toList();
+        if (tokens.isEmpty()) return null;
+
+        String cleanedRaw = cleanQueryForRor(orgName);
+        if (cleanedRaw.isBlank()) cleanedRaw = orgName.trim();
+
+        int maxCandidates = 25;
+
+        // 1. Exact case-insensitive match on names.value
+        try {
+            Document query = new Document("names.value", new Document("$regex", "^" + Pattern.quote(cleanedRaw) + "$").append("$options", "i"));
+            for (Document doc : collection.find(query).limit(maxCandidates)) {
+                String id = doc.getString("id");
+                if (id != null && !candidates.containsKey(id)) {
+                    candidates.put(id, doc);
+                }
+            }
+        } catch (Exception e) {
+            log.debug("ROR mongo exact match query error: {}", e.getMessage());
+        }
+
+        List<String> specificTokens = tokens.stream()
+                .filter(t -> !ROR_GENERIC_WORDS.contains(t) && t.length() >= 3)
+                .toList();
+
+        // 2. MongoDB Text search with quoted specific tokens (requires exact term matching)
+        if (specificTokens.size() >= 1) {
+            String quotedSearch = specificTokens.stream().limit(3)
+                    .map(t -> "\"" + t.replace("\"", "") + "\"")
+                    .collect(Collectors.joining(" "));
+            try {
+                Document textQuery = new Document("$text", new Document("$search", quotedSearch));
+                Document projection = new Document("score", new Document("$meta", "textScore"));
+                Document sort = new Document("score", new Document("$meta", "textScore"));
+                for (Document doc : collection.find(textQuery).projection(projection).sort(sort).limit(maxCandidates)) {
+                    String id = doc.getString("id");
+                    if (id != null && !candidates.containsKey(id)) {
+                        candidates.put(id, doc);
+                    }
+                }
+            } catch (Exception e) {
+                log.debug("ROR mongo text search (quoted) error: {}", e.getMessage());
+            }
+        }
+
+        // 3. Fallback: unquoted text search if we have few candidates
+        if (candidates.size() < 12) {
+            String searchWords = tokens.stream().filter(t -> t.length() > 2).collect(Collectors.joining(" "));
+            if (!searchWords.isBlank()) {
+                try {
+                    Document textQuery = new Document("$text", new Document("$search", searchWords));
+                    Document projection = new Document("score", new Document("$meta", "textScore"));
+                    Document sort = new Document("score", new Document("$meta", "textScore"));
+                    for (Document doc : collection.find(textQuery).projection(projection).sort(sort).limit(maxCandidates)) {
+                        String id = doc.getString("id");
+                        if (id != null && !candidates.containsKey(id)) {
+                            candidates.put(id, doc);
+                        }
+                    }
+                } catch (Exception e) {
+                    log.debug("ROR mongo text search (unquoted) error: {}", e.getMessage());
+                }
+            }
+        }
+
+        // 4. Fallback: regex search on longest specific token
+        if (candidates.size() < 5 && !specificTokens.isEmpty()) {
+            String longest = specificTokens.stream().max(Comparator.comparingInt(String::length)).orElse("");
+            if (longest.length() >= 4) {
+                try {
+                    Document regexQuery = new Document("names.value", new Document("$regex", "\\b" + Pattern.quote(longest) + "\\b").append("$options", "i"));
+                    for (Document doc : collection.find(regexQuery).limit(10)) {
+                        String id = doc.getString("id");
+                        if (id != null && !candidates.containsKey(id)) {
+                            candidates.put(id, doc);
+                        }
+                    }
+                } catch (Exception e) {
+                    log.debug("ROR mongo regex token query error: {}", e.getMessage());
+                }
+            }
+        }
+
+        if (candidates.isEmpty()) {
+            return null;
+        }
+
+        List<Document> resultList = candidates.values().stream().limit(maxCandidates).toList();
+        List<Map<String, Object>> items = new ArrayList<>();
+        for (Document d : resultList) {
+            Document copy = new Document(d);
+            copy.remove("_id");
+            items.add(copy);
+        }
+
+        try {
+            Map<String, Object> root = Map.of("items", items);
+            return objectMapper.writeValueAsString(root);
+        } catch (Exception e) {
+            log.warn("Error serializing ROR items to JSON: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    private boolean hasRorItems(String json) {
+        if (json == null || json.isBlank()) return false;
+        try {
+            JsonNode root = objectMapper.readTree(json);
+            JsonNode items = root.path("items");
+            return items.isArray() && !items.isEmpty();
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private String cleanQueryForRor(String name) {
+        if (name == null || name.isBlank()) return "";
+        return name.replaceAll("(?i)[,\\.;/\\-_]+", " ")
+                   .replaceAll("(?i)\\b(e\\.?w\\.?|s\\.?l\\.?|s\\.?a\\.?|gmbh|inc\\.?|llc|corp\\.?|ltd\\.?)\\b", " ")
+                   .replaceAll("\\s+", " ")
+                   .trim();
+    }
+
+    private static final Set<String> KNOWN_RAW_COUNTRY_TOKENS = Set.of(
+        "spain", "espana", "espanya", "france", "francia", "franca", "germany", "deutschland", "alemania", "alemanya",
+        "italy", "italia", "portugal", "united kingdom", "uk", "great britain", "england", "scotland", "wales",
+        "united states", "usa", "us", "u s a", "eeuu", "estados unidos", "switzerland", "suiza", "suissa", "suisse",
+        "netherlands", "holland", "holanda", "paises bajos", "paisos baixos", "belgium", "belgica", "belgique",
+        "austria", "osterreich", "ireland", "irlanda", "denmark", "dinamarca", "sweden", "suecia", "sverige",
+        "norway", "noruega", "norge", "finland", "finlandia", "suomi", "poland", "polonia", "polska",
+        "czech republic", "czechia", "republica checa", "greece", "grecia", "japan", "japon", "japo",
+        "china", "south korea", "korea", "corea", "australia", "canada",
+        "brazil", "brasil", "mexico", "mexic", "argentina", "chile", "colombia", "peru", "india", "israel", "turkey", "turquia",
+        "es", "esp", "fr", "fra", "de", "deu", "it", "ita", "pt", "prt", "gb", "gbr", "nl", "nld", "be", "bel", "ch", "che", "at", "aut", "se", "swe", "no", "nor", "fi", "fin", "dk", "dnk", "pl", "pol"
+    );
+
+    private static final Set<String> KNOWN_RAW_CITY_TOKENS = Set.of(
+        "barcelona", "madrid", "bellaterra", "cerdanyola del valles", "cerdanyola", "sabadell", "terrassa", "badalona",
+        "girona", "lleida", "tarragona", "manresa", "vic", "reus", "sant cugat del valles", "sant cugat", "mataro",
+        "santa coloma de gramenet", "l'hospitalet de llobregat", "hospitalet de llobregat", "hospitalet", "granollers",
+        "castelldefels", "viladecans", "el prat de llobregat", "rubi", "gava", "cornella de llobregat", "esplugues de llobregat",
+        "sant boi de llobregat", "mollet del valles", "valencia", "sevilla", "zaragoza", "malaga", "murcia",
+        "palma", "palma de mallorca", "bilbao", "alicante", "alacant", "cordoba", "valladolid", "vigo", "gijon", "vitoria",
+        "vitoria gasteiz", "a coruna", "la coruna", "granada", "elche", "elx", "oviedo", "cartagena", "jerez de la frontera",
+        "pamplona", "irunea", "almeria", "san sebastian", "donostia", "santander", "castellon", "castello", "burgos",
+        "salamanca", "albacete", "huelva", "logrono", "badajoz", "huesca", "segovia", "cuenca", "soria", "teruel",
+        "avila", "zamora", "palencia", "ciudad real", "toledo", "caceres", "lugo", "ourense", "pontevedra", "jaen",
+        "cadiz", "paris", "rome", "roma", "london", "berlin", "munich", "muenchen", "frankfurt", "amsterdam",
+        "brussels", "bruxelles", "geneva", "geneve", "zurich", "zuerich", "vienna", "wien", "milan", "milano",
+        "florence", "firenze", "naples", "napoli", "turin", "torino", "lisbon", "lisboa", "porto", "athens", "dublin",
+        "stockholm", "oslo", "copenhagen", "helsinki", "warsaw", "prague", "budapest", "tokyo", "beijing", "shanghai",
+        "seoul", "singapore", "sydney", "melbourne", "new york", "boston", "chicago", "los angeles", "san francisco",
+        "washington", "cambridge", "oxford", "toronto", "montreal", "vancouver", "buenos aires", "santiago", "bogota", "mexico city"
+    );
+
+    public String cleanRawAffiliationWithoutCityCountry(String rawAff, List<CountryAggregate> countryCatalog) {
+        if (rawAff == null || rawAff.isBlank()) return "";
+
+        // 1. Intentar extreure mitjançant el servidor local vLLM (IA / Model d'idioma)
+        if (vllmAffiliationService != null && vllmAffiliationService.isEnabled()) {
+            try {
+                String vllmParsed = vllmAffiliationService.cleanOrganizationName(rawAff);
+                if (vllmParsed != null && !vllmParsed.isBlank()) {
+                    return vllmParsed;
+                }
+            } catch (Exception e) {
+                log.debug("Fallback to heuristic cleaner, vLLM error: {}", e.getMessage());
+            }
+        }
+
+        // 2. Fallback heurístic / Address & Location Parser
+        String text = rawAff.trim();
+        text = text.replaceAll("(?i)\\bhttps?://\\S+", "")
+                   .replaceAll("(?i)\\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}\\b", "")
+                   .trim();
+
+        String[] rawSegments = text.split("\\s*[,;]\\s*");
+        if (rawSegments.length == 0) return text;
+
+        List<String> validSegments = new ArrayList<>();
+        for (String seg : rawSegments) {
+            String s = seg.trim();
+            if (!s.isBlank()) {
+                validSegments.add(s);
+            }
+        }
+
+        while (validSegments.size() > 1) {
+            String last = validSegments.get(validSegments.size() - 1);
+            if (isAffiliationLocationSegment(last, countryCatalog)) {
+                validSegments.remove(validSegments.size() - 1);
+            } else {
+                break;
+            }
+        }
+
+        String result = String.join(", ", validSegments).trim();
+        result = cleanInlineTrailingLocation(result, countryCatalog);
+        result = result.replaceAll("^[,;.\\s]+|[,;.\\s]+$", "").trim();
+        return result.isBlank() ? text : result;
+    }
+
+    private boolean isAffiliationLocationSegment(String segment, List<CountryAggregate> countryCatalog) {
+        if (segment == null || segment.isBlank()) return true;
+        String s = segment.trim();
+        String norm = normalizeText(s);
+
+        // 1. Pure postal code: 3 to 8 digits (e.g. 639798, 08193, 28040, 75005, 100000)
+        if (s.matches("^\\d{3,8}$")) return true;
+
+        // 2. Postal code with prefix/suffix, county or city (e.g. "639798", "Essex CM1 7ET", "CM1 7ET", "08193 Bellaterra", "D-80333 Munich", "EC1A 1BB", "CA 94305")
+        if (s.matches("(?i).*(?:\\b[A-Z]{1,2}\\d{1,2}[A-Z]?\\s*\\d[A-Z]{2}\\b|\\b[A-Z]\\d[A-Z]\\s*\\d[A-Z]\\d\\b).*")) return true;
+        if (s.matches("^(?:[A-Z]{1,3}[-\\s]?)?\\d{3,8}(?:\\s+[A-Za-zÀ-ÿ\\s'.-]+)?$")) return true;
+        if (s.matches("(?i).*(?:\\b[A-Z]{2}\\s+\\d{4,6}(?:-\\d{4})?\\b).*")) return true;
+        if (s.matches("^(?:CP|C\\.P\\.|BP|Cedex|Apartado|P\\.?O\\.?\\s*Box|Postal Code|Zip Code|Zip|Casilla|Boite Postale)\\b.*$")) return true;
+        if (s.matches("^[A-Z0-9]{2,4}\\s+[A-Z0-9]{2,4}(?:\\s+[A-Za-zÀ-ÿ\\s'-]+)?$")) return true;
+
+        // 3. Street address:
+        // 3a. Starts with street keyword (e.g. "Carrer de...", "Avenida...", "Passeig...", "Court Road...")
+        if (s.matches("(?i)^(?:c\\/|carrer|calle|avda\\.?|avenida|avinguda|passeig|paseo|pza\\.?|plaça|plaza|rúa|via|rue|street|st\\.?|road|rd\\.?|ave\\.?|avenue|boulevard|blvd\\.?|drive|dr\\.?|lane|ln\\.?|way|place|pl\\.?|court|ct\\.?|square|sq\\.?|building|edifici|edificio|campus\\b|apartado\\b|p\\.?o\\.?\\s*box\\b|bp\\s*\\d+|cp\\s*\\d+|casilla\\b|dr\\.\\s+[a-z]+|doctor\\s+[a-z]+|gran\\s+via|bloque|blq\\.?|nau|nave|piso|planta)\\b.*")) {
+            return true;
+        }
+
+        // 3b. Starts with street number, e.g. "50 Nanyang Avenue", "10 Downing Street", "353 Serra Mall", "1 Oxford St"
+        if (s.matches("(?i)^\\d+[-A-Za-z0-9/\\s,.-]*\\b(?:avenue|ave\\.?|street|st\\.?|road|rd\\.?|drive|dr\\.?|boulevard|blvd\\.?|lane|ln\\.?|way|place|pl\\.?|court|ct\\.?|square|sq\\.?|circle|cir\\.?|terrace|ter\\.?|parkway|pkwy\\.?|highway|hwy\\.?|close|cres\\.?|crescent|walk|row|alley|path|mall|campus|building|edifici|edificio|block|tower|weg|str\\.?|strasse|straße|allee|platz)\\b.*")) {
+            return true;
+        }
+
+        // 3c. Ends with street keyword / number, e.g. "Court Road", "Nanyang Avenue 50", "Ackermannweg 10", "Piazzale Aldo Moro 5", "Martí i Franquès 1"
+        if (s.matches("(?i).*\\b(?:avenue|ave\\.?|street|st\\.?|road|rd\\.?|drive|dr\\.?|boulevard|blvd\\.?|lane|ln\\.?|way|place|court|carrer|calle|avinguda|avenida|passeig|paseo|via|rue|str\\.?|strasse|straße|platz|allee|weg|mall|walk)\\s*(?:\\d+[-/\\d\\w]*)?$")) {
+            return true;
+        }
+
+        // 4. Country check
+        if (KNOWN_RAW_COUNTRY_TOKENS.contains(norm)) return true;
+        if (countryCatalog != null) {
+            boolean matchesCatalogCountry = countryCatalog.stream()
+                .anyMatch(c -> c.normalizedLabel.equals(norm));
+            if (matchesCatalogCountry) return true;
+        }
+
+        // 5. City / Province check
+        if (KNOWN_RAW_CITY_TOKENS.contains(norm)) return true;
+
+        String withoutParens = norm.replaceAll("\\([^)]+\\)", "").trim();
+        if (KNOWN_RAW_CITY_TOKENS.contains(withoutParens) || KNOWN_RAW_COUNTRY_TOKENS.contains(withoutParens)) {
+            return true;
+        }
+
+        // 6. Generic trailing location without organization keywords (e.g. single city/region/county name like "Chelmsford", "Essex")
+        boolean hasOrgKeyword = s.matches("(?i).*\\b(?:hospital|clinic|universit|college|school|faculty|facultat|facultad|institut|departm|centre|center|laborat|unit|service|servei|servicio|fundaci|foundat|associat|societ|agenc|organi|group|grup|grupo|consejo|consell|council|consort|board|govern|minister).*");
+        if (!hasOrgKeyword && (s.split("\\s+").length <= 2 || s.matches("(?i).*(?:shire|ford|borough|burg|ville|city|town|region|district|county|province)\\b.*"))) {
+            return true;
+        }
+
+        return false;
+    }
+
+    private String cleanInlineTrailingLocation(String text, List<CountryAggregate> countryCatalog) {
+        if (text == null || text.isBlank()) return "";
+        String cleaned = text.trim();
+        cleaned = cleaned.replaceAll("(?i)\\s*\\((?:Spain|Espanya|España|France|Germany|Italy|UK|USA|Singapore|Barcelona|Madrid|Bellaterra)\\)\\s*$", "");
+        cleaned = cleaned.replaceAll("(?i),?\\s*\\d+[-A-Za-z0-9/\\s,.-]*\\b(?:Avenue|Ave|Street|St|Road|Rd|Drive|Dr|Boulevard|Blvd|Lane|Ln|Way|Carrer|Calle|Avenida|Avinguda|Passeig|Paseo|Rue|Via|Strasse|Weg)\\b(?:\\s*\\d+)?.*$", "");
+        cleaned = cleaned.replaceAll("(?i),?\\s*(?:\\b\\d{3,8}\\b|[A-Z]{1,2}-\\d{3,8})\\s+[A-Za-zÀ-ÿ\\s'.-]+$", "");
+        cleaned = cleaned.replaceAll("(?i),?\\s*\\b\\d{3,8}\\b$", "");
+        return cleaned.trim();
+    }
+
+    private String executeRorQuery(String queryText) {
+        try {
+            String baseUrl = (rorSuggestUrl == null || rorSuggestUrl.isBlank())
+                    ? "https://api.ror.org/v2/organizations"
+                    : rorSuggestUrl.trim();
+            String encodedName = URLEncoder.encode(queryText, StandardCharsets.UTF_8);
+            String targetUrl = baseUrl + (baseUrl.contains("?") ? "&" : "?") + "query=" + encodedName;
+
+            HttpRequest req = HttpRequest.newBuilder()
+                    .uri(URI.create(targetUrl))
+                    .timeout(Duration.ofMillis(Math.max(1000, rorSuggestTimeoutMs)))
+                    .header("Accept", "application/json")
+                    .header("User-Agent", "Spring-egreta/1.0 (UAB)")
+                    .GET()
+                    .build();
+
+            HttpResponse<String> resp = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
+            if (resp.statusCode() == 200) {
+                return resp.body();
+            }
+        } catch (Exception e) {
+            log.debug("ROR API lookup error for '{}': {}", queryText, e.getMessage());
+        }
+        return null;
+    }
+
+    public RorNameProposal findRorNameProposal(String orgUuid, String orgName) {
+        return findRorNameProposal(orgUuid, null, orgName);
+    }
+
+    public RorNameProposal findRorNameProposal(String orgUuid, Long pureId, String orgName) {
+        if ((!rorSuggestEnabled && !openAlexAuthorSuggestEnabled) || orgName == null || orgName.isBlank()) return null;
+
+        List<CountryAggregate> countryCatalog = getCachedCountryCatalog();
+        List<TypeAggregate> typeCatalog = getCachedTypeCatalog();
+
+        RorNameProposal rorProposal = null;
+        if (rorSuggestEnabled) {
+            rorProposal = executeRorNameProposalLookup(orgUuid, pureId, orgName, countryCatalog, typeCatalog);
+        }
+
+        RorNameProposal bestProposal = rorProposal;
+
+        if (openAlexAuthorSuggestEnabled && (bestProposal == null || bestProposal.similarity() < 0.88)) {
+            // 1. Proposta a partir de publicació relacionada a Egreta
+            RorNameProposal pubProposal = findOpenAlexPublicationNameProposal(orgUuid, pureId, orgName, countryCatalog, typeCatalog);
+            if (pubProposal != null && (bestProposal == null || pubProposal.similarity() > bestProposal.similarity())) {
+                bestProposal = pubProposal;
+            }
+
+            // 2. Proposta a partir de cerca d'institucions a OpenAlex
+            if (bestProposal == null || bestProposal.similarity() < 0.85) {
+                RorNameProposal instProposal = findOpenAlexInstitutionNameProposal(orgUuid, pureId, orgName, countryCatalog, typeCatalog);
+                if (instProposal != null && (bestProposal == null || instProposal.similarity() > bestProposal.similarity())) {
+                    bestProposal = instProposal;
+                }
+            }
+        }
+
+        // Si tenim proposta però li falta país o tipus, complementar amb catàleg
+        if (bestProposal != null) {
+            String country = bestProposal.country();
+            if ((country == null || country.isBlank()) && countryCatalog != null && !countryCatalog.isEmpty()) {
+                InferenceResult cRes = inferCountryFromName(bestProposal.suggestedName(), countryCatalog);
+                if (cRes != null && !cRes.countryLabel().isBlank()) {
+                    country = cRes.countryLabel();
+                }
+            }
+            String type = bestProposal.type();
+            if ((type == null || type.isBlank()) && typeCatalog != null && !typeCatalog.isEmpty()) {
+                TypeInferenceResult tRes = resolvePreciseEgretaType(bestProposal.currentName(), bestProposal.suggestedName(), "", typeCatalog, bestProposal.similarity(), "type-enrich");
+                if (tRes != null && !tRes.typeLabel().isBlank()) {
+                    type = tRes.typeLabel();
+                }
+            }
+            if (!Objects.equals(country, bestProposal.country()) || !Objects.equals(type, bestProposal.type())) {
+                bestProposal = new RorNameProposal(
+                    bestProposal.uuid(),
+                    bestProposal.pureId(),
+                    bestProposal.currentName(),
+                    bestProposal.suggestedName(),
+                    bestProposal.similarity(),
+                    bestProposal.rorId(),
+                    country != null ? country : "",
+                    type != null ? type : "",
+                    bestProposal.reason(),
+                    bestProposal.rawAffiliation()
+                );
+            }
+        }
+
+        return bestProposal;
+    }
+
+    private RorNameProposal executeRorNameProposalLookup(
+            String orgUuid,
+            Long pureId,
+            String orgName,
+            List<CountryAggregate> countryCatalog,
+            List<TypeAggregate> typeCatalog) {
+        if (!rorSuggestEnabled || orgName == null || orgName.isBlank()) return null;
+        String rawJson = fetchRorRawJson(orgName);
+        if (rawJson == null || rawJson.isBlank()) {
+            return null;
+        }
+
+        try {
+            JsonNode root = objectMapper.readTree(rawJson);
+            JsonNode items = root.path("items");
+            if (!items.isArray() || items.isEmpty()) return null;
+
+            String queryNorm = normalizeText(orgName);
+            if (queryNorm.isBlank()) return null;
+
+            JsonNode bestItem = null;
+            String bestCanonicalName = "";
+            double bestSimilarity = 0.0;
+            String bestRorId = "";
+            String bestCountry = "";
+            String rawRorType = "";
+
+            int maxInspect = Math.min(items.size(), 20);
+            for (int i = 0; i < maxInspect; i++) {
+                JsonNode item = items.get(i);
+                String rorId = item.path("id").asText("");
+
+                String canonicalName = "";
+                JsonNode namesNode = item.path("names");
+                if (namesNode.isArray()) {
+                    for (JsonNode nameObj : namesNode) {
+                        String val = nameObj.path("value").asText("").trim();
+                        if (val.isBlank()) continue;
+                        JsonNode typesNode = nameObj.path("types");
+                        boolean isRorDisplay = false;
+                        boolean isLabel = false;
+                        if (typesNode.isArray()) {
+                            for (JsonNode t : typesNode) {
+                                if ("ror_display".equalsIgnoreCase(t.asText())) isRorDisplay = true;
+                                if ("label".equalsIgnoreCase(t.asText())) isLabel = true;
+                            }
+                        }
+                        if (isRorDisplay) {
+                            canonicalName = val;
+                            break;
+                        } else if (isLabel && canonicalName.isBlank()) {
+                            canonicalName = val;
+                        } else if (canonicalName.isBlank()) {
+                            canonicalName = val;
+                        }
+                    }
+                }
+
+                if (canonicalName.isBlank()) continue;
+
+                double itemMaxScore = 0.0;
+                double stringSim = calculateStringSimilarity(orgName, canonicalName);
+                if (namesNode.isArray()) {
+                    for (JsonNode nameObj : namesNode) {
+                        String val = nameObj.path("value").asText("").trim();
+                        if (val.isBlank()) continue;
+                        boolean isAcronym = false;
+                        JsonNode typesNode = nameObj.path("types");
+                        if (typesNode.isArray()) {
+                            for (JsonNode t : typesNode) {
+                                if ("acronym".equalsIgnoreCase(t.asText())) isAcronym = true;
+                            }
+                        }
+                        double score = calculateNameMatchScore(queryNorm, normalizeText(val), isAcronym);
+                        double sSim = calculateStringSimilarity(orgName, val);
+                        if (score > itemMaxScore) {
+                            itemMaxScore = score;
+                        }
+                        if (sSim > stringSim) {
+                            stringSim = sSim;
+                        }
+                    }
+                }
+
+                String[] qTokens = queryNorm.split("\\s+");
+                String[] cTokens = normalizeText(canonicalName).split("\\s+");
+                double tokenSim = calculateNameSimilarity(qTokens, cTokens, 0.0);
+                double combinedSimilarity = Math.max(itemMaxScore, Math.max(tokenSim, stringSim));
+
+                if (combinedSimilarity > bestSimilarity) {
+                    bestSimilarity = combinedSimilarity;
+                    bestItem = item;
+                    bestCanonicalName = canonicalName;
+                    bestRorId = rorId;
+
+                    JsonNode locs = item.path("locations");
+                    if (locs.isArray() && !locs.isEmpty()) {
+                        String rawCountryName = locs.get(0).path("geonames_details").path("country_name").asText("");
+                        String rawCountryCode = locs.get(0).path("geonames_details").path("country_code").asText("");
+                        String candidateCountry = !rawCountryName.isBlank() ? rawCountryName : rawCountryCode;
+                        if (!candidateCountry.isBlank() && countryCatalog != null) {
+                            String catalogCountry = resolveModelCountryToCatalog(candidateCountry, countryCatalog);
+                            if (catalogCountry.isBlank() && !rawCountryCode.isBlank()) {
+                                catalogCountry = resolveAliasCountry(rawCountryCode, countryCatalog);
+                            }
+                            bestCountry = !catalogCountry.isBlank() ? catalogCountry : candidateCountry;
+                        }
+                    }
+                    JsonNode types = item.path("types");
+                    if (types.isArray() && !types.isEmpty()) {
+                        rawRorType = types.get(0).asText("");
+                    }
+                }
+            }
+
+            if (bestItem == null || bestCanonicalName.isBlank() || bestSimilarity < 0.70) {
+                return null;
+            }
+
+            String bestType = "";
+            if (typeCatalog != null) {
+                TypeInferenceResult typeRes = resolvePreciseEgretaType(orgName, bestCanonicalName, rawRorType, typeCatalog, bestSimilarity, "ror-type:" + bestRorId);
+                if (typeRes != null && !typeRes.typeLabel().isBlank()) {
+                    bestType = typeRes.typeLabel();
+                }
+            }
+            if (bestType.isBlank() && !rawRorType.isBlank()) {
+                bestType = rawRorType;
+            }
+
+            double roundedSim = Math.round(bestSimilarity * 100.0) / 100.0;
+            return new RorNameProposal(
+                orgUuid,
+                pureId,
+                orgName,
+                bestCanonicalName,
+                roundedSim,
+                bestRorId,
+                bestCountry,
+                bestType,
+                "ror-name-similarity (" + Math.round(roundedSim * 100) + "%)"
+            );
+        } catch (Exception e) {
+            log.debug("Error generating ROR name proposal for '{}': {}", orgName, e.getMessage());
+            return null;
+        }
+    }
+
+    private RorNameProposal findOpenAlexPublicationNameProposal(
+            String orgUuid,
+            Long pureId,
+            String orgName,
+            List<CountryAggregate> countryCatalog,
+            List<TypeAggregate> typeCatalog) {
+        if (!openAlexAuthorSuggestEnabled || orgName == null || orgName.isBlank()) return null;
+
+        RelatedPublicationInfo pubInfo = findRelatedPublicationInfoForOrg(orgUuid, orgName);
+        if (pubInfo == null) return null;
+
+        String targetUrl = null;
+        String cleanDoi = pubInfo.doi() != null ? pubInfo.doi().trim().replaceAll("^https?://doi\\.org/", "").replaceAll("^doi:", "").trim() : "";
+        if (!cleanDoi.isBlank()) {
+            targetUrl = "https://api.openalex.org/works/doi:" + URLEncoder.encode(cleanDoi, StandardCharsets.UTF_8);
+        } else if (pubInfo.title() != null && !pubInfo.title().isBlank()) {
+            String cleanTitle = cleanPublicationTitleForSearch(pubInfo.title());
+            if (!cleanTitle.isBlank()) {
+                targetUrl = "https://api.openalex.org/works?search=" + URLEncoder.encode(cleanTitle, StandardCharsets.UTF_8) + "&per-page=3";
+            }
+        }
+        if (targetUrl == null) return null;
+
+        if (openAlexApiKey != null && !openAlexApiKey.isBlank()) {
+            targetUrl += (targetUrl.contains("?") ? "&" : "?") + "api_key=" + URLEncoder.encode(openAlexApiKey.trim(), StandardCharsets.UTF_8);
+        }
+
+        try {
+            HttpRequest.Builder reqBuilder = HttpRequest.newBuilder()
+                    .uri(URI.create(targetUrl))
+                    .timeout(Duration.ofMillis(Math.max(1000, openAlexAuthorSuggestTimeoutMs)))
+                    .header("Accept", "application/json")
+                    .header("User-Agent", "Spring-egreta/1.0 (mailto:egreta@uab.cat)")
+                    .GET();
+
+            if (openAlexApiKey != null && !openAlexApiKey.isBlank()) {
+                reqBuilder.header("Authorization", "Bearer " + openAlexApiKey.trim());
+            }
+
+            HttpResponse<String> resp = httpClient.send(reqBuilder.build(), HttpResponse.BodyHandlers.ofString());
+            if (resp.statusCode() == 200 && resp.body() != null && !resp.body().isBlank()) {
+                JsonNode root = objectMapper.readTree(resp.body());
+                JsonNode workNode = root.has("authorships") ? root : root.path("results").path(0);
+                if (workNode != null && !workNode.isMissingNode() && workNode.has("authorships")) {
+                    JsonNode authorships = workNode.path("authorships");
+                    if (authorships.isArray() && !authorships.isEmpty()) {
+                        String queryNorm = normalizeText(orgName);
+                        String authorNorm = pubInfo.authorName() != null ? normalizeText(pubInfo.authorName()) : "";
+
+                        Map<String, RorCandidateProposal> distinctCandidates = new LinkedHashMap<>();
+                        JsonNode bestInst = null;
+                        double bestSim = 0.0;
+                        String matchedRawAff = "";
+
+                        // Filtrar exclusivament les autories rellevants (l'investigador objectiu o l'afiliació que coincideixi)
+                        List<JsonNode> relevantAuthorships = new ArrayList<>();
+                        for (JsonNode authorship : authorships) {
+                            JsonNode authorObj = authorship.path("author");
+                            String authDisplayName = authorObj.path("display_name").asText("");
+                            boolean authorMatch = !authorNorm.isBlank() && calculateNameMatchScore(authorNorm, normalizeText(authDisplayName), false) >= 0.60;
+                            if (authorMatch) {
+                                relevantAuthorships.add(authorship);
+                            }
+                        }
+
+                        if (relevantAuthorships.isEmpty()) {
+                            for (JsonNode authorship : authorships) {
+                                boolean hasMatch = false;
+                                JsonNode rawAffStrings = authorship.path("raw_affiliation_strings");
+                                if (rawAffStrings.isArray()) {
+                                    for (JsonNode rNode : rawAffStrings) {
+                                        String r = rNode.asText("");
+                                        if (!r.isBlank() && (calculateNameMatchScore(queryNorm, normalizeText(r), false) >= 0.55 || calculateStringSimilarity(orgName, r) >= 0.55)) {
+                                            hasMatch = true;
+                                            break;
+                                        }
+                                    }
+                                }
+                                String singleRaw = authorship.path("raw_affiliation_string").asText("");
+                                if (!hasMatch && !singleRaw.isBlank() && (calculateNameMatchScore(queryNorm, normalizeText(singleRaw), false) >= 0.55 || calculateStringSimilarity(orgName, singleRaw) >= 0.55)) {
+                                    hasMatch = true;
+                                }
+                                if (!hasMatch) {
+                                    JsonNode insts = authorship.path("institutions");
+                                    if (insts.isArray()) {
+                                        for (JsonNode inst : insts) {
+                                            String instName = inst.path("display_name").asText("");
+                                            if (!instName.isBlank() && (calculateNameMatchScore(queryNorm, normalizeText(instName), false) >= 0.55 || calculateStringSimilarity(orgName, instName) >= 0.55)) {
+                                                hasMatch = true;
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+                                if (hasMatch) {
+                                    relevantAuthorships.add(authorship);
+                                    if (relevantAuthorships.size() >= 2) break;
+                                }
+                            }
+                        }
+
+                        for (JsonNode authorship : relevantAuthorships) {
+                            JsonNode authorObj = authorship.path("author");
+                            String authDisplayName = authorObj.path("display_name").asText("");
+                            boolean authorMatch = !authorNorm.isBlank() && calculateNameMatchScore(authorNorm, normalizeText(authDisplayName), false) >= 0.60;
+
+                            // Recollir totes les cadenes d'afiliació de l'autor
+                            List<String> rawAffsForAuthor = new ArrayList<>();
+                            JsonNode rawAffStrings = authorship.path("raw_affiliation_strings");
+                            if (rawAffStrings.isArray() && !rawAffStrings.isEmpty()) {
+                                for (JsonNode rNode : rawAffStrings) {
+                                    String rText = rNode.asText("").trim();
+                                    if (!rText.isBlank()) rawAffsForAuthor.add(rText);
+                                }
+                            }
+                            String singleRaw = authorship.path("raw_affiliation_string").asText("").trim();
+                            if (!singleRaw.isBlank() && !rawAffsForAuthor.contains(singleRaw)) {
+                                rawAffsForAuthor.add(singleRaw);
+                            }
+
+                            // Processar només les cadenes d'afiliació en brut d'aquest autor (màxim 3)
+                            int rawCount = 0;
+                            for (String rText : rawAffsForAuthor) {
+                                if (rawCount >= 3) break;
+                                rawCount++;
+
+                                double rawScore = calculateNameMatchScore(queryNorm, normalizeText(rText), false);
+                                double rawSim = calculateStringSimilarity(orgName, rText);
+                                double sim = Math.max(rawScore, rawSim);
+                                if (authorMatch) sim = Math.max(sim, 0.85);
+
+                                String cleaned = cleanRawAffiliationWithoutCityCountry(rText, countryCatalog);
+                                String candidateName = (!cleaned.isBlank()) ? cleaned : rText;
+                                String normKey = normalizeText(candidateName);
+
+                                if (!normKey.isBlank() && (!distinctCandidates.containsKey(normKey) || sim > distinctCandidates.get(normKey).similarity())) {
+                                    String cCountry = inferCountryFromName(candidateName, countryCatalog).countryLabel();
+                                    TypeInferenceResult tRes = resolvePreciseEgretaType(queryNorm, candidateName, "", typeCatalog, sim, "openalex-pub");
+                                    String cType = tRes != null ? tRes.typeLabel() : "";
+                                    distinctCandidates.put(normKey, new RorCandidateProposal(
+                                        candidateName,
+                                        Math.round(sim * 100.0) / 100.0,
+                                        "",
+                                        cCountry,
+                                        cType,
+                                        "openalex-raw-affiliation",
+                                        rText
+                                    ));
+                                }
+
+                                if (sim > bestSim) {
+                                    bestSim = sim;
+                                    matchedRawAff = rText;
+                                }
+                            }
+
+                            // Processar institucions canòniques d'OpenAlex d'aquest autor
+                            JsonNode insts = authorship.path("institutions");
+                            if (insts.isArray()) {
+                                for (JsonNode inst : insts) {
+                                    String instDisplayName = inst.path("display_name").asText("").trim();
+                                    if (instDisplayName.isBlank()) continue;
+                                    String rorId = inst.path("ror").asText("").trim();
+                                    String countryCode = inst.path("country_code").asText("").trim();
+                                    String instType = inst.path("type").asText("").trim();
+
+                                    double score = calculateNameMatchScore(queryNorm, normalizeText(instDisplayName), false);
+                                    double strSim = calculateStringSimilarity(orgName, instDisplayName);
+                                    double sim = Math.max(score, strSim);
+                                    if (authorMatch) sim = Math.max(sim, 0.85);
+
+                                    String normKey = normalizeText(instDisplayName);
+                                    String resolvedCountry = "";
+                                    if (!countryCode.isBlank()) {
+                                        resolvedCountry = resolveAliasCountry(countryCode.toLowerCase(), countryCatalog);
+                                    }
+                                    if (resolvedCountry.isBlank()) {
+                                        resolvedCountry = inferCountryFromName(instDisplayName, countryCatalog).countryLabel();
+                                    }
+                                    TypeInferenceResult tRes = resolvePreciseEgretaType(queryNorm, instDisplayName, instType, typeCatalog, sim, "openalex-pub");
+                                    String resolvedType = tRes != null ? tRes.typeLabel() : "";
+
+                                    if (!normKey.isBlank() && (!distinctCandidates.containsKey(normKey) || sim > distinctCandidates.get(normKey).similarity())) {
+                                        distinctCandidates.put(normKey, new RorCandidateProposal(
+                                            instDisplayName,
+                                            Math.round(sim * 100.0) / 100.0,
+                                            rorId,
+                                            resolvedCountry,
+                                            resolvedType,
+                                            "openalex-institution",
+                                            !rawAffsForAuthor.isEmpty() ? rawAffsForAuthor.get(0) : ""
+                                        ));
+                                    }
+
+                                    if (sim > bestSim) {
+                                        bestSim = sim;
+                                        bestInst = inst;
+                                        if (!rawAffsForAuthor.isEmpty()) {
+                                            matchedRawAff = rawAffsForAuthor.get(0);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        if ((bestInst != null || !matchedRawAff.isBlank() || !distinctCandidates.isEmpty()) && (bestSim >= 0.65 || !distinctCandidates.isEmpty())) {
+                            List<RorCandidateProposal> candidateList = new ArrayList<>(distinctCandidates.values());
+                            candidateList.sort(Comparator.comparingDouble(RorCandidateProposal::similarity).reversed());
+
+                            RorCandidateProposal topCandidate = candidateList.isEmpty() ? null : candidateList.get(0);
+
+                            String canonicalName = bestInst != null ? bestInst.path("display_name").asText("") : "";
+                            String rorId = topCandidate != null && !topCandidate.rorId().isBlank() ? topCandidate.rorId() : (bestInst != null ? bestInst.path("ror").asText("") : "");
+                            String resolvedCountry = topCandidate != null && !topCandidate.country().isBlank() ? topCandidate.country() : "";
+                            String resolvedType = topCandidate != null && !topCandidate.type().isBlank() ? topCandidate.type() : "";
+
+                            String rawProposedName = cleanRawAffiliationWithoutCityCountry(matchedRawAff, countryCatalog);
+                            String finalSuggestedName = topCandidate != null ? topCandidate.suggestedName() : ((!rawProposedName.isBlank()) ? rawProposedName : canonicalName);
+
+                            double finalSim = topCandidate != null ? topCandidate.similarity() : bestSim;
+                            double roundedSim = Math.round(finalSim * 100.0) / 100.0;
+                            String workId = workNode.path("id").asText("");
+                            String reason = (!workId.isBlank() ? workId : "openalex-publication") + " (" + Math.round(roundedSim * 100) + "%)";
+                            return new RorNameProposal(
+                                orgUuid,
+                                pureId,
+                                orgName,
+                                finalSuggestedName,
+                                roundedSim,
+                                rorId,
+                                resolvedCountry,
+                                resolvedType,
+                                reason,
+                                matchedRawAff,
+                                candidateList
+                            );
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.debug("Error querying OpenAlex publication for name proposal '{}': {}", orgName, e.getMessage());
+        }
+        return null;
+    }
+
+    private RorNameProposal findOpenAlexInstitutionNameProposal(
+            String orgUuid,
+            Long pureId,
+            String orgName,
+            List<CountryAggregate> countryCatalog,
+            List<TypeAggregate> typeCatalog) {
+        if (!openAlexAuthorSuggestEnabled || orgName == null || orgName.isBlank()) return null;
+
+        String cleanName = cleanQueryForRor(orgName);
+        if (cleanName.isBlank()) cleanName = orgName.trim();
+
+        try {
+            String targetUrl = "https://api.openalex.org/institutions?search=" + URLEncoder.encode(cleanName, StandardCharsets.UTF_8) + "&per-page=5";
+            if (openAlexApiKey != null && !openAlexApiKey.isBlank()) {
+                targetUrl += "&api_key=" + URLEncoder.encode(openAlexApiKey.trim(), StandardCharsets.UTF_8);
+            }
+
+            HttpRequest.Builder reqBuilder = HttpRequest.newBuilder()
+                    .uri(URI.create(targetUrl))
+                    .timeout(Duration.ofMillis(Math.max(1000, openAlexAuthorSuggestTimeoutMs)))
+                    .header("Accept", "application/json")
+                    .header("User-Agent", "Spring-egreta/1.0 (mailto:egreta@uab.cat)")
+                    .GET();
+
+            if (openAlexApiKey != null && !openAlexApiKey.isBlank()) {
+                reqBuilder.header("Authorization", "Bearer " + openAlexApiKey.trim());
+            }
+
+            HttpResponse<String> resp = httpClient.send(reqBuilder.build(), HttpResponse.BodyHandlers.ofString());
+            if (resp.statusCode() != 200 || resp.body() == null || resp.body().isBlank()) {
+                return null;
+            }
+
+            JsonNode root = objectMapper.readTree(resp.body());
+            JsonNode results = root.path("results");
+            if (!results.isArray() || results.isEmpty()) return null;
+
+            String queryNorm = normalizeText(orgName);
+            String[] qTokens = queryNorm.split("\\s+");
+
+            JsonNode bestInst = null;
+            String bestCanonicalName = "";
+            double bestSim = 0.0;
+            String bestRorId = "";
+            String bestCountry = "";
+            String bestType = "";
+
+            int maxCheck = Math.min(results.size(), 5);
+            for (int i = 0; i < maxCheck; i++) {
+                JsonNode inst = results.get(i);
+                String displayName = inst.path("display_name").asText("").trim();
+                if (displayName.isBlank()) continue;
+
+                String rorId = inst.path("ror").asText("").trim();
+                String countryCode = inst.path("country_code").asText("").trim();
+                String instType = inst.path("type").asText("").trim();
+
+                double score = calculateNameMatchScore(queryNorm, normalizeText(displayName), false);
+                double strSim = calculateStringSimilarity(orgName, displayName);
+                String[] cTokens = normalizeText(displayName).split("\\s+");
+                double tokSim = calculateNameSimilarity(qTokens, cTokens, 0.0);
+                double itemSim = Math.max(score, Math.max(strSim, tokSim));
+
+                // Check alternatives & acronyms
+                JsonNode alts = inst.path("display_name_alternatives");
+                if (alts.isArray()) {
+                    for (JsonNode alt : alts) {
+                        String aVal = alt.asText("").trim();
+                        if (!aVal.isBlank()) {
+                            double aScore = calculateNameMatchScore(queryNorm, normalizeText(aVal), false);
+                            double aStrSim = calculateStringSimilarity(orgName, aVal);
+                            if (Math.max(aScore, aStrSim) > itemSim) {
+                                itemSim = Math.max(aScore, aStrSim);
+                            }
+                        }
+                    }
+                }
+                JsonNode acrs = inst.path("display_name_acronyms");
+                if (acrs.isArray()) {
+                    for (JsonNode acr : acrs) {
+                        String aVal = acr.asText("").trim();
+                        if (!aVal.isBlank()) {
+                            double aScore = calculateNameMatchScore(queryNorm, normalizeText(aVal), true);
+                            if (aScore > itemSim) {
+                                itemSim = aScore;
+                            }
+                        }
+                    }
+                }
+
+                if (itemSim > bestSim) {
+                    bestSim = itemSim;
+                    bestInst = inst;
+                    bestCanonicalName = displayName;
+                    bestRorId = rorId;
+
+                    String resolvedCountry = "";
+                    if (!countryCode.isBlank()) {
+                        resolvedCountry = resolveAliasCountry(countryCode.toLowerCase(), countryCatalog);
+                    }
+                    if (resolvedCountry.isBlank() && !displayName.isBlank()) {
+                        resolvedCountry = inferCountryFromName(displayName, countryCatalog).countryLabel();
+                    }
+                    bestCountry = resolvedCountry;
+
+                    TypeInferenceResult typeRes = resolvePreciseEgretaType(queryNorm, displayName, instType, typeCatalog, itemSim, "openalex-inst");
+                    bestType = typeRes != null ? typeRes.typeLabel() : "";
+                }
+            }
+
+            if (bestInst != null && !bestCanonicalName.isBlank() && bestSim >= 0.70) {
+                double roundedSim = Math.round(bestSim * 100.0) / 100.0;
+                return new RorNameProposal(
+                    orgUuid,
+                    pureId,
+                    orgName,
+                    bestCanonicalName,
+                    roundedSim,
+                    bestRorId,
+                    bestCountry,
+                    bestType,
+                    "openalex-institution (" + Math.round(roundedSim * 100) + "%)"
+                );
+            }
+        } catch (Exception e) {
+            log.debug("Error querying OpenAlex institutions for name proposal '{}': {}", orgName, e.getMessage());
+        }
+
+        return null;
+    }
+
     public CompletableFuture<MetadataInferenceResult> inferMetadataWithRorAsync(
             String orgName,
             List<CountryAggregate> countryCatalog,
@@ -3535,31 +5255,13 @@ public class ExternalOrganizationController {
         }
 
         return CompletableFuture.supplyAsync(() -> {
-            try {
-                String baseUrl = (rorSuggestUrl == null || rorSuggestUrl.isBlank())
-                        ? "https://api.ror.org/v2/organizations"
-                        : rorSuggestUrl.trim();
-                String encodedName = URLEncoder.encode(orgName.trim(), StandardCharsets.UTF_8);
-                String targetUrl = baseUrl + (baseUrl.contains("?") ? "&" : "?") + "query=" + encodedName;
-
-                HttpRequest req = HttpRequest.newBuilder()
-                        .uri(URI.create(targetUrl))
-                        .timeout(Duration.ofMillis(Math.max(1000, rorSuggestTimeoutMs)))
-                        .header("Accept", "application/json")
-                        .header("User-Agent", "Spring-egreta/1.0 (UAB)")
-                        .GET()
-                        .build();
-
-                HttpResponse<String> resp = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
-                if (resp.statusCode() == 200) {
-                    MetadataInferenceResult res = parseRorResponse(orgName, resp.body(), countryCatalog, typeCatalog);
-                    if (res != null) {
-                        rorInferenceCache.put(cacheKey, new CachedMetadataInference(res, System.currentTimeMillis()));
-                    }
-                    return res;
+            String body = fetchRorRawJson(orgName);
+            if (body != null) {
+                MetadataInferenceResult res = parseRorResponse(orgName, body, countryCatalog, typeCatalog);
+                if (res != null) {
+                    rorInferenceCache.put(cacheKey, new CachedMetadataInference(res, System.currentTimeMillis()));
                 }
-            } catch (Exception e) {
-                log.debug("ROR API lookup error for '{}': {}", orgName, e.getMessage());
+                return res;
             }
             return null;
         }, aiExecutor != null ? aiExecutor : asyncExecutor);
@@ -3617,6 +5319,8 @@ public class ExternalOrganizationController {
                             }
                         }
                         double score = calculateNameMatchScore(queryNorm, normalizeText(val), isAcronym);
+                        double strScore = calculateStringSimilarity(queryNorm, normalizeText(val));
+                        score = Math.max(score, strScore);
                         if (score > bestScore) {
                             bestScore = score;
                             bestItem = item;
@@ -3636,7 +5340,7 @@ public class ExternalOrganizationController {
             InferenceResult countryResult = resolveCountryFromRorItem(bestItem, countryCatalog, bestScore, rorId);
 
             // 2. Resolve Type
-            TypeInferenceResult typeResult = resolveTypeFromRorItem(bestItem, typeCatalog, bestScore, rorId);
+            TypeInferenceResult typeResult = resolveTypeFromRorItem(bestItem, queryOrgName, typeCatalog, bestScore, rorId);
 
             // 3. Resolve Funding (Public / Private)
             FundingInferenceResult fundingResult = resolveFundingFromRorItem(bestItem, queryOrgName, bestScore, rorId);
@@ -3735,49 +5439,179 @@ public class ExternalOrganizationController {
 
     private TypeInferenceResult resolveTypeFromRorItem(
             JsonNode item,
+            String queryOrgName,
             List<TypeAggregate> typeCatalog,
             double matchScore,
             String rorId) {
         JsonNode typesNode = item.path("types");
-        List<String> rorTypes = new ArrayList<>();
-        if (typesNode.isArray()) {
-            for (JsonNode t : typesNode) {
-                rorTypes.add(t.asText().toLowerCase().trim());
+        String rorType = "";
+        if (typesNode.isArray() && !typesNode.isEmpty()) {
+            rorType = typesNode.get(0).asText("").toLowerCase().trim();
+        }
+
+        String canonicalName = "";
+        JsonNode namesNode = item.path("names");
+        if (namesNode.isArray() && !namesNode.isEmpty()) {
+            canonicalName = namesNode.get(0).path("value").asText("");
+        }
+        if (canonicalName.isBlank()) {
+            canonicalName = item.path("name").asText("");
+        }
+
+        return resolvePreciseEgretaType(queryOrgName, canonicalName, rorType, typeCatalog, matchScore, "ror-type:" + (rorId.isBlank() ? "found" : rorId));
+    }
+
+    private TypeInferenceResult resolvePreciseEgretaType(
+            String orgName,
+            String canonicalName,
+            String broadType,
+            List<TypeAggregate> typeCatalog,
+            double baseConfidence,
+            String reasonPrefix) {
+
+        String combined = (normalizeText(orgName) + " " + normalizeText(canonicalName)).trim();
+        if (combined.isBlank() || typeCatalog.isEmpty()) {
+            return new TypeInferenceResult("", 0.0, "no-signal");
+        }
+
+        // 1. Departament universitari
+        if (matchesAnyKeyword(combined, "department", "departament", "departamento", "dept", "seccio", "seccion", "section", "division", "catedra", "chair", "faculty", "facultat", "facultad", "scola", "school of", "college of", "escola")) {
+            String resolved = resolveTypeByHint(List.of("departament universitari", "departament", "departamento"), typeCatalog);
+            if (!resolved.isBlank()) {
+                return new TypeInferenceResult(resolved, Math.min(0.97, Math.max(0.90, baseConfidence * 0.98)), reasonPrefix + ":department-structure");
             }
         }
 
-        String resolvedType = "";
-        String matchedRorType = "";
-
-        for (String rType : rorTypes) {
-            List<String> hints = switch (rType) {
-                case "education" -> List.of("universitat", "universidad", "ensenyament superior", "educacio", "academic");
-                case "facility" -> List.of("centre de recerca", "instituts universitaris de recerca", "investigacio", "cientific", "recerca");
-                case "company" -> List.of("empresa", "sector empresarial", "companyia", "corporacio");
-                case "government" -> List.of("administracio publica", "organisme public", "entitats publiques", "govern");
-                case "nonprofit" -> List.of("fundacio", "associacio", "entitats sense anim de lucre", "ong");
-                case "healthcare" -> List.of("hospital", "institucions sanitaries", "sanitari", "salut");
-                case "funder" -> List.of("agencia de financament", "entitat financadora");
-                case "archive" -> List.of("arxiu", "biblioteca", "museu");
-                default -> List.of();
-            };
-
-            if (!hints.isEmpty()) {
-                resolvedType = resolveTypeByHint(hints, typeCatalog);
-                if (!resolvedType.isBlank()) {
-                    matchedRorType = rType;
-                    break;
-                }
+        // 2. Institut Universitari d'investigació
+        if (matchesAnyKeyword(combined, "institut universitari", "instituto universitario", "university institute", "instituts universitaris de recerca")) {
+            String resolved = resolveTypeByHint(List.of("institut universitari d'investigacio", "institut universitari", "instituto universitario"), typeCatalog);
+            if (!resolved.isBlank()) {
+                return new TypeInferenceResult(resolved, Math.min(0.97, Math.max(0.90, baseConfidence * 0.98)), reasonPrefix + ":university-institute");
             }
         }
 
-        if (!resolvedType.isBlank()) {
-            double confidence = Math.min(0.96, matchScore * 0.95);
-            String reason = "ror-type:" + matchedRorType + " (" + (rorId.isBlank() ? "found" : rorId) + ")";
-            return new TypeInferenceResult(resolvedType, confidence, reason);
+        // 3. CIBER
+        if (matchesAnyKeyword(combined, "ciber", "ciber-bbn", "ciberehd", "ciberes", "ciberned", "ciberobn", "ciberon", "ciberer", "ciberesp", "cibermed", "cibersam")) {
+            String resolved = resolveTypeByHint(List.of("ciber"), typeCatalog);
+            if (!resolved.isBlank()) {
+                return new TypeInferenceResult(resolved, Math.min(0.99, Math.max(0.95, baseConfidence * 0.99)), reasonPrefix + ":ciber");
+            }
         }
 
-        return new TypeInferenceResult("", 0.0, "no-ror-type");
+        // 4. Entitat gestora del sistema nacional de salut
+        if (matchesAnyKeyword(combined, "catsalut", "servei catala de la salut", "servicio de salud", "sergas", "sacyl", "sescam", "osakidetza", "sms", "sas", "ib-salut", "ibsalut", "sistema nacional de salud", "servei de salut")) {
+            String resolved = resolveTypeByHint(List.of("entitat gestora del sistema nacional de salut", "gestora del sistema nacional de salut", "sistema nacional de salut"), typeCatalog);
+            if (!resolved.isBlank()) {
+                return new TypeInferenceResult(resolved, Math.min(0.97, Math.max(0.90, baseConfidence * 0.98)), reasonPrefix + ":health-system-admin");
+            }
+        }
+
+        // 5. Institucions sanitàries (Hospitals, clíniques, etc.)
+        if (matchesAnyKeyword(combined, "hospital", "clinic", "clinica", "sanitari", "sanitaria", "healthcare", "medical center", "centre medic", "assistencial", "policlinica", "hospital universitari", "nhs trust", "centre d'atencio primaria", "cap", "infirmary", "dispensari", "mutua")
+                || "healthcare".equalsIgnoreCase(broadType)) {
+            String resolved = resolveTypeByHint(List.of("institucions sanitaries", "instituciones sanitarias", "sanitari", "hospital"), typeCatalog);
+            if (!resolved.isBlank()) {
+                return new TypeInferenceResult(resolved, Math.min(0.97, Math.max(0.90, baseConfidence * 0.98)), reasonPrefix + ":healthcare");
+            }
+        }
+
+        // 6. Organisme públic d'investigació (OPI)
+        if (matchesAnyKeyword(combined, "csic", "cnrs", "max planck", "inserm", "inria", "inrae", "helmholtz", "fraunhofer", "conicet", "cnpq", "conacyt", "iisc", "organisme public d'investigacio", "organismo publico de investigacion", "national research council", "consejo superior de investigaciones cientificas", "institut nacional d'investigacio", "instituto nacional de investigacion")) {
+            String resolved = resolveTypeByHint(List.of("organisme public d'investigacio", "organismo publico de investigacion", "recerca"), typeCatalog);
+            if (!resolved.isBlank()) {
+                return new TypeInferenceResult(resolved, Math.min(0.97, Math.max(0.90, baseConfidence * 0.98)), reasonPrefix + ":opi");
+            }
+        }
+
+        // 7. Centre tecnològic / Centres d'innovació i tecnologia
+        if (matchesAnyKeyword(combined, "centre tecnologic", "centro tecnologico", "technology center", "technological centre", "eurecat", "leitat", "tecnalia", "aimen", "itene", "cidaut", "parc tecnologic", "parc cientific", "research park", "innovacio i tecnologia")) {
+            String resolved = resolveTypeByHint(List.of("centre tecnologic", "centres d'innovacio i tecnologia", "centro tecnologico"), typeCatalog);
+            if (!resolved.isBlank()) {
+                return new TypeInferenceResult(resolved, Math.min(0.96, Math.max(0.90, baseConfidence * 0.96)), reasonPrefix + ":tech-center");
+            }
+        }
+
+        // 8. Centre R+D
+        if (matchesAnyKeyword(combined, "centre de recerca", "centro de investigacion", "research centre", "research center", "centre r+d", "centro i+d", "r&d centre", "r&d center", "laboratori de recerca", "laboratorio de investigacion")
+                || "facility".equalsIgnoreCase(broadType)) {
+            String resolved = resolveTypeByHint(List.of("centre r+d", "centre de recerca", "organismes publics d'investigacio", "recerca"), typeCatalog);
+            if (!resolved.isBlank()) {
+                return new TypeInferenceResult(resolved, Math.min(0.95, Math.max(0.88, baseConfidence * 0.95)), reasonPrefix + ":rd-center");
+            }
+        }
+
+        // 9. Fundació
+        if (matchesAnyKeyword(combined, "fundacio", "fundacion", "foundation", "stiftung", "fondation", "fondazione")) {
+            String resolved = resolveTypeByHint(List.of("fundacio", "fundacion", "foundation"), typeCatalog);
+            if (!resolved.isBlank()) {
+                return new TypeInferenceResult(resolved, Math.min(0.97, Math.max(0.90, baseConfidence * 0.98)), reasonPrefix + ":foundation");
+            }
+        }
+
+        // 10. Associacions i agrupacions
+        if (matchesAnyKeyword(combined, "associacio", "asociacion", "association", "societat", "sociedad", "society", "agrupacio", "agrupacion", "col legi", "colegio oficial", "collegi oficial", "federacio", "federacion", "federation", "e.v.", "e v", "eingetragener verein", "verein", "gremi", "gremio", "guild", "consell", "council", "academy", "academia", "akademie")
+                || "nonprofit".equalsIgnoreCase(broadType)) {
+            String resolved = resolveTypeByHint(List.of("associacions i agrupacions", "associacio", "asociaciones y agrupaciones", "fundacio"), typeCatalog);
+            if (!resolved.isBlank()) {
+                return new TypeInferenceResult(resolved, Math.min(0.95, Math.max(0.88, baseConfidence * 0.95)), reasonPrefix + ":association");
+            }
+        }
+
+        // 11. Administració internacional
+        if (matchesAnyKeyword(combined, "onu", "unesco", "who", "oms", "comissio europea", "european commission", "world bank", "banc mundial", "unicef", "oecd", "ocde", "nato", "otant", "united nations", "naciones unidas", "nacions unides", "fao", "ilo", "oit")) {
+            String resolved = resolveTypeByHint(List.of("administracio internacional", "administracion internacional", "international administration"), typeCatalog);
+            if (!resolved.isBlank()) {
+                return new TypeInferenceResult(resolved, Math.min(0.98, Math.max(0.92, baseConfidence * 0.98)), reasonPrefix + ":intl-admin");
+            }
+        }
+
+        // 12. Agència estatal
+        if (matchesAnyKeyword(combined, "agencia estatal", "agencia de", "state agency", "aemet", "aemps", "aei", "agencia nacional")) {
+            String resolved = resolveTypeByHint(List.of("agencia estatal", "state agency"), typeCatalog);
+            if (!resolved.isBlank()) {
+                return new TypeInferenceResult(resolved, Math.min(0.96, Math.max(0.90, baseConfidence * 0.96)), reasonPrefix + ":state-agency");
+            }
+        }
+
+        // 13. Sector administració pública
+        if (matchesAnyKeyword(combined, "ministeri", "ministerio", "ministry", "generalitat", "govern", "gobierno", "government", "ajuntament", "ayuntamiento", "diputacio", "diputacion", "conselleria", "consejeria", "consell comarcal", "alcaldia", "secretaria d'estat", "secretaria de estado", "department of state", "departament de la generalitat")
+                || "government".equalsIgnoreCase(broadType)) {
+            String resolved = resolveTypeByHint(List.of("sector administracio publica", "administracio publica", "administracion publica"), typeCatalog);
+            if (!resolved.isBlank()) {
+                return new TypeInferenceResult(resolved, Math.min(0.96, Math.max(0.90, baseConfidence * 0.96)), reasonPrefix + ":gov-admin");
+            }
+        }
+
+        // 14. Entitat empresarial (Empreses privades)
+        if (matchesAnyKeyword(combined, "s l", "s a", "slu", "sau", "slp", "ltd", "llc", "inc", "corp", "corporation", "gmbh", "srl", "spa", "kgaa", "sas", "sarl", "bv", "nv", "plc", "company", "empresa", "pharma", "pharmaceuticals", "laboratories", "laboratorios", "therapeutics", "biotech", "consulting", "solutions", "s.l.", "s.a.")
+                || "company".equalsIgnoreCase(broadType)) {
+            String resolved = resolveTypeByHint(List.of("entitat empresarial", "empresa", "enterprise"), typeCatalog);
+            if (!resolved.isBlank()) {
+                return new TypeInferenceResult(resolved, Math.min(0.96, Math.max(0.90, baseConfidence * 0.96)), reasonPrefix + ":company");
+            }
+        }
+
+        // 15. Universitat (només si no era departament o institut universitari)
+        if (matchesAnyKeyword(combined, "universitat", "universidad", "university", "universite", "universitaet", "universita", "universitad", "college", "hochschule", "faculdade", "polytechnic", "politecnica")
+                || "education".equalsIgnoreCase(broadType)) {
+            String resolved = resolveTypeByHint(List.of("universitat", "universidad", "university"), typeCatalog);
+            if (!resolved.isBlank()) {
+                return new TypeInferenceResult(resolved, Math.min(0.96, Math.max(0.90, baseConfidence * 0.96)), reasonPrefix + ":university");
+            }
+        }
+
+        return new TypeInferenceResult("", 0.0, "no-signal");
+    }
+
+    private boolean matchesAnyKeyword(String text, String... keywords) {
+        if (text == null || text.isBlank() || keywords == null) return false;
+        String norm = normalizeText(text);
+        for (String kw : keywords) {
+            if (containsWord(norm, normalizeText(kw))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private FundingInferenceResult resolveFundingFromRorItem(
@@ -3833,6 +5667,1125 @@ public class ExternalOrganizationController {
 
         // Fallback to name heuristic
         return inferFundingFromName(orgName);
+    }
+
+    // =========================================================================
+    // OpenAlex Author Affiliation & Institution Metadata Inference
+    // =========================================================================
+
+    private String cleanAuthorName(String rawAuthor) {
+        if (rawAuthor == null || rawAuthor.isBlank()) return "";
+        return rawAuthor.replaceAll("\\s*\\(Persona\\s+externa\\)\\s*", "")
+                        .replaceAll("\\s*\\(Persona\\s+interna\\)\\s*", "")
+                        .replaceAll("\\s*\\(Investigador/a\\)\\s*", "")
+                        .replaceAll("\\s*\\([^)]*\\)\\s*", "")
+                        .trim();
+    }
+
+    public CompletableFuture<MetadataInferenceResult> inferMetadataWithOpenAlexAuthorAsync(
+            String orgName,
+            String associatedPerson,
+            List<CountryAggregate> countryCatalog,
+            List<TypeAggregate> typeCatalog) {
+
+        if (!openAlexAuthorSuggestEnabled || associatedPerson == null || associatedPerson.isBlank() || orgName == null || orgName.isBlank()) {
+            return CompletableFuture.completedFuture(null);
+        }
+
+        String authorName = cleanAuthorName(associatedPerson);
+        if (authorName.isBlank() || authorName.length() < 3) {
+            return CompletableFuture.completedFuture(null);
+        }
+
+        String cacheKey = "openalex:" + normalizeText(orgName) + ":" + normalizeText(authorName);
+        CachedMetadataInference cached = openAlexInferenceCache.get(cacheKey);
+        if (cached != null && (System.currentTimeMillis() - cached.timestamp()) < INFERENCE_CACHE_TTL_MS) {
+            return CompletableFuture.completedFuture(cached.result());
+        }
+
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                String encoded = URLEncoder.encode(authorName, StandardCharsets.UTF_8);
+                String targetUrl = openAlexAuthorSuggestUrl + "?search=" + encoded;
+
+                HttpRequest.Builder reqBuilder = HttpRequest.newBuilder()
+                        .uri(URI.create(targetUrl))
+                        .timeout(Duration.ofMillis(Math.max(1000, openAlexAuthorSuggestTimeoutMs)))
+                        .header("Accept", "application/json")
+                        .header("User-Agent", "Spring-egreta/1.0 (mailto:egreta@uab.cat)")
+                        .GET();
+
+                if (openAlexApiKey != null && !openAlexApiKey.isBlank()) {
+                    reqBuilder.header("Authorization", "Bearer " + openAlexApiKey.trim());
+                }
+
+                HttpResponse<String> resp = httpClient.send(reqBuilder.build(), HttpResponse.BodyHandlers.ofString());
+                if (resp.statusCode() == 200) {
+                    MetadataInferenceResult res = parseOpenAlexAuthorResponse(orgName, authorName, resp.body(), countryCatalog, typeCatalog);
+                    if (res != null) {
+                        openAlexInferenceCache.put(cacheKey, new CachedMetadataInference(res, System.currentTimeMillis()));
+                    }
+                    return res;
+                } else if (resp.statusCode() == 429) {
+                    log.warn("OpenAlex Author API quota exhaurida o límit assolit (HTTP 429 Too Many Requests). Configureu 'app.openalex.api-key' per obtenir quota de 100k/dia.");
+                }
+            } catch (Exception e) {
+                log.debug("OpenAlex Author API lookup error for '{}' (author '{}'): {}", orgName, authorName, e.getMessage());
+            }
+            return null;
+        }, aiExecutor != null ? aiExecutor : asyncExecutor);
+    }
+
+    public MetadataInferenceResult inferMetadataWithOpenAlexAuthor(
+            String orgName,
+            String associatedPerson,
+            List<CountryAggregate> countryCatalog,
+            List<TypeAggregate> typeCatalog) {
+        if (!openAlexAuthorSuggestEnabled || associatedPerson == null || associatedPerson.isBlank() || orgName == null || orgName.isBlank()) return null;
+        try {
+            return inferMetadataWithOpenAlexAuthorAsync(orgName, associatedPerson, countryCatalog, typeCatalog)
+                    .get(openAlexAuthorSuggestTimeoutMs + AI_TIMEOUT_BUFFER_MS, TimeUnit.MILLISECONDS);
+        } catch (Exception e) {
+            log.debug("OpenAlex synchronous lookup failed for '{}': {}", orgName, e.getMessage());
+            return null;
+        }
+    }
+
+    private MetadataInferenceResult parseOpenAlexAuthorResponse(
+            String queryOrgName,
+            String authorName,
+            String jsonBody,
+            List<CountryAggregate> countryCatalog,
+            List<TypeAggregate> typeCatalog) {
+        if (jsonBody == null || jsonBody.isBlank()) return null;
+
+        try {
+            JsonNode root = objectMapper.readTree(jsonBody);
+            JsonNode results = root.path("results");
+            if (!results.isArray() || results.isEmpty()) return null;
+
+            String queryNorm = normalizeText(queryOrgName);
+            if (queryNorm.isBlank()) return null;
+
+            JsonNode bestInstitution = null;
+            String bestAuthorId = null;
+            double bestScore = 0.0;
+
+            // Inspect top authors returned (up to 3)
+            int maxAuthors = Math.min(results.size(), 3);
+            for (int i = 0; i < maxAuthors; i++) {
+                JsonNode authorNode = results.get(i);
+                String authorId = authorNode.path("id").asText("");
+
+                List<JsonNode> candidateInsts = new ArrayList<>();
+                // Check last_known_institutions
+                JsonNode lastKnown = authorNode.path("last_known_institutions");
+                if (lastKnown.isArray()) {
+                    for (JsonNode inst : lastKnown) candidateInsts.add(inst);
+                }
+                // Check affiliations[].institution
+                JsonNode affiliations = authorNode.path("affiliations");
+                if (affiliations.isArray()) {
+                    for (JsonNode aff : affiliations) {
+                        JsonNode inst = aff.path("institution");
+                        if (!inst.isMissingNode() && !inst.isNull()) {
+                            candidateInsts.add(inst);
+                        }
+                    }
+                }
+
+                for (JsonNode inst : candidateInsts) {
+                    String instDisplayName = inst.path("display_name").asText("");
+                    if (instDisplayName.isBlank()) continue;
+
+                    double score = calculateNameMatchScore(queryNorm, normalizeText(instDisplayName), false);
+                    if (score > bestScore) {
+                        bestScore = score;
+                        bestInstitution = inst;
+                        bestAuthorId = authorId;
+                    }
+                }
+            }
+
+            // Name assimilation verification: must satisfy threshold >= 0.65
+            if (bestInstitution == null || bestScore < 0.65) {
+                // If not matched at top institution level, check recent works of top author for raw affiliation string matching
+                for (int i = 0; i < maxAuthors; i++) {
+                    String aId = results.get(i).path("id").asText("");
+                    if (!aId.isBlank()) {
+                        MetadataInferenceResult workRes = inferMetadataFromAuthorWorks(queryOrgName, aId, countryCatalog, typeCatalog);
+                        if (workRes != null) {
+                            return workRes;
+                        }
+                    }
+                }
+                return null;
+            }
+
+            String instId = bestInstitution.path("id").asText("");
+            String instRor = bestInstitution.path("ror").asText("");
+            String instDisplayName = bestInstitution.path("display_name").asText("");
+            String instCountryCode = bestInstitution.path("country_code").asText("");
+            String instType = bestInstitution.path("type").asText("");
+
+            String reasonRef = (!instId.isBlank() ? instId : (bestAuthorId != null ? bestAuthorId : "openalex"));
+
+            // 1. Country resolution
+            String resolvedCountry = "";
+            if (!instCountryCode.isBlank()) {
+                resolvedCountry = resolveAliasCountry(instCountryCode.toLowerCase(), countryCatalog);
+            }
+            if (resolvedCountry.isBlank() && !instDisplayName.isBlank()) {
+                resolvedCountry = inferCountryFromName(instDisplayName, countryCatalog).countryLabel();
+            }
+            InferenceResult countryResult = null;
+            if (!resolvedCountry.isBlank()) {
+                double conf = Math.min(0.95, Math.max(0.88, bestScore * 0.95));
+                countryResult = new InferenceResult(resolvedCountry, conf, "openalex-author:" + reasonRef);
+            }
+
+            // 2. Type resolution
+            String resolvedType = "";
+            if (!instType.isBlank()) {
+                List<String> hints = switch (instType.toLowerCase()) {
+                    case "education" -> List.of("universitat", "universidad", "ensenyament superior", "educacio", "academic");
+                    case "facility" -> List.of("centre de recerca", "instituts universitaris de recerca", "investigacio", "cientific", "recerca");
+                    case "company" -> List.of("empresa", "sector empresarial", "companyia", "corporacio");
+                    case "government" -> List.of("administracio publica", "organisme public", "entitats publiques", "govern");
+                    case "nonprofit" -> List.of("fundacio", "associacio", "entitats sense anim de lucre", "ong");
+                    case "healthcare" -> List.of("hospital", "institucions sanitaries", "sanitari", "salut");
+                    case "funder" -> List.of("agencia de financament", "entitat financadora");
+                    case "archive" -> List.of("arxiu", "biblioteca", "museu");
+                    default -> List.of();
+                };
+                if (!hints.isEmpty()) {
+                    resolvedType = resolveTypeByHint(hints, typeCatalog);
+                }
+            }
+            if (resolvedType.isBlank() && !instDisplayName.isBlank()) {
+                TypeInferenceResult inferredType = inferTypeFromName(instDisplayName, typeCatalog);
+                if (inferredType != null && !inferredType.typeLabel().isBlank()) {
+                    resolvedType = inferredType.typeLabel();
+                }
+            }
+            TypeInferenceResult typeResult = null;
+            if (!resolvedType.isBlank()) {
+                double conf = Math.min(0.95, Math.max(0.88, bestScore * 0.95));
+                typeResult = new TypeInferenceResult(resolvedType, conf, "openalex-author:" + reasonRef);
+            }
+
+            // 3. Funding resolution
+            FundingInferenceResult fundingResult = null;
+            String typeLower = instType.toLowerCase();
+            if (typeLower.equals("education") || typeLower.equals("government")) {
+                fundingResult = new FundingInferenceResult("Publica", Math.min(0.95, Math.max(0.90, bestScore * 0.95)), "openalex-author:" + reasonRef);
+            } else if (typeLower.equals("company")) {
+                fundingResult = new FundingInferenceResult("Privada", Math.min(0.95, Math.max(0.90, bestScore * 0.95)), "openalex-author:" + reasonRef);
+            } else if (typeLower.equals("nonprofit")) {
+                fundingResult = new FundingInferenceResult("Privada", Math.min(0.90, Math.max(0.85, bestScore * 0.90)), "openalex-author:" + reasonRef);
+            } else if (typeLower.equals("healthcare")) {
+                String norm = normalizeText(instDisplayName);
+                if (norm.contains("privat") || norm.contains("privado") || norm.contains("private")
+                        || norm.contains("clinica") || norm.contains("quiron") || norm.contains("dexeus")) {
+                    fundingResult = new FundingInferenceResult("Privada", 0.90, "openalex-healthcare-private:" + reasonRef);
+                } else {
+                    fundingResult = new FundingInferenceResult("Publica", 0.90, "openalex-healthcare-public:" + reasonRef);
+                }
+            } else {
+                fundingResult = inferFundingFromName(instDisplayName);
+                if (fundingResult != null && !fundingResult.fundingLabel().isBlank()) {
+                    fundingResult = new FundingInferenceResult(fundingResult.fundingLabel(), Math.min(0.90, Math.max(0.85, bestScore * 0.90)), "openalex-author:" + reasonRef);
+                }
+            }
+
+            return (countryResult == null && typeResult == null && fundingResult == null) ? null
+                    : new MetadataInferenceResult(countryResult, typeResult, fundingResult);
+
+        } catch (Exception e) {
+            log.warn("Error parsing OpenAlex response for '{}': {}", queryOrgName, e.getMessage());
+            return null;
+        }
+    }
+
+    private MetadataInferenceResult inferMetadataFromAuthorWorks(
+            String queryOrgName,
+            String authorId,
+            List<CountryAggregate> countryCatalog,
+            List<TypeAggregate> typeCatalog) {
+        if (authorId == null || authorId.isBlank() || queryOrgName == null || queryOrgName.isBlank()) return null;
+
+        String cleanId = authorId.replaceAll("^https?://openalex\\.org/", "").trim();
+        if (cleanId.isBlank()) return null;
+
+        try {
+            String worksUrl = "https://api.openalex.org/works?filter=author.id:" + cleanId + "&sort=publication_year:desc&per_page=10";
+            HttpRequest req = HttpRequest.newBuilder()
+                    .uri(URI.create(worksUrl))
+                    .timeout(Duration.ofMillis(Math.max(1000, openAlexAuthorSuggestTimeoutMs)))
+                    .header("Accept", "application/json")
+                    .header("User-Agent", "Spring-egreta/1.0 (mailto:egreta@uab.cat)")
+                    .GET()
+                    .build();
+
+            HttpResponse<String> resp = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
+            if (resp.statusCode() != 200 || resp.body() == null || resp.body().isBlank()) {
+                return null;
+            }
+
+            JsonNode root = objectMapper.readTree(resp.body());
+            JsonNode results = root.path("results");
+            if (!results.isArray() || results.isEmpty()) return null;
+
+            String queryNorm = normalizeText(queryOrgName);
+            String[] rawTokens = queryNorm.split("\\s+");
+            Set<String> stopWords = Set.of(
+                "de", "del", "la", "el", "les", "los", "las", "d", "l", "i", "y", "and", "of", "the",
+                "for", "in", "a", "at", "on", "to", "department", "dept", "departament", "departamento", "platform", "unit", "service", "center", "centre"
+            );
+            List<String> contentTokens = Arrays.stream(rawTokens)
+                    .filter(t -> !stopWords.contains(t) && t.length() > 2)
+                    .toList();
+
+            if (contentTokens.isEmpty()) return null;
+
+            for (JsonNode work : results) {
+                String workId = work.path("id").asText("");
+                JsonNode authorships = work.path("authorships");
+                if (!authorships.isArray()) continue;
+
+                for (JsonNode authorship : authorships) {
+                    JsonNode authorObj = authorship.path("author");
+                    String authId = authorObj.path("id").asText("");
+                    if (!authId.endsWith(cleanId)) continue;
+
+                    JsonNode rawAffStrings = authorship.path("raw_affiliation_strings");
+                    if (!rawAffStrings.isArray()) continue;
+
+                    for (JsonNode rawNode : rawAffStrings) {
+                        String rawAff = rawNode.asText("");
+                        if (rawAff.isBlank()) continue;
+
+                        String rawNorm = normalizeText(rawAff);
+                        String[] rawWords = rawNorm.split("\\s+");
+                        Set<String> rawWordSet = new HashSet<>(Arrays.asList(rawWords));
+
+                        int matchedTokens = 0;
+                        for (String ct : contentTokens) {
+                            if (rawWordSet.contains(ct)) {
+                                matchedTokens++;
+                            } else {
+                                boolean partial = rawWordSet.stream().anyMatch(rw -> 
+                                    rw.startsWith(ct) || ct.startsWith(rw) || (ct.length() > 4 && rw.contains(ct))
+                                );
+                                if (partial) matchedTokens++;
+                            }
+                        }
+
+                        double matchRatio = (double) matchedTokens / contentTokens.size();
+                        if (matchRatio >= 0.70) {
+                            // Match found in work affiliation!
+                            JsonNode insts = authorship.path("institutions");
+                            JsonNode bestInst = (insts.isArray() && !insts.isEmpty()) ? insts.get(0) : null;
+
+                            String instDisplayName = bestInst != null ? bestInst.path("display_name").asText("") : "";
+                            String instCountryCode = bestInst != null ? bestInst.path("country_code").asText("") : "";
+                            String instType = bestInst != null ? bestInst.path("type").asText("") : "";
+                            String instId = bestInst != null ? bestInst.path("id").asText("") : "";
+
+                            String reasonRef = (!workId.isBlank() ? workId : (!instId.isBlank() ? instId : "openalex-work"));
+
+                            // 1. Resolve country
+                            String resolvedCountry = "";
+                            if (!instCountryCode.isBlank()) {
+                                resolvedCountry = resolveAliasCountry(instCountryCode.toLowerCase(), countryCatalog);
+                            }
+                            if (resolvedCountry.isBlank() && !instDisplayName.isBlank()) {
+                                resolvedCountry = inferCountryFromName(instDisplayName, countryCatalog).countryLabel();
+                            }
+                            if (resolvedCountry.isBlank()) {
+                                resolvedCountry = inferCountryFromName(rawAff, countryCatalog).countryLabel();
+                            }
+                            InferenceResult countryResult = null;
+                            if (!resolvedCountry.isBlank()) {
+                                countryResult = new InferenceResult(resolvedCountry, 0.92, "openalex-work:" + reasonRef);
+                            }
+
+                            // 2. Resolve type
+                            String resolvedType = "";
+                            if (!instType.isBlank()) {
+                                List<String> hints = switch (instType.toLowerCase()) {
+                                    case "education" -> List.of("universitat", "universidad", "ensenyament superior", "educacio", "academic");
+                                    case "facility" -> List.of("centre de recerca", "instituts universitaris de recerca", "investigacio", "cientific", "recerca");
+                                    case "company" -> List.of("empresa", "sector empresarial", "companyia", "corporacio");
+                                    case "government" -> List.of("administracio publica", "organisme public", "entitats publiques", "govern");
+                                    case "nonprofit" -> List.of("fundacio", "associacio", "entitats sense anim de lucre", "ong");
+                                    case "healthcare" -> List.of("hospital", "institucions sanitaries", "sanitari", "salut");
+                                    case "funder" -> List.of("agencia de financament", "entitat financadora");
+                                    case "archive" -> List.of("arxiu", "biblioteca", "museu");
+                                    default -> List.of();
+                                };
+                                if (!hints.isEmpty()) {
+                                    resolvedType = resolveTypeByHint(hints, typeCatalog);
+                                }
+                            }
+                            if (resolvedType.isBlank() && !instDisplayName.isBlank()) {
+                                TypeInferenceResult inferredType = inferTypeFromName(instDisplayName, typeCatalog);
+                                if (inferredType != null && !inferredType.typeLabel().isBlank()) {
+                                    resolvedType = inferredType.typeLabel();
+                                }
+                            }
+                            TypeInferenceResult typeResult = null;
+                            if (!resolvedType.isBlank()) {
+                                typeResult = new TypeInferenceResult(resolvedType, 0.92, "openalex-work:" + reasonRef);
+                            }
+
+                            // 3. Resolve funding
+                            FundingInferenceResult fundingResult = null;
+                            String typeLower = instType.toLowerCase();
+                            if (typeLower.equals("education") || typeLower.equals("government")) {
+                                fundingResult = new FundingInferenceResult("Publica", 0.92, "openalex-work:" + reasonRef);
+                            } else if (typeLower.equals("company")) {
+                                fundingResult = new FundingInferenceResult("Privada", 0.92, "openalex-work:" + reasonRef);
+                            } else if (typeLower.equals("nonprofit")) {
+                                fundingResult = new FundingInferenceResult("Privada", 0.90, "openalex-work:" + reasonRef);
+                            } else if (typeLower.equals("healthcare")) {
+                                String norm = normalizeText(instDisplayName + " " + rawAff);
+                                if (norm.contains("privat") || norm.contains("privado") || norm.contains("private")
+                                        || norm.contains("clinica") || norm.contains("quiron") || norm.contains("dexeus")) {
+                                    fundingResult = new FundingInferenceResult("Privada", 0.90, "openalex-healthcare-private:" + reasonRef);
+                                } else {
+                                    fundingResult = new FundingInferenceResult("Publica", 0.90, "openalex-healthcare-public:" + reasonRef);
+                                }
+                            } else if (!instDisplayName.isBlank()) {
+                                fundingResult = inferFundingFromName(instDisplayName);
+                                if (fundingResult != null && !fundingResult.fundingLabel().isBlank()) {
+                                    fundingResult = new FundingInferenceResult(fundingResult.fundingLabel(), 0.90, "openalex-work:" + reasonRef);
+                                }
+                            }
+
+                            if (countryResult != null || typeResult != null || fundingResult != null) {
+                                return new MetadataInferenceResult(countryResult, typeResult, fundingResult);
+                            }
+                        }
+                    }
+                }
+            }
+
+        } catch (Exception e) {
+            log.debug("Error inspecting author works on OpenAlex for '{}': {}", authorId, e.getMessage());
+        }
+
+        return null;
+    }
+
+    // =========================================================================
+    // OpenAlex Related Publication (DOI / Title) Metadata Inference
+    // =========================================================================
+
+    public record RelatedPublicationInfo(String doi, String title, String authorName) {}
+    private final Map<String, RelatedPublicationInfo> relatedPublicationCache = new ConcurrentHashMap<>();
+
+    private RelatedPublicationInfo findRelatedPublicationInfoForOrg(String orgUuid, String orgName) {
+        String cacheKey = (orgUuid != null && !orgUuid.isBlank()) ? orgUuid.trim() : (orgName != null ? orgName.trim() : "");
+        if (cacheKey.isBlank()) return null;
+
+        RelatedPublicationInfo cached = relatedPublicationCache.get(cacheKey);
+        if (cached != null) return cached;
+
+        try {
+            String targetUuid = (orgUuid != null && !orgUuid.isBlank()) ? orgUuid.trim() : null;
+            if (targetUuid == null && orgName != null && !orgName.isBlank()) {
+                String escaped = Pattern.quote(orgName.trim());
+                Criteria nameCriteria = new Criteria().orOperator(
+                    Criteria.where("name.ca_ES").regex("^" + escaped + "$", "i"),
+                    Criteria.where("name.es_ES").regex("^" + escaped + "$", "i"),
+                    Criteria.where("name.en_GB").regex("^" + escaped + "$", "i")
+                );
+                Query q = new Query(nameCriteria);
+                q.fields().include("uuid");
+                ExternalOrganization found = mongoTemplate.findOne(q, ExternalOrganization.class);
+                if (found != null && found.getUuid() != null) {
+                    targetUuid = found.getUuid();
+                }
+            }
+
+            if (targetUuid != null && !targetUuid.isBlank() && mongoTemplate.collectionExists("Researchoutputs")) {
+                Query q = new Query(new Criteria().orOperator(
+                    Criteria.where("contributors.externalOrganizations.uuid").is(targetUuid),
+                    Criteria.where("contributors.affiliations.externalOrganization.uuid").is(targetUuid),
+                    Criteria.where("contributors.affiliations.uuid").is(targetUuid),
+                    Criteria.where("contributors.externalOrganization.uuid").is(targetUuid),
+                    Criteria.where("contributors.externalPositions.externalOrganization.uuid").is(targetUuid),
+                    Criteria.where("externalOrganizations.uuid").is(targetUuid)
+                ));
+                q.fields().include("title", "electronicVersions", "contributors");
+                q.limit(1);
+                Document doc = mongoTemplate.findOne(q, Document.class, "Researchoutputs");
+                if (doc != null) {
+                    String title = "";
+                    Object titleObj = doc.get("title");
+                    if (titleObj instanceof Document tDoc) {
+                        title = tDoc.getString("value");
+                        if (title == null || title.isBlank()) title = tDoc.getString("en_GB");
+                        if (title == null || title.isBlank()) title = tDoc.getString("es_ES");
+                        if (title == null || title.isBlank()) title = tDoc.getString("ca_ES");
+                    } else if (titleObj instanceof String s) {
+                        title = s;
+                    }
+
+                    String doi = null;
+                    Object evRaw = doc.get("electronicVersions");
+                    if (evRaw instanceof List<?> evList) {
+                        for (Object item : evList) {
+                            if (item instanceof Document evDoc) {
+                                String d = evDoc.getString("doi");
+                                if (d != null && !d.isBlank()) { doi = d.trim(); break; }
+                            }
+                        }
+                    }
+
+                    String authorName = null;
+                    List<?> contributors = doc.get("contributors", List.class);
+                    if (contributors != null) {
+                        for (Object item : contributors) {
+                            if (item instanceof Document cDoc) {
+                                if (contributorMatchesOrgUuid(cDoc, targetUuid)) {
+                                    Document nameDoc = cDoc.get("name", Document.class);
+                                    if (nameDoc != null) {
+                                        String first = nameDoc.getString("firstName");
+                                        String last = nameDoc.getString("lastName");
+                                        authorName = ((first != null ? first : "") + " " + (last != null ? last : "")).trim();
+                                        if (!authorName.isBlank()) break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if (authorName == null || authorName.isBlank()) {
+                        authorName = findAssociatedPersonForOrg(targetUuid, orgName);
+                    }
+
+                    if ((doi != null && !doi.isBlank()) || (title != null && !title.isBlank())) {
+                        RelatedPublicationInfo info = new RelatedPublicationInfo(doi, title, authorName);
+                        relatedPublicationCache.put(cacheKey, info);
+                        return info;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.debug("Error finding related publication for org '{}': {}", orgUuid, e.getMessage());
+        }
+
+        return null;
+    }
+
+    private String cleanPublicationTitleForSearch(String title) {
+        if (title == null || title.isBlank()) return "";
+        // Treure caràcters especials, símbols i puntuació que bloquegen Elasticsearch d'OpenAlex
+        String cleaned = title.replaceAll("[®™©\"'„“”«»\\[\\]{}()<>:;,/\\\\|*+~?!#^]", " ")
+                              .replaceAll("\\s+", " ").trim();
+        // Limitar a les primeres 8 paraules per evitar queries massa àmplies / gateway timeout
+        String[] words = cleaned.split("\\s+");
+        if (words.length > 8) {
+            cleaned = Arrays.stream(words).limit(8).collect(Collectors.joining(" "));
+        }
+        return cleaned;
+    }
+
+    public CompletableFuture<MetadataInferenceResult> inferMetadataWithOpenAlexPublicationAsync(
+            String orgName,
+            RelatedPublicationInfo pubInfo,
+            List<CountryAggregate> countryCatalog,
+            List<TypeAggregate> typeCatalog) {
+
+        if (!openAlexAuthorSuggestEnabled || pubInfo == null || orgName == null || orgName.isBlank()) {
+            return CompletableFuture.completedFuture(null);
+        }
+
+        String targetUrl = null;
+        String cleanDoi = pubInfo.doi() != null ? pubInfo.doi().trim().replaceAll("^https?://doi\\.org/", "").replaceAll("^doi:", "").trim() : "";
+        if (!cleanDoi.isBlank()) {
+            targetUrl = "https://api.openalex.org/works/doi:" + URLEncoder.encode(cleanDoi, StandardCharsets.UTF_8);
+        } else if (pubInfo.title() != null && !pubInfo.title().isBlank()) {
+            String cleanTitle = cleanPublicationTitleForSearch(pubInfo.title());
+            if (!cleanTitle.isBlank()) {
+                targetUrl = "https://api.openalex.org/works?search=" + URLEncoder.encode(cleanTitle, StandardCharsets.UTF_8) + "&per-page=3";
+            }
+        }
+
+        if (targetUrl == null) return CompletableFuture.completedFuture(null);
+
+        if (openAlexApiKey != null && !openAlexApiKey.isBlank()) {
+            targetUrl += (targetUrl.contains("?") ? "&" : "?") + "api_key=" + URLEncoder.encode(openAlexApiKey.trim(), StandardCharsets.UTF_8);
+        }
+
+        String cacheKey = "openalex-pub:" + normalizeText(orgName) + ":" + (pubInfo.doi() != null ? pubInfo.doi() : normalizeText(pubInfo.title()));
+        CachedMetadataInference cached = openAlexInferenceCache.get(cacheKey);
+        if (cached != null && (System.currentTimeMillis() - cached.timestamp()) < INFERENCE_CACHE_TTL_MS) {
+            return CompletableFuture.completedFuture(cached.result());
+        }
+
+        final String finalTargetUrl = targetUrl;
+        log.info("[OpenAlex] Iniciant consulta per org '{}' | DOI: '{}' | Títol: '{}' | Autor objectiu: '{}' | URL: {}",
+                orgName, pubInfo.doi(), pubInfo.title(), pubInfo.authorName(), finalTargetUrl);
+
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                HttpRequest.Builder reqBuilder = HttpRequest.newBuilder()
+                        .uri(URI.create(finalTargetUrl))
+                        .timeout(Duration.ofMillis(Math.max(1000, openAlexAuthorSuggestTimeoutMs)))
+                        .header("Accept", "application/json")
+                        .header("User-Agent", "Spring-egreta/1.0 (mailto:egreta@uab.cat)")
+                        .GET();
+
+                if (openAlexApiKey != null && !openAlexApiKey.isBlank()) {
+                    reqBuilder.header("Authorization", "Bearer " + openAlexApiKey.trim());
+                }
+
+                HttpResponse<String> resp = httpClient.send(reqBuilder.build(), HttpResponse.BodyHandlers.ofString());
+                log.info("[OpenAlex] Resposta HTTP {} per org '{}' (URL: {})", resp.statusCode(), orgName, finalTargetUrl);
+
+                if (resp.statusCode() == 200 && resp.body() != null && !resp.body().isBlank()) {
+                    JsonNode root = objectMapper.readTree(resp.body());
+                    JsonNode workNode = root.has("authorships") ? root : root.path("results").path(0);
+                    if (workNode != null && !workNode.isMissingNode() && workNode.has("authorships")) {
+                        String workId = workNode.path("id").asText("");
+                        log.info("[OpenAlex] Article trobat (ID: '{}' | Títol: '{}'). Analitzant autories...",
+                                workId, workNode.path("title").asText(""));
+                        MetadataInferenceResult res = parseOpenAlexWorkAuthorships(orgName, pubInfo.authorName(), workNode, countryCatalog, typeCatalog);
+                        if (res != null) {
+                            log.info("[OpenAlex] Metadades deduïdes per '{}': País='{}', Tipus='{}'",
+                                    orgName,
+                                    res.country() != null ? res.country().countryLabel() : "-",
+                                    res.type() != null ? res.type().typeLabel() : "-");
+                            openAlexInferenceCache.put(cacheKey, new CachedMetadataInference(res, System.currentTimeMillis()));
+                            return res;
+                        } else {
+                            log.info("[OpenAlex] No s'ha trobat filiació coincident per org '{}' / autor '{}' a l'article '{}'",
+                                    orgName, pubInfo.authorName(), workId);
+                        }
+                    } else {
+                        log.info("[OpenAlex] No s'ha trobat cap publicació amb autories a OpenAlex per '{}'", orgName);
+                    }
+                } else if (resp.statusCode() == 429) {
+                    log.warn("OpenAlex Works API quota exhaurida o límit assolit (HTTP 429 Too Many Requests). Configureu 'app.openalex.api-key' per obtenir quota de 100k/dia.");
+                } else if (resp.statusCode() == 504 || resp.statusCode() == 408) {
+                    log.warn("[OpenAlex] Timeout a OpenAlex (HTTP {}) per org '{}'. La cerca a OpenAlex ha estat cancel·lada.", resp.statusCode(), orgName);
+                } else {
+                    log.warn("[OpenAlex] HTTP {} al consultar '{}' a URL: {}", resp.statusCode(), orgName, finalTargetUrl);
+                }
+            } catch (Exception e) {
+                log.debug("Error querying OpenAlex publication for '{}': {}", orgName, e.getMessage());
+            }
+            return null;
+        }, aiExecutor != null ? aiExecutor : asyncExecutor);
+    }
+
+    public MetadataInferenceResult inferMetadataWithOpenAlexPublication(
+            String orgName,
+            RelatedPublicationInfo pubInfo,
+            List<CountryAggregate> countryCatalog,
+            List<TypeAggregate> typeCatalog) {
+        if (!openAlexAuthorSuggestEnabled || pubInfo == null || orgName == null || orgName.isBlank()) return null;
+        try {
+            return inferMetadataWithOpenAlexPublicationAsync(orgName, pubInfo, countryCatalog, typeCatalog)
+                    .get(openAlexAuthorSuggestTimeoutMs + AI_TIMEOUT_BUFFER_MS, TimeUnit.MILLISECONDS);
+        } catch (Exception e) {
+            log.debug("OpenAlex synchronous publication lookup failed for '{}': {}", orgName, e.getMessage());
+            return null;
+        }
+    }
+
+    private MetadataInferenceResult parseOpenAlexWorkAuthorships(
+            String queryOrgName,
+            String authorName,
+            JsonNode workNode,
+            List<CountryAggregate> countryCatalog,
+            List<TypeAggregate> typeCatalog) {
+        if (workNode == null || workNode.isMissingNode()) return null;
+
+        String workId = workNode.path("id").asText("");
+        JsonNode authorships = workNode.path("authorships");
+        if (!authorships.isArray() || authorships.isEmpty()) return null;
+
+        String queryNorm = normalizeText(queryOrgName);
+        String[] rawTokens = queryNorm.split("\\s+");
+        Set<String> stopWords = Set.of(
+            "de", "del", "la", "el", "les", "los", "las", "d", "l", "i", "y", "and", "of", "the",
+            "for", "in", "a", "at", "on", "to", "department", "dept", "departament", "departamento", "platform", "unit", "service", "center", "centre"
+        );
+        List<String> contentTokens = Arrays.stream(rawTokens)
+                .filter(t -> !stopWords.contains(t) && t.length() > 2)
+                .toList();
+
+        String authorNorm = authorName != null ? normalizeText(authorName) : "";
+
+        // Pass 1: Si tenim un autor associat de la BD, buscar PRIMER la seva autoria específica a l'article
+        if (!authorNorm.isBlank()) {
+            for (JsonNode authorship : authorships) {
+                JsonNode authorObj = authorship.path("author");
+                String authDisplayName = authorObj.path("display_name").asText("");
+                if (calculateNameMatchScore(authorNorm, normalizeText(authDisplayName), false) >= 0.60) {
+                    log.info("[OpenAlex] Autor objectiu '{}' localitzat a l'article com '{}'. Analitzant la seva filiació...",
+                            authorName, authDisplayName);
+                    MetadataInferenceResult res = extractMetadataFromAuthorship(authorship, queryNorm, contentTokens, workId, countryCatalog, typeCatalog, true);
+                    if (res != null) {
+                        return res;
+                    }
+                }
+            }
+        }
+
+        // Pass 2: Si no hi ha autor associat o no tenia institució, cercar per coincidència de text d'afiliació/institució
+        for (JsonNode authorship : authorships) {
+            MetadataInferenceResult res = extractMetadataFromAuthorship(authorship, queryNorm, contentTokens, workId, countryCatalog, typeCatalog, false);
+            if (res != null) {
+                return res;
+            }
+        }
+
+        return null;
+    }
+
+    private MetadataInferenceResult extractMetadataFromAuthorship(
+            JsonNode authorship,
+            String queryNorm,
+            List<String> contentTokens,
+            String workId,
+            List<CountryAggregate> countryCatalog,
+            List<TypeAggregate> typeCatalog,
+            boolean isTargetAuthor) {
+
+        JsonNode rawAffStrings = authorship.path("raw_affiliation_strings");
+        boolean affMatched = false;
+        String matchedRawAff = "";
+
+        if (rawAffStrings.isArray()) {
+            for (JsonNode rawNode : rawAffStrings) {
+                String rawAff = rawNode.asText("");
+                if (rawAff.isBlank()) continue;
+
+                String rawNorm = normalizeText(rawAff);
+                String[] rawWords = rawNorm.split("\\s+");
+                Set<String> rawWordSet = new HashSet<>(Arrays.asList(rawWords));
+
+                int matchedCount = 0;
+                for (String ct : contentTokens) {
+                    if (rawWordSet.contains(ct)) {
+                        matchedCount++;
+                    } else {
+                        boolean partial = rawWordSet.stream().anyMatch(rw ->
+                            rw.startsWith(ct) || ct.startsWith(rw) || (ct.length() > 4 && rw.contains(ct))
+                        );
+                        if (partial) matchedCount++;
+                    }
+                }
+
+                if (!contentTokens.isEmpty() && (double) matchedCount / contentTokens.size() >= 0.60) {
+                    affMatched = true;
+                    matchedRawAff = rawAff;
+                    break;
+                }
+            }
+        }
+
+        // Also check institutions array inside authorship
+        JsonNode insts = authorship.path("institutions");
+        JsonNode bestInst = (insts.isArray() && !insts.isEmpty()) ? insts.get(0) : null;
+        if (!affMatched && bestInst != null) {
+            String instName = bestInst.path("display_name").asText("");
+            if (calculateNameMatchScore(queryNorm, normalizeText(instName), false) >= 0.65) {
+                affMatched = true;
+            }
+        }
+
+        if (affMatched || (isTargetAuthor && bestInst != null)) {
+            String instDisplayName = bestInst != null ? bestInst.path("display_name").asText("") : "";
+            String instCountryCode = bestInst != null ? bestInst.path("country_code").asText("") : "";
+            String instType = bestInst != null ? bestInst.path("type").asText("") : "";
+            String instId = bestInst != null ? bestInst.path("id").asText("") : "";
+
+            String reasonRef = (!workId.isBlank() ? workId : (!instId.isBlank() ? instId : "openalex-pub"));
+
+            // 1. Resolve country
+            String resolvedCountry = "";
+            if (!instCountryCode.isBlank()) {
+                resolvedCountry = resolveAliasCountry(instCountryCode.toLowerCase(), countryCatalog);
+            }
+            if (resolvedCountry.isBlank() && !instDisplayName.isBlank()) {
+                resolvedCountry = inferCountryFromName(instDisplayName, countryCatalog).countryLabel();
+            }
+            if (resolvedCountry.isBlank() && !matchedRawAff.isBlank()) {
+                resolvedCountry = inferCountryFromName(matchedRawAff, countryCatalog).countryLabel();
+            }
+            InferenceResult countryResult = null;
+            if (!resolvedCountry.isBlank()) {
+                countryResult = new InferenceResult(resolvedCountry, 0.95, "openalex-pub:" + reasonRef);
+            }
+
+            // 2. Resolve type with refined multi-level Egreta categorization
+            TypeInferenceResult typeResult = resolvePreciseEgretaType(
+                queryNorm,
+                instDisplayName + " " + matchedRawAff,
+                instType,
+                typeCatalog,
+                0.95,
+                "openalex-pub:" + reasonRef
+            );
+
+            // 3. Resolve funding
+            FundingInferenceResult fundingResult = null;
+            String typeLower = instType.toLowerCase();
+            if (typeLower.equals("education") || typeLower.equals("government")) {
+                fundingResult = new FundingInferenceResult("Publica", 0.95, "openalex-pub:" + reasonRef);
+            } else if (typeLower.equals("company")) {
+                fundingResult = new FundingInferenceResult("Privada", 0.95, "openalex-pub:" + reasonRef);
+            } else if (typeLower.equals("nonprofit")) {
+                fundingResult = new FundingInferenceResult("Privada", 0.92, "openalex-pub:" + reasonRef);
+            } else if (typeLower.equals("healthcare")) {
+                String norm = normalizeText(instDisplayName + " " + matchedRawAff);
+                if (norm.contains("privat") || norm.contains("privado") || norm.contains("private")
+                        || norm.contains("clinica") || norm.contains("quiron") || norm.contains("dexeus")) {
+                    fundingResult = new FundingInferenceResult("Privada", 0.92, "openalex-healthcare-private:" + reasonRef);
+                } else {
+                    fundingResult = new FundingInferenceResult("Publica", 0.92, "openalex-healthcare-public:" + reasonRef);
+                }
+            } else if (!instDisplayName.isBlank()) {
+                fundingResult = inferFundingFromName(instDisplayName);
+                if (fundingResult != null && !fundingResult.fundingLabel().isBlank()) {
+                    fundingResult = new FundingInferenceResult(fundingResult.fundingLabel(), 0.92, "openalex-pub:" + reasonRef);
+                }
+            }
+
+            if (countryResult != null || typeResult != null || fundingResult != null) {
+                return new MetadataInferenceResult(countryResult, typeResult, fundingResult);
+            }
+        }
+
+        return null;
+    }
+
+    // =========================================================================
+    // Crossref Publication & Author Metadata Inference
+    // =========================================================================
+
+    public CompletableFuture<MetadataInferenceResult> inferMetadataWithCrossrefPublicationAsync(
+            String orgName,
+            RelatedPublicationInfo pubInfo,
+            List<CountryAggregate> countryCatalog,
+            List<TypeAggregate> typeCatalog) {
+
+        if (!crossrefSuggestEnabled || pubInfo == null || orgName == null || orgName.isBlank()) {
+            return CompletableFuture.completedFuture(null);
+        }
+
+        String targetUrl = null;
+        if (pubInfo.doi() != null && !pubInfo.doi().isBlank()) {
+            targetUrl = crossrefSuggestUrl + "/" + URLEncoder.encode(pubInfo.doi().trim(), StandardCharsets.UTF_8);
+        } else if (pubInfo.title() != null && !pubInfo.title().isBlank()) {
+            targetUrl = crossrefSuggestUrl + "?query.title=" + URLEncoder.encode(pubInfo.title().trim(), StandardCharsets.UTF_8) + "&rows=3";
+        }
+
+        if (targetUrl == null) return CompletableFuture.completedFuture(null);
+
+        String cacheKey = "crossref-pub:" + normalizeText(orgName) + ":" + (pubInfo.doi() != null ? pubInfo.doi() : normalizeText(pubInfo.title()));
+        CachedMetadataInference cached = crossrefInferenceCache.get(cacheKey);
+        if (cached != null && (System.currentTimeMillis() - cached.timestamp()) < INFERENCE_CACHE_TTL_MS) {
+            return CompletableFuture.completedFuture(cached.result());
+        }
+
+        final String finalTargetUrl = targetUrl;
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                String mailto = (crossrefMailto != null && !crossrefMailto.isBlank()) ? crossrefMailto.trim() : "egreta@uab.cat";
+                HttpRequest.Builder reqBuilder = HttpRequest.newBuilder()
+                        .uri(URI.create(finalTargetUrl))
+                        .timeout(Duration.ofMillis(Math.max(1000, crossrefSuggestTimeoutMs)))
+                        .header("Accept", "application/json")
+                        .header("User-Agent", "Spring-egreta/1.0 (mailto:" + mailto + ")")
+                        .GET();
+
+                HttpResponse<String> resp = httpClient.send(reqBuilder.build(), HttpResponse.BodyHandlers.ofString());
+                if (resp.statusCode() == 200 && resp.body() != null && !resp.body().isBlank()) {
+                    JsonNode root = objectMapper.readTree(resp.body());
+                    JsonNode messageNode = root.path("message");
+                    if (messageNode.has("author")) {
+                        MetadataInferenceResult res = parseCrossrefWorkAuthorships(orgName, pubInfo.authorName(), messageNode, countryCatalog, typeCatalog);
+                        if (res != null) {
+                            crossrefInferenceCache.put(cacheKey, new CachedMetadataInference(res, System.currentTimeMillis()));
+                            return res;
+                        }
+                    } else {
+                        JsonNode items = messageNode.path("items");
+                        if (items.isArray()) {
+                            for (JsonNode item : items) {
+                                MetadataInferenceResult res = parseCrossrefWorkAuthorships(orgName, pubInfo.authorName(), item, countryCatalog, typeCatalog);
+                                if (res != null) {
+                                    crossrefInferenceCache.put(cacheKey, new CachedMetadataInference(res, System.currentTimeMillis()));
+                                    return res;
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                log.debug("Error querying Crossref publication for '{}': {}", orgName, e.getMessage());
+            }
+            return null;
+        }, aiExecutor != null ? aiExecutor : asyncExecutor);
+    }
+
+    public MetadataInferenceResult inferMetadataWithCrossrefPublication(
+            String orgName,
+            RelatedPublicationInfo pubInfo,
+            List<CountryAggregate> countryCatalog,
+            List<TypeAggregate> typeCatalog) {
+        if (!crossrefSuggestEnabled || pubInfo == null || orgName == null || orgName.isBlank()) return null;
+        try {
+            return inferMetadataWithCrossrefPublicationAsync(orgName, pubInfo, countryCatalog, typeCatalog)
+                    .get(crossrefSuggestTimeoutMs + AI_TIMEOUT_BUFFER_MS, TimeUnit.MILLISECONDS);
+        } catch (Exception e) {
+            log.debug("Crossref synchronous publication lookup failed for '{}': {}", orgName, e.getMessage());
+            return null;
+        }
+    }
+
+    public CompletableFuture<MetadataInferenceResult> inferMetadataWithCrossrefAuthorAsync(
+            String orgName,
+            String associatedPerson,
+            List<CountryAggregate> countryCatalog,
+            List<TypeAggregate> typeCatalog) {
+
+        if (!crossrefSuggestEnabled || associatedPerson == null || associatedPerson.isBlank() || orgName == null || orgName.isBlank()) {
+            return CompletableFuture.completedFuture(null);
+        }
+
+        String authorName = cleanAuthorName(associatedPerson);
+        if (authorName.isBlank() || authorName.length() < 3) {
+            return CompletableFuture.completedFuture(null);
+        }
+
+        String cacheKey = "crossref-author:" + normalizeText(orgName) + ":" + normalizeText(authorName);
+        CachedMetadataInference cached = crossrefInferenceCache.get(cacheKey);
+        if (cached != null && (System.currentTimeMillis() - cached.timestamp()) < INFERENCE_CACHE_TTL_MS) {
+            return CompletableFuture.completedFuture(cached.result());
+        }
+
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                String encoded = URLEncoder.encode(authorName, StandardCharsets.UTF_8);
+                String targetUrl = crossrefSuggestUrl + "?query.author=" + encoded + "&rows=5";
+                String mailto = (crossrefMailto != null && !crossrefMailto.isBlank()) ? crossrefMailto.trim() : "egreta@uab.cat";
+
+                HttpRequest.Builder reqBuilder = HttpRequest.newBuilder()
+                        .uri(URI.create(targetUrl))
+                        .timeout(Duration.ofMillis(Math.max(1000, crossrefSuggestTimeoutMs)))
+                        .header("Accept", "application/json")
+                        .header("User-Agent", "Spring-egreta/1.0 (mailto:" + mailto + ")")
+                        .GET();
+
+                HttpResponse<String> resp = httpClient.send(reqBuilder.build(), HttpResponse.BodyHandlers.ofString());
+                if (resp.statusCode() == 200 && resp.body() != null && !resp.body().isBlank()) {
+                    JsonNode root = objectMapper.readTree(resp.body());
+                    JsonNode items = root.path("message").path("items");
+                    if (items.isArray()) {
+                        for (JsonNode item : items) {
+                            MetadataInferenceResult res = parseCrossrefWorkAuthorships(orgName, authorName, item, countryCatalog, typeCatalog);
+                            if (res != null) {
+                                crossrefInferenceCache.put(cacheKey, new CachedMetadataInference(res, System.currentTimeMillis()));
+                                return res;
+                            }
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                log.debug("Error querying Crossref author for '{}' (author '{}'): {}", orgName, authorName, e.getMessage());
+            }
+            return null;
+        }, aiExecutor != null ? aiExecutor : asyncExecutor);
+    }
+
+    public MetadataInferenceResult inferMetadataWithCrossrefAuthor(
+            String orgName,
+            String associatedPerson,
+            List<CountryAggregate> countryCatalog,
+            List<TypeAggregate> typeCatalog) {
+        if (!crossrefSuggestEnabled || associatedPerson == null || associatedPerson.isBlank() || orgName == null || orgName.isBlank()) return null;
+        try {
+            return inferMetadataWithCrossrefAuthorAsync(orgName, associatedPerson, countryCatalog, typeCatalog)
+                    .get(crossrefSuggestTimeoutMs + AI_TIMEOUT_BUFFER_MS, TimeUnit.MILLISECONDS);
+        } catch (Exception e) {
+            log.debug("Crossref synchronous author lookup failed for '{}': {}", orgName, e.getMessage());
+            return null;
+        }
+    }
+
+    private MetadataInferenceResult parseCrossrefWorkAuthorships(
+            String queryOrgName,
+            String targetAuthorName,
+            JsonNode workNode,
+            List<CountryAggregate> countryCatalog,
+            List<TypeAggregate> typeCatalog) {
+        if (workNode == null || workNode.isMissingNode()) return null;
+
+        String doi = workNode.path("DOI").asText("").trim();
+        JsonNode authors = workNode.path("author");
+        if (!authors.isArray() || authors.isEmpty()) return null;
+
+        String queryNorm = normalizeText(queryOrgName);
+        String[] rawTokens = queryNorm.split("\\s+");
+        Set<String> stopWords = Set.of(
+            "de", "del", "la", "el", "les", "los", "las", "d", "l", "i", "y", "and", "of", "the",
+            "for", "in", "a", "at", "on", "to", "department", "dept", "departament", "departamento", "platform", "unit", "service", "center", "centre"
+        );
+        List<String> contentTokens = Arrays.stream(rawTokens)
+                .filter(t -> !stopWords.contains(t) && t.length() > 2)
+                .toList();
+
+        String authorNorm = targetAuthorName != null ? normalizeText(targetAuthorName) : "";
+
+        // Pass 1: If target author name is present, check author match first
+        if (!authorNorm.isBlank()) {
+            for (JsonNode author : authors) {
+                String given = author.path("given").asText("");
+                String family = author.path("family").asText("");
+                String name = author.path("name").asText("");
+                String fullAuthor = (!name.isBlank() ? name : (given + " " + family)).trim();
+
+                if (!fullAuthor.isBlank() && calculateNameMatchScore(authorNorm, normalizeText(fullAuthor), false) >= 0.60) {
+                    MetadataInferenceResult res = extractMetadataFromCrossrefAuthor(author, queryNorm, contentTokens, doi, countryCatalog, typeCatalog, true);
+                    if (res != null) return res;
+                }
+            }
+        }
+
+        // Pass 2: Check all authors' affiliations for org match
+        for (JsonNode author : authors) {
+            MetadataInferenceResult res = extractMetadataFromCrossrefAuthor(author, queryNorm, contentTokens, doi, countryCatalog, typeCatalog, false);
+            if (res != null) return res;
+        }
+
+        return null;
+    }
+
+    private MetadataInferenceResult extractMetadataFromCrossrefAuthor(
+            JsonNode authorNode,
+            String queryNorm,
+            List<String> contentTokens,
+            String doi,
+            List<CountryAggregate> countryCatalog,
+            List<TypeAggregate> typeCatalog,
+            boolean isTargetAuthor) {
+
+        JsonNode affs = authorNode.path("affiliation");
+        if (!affs.isArray() || affs.isEmpty()) return null;
+
+        String matchedRawAff = "";
+        String matchedRorId = "";
+        boolean affMatched = false;
+
+        for (JsonNode affNode : affs) {
+            String rawAff = "";
+            if (affNode.isTextual()) {
+                rawAff = affNode.asText("");
+            } else if (affNode.isObject()) {
+                rawAff = affNode.path("name").asText("");
+                JsonNode ids = affNode.path("id");
+                if (ids.isArray()) {
+                    for (JsonNode idNode : ids) {
+                        String idType = idNode.path("id-type").asText("");
+                        String idVal = idNode.path("id").asText("");
+                        if ("ror".equalsIgnoreCase(idType) || idVal.contains("ror.org")) {
+                            matchedRorId = idVal;
+                        }
+                    }
+                }
+            }
+
+            if (matchedRorId.isBlank()) {
+                String authorRor = authorNode.path("ROR").asText("");
+                if (!authorRor.isBlank()) matchedRorId = authorRor;
+            }
+
+            if (rawAff.isBlank()) continue;
+
+            String rawNorm = normalizeText(rawAff);
+            String[] rawWords = rawNorm.split("\\s+");
+            Set<String> rawWordSet = new HashSet<>(Arrays.asList(rawWords));
+
+            int matchedCount = 0;
+            for (String ct : contentTokens) {
+                if (rawWordSet.contains(ct)) {
+                    matchedCount++;
+                } else {
+                    boolean partial = rawWordSet.stream().anyMatch(rw ->
+                        rw.startsWith(ct) || ct.startsWith(rw) || (ct.length() > 4 && rw.contains(ct))
+                    );
+                    if (partial) matchedCount++;
+                }
+            }
+
+            if (!contentTokens.isEmpty() && (double) matchedCount / contentTokens.size() >= 0.60) {
+                affMatched = true;
+                matchedRawAff = rawAff;
+                break;
+            }
+
+            if (calculateNameMatchScore(queryNorm, rawNorm, false) >= 0.65) {
+                affMatched = true;
+                matchedRawAff = rawAff;
+                break;
+            }
+        }
+
+        if (affMatched || (isTargetAuthor && !matchedRawAff.isBlank())) {
+            String reasonRef = (!doi.isBlank() ? doi : "crossref-pub");
+
+            // 1. Resolve country
+            String resolvedCountry = "";
+            if (!matchedRorId.isBlank()) {
+                RorNameProposal rorProp = findRorNameProposal(null, matchedRawAff);
+                if (rorProp != null && rorProp.country() != null && !rorProp.country().isBlank()) {
+                    resolvedCountry = rorProp.country();
+                }
+            }
+            if (resolvedCountry.isBlank() && !matchedRawAff.isBlank()) {
+                InferenceResult cRes = inferCountryFromName(matchedRawAff, countryCatalog);
+                if (cRes != null && !cRes.countryLabel().isBlank()) {
+                    resolvedCountry = cRes.countryLabel();
+                }
+            }
+            InferenceResult countryResult = null;
+            if (!resolvedCountry.isBlank()) {
+                countryResult = new InferenceResult(resolvedCountry, 0.95, "crossref-pub:" + reasonRef);
+            }
+
+            // 2. Resolve type with refined multi-level Egreta categorization
+            TypeInferenceResult typeResult = resolvePreciseEgretaType(
+                queryNorm,
+                matchedRawAff,
+                "",
+                typeCatalog,
+                0.95,
+                "crossref-pub:" + reasonRef
+            );
+
+            // 3. Resolve funding
+            FundingInferenceResult fundingResult = null;
+            if (!matchedRawAff.isBlank()) {
+                FundingInferenceResult fRes = inferFundingFromName(matchedRawAff);
+                if (fRes != null && !fRes.fundingLabel().isBlank()) {
+                    fundingResult = new FundingInferenceResult(fRes.fundingLabel(), 0.92, "crossref-pub:" + reasonRef);
+                }
+            }
+
+            if (countryResult != null || typeResult != null || fundingResult != null) {
+                return new MetadataInferenceResult(countryResult, typeResult, fundingResult);
+            }
+        }
+
+        return null;
     }
 
     // =========================================================================
@@ -4208,11 +7161,20 @@ public class ExternalOrganizationController {
     // extractOrgName — nombre preferido en en_GB, fallback es_ES, ca_ES
     // -------------------------------------------------------------------------
     private String extractOrgName(ExternalOrganization org) {
-        if (org.getName() == null) return "";
+        if (org == null) return "";
+        if (org.getDisplayName() != null && !org.getDisplayName().isBlank()) {
+            return org.getDisplayName().trim();
+        }
+        if (org.getName() == null || org.getName().isEmpty()) return "";
         String name = org.getName().get("en_GB");
         if (name == null || name.isBlank()) name = org.getName().get("es_ES");
         if (name == null || name.isBlank()) name = org.getName().get("ca_ES");
-        return name != null ? name : "";
+        if (name == null || name.isBlank()) {
+            for (String v : org.getName().values()) {
+                if (v != null && !v.isBlank()) return v.trim();
+            }
+        }
+        return name != null ? name.trim() : "";
     }
 
     private TypeInferenceResult inferTypeWithLocalAi(String orgName, List<TypeAggregate> catalog) {
@@ -4968,6 +7930,70 @@ public class ExternalOrganizationController {
         );
     }
 
+    private Criteria missingRorCriteria() {
+        return new Criteria().orOperator(
+            Criteria.where("identifiers").exists(false),
+            Criteria.where("identifiers").is(null),
+            Criteria.where("identifiers").size(0),
+            Criteria.where("identifiers").not().elemMatch(
+                new Criteria().orOperator(
+                    Criteria.where("type.uri").regex("ror", "i"),
+                    Criteria.where("type.term.ca_ES").regex("ror", "i"),
+                    Criteria.where("type.term.es_ES").regex("ror", "i"),
+                    Criteria.where("type.term.en_GB").regex("ror", "i"),
+                    Criteria.where("idSource").regex("ror", "i"),
+                    Criteria.where("value").regex("ror\\.org", "i"),
+                    Criteria.where("id").regex("ror\\.org", "i")
+                )
+            )
+        );
+    }
+
+    private boolean hasRorIdentifier(ExternalOrganization org) {
+        if (org == null || org.getIdentifiers() == null || org.getIdentifiers().isEmpty()) {
+            return false;
+        }
+        for (ExternalOrganization.Identifier id : org.getIdentifiers()) {
+            if (id == null) continue;
+            if (id.getIdSource() != null && id.getIdSource().toLowerCase().contains("ror")) return true;
+            if (id.getType() != null && id.getType().getUri() != null && id.getType().getUri().toLowerCase().contains("ror")) return true;
+            if (id.getType() != null && id.getType().getTerm() != null) {
+                for (String t : id.getType().getTerm().values()) {
+                    if (t != null && t.toLowerCase().contains("ror")) return true;
+                }
+            }
+            String val = id.getEffectiveValue();
+            if (val != null && (val.toLowerCase().contains("ror.org") || (val.startsWith("0") && val.length() == 9))) return true;
+        }
+        return false;
+    }
+
+    private boolean hasExistingCountry(ExternalOrganization org) {
+        if (org == null) return false;
+        String countryName = org.getCountryName();
+        if (countryName != null && !countryName.isBlank()) {
+            return true;
+        }
+        if (org.getAddress() != null && org.getAddress().getCountry() != null) {
+            ExternalOrganization.UriTerm c = org.getAddress().getCountry();
+            if (c.getUri() != null && !c.getUri().isBlank()) {
+                return true;
+            }
+            if (c.getTerm() != null) {
+                for (String val : c.getTerm().values()) {
+                    if (val != null && !val.isBlank()) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    private boolean isMissingCountry(ExternalOrganization org) {
+        return !hasExistingCountry(org);
+    }
+
     /**
      * Mejora #10: containsWord precompila el Pattern sólo si el término
      * normalizado cambia. En la práctica los términos son constantes de
@@ -5094,9 +8120,10 @@ public class ExternalOrganizationController {
     private void executeAutoApplyCountry(String env, double confidenceThreshold) {
         asyncExecutor.submit(() -> {
             try {
-                Query query = new Query(missingCountryCriteria());
-                query.fields().include("uuid").include("name");
+                Query query = new Query(missingCountryCriteria()).with(buildNameSort());
+                query.fields().include("uuid").include("name").include("displayName");
                 List<ExternalOrganization> orgs = mongoTemplate.find(query, ExternalOrganization.class);
+                orgs.sort(Comparator.comparing(this::extractOrgName, String.CASE_INSENSITIVE_ORDER));
                 
                 synchronized(autoApplyLock) {
                     autoApplyTotal = orgs.size();
@@ -5146,43 +8173,19 @@ public class ExternalOrganizationController {
                                 return;
                             }
                             
-                            // 1. Consulta ROR (fuente primaria de alta precisión y coste cero)
                             InferenceResult countryResult = null;
-                            MetadataInferenceResult rorResult = inferMetadataWithRor(name, countryCatalog, typeCatalog);
-                            if (rorResult != null && rorResult.country() != null && !rorResult.country().countryLabel().isBlank()) {
-                                countryResult = rorResult.country();
-                            }
-
-                            // 2. Si no hay resultado o la confianza es insuficiente, consultar IA local con persona asociada
-                            String associatedPerson = null;
-                            if (countryResult == null || countryResult.confidence() < confidenceThreshold || countryResult.countryLabel().isBlank()) {
-                                associatedPerson = findAssociatedPersonForOrg(uuid, name);
-                                InferenceResult aiResult = inferCountryWithLocalAi(name, associatedPerson, countryCatalog);
-                                if (aiResult != null && !aiResult.countryLabel().isBlank()) {
-                                    countryResult = aiResult;
+                            if (rorSuggestEnabled) {
+                                MetadataInferenceResult rorRes = inferMetadataWithRor(name, countryCatalog, typeCatalog);
+                                if (rorRes != null && rorRes.country() != null && !rorRes.country().countryLabel().isBlank() && rorRes.country().confidence() >= 0.85) {
+                                    countryResult = rorRes.country();
                                 }
                             }
-
-                            // 3. WebSearch como fallback secundario si sigue sin resultado o baja confianza
-                            if (countryResult == null || countryResult.confidence() < confidenceThreshold || countryResult.countryLabel().isBlank()) {
-                                if (associatedPerson == null) {
-                                    associatedPerson = findAssociatedPersonForOrg(uuid, name);
-                                }
-                                InferenceResult webResult = inferCountryWithWebSearch(name, associatedPerson, countryCatalog);
-                                if (webResult != null && !webResult.countryLabel().isBlank()) {
-                                    countryResult = webResult;
-                                }
-                            }
-
-                            // 4. Heurística local por nombre como último recurso (fallback de seguridad)
-                            if (countryResult == null || countryResult.confidence() < confidenceThreshold || countryResult.countryLabel().isBlank()) {
-                                InferenceResult heuristicResult = inferCountryFromName(name, countryCatalog);
-                                if (heuristicResult != null && !heuristicResult.countryLabel().isBlank()) {
-                                    countryResult = heuristicResult;
-                                }
+                            if (countryResult == null) {
+                                MetadataInferenceResult best = inferBestMetadata(uuid, name, null, countryCatalog, typeCatalog);
+                                countryResult = best.country();
                             }
                             
-                            if (countryResult == null || countryResult.countryLabel.isBlank()) {
+                            if (countryResult == null || countryResult.countryLabel().isBlank()) {
                                 logMessage("[OMES] " + name + " (UUID: " + uuid + ") - Sense suggeriment de pais.");
                                 return;
                             }
@@ -5214,11 +8217,11 @@ public class ExternalOrganizationController {
                                         synchronized(autoApplyLock) {
                                             autoApplyApplied++;
                                         }
-                                        logMessage("[APLICAT] " + name + " -> " + suggestedCountry + " (Confiança: " + Math.round(confidence * 100) + "%)");
+                                        logMessage("[APLICAT] " + name + " -> " + suggestedCountry + " (Font: " + countryResult.reason() + ", Confiança: " + Math.round(confidence * 100) + "%)");
                                     }
                                 }
                             } else {
-                                logMessage("[OMES] " + name + " - Suggeriment: " + suggestedCountry + " (Confiança: " + Math.round(confidence * 100) + "% - baixa).");
+                                logMessage("[OMES] " + name + " - Suggeriment: " + suggestedCountry + " (Font: " + countryResult.reason() + ", Confiança: " + Math.round(confidence * 100) + "% - baixa).");
                             }
                         } catch (Exception e) {
                             logMessage("[ERROR] " + name + " - " + e.getMessage());
@@ -5358,9 +8361,10 @@ public class ExternalOrganizationController {
     private void executeAutoApplyType(String env, double confidenceThreshold) {
         asyncExecutor.submit(() -> {
             try {
-                Query query = new Query(missingTypeCriteria());
-                query.fields().include("uuid").include("name");
+                Query query = new Query(missingTypeCriteria()).with(buildNameSort());
+                query.fields().include("uuid").include("name").include("displayName");
                 List<ExternalOrganization> orgs = mongoTemplate.find(query, ExternalOrganization.class);
+                orgs.sort(Comparator.comparing(this::extractOrgName, String.CASE_INSENSITIVE_ORDER));
                 
                 synchronized(autoApplyTypeLock) {
                     autoApplyTypeTotal = orgs.size();
@@ -5409,31 +8413,19 @@ public class ExternalOrganizationController {
                                 return;
                             }
                             
-                            // 1. Consulta ROR (fuente primaria de alta precisión y coste cero)
                             TypeInferenceResult typeResult = null;
-                            MetadataInferenceResult rorResult = inferMetadataWithRor(name, countryCatalog, typeCatalog);
-                            if (rorResult != null && rorResult.type() != null && !rorResult.type().typeLabel().isBlank()) {
-                                typeResult = rorResult.type();
-                            }
-
-                            // 2. Si no hay resultado o la confianza es insuficiente, consultar IA local con persona asociada
-                            if (typeResult == null || typeResult.confidence() < confidenceThreshold || typeResult.typeLabel().isBlank()) {
-                                String associatedPerson = findAssociatedPersonForOrg(uuid, name);
-                                TypeInferenceResult aiResult = inferTypeWithLocalAi(name, associatedPerson, typeCatalog);
-                                if (aiResult != null && !aiResult.typeLabel().isBlank()) {
-                                    typeResult = aiResult;
+                            if (rorSuggestEnabled) {
+                                MetadataInferenceResult rorRes = inferMetadataWithRor(name, countryCatalog, typeCatalog);
+                                if (rorRes != null && rorRes.type() != null && !rorRes.type().typeLabel().isBlank() && rorRes.type().confidence() >= 0.85) {
+                                    typeResult = rorRes.type();
                                 }
                             }
-
-                            // 3. Heurística local por nombre como último recurso (fallback de seguridad)
-                            if (typeResult == null || typeResult.confidence() < confidenceThreshold || typeResult.typeLabel().isBlank()) {
-                                TypeInferenceResult heuristicResult = inferTypeFromName(name, typeCatalog);
-                                if (heuristicResult != null && !heuristicResult.typeLabel().isBlank()) {
-                                    typeResult = heuristicResult;
-                                }
+                            if (typeResult == null) {
+                                MetadataInferenceResult best = inferBestMetadata(uuid, name, null, countryCatalog, typeCatalog);
+                                typeResult = best.type();
                             }
                             
-                            if (typeResult == null || typeResult.typeLabel.isBlank()) {
+                            if (typeResult == null || typeResult.typeLabel().isBlank()) {
                                 logTypeMessage("[OMES] " + name + " (UUID: " + uuid + ") - Sense suggeriment de tipus.");
                                 return;
                             }
@@ -5457,11 +8449,11 @@ public class ExternalOrganizationController {
                                         synchronized(autoApplyTypeLock) {
                                             autoApplyTypeApplied++;
                                         }
-                                        logTypeMessage("[APLICAT] " + name + " -> " + suggestedType + " (Confiança: " + Math.round(confidence * 100) + "%)");
+                                        logTypeMessage("[APLICAT] " + name + " -> " + suggestedType + " (Font: " + typeResult.reason() + ", Confiança: " + Math.round(confidence * 100) + "%)");
                                     }
                                 }
                             } else {
-                                logTypeMessage("[OMES] " + name + " - Suggeriment: " + suggestedType + " (Confiança: " + Math.round(confidence * 100) + "% - baixa).");
+                                logTypeMessage("[OMES] " + name + " - Suggeriment: " + suggestedType + " (Font: " + typeResult.reason() + ", Confiança: " + Math.round(confidence * 100) + "% - baixa).");
                             }
                         } catch (Exception e) {
                             logTypeMessage("[ERROR] " + name + " - " + e.getMessage());
@@ -5601,9 +8593,10 @@ public class ExternalOrganizationController {
     private void executeAutoApplyFunding(String env, double confidenceThreshold) {
         asyncExecutor.submit(() -> {
             try {
-                Query query = new Query(missingFundingCriteria());
-                query.fields().include("uuid").include("name");
+                Query query = new Query(missingFundingCriteria()).with(buildNameSort());
+                query.fields().include("uuid").include("name").include("displayName");
                 List<ExternalOrganization> orgs = mongoTemplate.find(query, ExternalOrganization.class);
+                orgs.sort(Comparator.comparing(this::extractOrgName, String.CASE_INSENSITIVE_ORDER));
                 
                 synchronized(autoApplyFundingLock) {
                     autoApplyFundingTotal = orgs.size();
@@ -5652,31 +8645,19 @@ public class ExternalOrganizationController {
                                 return;
                             }
                             
-                            // 1. Consulta ROR (fuente primaria de alta precisión y coste cero)
                             FundingInferenceResult fundingResult = null;
-                            MetadataInferenceResult rorResult = inferMetadataWithRor(name, countryCatalog, typeCatalog);
-                            if (rorResult != null && rorResult.funding() != null && !rorResult.funding().fundingLabel().isBlank()) {
-                                fundingResult = rorResult.funding();
-                            }
-
-                            // 2. Si no hay resultado o la confianza es insuficiente, consultar IA local con persona asociada
-                            if (fundingResult == null || fundingResult.confidence() < confidenceThreshold || fundingResult.fundingLabel().isBlank()) {
-                                String associatedPerson = findAssociatedPersonForOrg(uuid, name);
-                                MetadataInferenceResult aiResult = inferMetadataWithLocalAi(name, associatedPerson, countryCatalog, typeCatalog);
-                                if (aiResult != null && aiResult.funding() != null && !aiResult.funding().fundingLabel().isBlank()) {
-                                    fundingResult = aiResult.funding();
+                            if (rorSuggestEnabled) {
+                                MetadataInferenceResult rorRes = inferMetadataWithRor(name, countryCatalog, typeCatalog);
+                                if (rorRes != null && rorRes.funding() != null && !rorRes.funding().fundingLabel().isBlank() && rorRes.funding().confidence() >= 0.85) {
+                                    fundingResult = rorRes.funding();
                                 }
                             }
-
-                            // 3. Heurística local por nombre como último recurso (fallback de seguridad)
-                            if (fundingResult == null || fundingResult.confidence() < confidenceThreshold || fundingResult.fundingLabel().isBlank()) {
-                                FundingInferenceResult heuristicResult = inferFundingFromName(name);
-                                if (heuristicResult != null && !heuristicResult.fundingLabel().isBlank()) {
-                                    fundingResult = heuristicResult;
-                                }
+                            if (fundingResult == null) {
+                                MetadataInferenceResult best = inferBestMetadata(uuid, name, null, countryCatalog, typeCatalog);
+                                fundingResult = best.funding();
                             }
                             
-                            if (fundingResult == null || fundingResult.fundingLabel.isBlank()) {
+                            if (fundingResult == null || fundingResult.fundingLabel().isBlank()) {
                                 logFundingMessage("[OMES] " + name + " (UUID: " + uuid + ") - Sense suggeriment de finançament.");
                                 return;
                             }
@@ -5700,11 +8681,11 @@ public class ExternalOrganizationController {
                                         synchronized(autoApplyFundingLock) {
                                             autoApplyFundingApplied++;
                                         }
-                                        logFundingMessage("[APLICAT] " + name + " -> " + suggestedFunding + " (Confiança: " + Math.round(confidence * 100) + "%)");
+                                        logFundingMessage("[APLICAT] " + name + " -> " + suggestedFunding + " (Font: " + fundingResult.reason() + ", Confiança: " + Math.round(confidence * 100) + "%)");
                                     }
                                 }
                             } else {
-                                logFundingMessage("[OMES] " + name + " - Suggeriment: " + suggestedFunding + " (Confiança: " + Math.round(confidence * 100) + "% - baixa).");
+                                logFundingMessage("[OMES] " + name + " - Suggeriment: " + suggestedFunding + " (Font: " + fundingResult.reason() + ", Confiança: " + Math.round(confidence * 100) + "% - baixa).");
                             }
                         } catch (Exception e) {
                             logFundingMessage("[ERROR] " + name + " - " + e.getMessage());
@@ -5782,6 +8763,399 @@ public class ExternalOrganizationController {
             org.springframework.core.io.Resource resource = new org.springframework.core.io.UrlResource(file.toURI());
             return org.springframework.http.ResponseEntity.ok()
                 .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"auto-apply-funding.log\"")
+                .contentType(org.springframework.http.MediaType.TEXT_PLAIN)
+                .body(resource);
+        } catch (Exception e) {
+            return org.springframework.http.ResponseEntity.internalServerError().build();
+        }
+    }
+
+    @GetMapping("/stats/name-proposals")
+    public Map<String, Object> getNameProposals(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(defaultValue = "0.75") double minSimilarity,
+            @RequestParam(defaultValue = "0.9999") double maxSimilarity,
+            @RequestParam(required = false) String search,
+            @RequestParam(defaultValue = "300") int limit,
+            @RequestParam(defaultValue = "true") boolean onlyWithoutRor,
+            @RequestParam(defaultValue = "false") boolean onlyWithoutCountry) {
+        
+        List<Criteria> andCriteria = new ArrayList<>();
+        if (onlyWithoutRor) {
+            andCriteria.add(missingRorCriteria());
+        }
+        if (onlyWithoutCountry) {
+            andCriteria.add(missingCountryCriteria());
+        }
+        if (search != null && !search.isBlank()) {
+            String escaped = Pattern.quote(search.trim());
+            andCriteria.add(new Criteria().orOperator(
+                Criteria.where("name.ca_ES").regex(escaped, "i"),
+                Criteria.where("name.es_ES").regex(escaped, "i"),
+                Criteria.where("name.en_GB").regex(escaped, "i")
+            ));
+        }
+        
+        Query query = new Query();
+        if (!andCriteria.isEmpty()) {
+            if (andCriteria.size() == 1) {
+                query.addCriteria(andCriteria.get(0));
+            } else {
+                query.addCriteria(new Criteria().andOperator(andCriteria.toArray(new Criteria[0])));
+            }
+        }
+        query.fields().include("uuid").include("pureId").include("name").include("address").include("type").include("identifiers");
+        if (limit > 0) {
+            query.limit(limit);
+        }
+        
+        List<ExternalOrganization> orgList = mongoTemplate.find(query, ExternalOrganization.class);
+        
+        List<RorNameProposal> proposals = new java.util.concurrent.CopyOnWriteArrayList<>();
+        int concurrencyLimit = 16;
+        java.util.concurrent.Semaphore sem = new java.util.concurrent.Semaphore(concurrencyLimit);
+        List<CompletableFuture<Void>> futures = new ArrayList<>();
+        
+        for (ExternalOrganization org : orgList) {
+            if (onlyWithoutRor && hasRorIdentifier(org)) {
+                continue;
+            }
+            if (onlyWithoutCountry && !isMissingCountry(org)) {
+                continue;
+            }
+            String uuid = org.getUuid();
+            Long pureId = org.getPureId();
+            String name = extractOrgName(org);
+            if (name.isBlank()) continue;
+            
+            try {
+                sem.acquire();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+            
+            CompletableFuture<Void> fut = CompletableFuture.runAsync(() -> {
+                try {
+                    RorNameProposal p = findRorNameProposal(uuid, pureId, name);
+                    if (p != null && p.similarity() >= minSimilarity && p.similarity() <= maxSimilarity) {
+                        proposals.add(p);
+                    }
+                } finally {
+                    sem.release();
+                }
+            }, aiExecutor != null ? aiExecutor : asyncExecutor);
+            futures.add(fut);
+        }
+        
+        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+        
+        proposals.sort((a, b) -> Double.compare(b.similarity(), a.similarity()));
+        
+        int total = proposals.size();
+        int fromIndex = Math.min(page * size, total);
+        int toIndex = Math.min(fromIndex + size, total);
+        List<RorNameProposal> paged = proposals.subList(fromIndex, toIndex);
+        
+        return Map.of(
+            "total", total,
+            "page", page,
+            "size", size,
+            "items", paged
+        );
+    }
+
+    @GetMapping("/stats/suggest-name")
+    public Map<String, Object> suggestName(
+            @RequestParam(required = false) String uuid,
+            @RequestParam(required = false) String name) {
+        String orgName = name == null ? "" : name.trim();
+        String orgUuid = uuid == null ? "" : uuid.trim();
+        Long orgPureId = null;
+        if (!orgUuid.isBlank()) {
+            ExternalOrganization org = mongoTemplate.findOne(new Query(Criteria.where("uuid").is(orgUuid)), ExternalOrganization.class);
+            if (org != null) {
+                orgPureId = org.getPureId();
+                if (orgName.isBlank()) {
+                    orgName = extractOrgName(org);
+                }
+            }
+        }
+        if (orgName.isBlank()) {
+            return Map.of("suggestedName", "", "similarity", 0.0, "reason", "empty-name");
+        }
+        
+        RorNameProposal proposal = findRorNameProposal(orgUuid, orgPureId, orgName);
+        if (proposal == null) {
+            return Map.of("currentName", orgName, "suggestedName", "", "similarity", 0.0, "reason", "no-proposal");
+        }
+        
+        Map<String, Object> resp = new LinkedHashMap<>();
+        resp.put("uuid", proposal.uuid() == null ? "" : proposal.uuid());
+        if (proposal.pureId() != null) {
+            resp.put("pureId", proposal.pureId());
+        }
+        resp.put("currentName", proposal.currentName());
+        resp.put("suggestedName", proposal.suggestedName());
+        resp.put("similarity", proposal.similarity());
+        resp.put("rorId", proposal.rorId());
+        resp.put("country", proposal.country());
+        resp.put("type", proposal.type());
+        resp.put("reason", proposal.reason());
+        resp.put("rawAffiliation", proposal.rawAffiliation() != null ? proposal.rawAffiliation() : "");
+        return resp;
+    }
+
+    private void startAutoApplyNameRun(String env, double similarity) {
+        synchronized(autoApplyNameLock) {
+            autoApplyNameRunning = true;
+            autoApplyNameTotal = 0;
+            autoApplyNameProcessed = 0;
+            autoApplyNameApplied = 0;
+            autoApplyNameSimilarityThreshold = similarity;
+            autoApplyNameLogs.clear();
+        }
+        
+        try {
+            java.io.File file = new java.io.File(autoApplyNameLogFilePath);
+            java.io.File parent = file.getParentFile();
+            if (parent != null && !parent.exists()) {
+                parent.mkdirs();
+            }
+            java.nio.file.Files.writeString(
+                file.toPath(), 
+                "=== INICI DE PROCES NORMALITZACIO DE NOMS ROR (" + (env == null ? "DEFAULT" : env.toUpperCase()) + ", Similitud >= " + Math.round(similarity * 100) + "%) === " + java.time.LocalDateTime.now() + System.lineSeparator(), 
+                java.nio.file.StandardOpenOption.CREATE, 
+                java.nio.file.StandardOpenOption.TRUNCATE_EXISTING
+            );
+        } catch (Exception e) {
+            System.err.println("Error initializing auto-apply name log file: " + e.getMessage());
+        }
+    }
+
+    private synchronized void writeNameLogToFile(String line) {
+        try {
+            java.io.File file = new java.io.File(autoApplyNameLogFilePath);
+            java.io.File parent = file.getParentFile();
+            if (parent != null && !parent.exists()) {
+                parent.mkdirs();
+            }
+            java.nio.file.Files.writeString(
+                file.toPath(), 
+                line + System.lineSeparator(), 
+                java.nio.file.StandardOpenOption.CREATE, 
+                java.nio.file.StandardOpenOption.APPEND
+            );
+        } catch (Exception e) {
+            System.err.println("Error writing to auto-apply name log file: " + e.getMessage());
+        }
+    }
+
+    private void logNameMessage(String message) {
+        String formatted = "[" + java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss")) + "] " + message;
+        autoApplyNameLogs.add(formatted);
+        writeNameLogToFile(formatted);
+    }
+
+    private void executeAutoApplyName(String env, double similarityThreshold, boolean onlyWithoutRor, boolean onlyWithoutCountry, boolean applyName) {
+        asyncExecutor.submit(() -> {
+            try {
+                List<Criteria> andCriteria = new ArrayList<>();
+                if (onlyWithoutRor) {
+                    andCriteria.add(missingRorCriteria());
+                }
+                if (onlyWithoutCountry) {
+                    andCriteria.add(missingCountryCriteria());
+                }
+                Query query = new Query();
+                if (!andCriteria.isEmpty()) {
+                    if (andCriteria.size() == 1) {
+                        query.addCriteria(andCriteria.get(0));
+                    } else {
+                        query.addCriteria(new Criteria().andOperator(andCriteria.toArray(new Criteria[0])));
+                    }
+                }
+                query.with(buildNameSort());
+                query.fields().include("uuid").include("name").include("displayName").include("address").include("identifiers");
+                List<ExternalOrganization> orgs = mongoTemplate.find(query, ExternalOrganization.class);
+                orgs.sort(Comparator.comparing(this::extractOrgName, String.CASE_INSENSITIVE_ORDER));
+                
+                synchronized(autoApplyNameLock) {
+                    autoApplyNameTotal = orgs.size();
+                }
+                
+                logNameMessage("S'han trobat " + autoApplyNameTotal + " organitzacions (Sense ROR: " + onlyWithoutRor + ", Sense País: " + onlyWithoutCountry + ", Canviar Nom: " + applyName + "). Analitzant propostes de noms ROR/OpenAlex (Similitud >= " + Math.round(similarityThreshold * 100) + "%)...");
+                
+                int concurrencyLimit = 16;
+                java.util.concurrent.Semaphore sem = new java.util.concurrent.Semaphore(concurrencyLimit);
+                
+                List<CompletableFuture<Void>> futures = new java.util.ArrayList<>();
+                
+                for (ExternalOrganization shortOrg : orgs) {
+                    if (onlyWithoutRor && hasRorIdentifier(shortOrg)) {
+                        continue;
+                    }
+                    if (onlyWithoutCountry && !isMissingCountry(shortOrg)) {
+                        continue;
+                    }
+                    String uuid = shortOrg.getUuid();
+                    String name = extractOrgName(shortOrg);
+                    
+                    synchronized(autoApplyNameLock) {
+                        if (!autoApplyNameRunning) {
+                            break;
+                        }
+                    }
+                    
+                    sem.acquire();
+                    
+                    synchronized(autoApplyNameLock) {
+                        if (!autoApplyNameRunning) {
+                            sem.release();
+                            break;
+                        }
+                    }
+                    
+                    CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
+                        try {
+                            synchronized(autoApplyNameLock) {
+                                if (!autoApplyNameRunning) {
+                                    return;
+                                }
+                            }
+                            
+                            ExternalOrganization org = mongoTemplate.findOne(new Query(Criteria.where("uuid").is(uuid)), ExternalOrganization.class);
+                            if (org == null) {
+                                logNameMessage("[ERROR] Organitzacio no trobada: " + name + " (UUID: " + uuid + ")");
+                                return;
+                            }
+                            
+                            RorNameProposal proposal = findRorNameProposal(uuid, name);
+                            if (proposal == null || proposal.suggestedName() == null || proposal.suggestedName().isBlank()) {
+                                return;
+                            }
+                            
+                            if (proposal.similarity() >= similarityThreshold) {
+                                ExternalOrganization.UriTerm updatedCountry = null;
+                                if (isMissingCountry(org) && proposal.country() != null && !proposal.country().isBlank()) {
+                                    updatedCountry = resolveCountryUriTermFromPayload(null, proposal.country(), null);
+                                }
+                                String nameToApply = (applyName && proposal.suggestedName() != null && !proposal.suggestedName().isBlank()) ? proposal.suggestedName().trim() : null;
+
+                                Map<String, Object> egretaSync = syncExternalOrganizationRorIdentifierToEgreta(org, proposal.rorId(), updatedCountry, nameToApply, env);
+                                boolean egretaUpdated = Boolean.TRUE.equals(egretaSync.get("updated"));
+                                if (!egretaUpdated) {
+                                    logNameMessage("[ERROR] " + name + " - Error de sincronitzacio amb Egreta: " + egretaSync.get("reason"));
+                                } else {
+                                    if (nameToApply != null) {
+                                        if (org.getName() == null) {
+                                            org.setName(new java.util.HashMap<>());
+                                        }
+                                        org.getName().put("ca_ES", nameToApply);
+                                        org.getName().put("es_ES", nameToApply);
+                                        org.getName().put("en_GB", nameToApply);
+                                    }
+                                    if (proposal.rorId() != null && !proposal.rorId().isBlank()) {
+                                        applyRorIdentifierToOrganization(org, proposal.rorId(), updatedCountry);
+                                    } else if (updatedCountry != null) {
+                                        if (org.getAddress() == null) {
+                                            org.setAddress(new ExternalOrganization.Address());
+                                        }
+                                        org.getAddress().setCountry(updatedCountry);
+                                    }
+                                    repository.save(org);
+                                    if (updatedCountry != null || nameToApply != null) {
+                                        invalidateMetadataCatalogCaches();
+                                    }
+                                    
+                                    synchronized(autoApplyNameLock) {
+                                        autoApplyNameApplied++;
+                                    }
+                                    String countryLog = (updatedCountry != null) ? " + País: \"" + proposal.country() + "\"" : "";
+                                    String nameLog = (nameToApply != null) ? " -> Nou Nom: \"" + nameToApply + "\"" : "";
+                                    logNameMessage("[ROR/NOM ASSIGNAT] \"" + name + "\"" + nameLog + " (ROR: " + proposal.rorId() + ", Similitud: " + Math.round(proposal.similarity() * 100) + "%, Font: " + proposal.reason() + ")" + countryLog);
+                                }
+                            }
+                        } catch (Exception e) {
+                            logNameMessage("[ERROR] " + name + " - " + e.getMessage());
+                        } finally {
+                            sem.release();
+                            synchronized(autoApplyNameLock) {
+                                autoApplyNameProcessed++;
+                            }
+                        }
+                    }, aiExecutor != null ? aiExecutor : asyncExecutor);
+                    
+                    futures.add(future);
+                }
+                
+                CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+                
+                logNameMessage("Proces d'assignacio de noms i identificadors finalitzat. Processades: " + autoApplyNameProcessed + ", Assignacions: " + autoApplyNameApplied);
+            } catch (Exception e) {
+                logNameMessage("[FATAL ERROR] " + e.getMessage());
+            } finally {
+                synchronized(autoApplyNameLock) {
+                    autoApplyNameRunning = false;
+                }
+            }
+        });
+    }
+
+    @PostMapping("/stats/auto-apply-name/start")
+    public Map<String, Object> startAutoApplyName(
+            @RequestParam(defaultValue = "test") String env,
+            @RequestParam(defaultValue = "0.90") double similarity,
+            @RequestParam(defaultValue = "true") boolean onlyWithoutRor,
+            @RequestParam(defaultValue = "false") boolean onlyWithoutCountry,
+            @RequestParam(defaultValue = "false") boolean applyName) {
+        synchronized(autoApplyNameLock) {
+            if (autoApplyNameRunning) {
+                return Map.of("started", false, "reason", "already-running");
+            }
+            startAutoApplyNameRun(env, similarity);
+            executeAutoApplyName(env, similarity, onlyWithoutRor, onlyWithoutCountry, applyName);
+            return Map.of("started", true);
+        }
+    }
+
+    @PostMapping("/stats/auto-apply-name/stop")
+    public Map<String, Object> stopAutoApplyName() {
+        synchronized(autoApplyNameLock) {
+            if (!autoApplyNameRunning) {
+                return Map.of("stopped", false, "reason", "not-running");
+            }
+            autoApplyNameRunning = false;
+            logNameMessage("Petició d'aturar el procés rebuda.");
+            return Map.of("stopped", true);
+        }
+    }
+
+    @GetMapping("/stats/auto-apply-name/status")
+    public Map<String, Object> getAutoApplyNameStatus() {
+        synchronized(autoApplyNameLock) {
+            Map<String, Object> status = new java.util.LinkedHashMap<>();
+            status.put("running", autoApplyNameRunning);
+            status.put("total", autoApplyNameTotal);
+            status.put("processed", autoApplyNameProcessed);
+            status.put("applied", autoApplyNameApplied);
+            status.put("similarityThreshold", autoApplyNameSimilarityThreshold);
+            status.put("logs", String.join("\n", autoApplyNameLogs));
+            return status;
+        }
+    }
+
+    @GetMapping("/stats/auto-apply-name/download-log")
+    public org.springframework.http.ResponseEntity<org.springframework.core.io.Resource> downloadAutoApplyNameLog() {
+        try {
+            java.io.File file = new java.io.File(autoApplyNameLogFilePath);
+            if (!file.exists()) {
+                return org.springframework.http.ResponseEntity.notFound().build();
+            }
+            org.springframework.core.io.Resource resource = new org.springframework.core.io.UrlResource(file.toURI());
+            return org.springframework.http.ResponseEntity.ok()
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"auto-apply-name.log\"")
                 .contentType(org.springframework.http.MediaType.TEXT_PLAIN)
                 .body(resource);
         } catch (Exception e) {
@@ -5900,10 +9274,11 @@ public class ExternalOrganizationController {
                 Criteria hasCountry = new Criteria().norOperator(missingCountryCriteria());
                 Criteria hasFunding = new Criteria().norOperator(missingFundingCriteria());
 
-                Query query = new Query(new Criteria().andOperator(notApproved, hasType, hasCountry, hasFunding));
-                query.fields().include("uuid").include("name").include("workflow");
+                Query query = new Query(new Criteria().andOperator(notApproved, hasType, hasCountry, hasFunding)).with(buildNameSort());
+                query.fields().include("uuid").include("name").include("displayName").include("workflow");
                 
                 List<ExternalOrganization> orgs = mongoTemplate.find(query, ExternalOrganization.class);
+                orgs.sort(Comparator.comparing(this::extractOrgName, String.CASE_INSENSITIVE_ORDER));
                 
                 synchronized(autoValidateLock) {
                     autoValidateTotal = orgs.size();

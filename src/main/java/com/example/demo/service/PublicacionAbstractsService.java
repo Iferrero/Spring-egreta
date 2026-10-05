@@ -1,5 +1,8 @@
 package com.example.demo.service;
 
+import com.github.pemistahl.lingua.api.Language;
+import com.github.pemistahl.lingua.api.LanguageDetector;
+import com.github.pemistahl.lingua.api.LanguageDetectorBuilder;
 import org.bson.Document;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.mongodb.core.MongoTemplate;
@@ -19,63 +22,65 @@ public class PublicacionAbstractsService {
     private final Map<String, CacheEntry> yearsCache = new ConcurrentHashMap<>();
     private final Map<String, CacheEntry> yearsLanguagesCache = new ConcurrentHashMap<>();
     private final Map<String, CacheEntry> typesCache = new ConcurrentHashMap<>();
+    private final Map<String, CacheEntry> discrepanciesStatsCache = new ConcurrentHashMap<>();
     private static final long CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
     public record CacheEntry(Object data, long timestamp) {}
 
-    // NLP Stop words and distinctive markers for language classification
-    private static final Set<String> CA_DISTINCT = Set.of(
-        "amb", "dels", "pels", "aquest", "aquesta", "aquests", "aquestes", "perque", "perquè", "seva",
-        "seus", "seves", "tambe", "també", "gairebe", "gairebé", "gaire", "quelcom", "adhuc", "àdhuc",
-        "nomes", "només", "doncs", "mateix", "mateixa", "mateixos", "mateixes", "qualque", "llur", "llurs",
-        "despres", "després", "mentre", "sovint", "tanmateix", "hom", "cadascu", "cadascú", "cadascun", "cadascuna",
-        "aleshores", "aixi", "així", "sense", "fins", "segons", "mitjançant", "envers", "sigui", "siguin",
-        "essent", "estat", "estats", "estada", "estades", "fet", "feta", "fets", "fetes", "millorar", "aconseguir",
-        "coneixement", "coneixements", "desenvolupament", "recerca", "poblacio", "població", "qualitat", "activitat"
-    );
+    // Language detector using Lingua with optimal languages and low-accuracy mode (low memory footprint)
+    private static final LanguageDetector LINGUA_DETECTOR = LanguageDetectorBuilder
+            .fromLanguages(
+                Language.CATALAN,
+                Language.SPANISH,
+                Language.ENGLISH,
+                Language.FRENCH,
+                Language.ITALIAN,
+                Language.PORTUGUESE,
+                Language.GERMAN,
+                Language.BASQUE,
+                Language.RUSSIAN
+            )
+            .withLowAccuracyMode()
+            .build();
 
-    private static final Set<String> CA_COMMON = Set.of(
-        "de", "la", "el", "a", "i", "en", "que", "del", "les", "per", "un", "els", "una", "uns", "unes",
-        "al", "als", "pel", "no", "com", "es", "és", "se", "mes", "més", "tot", "tots", "tota", "totes",
-        "ha", "han", "estudi", "objectiu", "resultats", "conclusions", "metodologia", "metode", "mètode",
-        "investigacio", "investigació", "entre", "sobre", "on", "quan", "molt", "molta", "molts", "moltes",
-        "poc", "pocs", "poca", "poques", "altre", "altres", "altra", "nostre", "nostra", "nostres", "durant",
-        "hi", "ho", "li", "son", "són", "era", "eren", "va", "van", "ja", "fa", "fan"
-    );
+    public static final String HTML_EMPTY_REGEX = "^([\\s\u00a0\ufeff\u200b]|<[^>]*>|&(?:nbsp|#160|#xA0|#xa0|ensp|emsp|thinsp|zwnj|zwj|amp;nbsp);?)*$";
+    public static final Pattern HTML_EMPTY_PATTERN = Pattern.compile(HTML_EMPTY_REGEX, Pattern.CASE_INSENSITIVE);
 
-    private static final Set<String> ES_DISTINCT = Set.of(
-        "los", "las", "por", "para", "con", "sus", "este", "esta", "estos", "estas", "esto", "ese", "esa", "esos", "esas",
-        "aquel", "aquella", "aquellos", "aquellas", "tambien", "también", "hacia", "hasta", "desde", "despues", "después",
-        "entonces", "ademas", "además", "mientras", "aunque", "donde", "cuando", "mismo", "misma", "mismos", "mismas",
-        "cada", "nuestro", "nuestra", "nuestros", "nuestras", "suyo", "suya", "suyos", "suyas", "hecho", "hecha", "hechos", "hechas",
-        "hace", "hacen", "hizo", "sido", "habia", "había", "hubo", "hay", "desarrollo", "conocimiento", "mediante",
-        "acerca", "cuanto", "tanto", "poblacion", "población", "calidad", "actividad", "sociedad", "universidad"
-    );
+    public static boolean isHtmlEmpty(String text) {
+        if (text == null || text.isBlank()) return true;
+        return HTML_EMPTY_PATTERN.matcher(text).matches();
+    }
 
-    private static final Set<String> ES_COMMON = Set.of(
-        "de", "la", "el", "en", "y", "a", "que", "del", "se", "un", "una", "unos", "unas", "no", "al", "es", "su",
-        "algunos", "como", "mas", "más", "pero", "le", "les", "ya", "o", "fue", "ha", "han", "si", "porque", "por",
-        "son", "era", "eran", "entre", "estudio", "objetivo", "resultados", "conclusiones", "investigacion", "investigación",
-        "analisis", "análisis", "durante", "sobre", "todo", "todos", "toda", "todas", "muy", "mucho", "muchos", "mucha",
-        "muchas", "poco", "pocos", "poca", "pocas", "otro", "otros", "otra", "otras", "solo", "solamente"
-    );
+    public static String cleanHtmlToText(String text) {
+        if (text == null || isHtmlEmpty(text)) return "";
+        return text.replaceAll("<[^>]+>", " ")
+                   .replaceAll("&(?:apos|#39);?", "'")
+                   .replaceAll("&(?:quot|#34);?", "\"")
+                   .replaceAll("&(?:amp|#38);?", "&")
+                   .replaceAll("&(?:lt|#60);?", "<")
+                   .replaceAll("&(?:gt|#62);?", ">")
+                   .replaceAll("&(?:nbsp|#160|#xA0|#xa0|ensp|emsp|thinsp|zwnj|zwj|amp;nbsp);?", " ")
+                   .replace('’', '\'')
+                   .replace('‘', '\'')
+                   .replaceAll("\\s+", " ")
+                   .trim();
+    }
 
-    private static final Set<String> EN_DISTINCT = Set.of(
-        "the", "this", "that", "these", "those", "with", "from", "which", "were", "have", "been", "their", "our",
-        "they", "them", "between", "through", "within", "should", "could", "would", "where", "when", "what",
-        "who", "whose", "whom", "why", "how", "both", "each", "other", "others", "such", "also", "than", "then",
-        "after", "before", "during", "while", "without", "about", "into", "onto", "under", "above", "more", "most",
-        "many", "much", "some", "any", "few", "paper", "aims", "findings", "discuss", "discusses", "used", "using",
-        "background", "approach", "based", "showed", "demonstrated", "provides", "significant", "however", "although", "furthermore"
-    );
+    public static int countWords(String text) {
+        String clean = cleanHtmlToText(text);
+        if (clean.isBlank()) return 0;
+        return clean.split("\\s+").length;
+    }
 
-    private static final Set<String> EN_COMMON = Set.of(
-        "and", "of", "to", "in", "is", "are", "was", "for", "on", "as", "at", "by", "an", "be", "it", "its",
-        "we", "you", "your", "he", "she", "his", "her", "not", "but", "or", "if", "so", "can", "will", "has",
-        "had", "do", "does", "did", "study", "results", "aim", "methods", "method", "research", "analysis", "data", "conclusion", "conclusions"
-    );
-
-    private static final Pattern WORD_PATTERN = Pattern.compile("\\b[a-zA-Zà-ÿÀ-ß'-]+\\b");
+    public static Document buildHasTextCond(String langField) {
+        return new Document("$cond", List.of(
+            new Document("$regexMatch", new Document("input", new Document("$ifNull", List.of("$abstract." + langField, "")))
+                .append("regex", HTML_EMPTY_REGEX)
+                .append("options", "i")),
+            0,
+            1
+        ));
+    }
 
     @Autowired
     public PublicacionAbstractsService(MongoTemplate mongoTemplate) {
@@ -117,65 +122,49 @@ public class PublicacionAbstractsService {
     }
 
     /**
-     * Language detector based on vocabulary, distinctive stopwords, character discriminators and elision handling
+     * Language detector based on Lingua (n-gram statistical model optimized for JVM)
+     * augmented with HTML entity unescaping and bibliographic metadata stripping.
      */
     public static String detectLanguage(String text) {
-        if (text == null || text.trim().length() < 10) return "unknown";
-        String raw = text.replaceAll("<[^>]+>", " ");
+        if (text == null || isHtmlEmpty(text)) return "unknown";
+        String sample = text.length() > 1500 ? text.substring(0, 1500) : text;
+        String raw = sample.replaceAll("<[^>]+>", " ")
+                           .replaceAll("&(?:apos|#39);?", "'")
+                           .replaceAll("&(?:quot|#34);?", "\"")
+                           .replaceAll("&(?:amp|#38);?", "&")
+                           .replaceAll("&(?:lt|#60);?", "<")
+                           .replaceAll("&(?:gt|#62);?", ">")
+                           .replaceAll("&(?:nbsp|#160|#xA0|#xa0|ensp|emsp|thinsp|zwnj|zwj|amp;nbsp);?", " ")
+                           .replace('’', '\'')
+                           .replace('‘', '\'')
+                           .replaceAll("\\s+", " ")
+                           .trim();
+        if (raw.length() < 10) return "unknown";
 
-        int caSpecificBonus = 0;
-        int esSpecificBonus = 0;
+        // Remove trailing bibliographic metadata: coordinator/editor lists, ISBNs, publisher copyright
+        String cleaned = raw.replaceAll("(?i)©?\\s*\\b\\d{4}\\b[^.]*all rights reserved.*", " ")
+                            .replaceAll("(?i)/\\s*(?:coord(?:inator[s]?)?|dir(?:ector[s]?)?|edit(?:or[s]?)?|ed|coords?)\\.?\\s*(?:by|per|por|de)\\b.*", " ")
+                            .replaceAll("(?i)\\bISBN(?:-1[03])?:?\\s*[0-9\\-Xx]+.*", " ")
+                            .trim();
+        String toCheck = cleaned.length() >= 15 ? cleaned : raw;
 
-        // Character-level unique features
-        if (raw.contains("ñ") || raw.contains("Ñ") || raw.contains("¿") || raw.contains("¡")) {
-            esSpecificBonus += 6;
-        }
-        if (raw.contains("ç") || raw.contains("Ç") || raw.contains("·") || raw.contains("l·l") || raw.contains("L·L") || raw.contains("L.L") || raw.contains("l.l")) {
-            caSpecificBonus += 6;
-        }
-
-        // Separate Catalan elisions: d', l', s', m', t', n', c', qu'
-        String clean = raw.toLowerCase()
-                .replaceAll("\\b([dlstmnc]|qu)['’]", "$1' ")
-                .replaceAll("['-]", " ");
-
-        Matcher matcher = WORD_PATTERN.matcher(clean);
-
-        int totalWords = 0;
-        int scoreEn = 0;
-        int scoreEs = esSpecificBonus;
-        int scoreCa = caSpecificBonus;
-
-        while (matcher.find()) {
-            String w = matcher.group();
-            totalWords++;
-
-            if (EN_DISTINCT.contains(w)) scoreEn += 3;
-            else if (EN_COMMON.contains(w)) scoreEn += 1;
-
-            if (ES_DISTINCT.contains(w)) scoreEs += 3;
-            else if (ES_COMMON.contains(w)) scoreEs += 1;
-
-            if (CA_DISTINCT.contains(w)) scoreCa += 3;
-            else if (CA_COMMON.contains(w)) scoreCa += 1;
-
-            if ("d'".equals(w) || "l'".equals(w) || "s'".equals(w) || "m'".equals(w) || "t'".equals(w) || "n'".equals(w)) {
-                scoreCa += 3;
-            }
-            if ("i".equals(w)) scoreCa += 2;
-            if ("y".equals(w)) scoreEs += 2;
+        Language lang = LINGUA_DETECTOR.detectLanguageOf(toCheck);
+        if (lang == null || lang == Language.UNKNOWN) {
+            return "unknown";
         }
 
-        if (totalWords == 0) return "unknown";
-
-        int maxScore = Math.max(scoreEn, Math.max(scoreEs, scoreCa));
-        if (maxScore < 4 && totalWords > 5) return "unknown";
-
-        if (scoreEn > scoreEs && scoreEn > scoreCa && scoreEn >= (maxScore * 0.6)) return "en_GB";
-        if (scoreCa > scoreEs && scoreCa > scoreEn) return "ca_ES";
-        if (scoreEs > scoreCa && scoreEs > scoreEn) return "es_ES";
-
-        return "unknown";
+        return switch (lang) {
+            case CATALAN -> "ca_ES";
+            case SPANISH -> "es_ES";
+            case ENGLISH -> "en_GB";
+            case FRENCH -> "fr_FR";
+            case ITALIAN -> "it_IT";
+            case PORTUGUESE -> "pt_PT";
+            case GERMAN -> "de_DE";
+            case BASQUE -> "eu_ES";
+            case RUSSIAN -> "ru_RU";
+            default -> "unknown";
+        };
     }
 
     /**
@@ -259,9 +248,9 @@ public class PublicacionAbstractsService {
                 isSubmissionYear ? "$submissionYear" : buildPublicationYearExpr(),
                 0
             )))
-            .append("has_ca", new Document("$cond", List.of(new Document("$gt", List.of(new Document("$strLenCP", new Document("$ifNull", List.of("$abstract.ca_ES", ""))), 0)), 1, 0)))
-            .append("has_es", new Document("$cond", List.of(new Document("$gt", List.of(new Document("$strLenCP", new Document("$ifNull", List.of("$abstract.es_ES", ""))), 0)), 1, 0)))
-            .append("has_en", new Document("$cond", List.of(new Document("$gt", List.of(new Document("$strLenCP", new Document("$ifNull", List.of("$abstract.en_GB", ""))), 0)), 1, 0)))
+            .append("has_ca", buildHasTextCond("ca_ES"))
+            .append("has_es", buildHasTextCond("es_ES"))
+            .append("has_en", buildHasTextCond("en_GB"))
             .append("ca", new Document("$ifNull", List.of("$abstract.ca_ES", "")))
             .append("es", new Document("$ifNull", List.of("$abstract.es_ES", "")))
             .append("en", new Document("$ifNull", List.of("$abstract.en_GB", "")))
@@ -396,9 +385,9 @@ public class PublicacionAbstractsService {
         List<Document> andList = new ArrayList<>();
 
         andList.add(new Document("$or", List.of(
-            new Document("abstract.ca_ES", new Document("$exists", true).append("$ne", "")),
-            new Document("abstract.es_ES", new Document("$exists", true).append("$ne", "")),
-            new Document("abstract.en_GB", new Document("$exists", true).append("$ne", ""))
+            new Document("abstract.ca_ES", new Document("$exists", true).append("$type", "string").append("$not", new Document("$regex", HTML_EMPTY_REGEX).append("$options", "i"))),
+            new Document("abstract.es_ES", new Document("$exists", true).append("$type", "string").append("$not", new Document("$regex", HTML_EMPTY_REGEX).append("$options", "i"))),
+            new Document("abstract.en_GB", new Document("$exists", true).append("$type", "string").append("$not", new Document("$regex", HTML_EMPTY_REGEX).append("$options", "i")))
         )));
 
         if (isSubmissionYear) {
@@ -525,9 +514,9 @@ public class PublicacionAbstractsService {
                 String es = abs.getString("es_ES");
                 String en = abs.getString("en_GB");
 
-                boolean hasCa = ca != null && !ca.isBlank();
-                boolean hasEs = es != null && !es.isBlank();
-                boolean hasEn = en != null && !en.isBlank();
+                boolean hasCa = !isHtmlEmpty(ca);
+                boolean hasEs = !isHtmlEmpty(es);
+                boolean hasEn = !isHtmlEmpty(en);
 
                 String detCa = hasCa ? detectLanguage(ca) : "none";
                 String detEs = hasEs ? detectLanguage(es) : "none";
@@ -652,9 +641,9 @@ public class PublicacionAbstractsService {
                 isSubmissionYear ? "$submissionYear" : buildPublicationYearExpr(),
                 0
             )))
-            .append("has_ca", new Document("$cond", List.of(new Document("$gt", List.of(new Document("$strLenCP", new Document("$ifNull", List.of("$abstract.ca_ES", ""))), 0)), 1, 0)))
-            .append("has_es", new Document("$cond", List.of(new Document("$gt", List.of(new Document("$strLenCP", new Document("$ifNull", List.of("$abstract.es_ES", ""))), 0)), 1, 0)))
-            .append("has_en", new Document("$cond", List.of(new Document("$gt", List.of(new Document("$strLenCP", new Document("$ifNull", List.of("$abstract.en_GB", ""))), 0)), 1, 0)))
+            .append("has_ca", buildHasTextCond("ca_ES"))
+            .append("has_es", buildHasTextCond("es_ES"))
+            .append("has_en", buildHasTextCond("en_GB"))
             .append("ca", new Document("$ifNull", List.of("$abstract.ca_ES", "")))
             .append("es", new Document("$ifNull", List.of("$abstract.es_ES", "")))
             .append("en", new Document("$ifNull", List.of("$abstract.en_GB", "")))
@@ -800,11 +789,11 @@ public class PublicacionAbstractsService {
         List<Document> pipeline = new ArrayList<>();
 
         List<Document> initialMatches = new ArrayList<>();
-        // Only publications that have an abstract (non-empty ca, es, or en)
+        // Only publications that have an abstract with actual text (not empty HTML)
         initialMatches.add(new Document("$or", List.of(
-            new Document("abstract.ca_ES", new Document("$exists", true).append("$ne", "")),
-            new Document("abstract.es_ES", new Document("$exists", true).append("$ne", "")),
-            new Document("abstract.en_GB", new Document("$exists", true).append("$ne", ""))
+            new Document("abstract.ca_ES", new Document("$exists", true).append("$type", "string").append("$not", new Document("$regex", HTML_EMPTY_REGEX).append("$options", "i"))),
+            new Document("abstract.es_ES", new Document("$exists", true).append("$type", "string").append("$not", new Document("$regex", HTML_EMPTY_REGEX).append("$options", "i"))),
+            new Document("abstract.en_GB", new Document("$exists", true).append("$type", "string").append("$not", new Document("$regex", HTML_EMPTY_REGEX).append("$options", "i")))
         )));
 
         if (type != null && !type.isBlank()) {
@@ -971,9 +960,9 @@ public class PublicacionAbstractsService {
                 0
             )))
             .append("type", new Document("$ifNull", List.of("$type.term.ca_ES", "Sense tipus")))
-            .append("has_ca", new Document("$cond", List.of(new Document("$gt", List.of(new Document("$strLenCP", new Document("$ifNull", List.of("$abstract.ca_ES", ""))), 0)), 1, 0)))
-            .append("has_es", new Document("$cond", List.of(new Document("$gt", List.of(new Document("$strLenCP", new Document("$ifNull", List.of("$abstract.es_ES", ""))), 0)), 1, 0)))
-            .append("has_en", new Document("$cond", List.of(new Document("$gt", List.of(new Document("$strLenCP", new Document("$ifNull", List.of("$abstract.en_GB", ""))), 0)), 1, 0)))
+            .append("has_ca", buildHasTextCond("ca_ES"))
+            .append("has_es", buildHasTextCond("es_ES"))
+            .append("has_en", buildHasTextCond("en_GB"))
             .append("ca", new Document("$ifNull", List.of("$abstract.ca_ES", "")))
             .append("es", new Document("$ifNull", List.of("$abstract.es_ES", "")))
             .append("en", new Document("$ifNull", List.of("$abstract.en_GB", "")))
@@ -1098,10 +1087,9 @@ public class PublicacionAbstractsService {
             .append("type", 1)
             .append("language", 1)
             .append("contributors", 1)
-            .append("abstract", 1)
-            .append("has_ca", new Document("$cond", List.of(new Document("$gt", List.of(new Document("$strLenCP", new Document("$ifNull", List.of("$abstract.ca_ES", ""))), 0)), 1, 0)))
-            .append("has_es", new Document("$cond", List.of(new Document("$gt", List.of(new Document("$strLenCP", new Document("$ifNull", List.of("$abstract.es_ES", ""))), 0)), 1, 0)))
-            .append("has_en", new Document("$cond", List.of(new Document("$gt", List.of(new Document("$strLenCP", new Document("$ifNull", List.of("$abstract.en_GB", ""))), 0)), 1, 0)))
+            .append("has_ca", buildHasTextCond("ca_ES"))
+            .append("has_es", buildHasTextCond("es_ES"))
+            .append("has_en", buildHasTextCond("en_GB"))
             .append("ca", new Document("$ifNull", List.of("$abstract.ca_ES", "")))
             .append("es", new Document("$ifNull", List.of("$abstract.es_ES", "")))
             .append("en", new Document("$ifNull", List.of("$abstract.en_GB", "")))
@@ -1238,29 +1226,28 @@ public class PublicacionAbstractsService {
 
         if (isLinguisticFilter) {
             pipeline.add(new Document("$sort", new Document(sortProperty, sortOrder).append("uuid", 1)));
-            List<Document> allDocs = mongoTemplate.getCollection("Researchoutputs").aggregate(pipeline).into(new ArrayList<>());
-            List<Map<String, Object>> matchedItems = new ArrayList<>();
             String f = filter.toLowerCase();
+            int fromIndex = Math.max(0, page) * Math.max(1, size);
+            int toIndex = fromIndex + Math.max(1, size);
+            long matchCount = 0;
 
-            for (Document doc : allDocs) {
-                Map<String, Object> item = formatPublicationItem(doc);
-                boolean matches = false;
-                switch (f) {
-                    case "wrong_language" -> matches = Boolean.TRUE.equals(item.get("hasAnyWrongLanguage"));
-                    case "genuine_3_langs" -> matches = Boolean.TRUE.equals(item.get("isGenuine3Langs"));
-                    case "wrong_ca" -> matches = Boolean.TRUE.equals(item.get("isWrongCa"));
-                    case "wrong_es" -> matches = Boolean.TRUE.equals(item.get("isWrongEs"));
-                    case "wrong_en" -> matches = Boolean.TRUE.equals(item.get("isWrongEn"));
-                }
-                if (matches) {
-                    matchedItems.add(item);
+            try (var cursor = mongoTemplate.getCollection("Researchoutputs")
+                    .aggregate(pipeline)
+                    .allowDiskUse(true)
+                    .batchSize(500)
+                    .iterator()) {
+                while (cursor.hasNext()) {
+                    Document doc = cursor.next();
+                    if (matchesLinguisticFilter(f, doc)) {
+                        if (matchCount >= fromIndex && matchCount < toIndex) {
+                            items.add(formatPublicationItem(doc));
+                        }
+                        matchCount++;
+                    }
                 }
             }
 
-            totalElements = matchedItems.size();
-            int fromIndex = Math.min(Math.max(0, page) * Math.max(1, size), matchedItems.size());
-            int toIndex = Math.min(fromIndex + Math.max(1, size), matchedItems.size());
-            items = matchedItems.subList(fromIndex, toIndex);
+            totalElements = matchCount;
         } else {
             List<Document> dataPipeline = new ArrayList<>();
             dataPipeline.add(new Document("$sort", new Document(sortProperty, sortOrder).append("uuid", 1)));
@@ -1302,6 +1289,48 @@ public class PublicacionAbstractsService {
         return response;
     }
 
+    private boolean matchesLinguisticFilter(String filter, Document doc) {
+        String caText = doc.getString("ca");
+        String esText = doc.getString("es");
+        String enText = doc.getString("en");
+
+        boolean hasCa = !isHtmlEmpty(caText);
+        boolean hasEs = !isHtmlEmpty(esText);
+        boolean hasEn = !isHtmlEmpty(enText);
+        if (!hasCa && !hasEs && !hasEn) return false;
+
+        // Fast-path skips if specific language field is missing
+        if ("wrong_ca".equals(filter) && !hasCa) return false;
+        if ("wrong_es".equals(filter) && !hasEs) return false;
+        if ("wrong_en".equals(filter) && !hasEn) return false;
+        if ("genuine_3_langs".equals(filter) && (!hasCa || !hasEs || !hasEn)) return false;
+
+        boolean isIdentical3 = hasCa && hasEs && hasEn && ((Number) doc.getOrDefault("is_identical_3", 0)).intValue() == 1;
+        if ("genuine_3_langs".equals(filter) && isIdentical3) return false;
+
+        String detectedCa = hasCa ? detectLanguage(caText) : "none";
+        boolean isWrongCa = hasCa && ("en_GB".equals(detectedCa) || "es_ES".equals(detectedCa));
+        if ("wrong_ca".equals(filter)) return isWrongCa;
+
+        String detectedEs = hasEs ? detectLanguage(esText) : "none";
+        boolean isWrongEs = hasEs && ("en_GB".equals(detectedEs) || "ca_ES".equals(detectedEs));
+        if ("wrong_es".equals(filter)) return isWrongEs;
+
+        String detectedEn = hasEn ? detectLanguage(enText) : "none";
+        boolean isWrongEn = hasEn && ("ca_ES".equals(detectedEn) || "es_ES".equals(detectedEn));
+        if ("wrong_en".equals(filter)) return isWrongEn;
+
+        if ("wrong_language".equals(filter)) {
+            return isWrongCa || isWrongEs || isWrongEn;
+        }
+
+        if ("genuine_3_langs".equals(filter)) {
+            return hasCa && hasEs && hasEn && !isWrongCa && !isWrongEs && !isWrongEn && !isIdentical3;
+        }
+
+        return false;
+    }
+
     private Map<String, Object> formatPublicationItem(Document doc) {
         Map<String, Object> item = new LinkedHashMap<>();
         String uuid = doc.getString("uuid");
@@ -1340,15 +1369,15 @@ public class PublicacionAbstractsService {
         }
         item.put("authors", authors);
 
-        boolean hasCa = ((Number) doc.getOrDefault("has_ca", 0)).intValue() == 1;
-        boolean hasEs = ((Number) doc.getOrDefault("has_es", 0)).intValue() == 1;
-        boolean hasEn = ((Number) doc.getOrDefault("has_en", 0)).intValue() == 1;
-        int langCount = ((Number) doc.getOrDefault("lang_count", 0)).intValue();
-        boolean isIdentical3 = ((Number) doc.getOrDefault("is_identical_3", 0)).intValue() == 1;
-
         String caText = doc.getString("ca");
         String esText = doc.getString("es");
         String enText = doc.getString("en");
+
+        boolean hasCa = !isHtmlEmpty(caText);
+        boolean hasEs = !isHtmlEmpty(esText);
+        boolean hasEn = !isHtmlEmpty(enText);
+        int langCount = (hasCa ? 1 : 0) + (hasEs ? 1 : 0) + (hasEn ? 1 : 0);
+        boolean isIdentical3 = hasCa && hasEs && hasEn && ((Number) doc.getOrDefault("is_identical_3", 0)).intValue() == 1;
 
         // Real Language Detection
         String detectedCa = hasCa ? detectLanguage(caText) : "none";
@@ -1410,20 +1439,23 @@ public class PublicacionAbstractsService {
         item.put("statusLabel", statusLabel);
         item.put("statusClass", statusClass);
 
-        item.put("abstractCa", caText);
-        item.put("abstractEs", esText);
-        item.put("abstractEn", enText);
+        item.put("abstractCa", hasCa ? caText : "");
+        item.put("abstractEs", hasEs ? esText : "");
+        item.put("abstractEn", hasEn ? enText : "");
 
-        item.put("abstractPreviewCa", truncate(caText, 160));
-        item.put("abstractPreviewEs", truncate(esText, 160));
-        item.put("abstractPreviewEn", truncate(enText, 160));
+        item.put("abstractPreviewCa", hasCa ? truncate(caText, 160) : "");
+        item.put("abstractPreviewEs", hasEs ? truncate(esText, 160) : "");
+        item.put("abstractPreviewEn", hasEn ? truncate(enText, 160) : "");
 
         return item;
     }
 
     private String truncate(String text, int maxLength) {
-        if (text == null || text.isBlank()) return "";
-        String cleaned = text.replaceAll("<[^>]+>", " ").replaceAll("\\s+", " ").trim();
+        if (text == null || isHtmlEmpty(text)) return "";
+        String cleaned = text.replaceAll("<[^>]+>", " ")
+                             .replaceAll("&(?:nbsp|#160|#xA0|#xa0|ensp|emsp|thinsp|zwnj|zwj|amp;nbsp);?", " ")
+                             .replaceAll("\\s+", " ")
+                             .trim();
         if (cleaned.length() <= maxLength) return cleaned;
         return cleaned.substring(0, maxLength) + "...";
     }
@@ -1451,13 +1483,13 @@ public class PublicacionAbstractsService {
         Document termDoc = typeDoc != null ? (Document) typeDoc.get("term") : null;
         result.put("type", termDoc != null ? termDoc.getString("ca_ES") : "Sense tipus");
 
-        result.put("abstractCa", ca != null ? ca : "");
-        result.put("abstractEs", es != null ? es : "");
-        result.put("abstractEn", en != null ? en : "");
+        boolean hasCa = !isHtmlEmpty(ca);
+        boolean hasEs = !isHtmlEmpty(es);
+        boolean hasEn = !isHtmlEmpty(en);
 
-        boolean hasCa = ca != null && !ca.isBlank();
-        boolean hasEs = es != null && !es.isBlank();
-        boolean hasEn = en != null && !en.isBlank();
+        result.put("abstractCa", hasCa ? ca : "");
+        result.put("abstractEs", hasEs ? es : "");
+        result.put("abstractEn", hasEn ? en : "");
 
         result.put("hasCa", hasCa);
         result.put("hasEs", hasEs);
@@ -1496,12 +1528,447 @@ public class PublicacionAbstractsService {
         result.put("lengthEs", hasEs ? es.length() : 0);
         result.put("lengthEn", hasEn ? en.length() : 0);
 
+        int wordsCa = hasCa ? countWords(ca) : 0;
+        int wordsEs = hasEs ? countWords(es) : 0;
+        int wordsEn = hasEn ? countWords(en) : 0;
+        result.put("wordsCa", wordsCa);
+        result.put("wordsEs", wordsEs);
+        result.put("wordsEn", wordsEn);
+
+        List<Integer> activeCounts = new ArrayList<>();
+        if (hasCa) activeCounts.add(wordsCa);
+        if (hasEs) activeCounts.add(wordsEs);
+        if (hasEn) activeCounts.add(wordsEn);
+
+        if (activeCounts.size() >= 2) {
+            int maxW = Collections.max(activeCounts);
+            int minW = Collections.min(activeCounts);
+            result.put("diffWords", maxW - minW);
+            result.put("ratioWords", minW > 0 ? (double) Math.round(((double) maxW / minW) * 10.0) / 10.0 : (maxW > 0 ? 99.0 : 1.0));
+            result.put("pctDiscrepancy", maxW > 0 ? Math.round(((double) (maxW - minW) / maxW) * 1000.0) / 10.0 : 0.0);
+        } else {
+            result.put("diffWords", 0);
+            result.put("ratioWords", 1.0);
+            result.put("pctDiscrepancy", 0.0);
+        }
+
         return Optional.of(result);
     }
 
     private String cleanForCompare(String text) {
-        if (text == null) return "";
-        return text.replaceAll("<[^>]+>", " ").replaceAll("\\s+", " ").trim().toLowerCase();
+        if (text == null || isHtmlEmpty(text)) return "";
+        return text.replaceAll("<[^>]+>", " ")
+                   .replaceAll("&(?:nbsp|#160|#xA0|#xa0|ensp|emsp|thinsp|zwnj|zwj|amp;nbsp);?", " ")
+                   .replaceAll("\\s+", " ")
+                   .trim()
+                   .toLowerCase();
+    }
+
+    private static class DiscrepancyCandidate {
+        final Document doc;
+        final int wordsCa;
+        final int wordsEs;
+        final int wordsEn;
+        final int diffWords;
+        final double ratioWords;
+        final double pctDiscrepancy;
+        final String shortestLang;
+        final String longestLang;
+        final String severity;
+        final int pubYear;
+        final int subYear;
+
+        DiscrepancyCandidate(Document doc, int wordsCa, int wordsEs, int wordsEn, int diffWords, double ratioWords, double pctDiscrepancy, String shortestLang, String longestLang, String severity, int pubYear, int subYear) {
+            this.doc = doc;
+            this.wordsCa = wordsCa;
+            this.wordsEs = wordsEs;
+            this.wordsEn = wordsEn;
+            this.diffWords = diffWords;
+            this.ratioWords = ratioWords;
+            this.pctDiscrepancy = pctDiscrepancy;
+            this.shortestLang = shortestLang;
+            this.longestLang = longestLang;
+            this.severity = severity;
+            this.pubYear = pubYear;
+            this.subYear = subYear;
+        }
+    }
+
+    public Map<String, Object> getDiscrepanciesStats(Integer desde, Integer hasta, String type, String yearType, Integer minDiff, Double minRatio, Integer minLangs) {
+        int effectiveMinDiff = minDiff != null ? minDiff : 50;
+        double effectiveMinRatio = minRatio != null ? minRatio : 1.5;
+        int effectiveMinLangs = minLangs != null && minLangs == 3 ? 3 : 2;
+        boolean isSubmissionYear = "submissionYear".equalsIgnoreCase(yearType);
+
+        String cacheKey = "disc_stats_" + desde + "_" + hasta + "_" + type + "_" + yearType + "_" + effectiveMinDiff + "_" + effectiveMinRatio + "_" + effectiveMinLangs;
+        CacheEntry cached = discrepanciesStatsCache.get(cacheKey);
+        if (isCacheValid(cached)) {
+            return (Map<String, Object>) cached.data();
+        }
+
+        List<Document> pipeline = buildDiscrepanciesBasePipeline(desde, hasta, type, isSubmissionYear, effectiveMinLangs);
+
+        long totalMulti = 0;
+        long totalDiscrepant = 0;
+        long criticalCount = 0;
+        long highCount = 0;
+        long moderateCount = 0;
+
+        long caShortestCount = 0;
+        long esShortestCount = 0;
+        long enShortestCount = 0;
+
+        long caLongestCount = 0;
+        long esLongestCount = 0;
+        long enLongestCount = 0;
+
+        long totalWordsCa = 0, countCa = 0;
+        long totalWordsEs = 0, countEs = 0;
+        long totalWordsEn = 0, countEn = 0;
+        long sumDiffWords = 0;
+
+        try (var cursor = mongoTemplate.getCollection("Researchoutputs")
+                .aggregate(pipeline)
+                .batchSize(100)
+                .iterator()) {
+            while (cursor.hasNext()) {
+                Document doc = cursor.next();
+                String ca = doc.getString("ca");
+                String es = doc.getString("es");
+                String en = doc.getString("en");
+
+                boolean hasCa = !isHtmlEmpty(ca);
+                boolean hasEs = !isHtmlEmpty(es);
+                boolean hasEn = !isHtmlEmpty(en);
+
+                int wCa = hasCa ? countWords(ca) : 0;
+                int wEs = hasEs ? countWords(es) : 0;
+                int wEn = hasEn ? countWords(en) : 0;
+
+                int activeLangs = (hasCa ? 1 : 0) + (hasEs ? 1 : 0) + (hasEn ? 1 : 0);
+                if (activeLangs < effectiveMinLangs) continue;
+
+                totalMulti++;
+                if (hasCa) { totalWordsCa += wCa; countCa++; }
+                if (hasEs) { totalWordsEs += wEs; countEs++; }
+                if (hasEn) { totalWordsEn += wEn; countEn++; }
+
+                List<Integer> activeCounts = new ArrayList<>();
+                if (hasCa) activeCounts.add(wCa);
+                if (hasEs) activeCounts.add(wEs);
+                if (hasEn) activeCounts.add(wEn);
+
+                int maxW = Collections.max(activeCounts);
+                int minW = Collections.min(activeCounts);
+                int diffW = maxW - minW;
+                double ratioW = minW > 0 ? (double) maxW / minW : (maxW > 0 ? 99.0 : 1.0);
+
+                if (diffW >= effectiveMinDiff || ratioW >= effectiveMinRatio) {
+                    totalDiscrepant++;
+                    sumDiffWords += diffW;
+
+                    if (ratioW >= 4.0 || diffW >= 150) {
+                        criticalCount++;
+                    } else if (ratioW >= 2.5 || diffW >= 80) {
+                        highCount++;
+                    } else {
+                        moderateCount++;
+                    }
+
+                    if (hasCa && wCa == minW) caShortestCount++;
+                    else if (hasEs && wEs == minW) esShortestCount++;
+                    else if (hasEn && wEn == minW) enShortestCount++;
+
+                    if (hasEn && wEn == maxW) enLongestCount++;
+                    else if (hasEs && wEs == maxW) esLongestCount++;
+                    else if (hasCa && wCa == maxW) caLongestCount++;
+                }
+            }
+        }
+
+        Map<String, Object> resp = new LinkedHashMap<>();
+        resp.put("totalMultiLangs", totalMulti);
+        resp.put("totalDiscrepant", totalDiscrepant);
+        resp.put("pctDiscrepant", totalMulti > 0 ? Math.round(((double) totalDiscrepant / totalMulti) * 1000.0) / 10.0 : 0.0);
+        resp.put("criticalCount", criticalCount);
+        resp.put("highCount", highCount);
+        resp.put("moderateCount", moderateCount);
+
+        resp.put("caShortestCount", caShortestCount);
+        resp.put("esShortestCount", esShortestCount);
+        resp.put("enShortestCount", enShortestCount);
+
+        resp.put("caLongestCount", caLongestCount);
+        resp.put("esLongestCount", esLongestCount);
+        resp.put("enLongestCount", enLongestCount);
+
+        resp.put("avgWordsCa", countCa > 0 ? Math.round((double) totalWordsCa / countCa) : 0);
+        resp.put("avgWordsEs", countEs > 0 ? Math.round((double) totalWordsEs / countEs) : 0);
+        resp.put("avgWordsEn", countEn > 0 ? Math.round((double) totalWordsEn / countEn) : 0);
+        resp.put("avgDiffWords", totalDiscrepant > 0 ? Math.round((double) sumDiffWords / totalDiscrepant) : 0);
+
+        discrepanciesStatsCache.put(cacheKey, new CacheEntry(resp, System.currentTimeMillis()));
+        return resp;
+    }
+
+    public Map<String, Object> getDiscrepanciesList(
+            Integer desde, Integer hasta, String type, String yearType,
+            Integer minDiff, Double minRatio, Integer minLangs,
+            String shortestLang, String longestLang, String severity,
+            String search, int page, int size, String sortField, String sortDir) {
+
+        int effectiveMinDiff = minDiff != null ? minDiff : 50;
+        double effectiveMinRatio = minRatio != null ? minRatio : 1.5;
+        int effectiveMinLangs = minLangs != null && minLangs == 3 ? 3 : 2;
+        boolean isSubmissionYear = "submissionYear".equalsIgnoreCase(yearType);
+
+        List<Document> pipeline = buildDiscrepanciesBasePipeline(desde, hasta, type, isSubmissionYear, effectiveMinLangs);
+
+        String searchLower = (search != null && !search.isBlank()) ? search.trim().toLowerCase() : null;
+
+        List<DiscrepancyCandidate> candidates = new ArrayList<>();
+
+        try (var cursor = mongoTemplate.getCollection("Researchoutputs")
+                .aggregate(pipeline)
+                .batchSize(100)
+                .iterator()) {
+            while (cursor.hasNext()) {
+                Document doc = cursor.next();
+                String ca = doc.getString("ca");
+                String es = doc.getString("es");
+                String en = doc.getString("en");
+
+                boolean hasCa = !isHtmlEmpty(ca);
+                boolean hasEs = !isHtmlEmpty(es);
+                boolean hasEn = !isHtmlEmpty(en);
+
+                int activeLangs = (hasCa ? 1 : 0) + (hasEs ? 1 : 0) + (hasEn ? 1 : 0);
+                if (activeLangs < effectiveMinLangs) continue;
+
+                int wCa = hasCa ? countWords(ca) : 0;
+                int wEs = hasEs ? countWords(es) : 0;
+                int wEn = hasEn ? countWords(en) : 0;
+
+                List<Integer> activeCounts = new ArrayList<>();
+                if (hasCa) activeCounts.add(wCa);
+                if (hasEs) activeCounts.add(wEs);
+                if (hasEn) activeCounts.add(wEn);
+
+                int maxW = Collections.max(activeCounts);
+                int minW = Collections.min(activeCounts);
+                int diffW = maxW - minW;
+                double ratioW = minW > 0 ? (double) maxW / minW : (maxW > 0 ? 99.0 : 1.0);
+
+                if (diffW < effectiveMinDiff && ratioW < effectiveMinRatio) continue;
+
+                String sLang = (hasCa && wCa == minW) ? "ca" : ((hasEs && wEs == minW) ? "es" : "en");
+                String lLang = (hasEn && wEn == maxW) ? "en" : ((hasEs && wEs == maxW) ? "es" : "ca");
+
+                if (shortestLang != null && !"all".equalsIgnoreCase(shortestLang) && !sLang.equalsIgnoreCase(shortestLang)) continue;
+                if (longestLang != null && !"all".equalsIgnoreCase(longestLang) && !lLang.equalsIgnoreCase(longestLang)) continue;
+
+                String sev;
+                if (ratioW >= 4.0 || diffW >= 150) {
+                    sev = "critical";
+                } else if (ratioW >= 2.5 || diffW >= 80) {
+                    sev = "high";
+                } else {
+                    sev = "moderate";
+                }
+
+                if (severity != null && !"all".equalsIgnoreCase(severity) && !sev.equalsIgnoreCase(severity)) continue;
+
+                if (searchLower != null) {
+                    Document titleDoc = (Document) doc.get("title");
+                    String titleVal = titleDoc != null ? titleDoc.getString("value") : "";
+                    boolean matchTitle = titleVal != null && titleVal.toLowerCase().contains(searchLower);
+                    boolean matchUuid = doc.getString("uuid") != null && doc.getString("uuid").toLowerCase().contains(searchLower);
+                    boolean matchCa = ca != null && ca.toLowerCase().contains(searchLower);
+                    boolean matchEs = es != null && es.toLowerCase().contains(searchLower);
+                    boolean matchEn = en != null && en.toLowerCase().contains(searchLower);
+                    if (!matchTitle && !matchUuid && !matchCa && !matchEs && !matchEn) continue;
+                }
+
+                double pctDiscrepancy = maxW > 0 ? Math.round(((double)(maxW - minW) / maxW) * 1000.0) / 10.0 : 0.0;
+                int pYear = ((Number) doc.getOrDefault("publicationYear", 0)).intValue();
+                int sYear = ((Number) doc.getOrDefault("submissionYear", 0)).intValue();
+
+                candidates.add(new DiscrepancyCandidate(doc, wCa, wEs, wEn, diffW, ratioW, pctDiscrepancy, sLang, lLang, sev, pYear, sYear));
+            }
+        }
+
+        Comparator<DiscrepancyCandidate> comparator;
+        switch (sortField != null ? sortField : "diffWords") {
+            case "ratioWords" -> comparator = Comparator.comparingDouble(c -> c.ratioWords);
+            case "wordsCa" -> comparator = Comparator.comparingInt(c -> c.wordsCa);
+            case "wordsEs" -> comparator = Comparator.comparingInt(c -> c.wordsEs);
+            case "wordsEn" -> comparator = Comparator.comparingInt(c -> c.wordsEn);
+            case "submissionYear" -> comparator = Comparator.comparingInt(c -> c.subYear);
+            case "publicationYear" -> comparator = Comparator.comparingInt(c -> c.pubYear);
+            default -> comparator = Comparator.comparingInt(c -> c.diffWords);
+        }
+        if (!"asc".equalsIgnoreCase(sortDir)) {
+            comparator = comparator.reversed();
+        }
+        candidates.sort(comparator);
+
+        int totalElements = candidates.size();
+        int totalPages = size > 0 ? (int) Math.ceil((double) totalElements / size) : 0;
+        int fromIndex = Math.min(Math.max(0, page) * Math.max(1, size), totalElements);
+        int toIndex = Math.min(fromIndex + Math.max(1, size), totalElements);
+
+        List<DiscrepancyCandidate> paged = candidates.subList(fromIndex, toIndex);
+        List<Map<String, Object>> items = new ArrayList<>();
+
+        for (DiscrepancyCandidate c : paged) {
+            Document doc = c.doc;
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("uuid", doc.getString("uuid"));
+            Document titleDoc = (Document) doc.get("title");
+            item.put("title", titleDoc != null ? titleDoc.getString("value") : "Sense títol");
+            item.put("publicationYear", c.pubYear);
+            item.put("submissionYear", c.subYear);
+
+            Document typeDoc = (Document) doc.get("type");
+            Document termDoc = typeDoc != null ? (Document) typeDoc.get("term") : null;
+            item.put("typeName", termDoc != null ? termDoc.getString("ca_ES") : "Sense tipus");
+
+            List<Document> contributors = doc.getList("contributors", Document.class);
+            String authors = "Sense autors";
+            if (contributors != null && !contributors.isEmpty()) {
+                List<String> names = new ArrayList<>();
+                for (Document cnt : contributors) {
+                    Document n = (Document) cnt.get("name");
+                    if (n != null) {
+                        String ln = n.getString("lastName");
+                        String fn = n.getString("firstName");
+                        if (ln != null && fn != null) names.add(ln + ", " + fn);
+                        else if (ln != null) names.add(ln);
+                    }
+                }
+                if (!names.isEmpty()) authors = String.join("; ", names);
+            }
+            item.put("authors", authors);
+
+            String ca = doc.getString("ca");
+            String es = doc.getString("es");
+            String en = doc.getString("en");
+
+            boolean hasCa = !isHtmlEmpty(ca);
+            boolean hasEs = !isHtmlEmpty(es);
+            boolean hasEn = !isHtmlEmpty(en);
+
+            item.put("hasCa", hasCa);
+            item.put("hasEs", hasEs);
+            item.put("hasEn", hasEn);
+
+            item.put("wordsCa", c.wordsCa);
+            item.put("wordsEs", c.wordsEs);
+            item.put("wordsEn", c.wordsEn);
+
+            item.put("charsCa", ca != null ? ca.length() : 0);
+            item.put("charsEs", es != null ? es.length() : 0);
+            item.put("charsEn", en != null ? en.length() : 0);
+
+            item.put("diffWords", c.diffWords);
+            item.put("ratioWords", Math.round(c.ratioWords * 10.0) / 10.0);
+            item.put("pctDiscrepancy", c.pctDiscrepancy);
+
+            item.put("shortestLang", c.shortestLang);
+            item.put("longestLang", c.longestLang);
+            item.put("severity", c.severity);
+
+            item.put("detectedCa", hasCa ? detectLanguage(ca) : "none");
+            item.put("detectedEs", hasEs ? detectLanguage(es) : "none");
+            item.put("detectedEn", hasEn ? detectLanguage(en) : "none");
+
+            item.put("abstractPreviewCa", hasCa ? truncate(ca, 200) : "");
+            item.put("abstractPreviewEs", hasEs ? truncate(es, 200) : "");
+            item.put("abstractPreviewEn", hasEn ? truncate(en, 200) : "");
+
+            items.add(item);
+        }
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("page", page);
+        response.put("size", size);
+        response.put("totalElements", totalElements);
+        response.put("totalPages", totalPages);
+        response.put("items", items);
+        return response;
+    }
+
+    private List<Document> buildDiscrepanciesBasePipeline(Integer desde, Integer hasta, String type, boolean isSubmissionYear, int minLangs) {
+        List<Document> pipeline = new ArrayList<>();
+
+        List<Document> initialMatches = new ArrayList<>();
+        initialMatches.add(new Document("abstract", new Document("$exists", true).append("$ne", null)));
+        if (type != null && !type.isBlank()) {
+            initialMatches.add(new Document("$or", List.of(
+                new Document("type.term.ca_ES", type),
+                new Document("type.term.es_ES", type),
+                new Document("type.term.en_GB", type)
+            )));
+        }
+        pipeline.add(new Document("$match", new Document("$and", initialMatches)));
+
+        pipeline.add(new Document("$project", new Document()
+            .append("uuid", 1)
+            .append("title.value", 1)
+            .append("publicationYear", new Document("$cond", List.of(
+                new Document("$gte", List.of(
+                    new Document("$ifNull", List.of(buildPublicationYearExpr(), 0)),
+                    1900
+                )),
+                buildPublicationYearExpr(),
+                0
+            )))
+            .append("submissionYear", new Document("$ifNull", List.of("$submissionYear", 0)))
+            .append("type.term.ca_ES", 1)
+            .append("contributors.name", 1)
+            .append("has_ca", buildHasTextCond("ca_ES"))
+            .append("has_es", buildHasTextCond("es_ES"))
+            .append("has_en", buildHasTextCond("en_GB"))
+            .append("ca", new Document("$ifNull", List.of("$abstract.ca_ES", "")))
+            .append("es", new Document("$ifNull", List.of("$abstract.es_ES", "")))
+            .append("en", new Document("$ifNull", List.of("$abstract.en_GB", "")))
+        ));
+
+        pipeline.add(new Document("$project", new Document()
+            .append("uuid", 1)
+            .append("title", 1)
+            .append("publicationYear", 1)
+            .append("submissionYear", 1)
+            .append("type", 1)
+            .append("contributors", 1)
+            .append("ca", 1)
+            .append("es", 1)
+            .append("en", 1)
+            .append("lang_count", new Document("$add", List.of("$has_ca", "$has_es", "$has_en")))
+        ));
+
+        List<Document> matchConditions = new ArrayList<>();
+        matchConditions.add(new Document("lang_count", new Document("$gte", minLangs)));
+
+        String checkYearField = isSubmissionYear ? "submissionYear" : "publicationYear";
+        if (desde != null) {
+            if (desde == 0) {
+                matchConditions.add(new Document("$or", List.of(
+                    new Document(checkYearField, null),
+                    new Document(checkYearField, 0),
+                    new Document(checkYearField, new Document("$exists", false))
+                )));
+            } else {
+                matchConditions.add(new Document(checkYearField, new Document("$gte", desde)));
+            }
+        }
+        if (hasta != null && hasta > 0) {
+            matchConditions.add(new Document(checkYearField, new Document("$lte", hasta)));
+        }
+
+        pipeline.add(new Document("$match", new Document("$and", matchConditions)));
+
+        return pipeline;
     }
 
     public void clearCache() {
@@ -1509,5 +1976,7 @@ public class PublicacionAbstractsService {
         yearsCache.clear();
         yearsLanguagesCache.clear();
         typesCache.clear();
+        discrepanciesStatsCache.clear();
     }
 }
+
