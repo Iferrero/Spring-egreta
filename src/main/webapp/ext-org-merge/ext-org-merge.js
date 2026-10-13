@@ -21,8 +21,23 @@ let sourceUuids = [];
 
 function getUuidsFromUrl() {
   const params = new URLSearchParams(window.location.search);
+  // 1. Si viene indicado source=storage o no hay uuids en la url, mirar sessionStorage
+  if (params.get('source') === 'storage' || !params.get('uuids')) {
+    try {
+      const stored = sessionStorage.getItem('mergeClusterUuids');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch (e) {
+      console.warn('Error llegint mergeClusterUuids de sessionStorage:', e);
+    }
+  }
+  // 2. Fallback a parámetro 'uuids' en la URL
   const uuids = params.get('uuids');
-  return uuids ? uuids.split(',') : [];
+  return uuids ? uuids.split(',').map(s => s.trim()).filter(Boolean) : [];
 }
 
 
@@ -228,6 +243,9 @@ mergeForm.onsubmit = async (e) => {
     } else {
       targetUuid = null;
     }
+    try {
+      sessionStorage.setItem('mergeClusterUuids', JSON.stringify(orgResults.map(o => o.uuid)));
+    } catch (e) {}
     renderResults();
   } catch (err) {
     showError(err.message);

@@ -44,6 +44,7 @@ python -m scripts.abstracts_translator.main [PARÁMETROS]
 | `--model` | `str` | `bsc/salamandra-7b-instruct` | Nombre o ruta del modelo. En LM Studio detecta automáticamente el modelo cargado si no se especifica. |
 | `--lm-studio-url` | `str` (URL) | `http://127.0.0.1:1234/v1` | URL base del servidor local de LM Studio. |
 | `--vllm-url` | `str` (URL) | `http://localhost:8000/v1` | URL base del servidor HTTP vLLM. |
+| `--uuid` | `str` | `None` | **Filtrar por UUID exclusivo**: Procesa y traduce únicamente el Research Output especificado por su UUID (ej: `--uuid bb7e8717-7f64-4215-9151-a8995f2c15fd`). |
 | `--limit` | `int` | `10` | Número máximo de Research Outputs a procesar (`0` = procesar todos sin límite). |
 | `--year` | `int` | `None` | Filtro por año de publicación (`submissionYear`), ej: `--year 2023`. |
 | `--only-with-abstract` | `bool` | `True` | Si está activo, procesa únicamente ROs que ya tengan algún texto en el campo `abstract` de MongoDB. |
@@ -100,7 +101,7 @@ Puedes sobreescribir la configuración por defecto mediante variables de entorno
    ```
 
 2. **Colección `ResearchoutputsAiAbstracts` (Desacoplada)**:
-   Almacena el detalle de trazabilidad, latencias y sincronización con Egreta:
+   Almacena el detalle de trazabilidad, latencias, análisis de discrepancias y sincronización con Egreta:
    ```json
    {
      "_id": ObjectId("..."),
@@ -140,6 +141,28 @@ Puedes sobreescribir la configuración por defecto mediante variables de entorno
          "message": "Abstracts sincronitzats correctament a Egreta (test) [HTTP 200]"
        }
      },
+     "discrepancy_analysis": {
+       "has_ca": true,
+       "has_es": true,
+       "has_en": true,
+       "words_ca": 13,
+       "words_es": 13,
+       "words_en": 14,
+       "chars_ca": 77,
+       "chars_es": 80,
+       "chars_en": 80,
+       "diff_words": 1,
+       "ratio_words": 1.1,
+       "pct_discrepancy": 7.1,
+       "shortest_lang": "ca",
+       "longest_lang": "en",
+       "severity": "none",
+       "has_discrepancy": false,
+       "detected_ca": "none",
+       "detected_es": "none",
+       "detected_en": "none",
+       "analyzed_at": "2026-10-01T09:19:35.876889900Z"
+     },
      "updated_at": "2026-09-07T12:30:00Z"
    }
    ```
@@ -176,20 +199,38 @@ python -m scripts.abstracts_translator.main \
   --egreta-env test
 ```
 
-### 4. Benchmark en servidor GPU con vLLM:
+### 5. Re-traducción automática por alta discrepancia (por año):
 ```bash
-python -m scripts.abstracts_translator.main \
-  --mode benchmark \
-  --engine vllm-server \
-  --vllm-url http://localhost:8000/v1 \
-  --limit 50
+python -m abstracts_translator.retranslate_discrepancies \
+  --year 2024 \
+  --min-ratio 4.0 \
+  --min-word-diff 150 \
+  --mode apply \
+  --engine lm-studio \
+  --sync-egreta \
+  --egreta-env prod
 ```
+
+---
+
+## 🔁 Script de Re-traducción de Discrepancias (`retranslate_discrepancies.py`)
+
+El script `retranslate_discrepancies.py` recorre la colección **`ResearchoutputsAiAbstracts`**, filtra los documentos con alta discrepancia (`ratio_words >= 4.0` o `diff_words >= 150`), extrae el idioma de origen (`source_language`) y los idiomas de destino previamente generados (`generated_languages`), y fuerza su re-traducción automática.
+
+### Opciones y Parámetros:
+- `--year` / `-y`: **(Requerido)** Año de publicación/sumisión a filtrar (ej. `2024`, `2023`, `2021`) o `all` para procesar todos los años.
+- `--min-ratio`: Umbral mínimo de ratio de discrepancia de palabras (por defecto `4.0`).
+- `--min-word-diff`: Umbral mínimo de diferencia de palabras (por defecto `150`).
+- `--mode`: `apply` (escribe en MongoDB y sincroniza), `dry-run` (simulación), `benchmark`. Por defecto `apply`.
+- `--engine`: Motor LLM (`lm-studio`, `vllm-server`, `mock`, etc.). Por defecto `lm-studio`.
+- `--sync-egreta`: Activa la sincronización REST API con Egreta.
+- `--egreta-env`: `prod` o `test` (por defecto `prod`).
 
 ---
 
 ## 🧪 Ejecución de Tests Unitarios
 
-Para verificar que las 9 ramas y casos de prueba del árbol de decisión funcionan correctamente:
+Para verificar que las ramas y casos de prueba del árbol de decisión funcionan correctamente:
 ```bash
-python -m unittest scripts.abstracts_translator.test_translator
+python -m unittest abstracts_translator.test_translator
 ```

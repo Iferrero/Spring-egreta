@@ -65,7 +65,7 @@
 </head>
 
 <body class="bg-slate-50 min-h-screen">
-    <div class="mx-auto w-[95%] px-4 py-10">
+    <div class="mx-auto w-[98%] max-w-[1920px] px-4 py-10">
         <header class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
             <a href="index-orgaext.html" class="hover:opacity-80 transition-opacity flex items-center gap-3">
                 <span class="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-indigo-600 text-white shadow-md shadow-indigo-100">
@@ -246,10 +246,10 @@
             </div>
 
             <div class="overflow-x-auto">
-                <table class="w-full text-left border-collapse">
+                <table class="w-full min-w-[1500px] text-left border-collapse">
                     <thead>
                         <tr class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider select-none">
-                            <th class="px-6 py-3 font-bold cursor-pointer hover:text-indigo-600 transition-colors"
+                            <th class="px-6 py-3 font-bold cursor-pointer hover:text-indigo-600 transition-colors min-w-[420px] lg:min-w-[480px]"
                                 data-sort="name">
                                 Nom <i class="fa-solid fa-sort ml-1 text-slate-300"></i>
                             </th>
@@ -1103,8 +1103,11 @@
                 const nameCell = rowEl.querySelector('td[data-cell="org-name"]');
                 if (nameCell) {
                     const egretaBtn = nameCell.querySelector('.open-egreta-org');
+                    const nameSpan = nameCell.querySelector('.org-name-text');
                     if (egretaBtn) {
                         egretaBtn.textContent = appliedName;
+                    } else if (nameSpan) {
+                        nameSpan.textContent = appliedName;
                     } else {
                         const firstChild = nameCell.firstChild;
                         if (firstChild && firstChild.nodeType === Node.TEXT_NODE) {
@@ -1368,8 +1371,8 @@
                 const nameText = esc(nameRaw || '—');
                 const egretaUrl = getOrgEgretaUrl(org);
                 const name = egretaUrl
-                    ? '<button type="button" class="open-egreta-org text-left text-indigo-700 hover:text-indigo-900 hover:underline" data-egreta-url="' + esc(egretaUrl) + '">' + nameText + '</button>'
-                    : nameText;
+                    ? '<button type="button" class="open-egreta-org text-left text-indigo-700 hover:text-indigo-900 hover:underline whitespace-nowrap inline-block" data-egreta-url="' + esc(egretaUrl) + '">' + nameText + '</button>'
+                    : '<span class="org-name-text whitespace-nowrap inline-block">' + nameText + '</span>';
                 const typeRaw = getOrgTypeLabel(org);
                 const type = esc(typeRaw || '—');
                 const countryRaw = getOrgCountryLabel(org);
@@ -1392,7 +1395,7 @@
                 const wf = workflowCell(org);
                 return `
         <tr data-uuid="${esc(org.uuid)}" class="hover:bg-slate-50 transition-colors">
-            <td data-cell="org-name" class="px-6 py-3 font-semibold text-slate-800">${name}${personSubtext}${suggestedNameHtml}</td>
+            <td data-cell="org-name" class="px-6 py-3 font-semibold text-slate-800 min-w-[420px] lg:min-w-[480px]">${name}${personSubtext}${suggestedNameHtml}</td>
             <td class="px-6 py-3 text-slate-600">${type}</td>
             <td data-cell="suggested-type" class="px-6 py-3 text-slate-600">${suggestedTypeCell}</td>
             <td class="px-6 py-3 text-slate-600">${funding}</td>

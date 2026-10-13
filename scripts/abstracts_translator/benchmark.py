@@ -27,6 +27,7 @@ class BenchmarkCollector:
             "decision_branch": process_result.get("decision_branch", ""),
             "original_languages": list(original_abs.keys()) if isinstance(original_abs, dict) else [],
             "resulting_languages": list(updated_abs.keys()) if isinstance(updated_abs, dict) else [],
+            "discrepancy_analysis": process_result.get("discrepancy_analysis"),
             "translations_count": len(translations),
             "total_latency_ro_ms": round(total_latency_ro, 2),
             "translations": translations

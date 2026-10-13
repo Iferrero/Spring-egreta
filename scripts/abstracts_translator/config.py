@@ -30,6 +30,7 @@ LANG_MAP_CATALAN = {
     "es": "espanyol",
     "ca": "català",
     "fr": "francès",
+    "fr_FR": "francès",
     "de": "alemany",
     "it": "italià",
     "pt": "portuguès",
@@ -44,15 +45,32 @@ LANG_MAP_SPANISH = {
     "es": "español",
     "ca": "catalán",
     "fr": "francés",
+    "fr_FR": "francés",
     "de": "alemán",
     "it": "italiano",
     "pt": "portugués",
     "ru": "ruso"
 }
 
+LANG_MAP_ENGLISH = {
+    LANG_EN: "English",
+    LANG_ES: "Spanish",
+    LANG_CA: "Catalan",
+    "en": "English",
+    "es": "Spanish",
+    "ca": "Catalan",
+    "fr": "French",
+    "fr_FR": "French",
+    "de": "German",
+    "it": "Italian",
+    "pt": "Portuguese",
+    "ru": "Russian"
+}
+
 
 # Alias for backward compatibility
 LANG_MAP_PROMPT = LANG_MAP_SPANISH
+
 
 # Sampling parameters specified for Salamandra (Optimal for translation tasks)
 SAMPLING_TEMPERATURE = 0.0  # Greedy decoding for maximum translation accuracy and zero hallucination

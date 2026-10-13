@@ -92,13 +92,13 @@ public class AiAbstractsTest {
         System.out.println("Detail for " + uuid + ": " + detailOpt.get().get("title"));
 
         // 6. Test populateSingleDiscrepancy on real discrepant publication
-        String testUuid = "458d485f-e48d-4712-9549-389b8b8adac0";
+        String testUuid = "25b45ccb-7a48-49f0-a852-5461f03f6490";
         var discOpt = aiAbstractsService.populateSingleDiscrepancy(testUuid);
         assertTrue(discOpt.isPresent(), "Discrepancy should be populated");
         Map<String, Object> disc = discOpt.get();
         System.out.println("Populated discrepancy for " + testUuid + ": " + disc);
-        assertTrue((int) disc.get("words_en") > 200, "English words should be > 200");
-        assertTrue((int) disc.get("diff_words") > 200, "Diff words should be > 200");
+        assertTrue((int) disc.get("words_es") > 150, "Spanish words should be > 150");
+        assertTrue((int) disc.get("diff_words") > 150, "Diff words should be > 150");
         assertEquals("critical", disc.get("severity"), "Severity should be critical");
 
         // Verify it is readable in getAiAbstractDetail

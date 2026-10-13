@@ -1465,23 +1465,49 @@ public class PublicacionAbstractsService {
      */
     public Optional<Map<String, Object>> getAbstractDetail(String uuid) {
         Document doc = mongoTemplate.getCollection("Researchoutputs").find(new Document("uuid", uuid)).first();
-        if (doc == null) return Optional.empty();
+        if (doc == null) {
+            doc = mongoTemplate.getCollection("ResearchoutputsAiAbstracts").find(new Document("uuid", uuid)).first();
+            if (doc == null) return Optional.empty();
+        }
 
         Document abstractDoc = (Document) doc.get("abstract");
-        String ca = abstractDoc != null ? abstractDoc.getString("ca_ES") : null;
-        String es = abstractDoc != null ? abstractDoc.getString("es_ES") : null;
-        String en = abstractDoc != null ? abstractDoc.getString("en_GB") : null;
+        String ca = extractAbstractString(abstractDoc, "ca_ES");
+        String es = extractAbstractString(abstractDoc, "es_ES");
+        String en = extractAbstractString(abstractDoc, "en_GB");
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("uuid", uuid);
         Document titleDoc = (Document) doc.get("title");
-        result.put("title", titleDoc != null ? titleDoc.getString("value") : "Sense títol");
+        String titleStr = titleDoc != null ? titleDoc.getString("value") : (doc.getString("title") != null ? doc.getString("title") : "Sense títol");
+        result.put("title", titleStr);
         result.put("publicationYear", extractPublicationYear(doc));
         result.put("submissionYear", doc.get("submissionYear"));
 
         Document typeDoc = (Document) doc.get("type");
         Document termDoc = typeDoc != null ? (Document) typeDoc.get("term") : null;
-        result.put("type", termDoc != null ? termDoc.getString("ca_ES") : "Sense tipus");
+        String typeName = termDoc != null ? termDoc.getString("ca_ES") : (doc.getString("type") != null ? doc.getString("type") : "Sense tipus");
+        result.put("type", typeName);
+        result.put("typeName", typeName);
+
+        List<Document> contributors = doc.getList("contributors", Document.class);
+        String authors = "Sense autors";
+        if (contributors != null && !contributors.isEmpty()) {
+            List<String> names = new ArrayList<>();
+            for (Document cnt : contributors) {
+                Document n = (Document) cnt.get("name");
+                if (n != null) {
+                    String ln = n.getString("lastName");
+                    String fn = n.getString("firstName");
+                    if (ln != null && fn != null) names.add(ln + ", " + fn);
+                    else if (ln != null) names.add(ln);
+                    else if (n.getString("text") != null) names.add(n.getString("text"));
+                }
+            }
+            if (!names.isEmpty()) authors = String.join("; ", names);
+        } else if (doc.get("authors") instanceof String a && !a.isBlank()) {
+            authors = a;
+        }
+        result.put("authors", authors);
 
         boolean hasCa = !isHtmlEmpty(ca);
         boolean hasEs = !isHtmlEmpty(es);
@@ -1490,10 +1516,16 @@ public class PublicacionAbstractsService {
         result.put("abstractCa", hasCa ? ca : "");
         result.put("abstractEs", hasEs ? es : "");
         result.put("abstractEn", hasEn ? en : "");
+        result.put("ca_ES", hasCa ? ca : "");
+        result.put("es_ES", hasEs ? es : "");
+        result.put("en_GB", hasEn ? en : "");
 
         result.put("hasCa", hasCa);
         result.put("hasEs", hasEs);
         result.put("hasEn", hasEn);
+        result.put("has_ca", hasCa);
+        result.put("has_es", hasEs);
+        result.put("has_en", hasEn);
 
         // Language detection
         String detectedCa = hasCa ? detectLanguage(ca) : "none";
@@ -1527,6 +1559,9 @@ public class PublicacionAbstractsService {
         result.put("lengthCa", hasCa ? ca.length() : 0);
         result.put("lengthEs", hasEs ? es.length() : 0);
         result.put("lengthEn", hasEn ? en.length() : 0);
+        result.put("charsCa", hasCa ? ca.length() : 0);
+        result.put("charsEs", hasEs ? es.length() : 0);
+        result.put("charsEn", hasEn ? en.length() : 0);
 
         int wordsCa = hasCa ? countWords(ca) : 0;
         int wordsEs = hasEs ? countWords(es) : 0;
@@ -1562,6 +1597,20 @@ public class PublicacionAbstractsService {
                    .replaceAll("\\s+", " ")
                    .trim()
                    .toLowerCase();
+    }
+
+    public static String extractAbstractString(Document absDoc, String langKey) {
+        if (absDoc == null) return null;
+        Object val = absDoc.get(langKey);
+        if (val instanceof String s) return s;
+        if (val instanceof Document d) {
+            String v = d.getString("value");
+            if (v != null) return v;
+            v = d.getString("text");
+            if (v != null) return v;
+            return d.toJson();
+        }
+        return val != null ? val.toString() : null;
     }
 
     private static class DiscrepancyCandidate {
@@ -1667,9 +1716,9 @@ public class PublicacionAbstractsService {
                     totalDiscrepant++;
                     sumDiffWords += diffW;
 
-                    if (ratioW >= 4.0 || diffW >= 150) {
+                    if (ratioW >= 4.0) {
                         criticalCount++;
-                    } else if (ratioW >= 2.5 || diffW >= 80) {
+                    } else if (ratioW >= 3.0 || (diffW >= 100 && ratioW >= 2.0)) {
                         highCount++;
                     } else {
                         moderateCount++;
@@ -1768,9 +1817,9 @@ public class PublicacionAbstractsService {
                 if (longestLang != null && !"all".equalsIgnoreCase(longestLang) && !lLang.equalsIgnoreCase(longestLang)) continue;
 
                 String sev;
-                if (ratioW >= 4.0 || diffW >= 150) {
+                if (ratioW >= 4.0) {
                     sev = "critical";
-                } else if (ratioW >= 2.5 || diffW >= 80) {
+                } else if (ratioW >= 3.0 || (diffW >= 100 && ratioW >= 2.0)) {
                     sev = "high";
                 } else {
                     sev = "moderate";

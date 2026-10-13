@@ -26,37 +26,16 @@ from .config import (
     LM_STUDIO_URL
 )
 from .processor import AbstractProcessor
-from .egreta_sync import sync_abstract_to_egreta
-from .engine import (
-    MockBenchmarkEngine,
-    LMStudioEngine,
-    VLLMServerEngine,
-    LocalVLLMEngine,
-    TransformersEngine
+from .intake import (
+    IntakeQuery,
+    IntakeOptions,
+    MongoROStore,
+    ROIntakePipeline,
+    extract_title,
+    extract_publication_year
 )
+from .engine import Translator, get_engine
 from .benchmark import BenchmarkCollector
-
-def extract_title(doc: dict) -> str:
-    t = doc.get("title")
-    if isinstance(t, dict):
-        return t.get("value") or t.get("ca_ES") or t.get("es_ES") or t.get("en_GB") or "Sin titulo"
-    elif isinstance(t, str):
-        return t
-    return "Sin titulo"
-
-def get_engine(engine_type: str, model_name: str, vllm_url: str, lm_studio_url: str):
-    if engine_type == "mock":
-        return MockBenchmarkEngine(model_name=model_name)
-    elif engine_type == "lm-studio":
-        return LMStudioEngine(server_url=lm_studio_url, model_name=model_name if model_name != DEFAULT_MODEL_NAME else None)
-    elif engine_type == "vllm-server":
-        return VLLMServerEngine(server_url=vllm_url, model_name=model_name)
-    elif engine_type == "vllm-local":
-        return LocalVLLMEngine(model_name=model_name)
-    elif engine_type == "transformers":
-        return TransformersEngine(model_name=model_name)
-    else:
-        raise ValueError(f"Unknown engine type: {engine_type}")
 
 def main():
     parser = argparse.ArgumentParser(
@@ -97,9 +76,20 @@ def main():
     )
     parser.add_argument(
         "--year",
-        type=int,
         default=None,
-        help="Filtrar por ano de publicacion (submissionYear)"
+        help="Filtrar por ano (ej: 2024, o 'none'/'0' para procesar los que no tienen ano asignado)"
+    )
+    parser.add_argument(
+        "--year-type",
+        choices=["submission", "publication"],
+        default="submission",
+        help="Tipo de ano por el que filtrar: 'submission' (submissionYear, default) o 'publication' (publicationStatuses.publicationDate.year)"
+    )
+    parser.add_argument(
+        "--no-year",
+        action="store_true",
+        default=False,
+        help="Procesar exclusivamente los Research Outputs que NO tienen ano asignado (segun --year-type)"
     )
     parser.add_argument(
         "--only-with-abstract",
@@ -107,6 +97,7 @@ def main():
         default=True,
         help="Procesar unicamente ROs que tengan algun abstract en MongoDB (default: True)"
     )
+
     parser.add_argument(
         "--sync-egreta",
         action="store_true",
@@ -129,6 +120,33 @@ def main():
         default=None,
         help="Ruta de archivo JSON donde guardar el informe del benchmark"
     )
+    parser.add_argument(
+        "--only-ai-collection",
+        action="store_true",
+        default=False,
+        help="Procesar unicamente los Research Outputs presentes en la coleccion ResearchoutputsAiAbstracts"
+    )
+    parser.add_argument(
+        "--uuid",
+        default=None,
+        help="UUID especifico del Research Output a procesar/traducir"
+    )
+    parser.add_argument(
+        "--source-lang",
+        default=None,
+        help="Especificar idioma de origen desde el cual traducir (ej: 'en_GB', 'es_ES', 'ca_ES', 'ru', 'en', 'es', 'ca')"
+    )
+    parser.add_argument(
+        "--target-lang",
+        default=None,
+        help="Especificar idioma(s) de destino especifico(s) a traducir (ej: 'en_GB', 'ca_ES', 'es_ES', 'en', 'ca', 'es'). Varias opciones separadas por coma."
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        default=False,
+        help="Forzar la re-traduccion de todos los idiomas de destino aunque ya existan"
+    )
 
     args = parser.parse_args()
 
@@ -142,29 +160,22 @@ def main():
     elif args.engine == "vllm-server":
         print(f"* vLLM URL:       {args.vllm_url}")
     print(f"* Modelo:         {args.model}")
-    print(f"* Limite:         {args.limit if args.limit > 0 else 'Sin limite'}")
+    if args.uuid:
+        print(f"* RO UUID:        {args.uuid}")
+    else:
+        print(f"* Limite:         {args.limit if args.limit > 0 else 'Sin limite'}")
+    if args.source_lang:
+        print(f"* Origen Forzado: {args.source_lang}")
+    if args.target_lang:
+        print(f"* Destino Forzado:{args.target_lang}")
+    if args.force:
+        print(f"* Re-traduccion:  FORZADA (--force)")
     if args.year:
         print(f"* Filtro Ano:     {args.year}")
     print(f"* Sync Egreta:    {'ACTIVADO (' + args.egreta_env.upper() + ')' if args.sync_egreta else 'Desactivado'}")
     print(f"* Coleccion ROs:  {MONGO_COLLECTION}")
     print(f"* Coleccion Meta: {MONGO_AI_METADATA_COLLECTION}")
     print("="*60 + "\n")
-
-    # Connect to MongoDB
-    print("Connecting to MongoDB...")
-    try:
-        client = pymongo.MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
-        db = client[MONGO_DB_NAME]
-        collection = db[MONGO_COLLECTION]
-        collection_ai = db[MONGO_AI_METADATA_COLLECTION]
-        client.admin.command('ping')
-        print("Connected successfully to MongoDB.")
-        
-        if args.mode == "apply":
-            collection_ai.create_index("uuid", unique=True)
-    except Exception as e:
-        print(f"[!] Error connecting to MongoDB: {e}")
-        sys.exit(1)
 
     # Initialize Engine & Processor
     try:
@@ -174,122 +185,40 @@ def main():
         sys.exit(1)
 
     processor = AbstractProcessor(engine)
-    collector = BenchmarkCollector(engine_name=args.engine, model_name=getattr(engine, "model_name", args.model))
 
-    # Build Mongo Query
-    query = {}
-    if args.only_with_abstract:
-        query["abstract"] = {"$exists": True, "$ne": None, "$ne": {}}
-    if args.year:
-        query["submissionYear"] = args.year
+    # Initialize Store & Pipeline
+    print("Connecting to MongoDB...")
+    try:
+        store = MongoROStore()
+        print("Connected successfully to MongoDB.")
+    except Exception as e:
+        print(f"[!] Error connecting to MongoDB: {e}")
+        sys.exit(1)
 
-    cursor = collection.find(query, {"uuid": 1, "title": 1, "abstract": 1, "submissionYear": 1})
-    if args.limit > 0:
-        cursor = cursor.limit(args.limit)
+    pipeline = ROIntakePipeline(store=store, processor=processor)
 
-    docs = list(cursor)
-    total_docs = len(docs)
-    print(f"Found {total_docs} Research Outputs matching criteria.\n")
+    query = IntakeQuery(
+        uuid=args.uuid,
+        year=args.year,
+        year_type=args.year_type,
+        no_year=args.no_year,
+        only_with_abstract=args.only_with_abstract,
+        only_ai_collection=args.only_ai_collection
+    )
+    options = IntakeOptions(
+        mode=args.mode,
+        sync_egreta=args.sync_egreta,
+        egreta_env=args.egreta_env,
+        egreta_api_key=args.egreta_api_key,
+        limit=args.limit,
+        report_file=args.report_file,
+        source_lang=args.source_lang,
+        target_lang=args.target_lang,
+        force=args.force
+    )
 
-    if total_docs == 0:
-        print("No documents found. Exiting.")
-        return
+    pipeline.run(query, options)
 
-    # Process Documents with Progress Bar
-    applied_count = 0
-    egreta_synced_count = 0
-    egreta_failed_count = 0
-
-    with tqdm(total=total_docs, desc="Procesando ROs", unit="doc") as pbar:
-        for doc in docs:
-            uuid = doc.get("uuid", str(doc.get("_id")))
-            title = extract_title(doc)
-            sub_year = doc.get("submissionYear")
-            
-            # Retry loop per document (up to 3 attempts) for batch robustness
-            max_doc_attempts = 3
-            for attempt in range(max_doc_attempts):
-                try:
-                    res = processor.process_ro_abstracts(doc)
-                    collector.add_ro_result(uuid, title, sub_year, res)
-
-                    # If mode is 'apply' and changes/translations occurred, persist to MongoDB
-                    if args.mode == "apply" and res["status"] in ["TRANSLATED", "REORGANIZED"]:
-                        # 1. Update abstract fields in Researchoutputs
-                        collection.update_one(
-                            {"uuid": uuid},
-                            {"$set": {"abstract": res["updated_abstract"]}}
-                        )
-
-                        # 2. Optional: Synchronize to Egreta REST API
-                        egreta_status = None
-                        if args.sync_egreta:
-                            sync_ok, sync_msg = sync_abstract_to_egreta(
-                                uuid=uuid,
-                                abstracts=res["updated_abstract"],
-                                env=args.egreta_env,
-                                api_key=args.egreta_api_key
-                            )
-                            egreta_status = {
-                                "synced": sync_ok,
-                                "env": args.egreta_env,
-                                "synced_at": datetime.now(timezone.utc).isoformat(),
-                                "message": sync_msg
-                            }
-                            if sync_ok:
-                                egreta_synced_count += 1
-                            else:
-                                egreta_failed_count += 1
-                                print(f"\n[!] Error sync Egreta ({uuid}): {sync_msg}")
-
-                        # 3. Store AI metadata in dedicated collection (ResearchoutputsAiAbstracts)
-                        if res["ai_metadata"]:
-                            ai_metadata_payload = dict(res["ai_metadata"])
-                            if egreta_status:
-                                ai_metadata_payload["egreta_sync"] = egreta_status
-
-                            ai_doc = {
-                                "uuid": uuid,
-                                "title": title,
-                                "submissionYear": sub_year,
-                                "abstract_ai_metadata": ai_metadata_payload,
-                                "updated_at": datetime.now(timezone.utc).isoformat()
-                            }
-                            collection_ai.update_one(
-                                {"uuid": uuid},
-                                {"$set": ai_doc},
-                                upsert=True
-                            )
-                        applied_count += 1
-                    
-                    # Successfully processed document
-                    break
-
-                except Exception as e:
-                    if attempt < max_doc_attempts - 1:
-                        import time
-                        time.sleep(2)
-                    else:
-                        print(f"\n[!] Error definitivo procesando RO {uuid} tras {max_doc_attempts} intentos: {e}")
-
-            pbar.update(1)
-
-    # Finalize benchmark metrics
-    report = collector.finalize()
-    collector.print_summary(report)
-
-    if args.mode == "apply":
-        print(f"[+] Se han actualizado {applied_count} documentos en MongoDB:")
-        print(f"    - Coleccion Researchoutputs ({MONGO_COLLECTION}): abstracts normalizados.")
-        print(f"    - Coleccion Metadatos IA ({MONGO_AI_METADATA_COLLECTION}): metadatos y trazabilidad guardados.")
-        if args.sync_egreta:
-            print(f"    - Sincronizacion Egreta ({args.egreta_env.upper()}): {egreta_synced_count} exitosos, {egreta_failed_count} fallidos.")
-
-    # Save JSON report if specified
-    if args.report_file:
-        with open(args.report_file, "w", encoding="utf-8") as f:
-            json.dump(report, f, indent=2, ensure_ascii=False)
-        print(f"[*] Informe guardado en: {args.report_file}")
 
 if __name__ == "__main__":
     main()

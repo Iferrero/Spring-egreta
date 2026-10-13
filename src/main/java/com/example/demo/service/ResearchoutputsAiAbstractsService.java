@@ -657,7 +657,8 @@ public class ResearchoutputsAiAbstractsService {
                             setDoc.append("type", typeStr);
                         }
 
-                        Document updateDoc = new Document("$set", setDoc);
+                        Document updateDoc = new Document("$set", setDoc)
+                                .append("$unset", new Document("abstract_ai_metadata.discrepancy_analysis", ""));
 
                         Document setOnInsert = new Document("uuid", uuid);
                         Object title = doc.get("title");
@@ -748,7 +749,8 @@ public class ResearchoutputsAiAbstractsService {
             setDoc.append("type", typeStr);
         }
 
-        Document updateDoc = new Document("$set", setDoc);
+        Document updateDoc = new Document("$set", setDoc)
+                .append("$unset", new Document("abstract_ai_metadata.discrepancy_analysis", ""));
 
         Document setOnInsert = new Document("uuid", uuid.trim());
         Object title = doc.get("title");
@@ -806,9 +808,9 @@ public class ResearchoutputsAiAbstractsService {
             shortestLang = (hasCa && wCa == minW) ? "ca" : ((hasEs && wEs == minW) ? "es" : "en");
             longestLang = (hasEn && wEn == maxW) ? "en" : ((hasEs && wEs == maxW) ? "es" : "ca");
 
-            if (ratioW >= 4.0 || diffW >= 150) {
+            if (ratioW >= 4.0) {
                 severity = "critical";
-            } else if (ratioW >= 2.5 || diffW >= 80) {
+            } else if (ratioW >= 3.0 || (diffW >= 100 && ratioW >= 2.0)) {
                 severity = "high";
             } else if (ratioW >= 1.5 || diffW >= 50) {
                 severity = "moderate";

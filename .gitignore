@@ -39,3 +39,4 @@ logs/auto-apply-name.log
 .gitignore
 logs/auto-apply-country.log
 logs/auto-validate.log
+/.agents

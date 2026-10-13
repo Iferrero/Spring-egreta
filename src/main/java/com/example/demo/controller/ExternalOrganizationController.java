@@ -32,6 +32,12 @@ import org.springframework.web.bind.annotation.RestController;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 
+import com.example.demo.curation.model.ProviderQueryContext;
+import com.example.demo.curation.model.ReconciliationType;
+import com.example.demo.curation.reconciler.ReconciliationJobRegistry;
+import com.example.demo.curation.service.MetadataEnrichmentEngine;
+import com.example.demo.curation.util.CurationTextNormalizer;
+
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -254,6 +260,15 @@ public class ExternalOrganizationController {
 
     @Autowired(required = false)
     private com.example.demo.service.VllmAffiliationService vllmAffiliationService;
+
+    @Autowired(required = false)
+    private MetadataEnrichmentEngine metadataEnrichmentEngine;
+
+    @Autowired(required = false)
+    private ReconciliationJobRegistry reconciliationJobRegistry;
+
+    @Autowired(required = false)
+    private com.example.demo.curation.service.SimilarityMatchingEngine similarityMatchingEngine;
 
     public ExternalOrganizationController(
             ExternalOrganizationRepository repository,
@@ -802,6 +817,32 @@ public class ExternalOrganizationController {
                 new TypeInferenceResult("", 0.0, "empty-name"),
                 new FundingInferenceResult("", 0.0, "empty-name")
             );
+        }
+
+        if (metadataEnrichmentEngine != null) {
+            String associatedPerson = (explicitAssociatedPerson != null && !explicitAssociatedPerson.isBlank())
+                ? explicitAssociatedPerson.trim()
+                : findAssociatedPersonForOrg(orgUuid, orgName);
+            RelatedPublicationInfo pubInfo = findRelatedPublicationInfoForOrg(orgUuid, orgName);
+            String pubTitle = pubInfo != null ? pubInfo.title() : null;
+            String doi = pubInfo != null ? pubInfo.doi() : null;
+
+            List<com.example.demo.curation.model.CountryAggregate> modelCountries = (countryCatalog != null)
+                ? countryCatalog.stream().map(c -> new com.example.demo.curation.model.CountryAggregate(c.label, c.normalizedLabel, c.count)).toList()
+                : List.of();
+            List<com.example.demo.curation.model.TypeAggregate> modelTypes = (typeCatalog != null)
+                ? typeCatalog.stream().map(t -> new com.example.demo.curation.model.TypeAggregate(t.label, t.normalizedLabel, t.count)).toList()
+                : List.of();
+
+            ProviderQueryContext ctx = new ProviderQueryContext(associatedPerson, pubTitle, doi, modelCountries, modelTypes);
+            com.example.demo.curation.model.MetadataInferenceResult engineRes = metadataEnrichmentEngine.inferMetadata(orgName, ctx);
+            if (engineRes != null && engineRes.hasAnySignal()) {
+                return new MetadataInferenceResult(
+                    new InferenceResult(engineRes.country().countryLabel(), engineRes.country().confidence(), engineRes.country().reason()),
+                    new TypeInferenceResult(engineRes.type().typeLabel(), engineRes.type().confidence(), engineRes.type().reason()),
+                    new FundingInferenceResult(engineRes.funding().fundingLabel(), engineRes.funding().confidence(), engineRes.funding().reason())
+                );
+            }
         }
 
         List<InferenceResult> countryCandidates = new ArrayList<>();
@@ -2958,6 +2999,19 @@ public class ExternalOrganizationController {
             return cached.payload();
         }
 
+        if (similarityMatchingEngine != null) {
+            int totalAvailableOrgs = (int) repository.count();
+            List<ExternalOrganization> orgs = findOrganizationsLimited(limit);
+            List<com.example.demo.curation.model.OrgSimilarityProfile> profiles = similarityMatchingEngine.buildSimilarityProfiles(orgs);
+            Set<String> ignoredKeys = getIgnoredPairKeys();
+            Map<String, Object> result = similarityMatchingEngine.buildGraphSimilarity(profiles, threshold, limit, totalAvailableOrgs, ignoredKeys);
+            graphSimilarityCache.put(cacheKey, new CachedGraphResult(result, now));
+            if (graphSimilarityCache.size() > 100) {
+                graphSimilarityCache.entrySet().removeIf(e -> (now - e.getValue().timestamp()) > GRAPH_SIMILARITY_CACHE_TTL_MS);
+            }
+            return result;
+        }
+
         int totalAvailableOrgs = (int) repository.count();
         List<ExternalOrganization> orgs = findOrganizationsLimited(limit);
 
@@ -3027,6 +3081,19 @@ public class ExternalOrganizationController {
         long now = System.currentTimeMillis();
         if (cached != null && (now - cached.timestamp()) <= GRAPH_SIMILARITY_CACHE_TTL_MS) {
             return cached.payload();
+        }
+
+        if (similarityMatchingEngine != null) {
+            int totalAvailableOrgs = (int) repository.count();
+            List<ExternalOrganization> orgs = findOrganizationsLimited(limit);
+            List<com.example.demo.curation.model.OrgSimilarityProfile> profiles = similarityMatchingEngine.buildSimilarityProfiles(orgs);
+            Set<String> ignoredKeys = getIgnoredPairKeys();
+            Map<String, Object> result = similarityMatchingEngine.buildPairsSimilarityResult(profiles, threshold, limit, maxPairs, totalAvailableOrgs, ignoredKeys, null);
+            pairsSimilarityCache.put(cacheKey, new CachedPairsResult(result, now));
+            if (pairsSimilarityCache.size() > 100) {
+                pairsSimilarityCache.entrySet().removeIf(e -> (now - e.getValue().timestamp()) > GRAPH_SIMILARITY_CACHE_TTL_MS);
+            }
+            return result;
         }
 
         int totalAvailableOrgs = (int) repository.count();
@@ -3144,6 +3211,35 @@ public class ExternalOrganizationController {
             state.progress = 100;
             state.message = "Resultat en caché";
             return cached.payload();
+        }
+
+        if (similarityMatchingEngine != null) {
+            state.progress = 4;
+            state.message = "Llegint organitzacions";
+            int totalAvailableOrgs = (int) repository.count();
+            List<ExternalOrganization> orgs = findOrganizationsLimited(limit);
+
+            state.progress = 10;
+            state.message = "Preparant noms";
+            List<com.example.demo.curation.model.OrgSimilarityProfile> profiles = similarityMatchingEngine.buildSimilarityProfiles(orgs);
+
+            state.progress = 16;
+            state.message = "Comparant noms";
+            Set<String> ignoredKeys = getIgnoredPairKeys();
+
+            Map<String, Object> result = similarityMatchingEngine.buildPairsSimilarityResult(
+                profiles, threshold, limit, maxPairs, totalAvailableOrgs, ignoredKeys,
+                value -> {
+                    state.progress = Math.max(16, Math.min(98, value));
+                    state.message = "Comparant noms";
+                }
+            );
+
+            pairsSimilarityCache.put(cacheKey, new CachedPairsResult(result, now));
+            if (pairsSimilarityCache.size() > 100) {
+                pairsSimilarityCache.entrySet().removeIf(e -> (now - e.getValue().timestamp()) > GRAPH_SIMILARITY_CACHE_TTL_MS);
+            }
+            return result;
         }
 
         state.progress = 4;
@@ -3480,141 +3576,15 @@ public class ExternalOrganizationController {
     }
 
     private double calculateNameSimilarity(String[] parts1, String[] parts2, double threshold) {
-        if (parts1.length == 0 || parts2.length == 0) return 0.0;
-        if (parts1.length == parts2.length) {
-            boolean allEqual = true;
-            for (int i = 0; i < parts1.length; i++) {
-                if (!parts1[i].equals(parts2[i])) {
-                    allEqual = false;
-                    break;
-                }
-            }
-            if (allEqual) return 1.0;
-        }
-
-        String[] shorter = parts1.length <= parts2.length ? parts1 : parts2;
-        String[] longer = parts1.length <= parts2.length ? parts2 : parts1;
-        int maxLen = longer.length;
-
-        boolean[] usedLong = new boolean[longer.length];
-        boolean[] matchedShort = new boolean[shorter.length];
-
-        int exactMatches = 0;
-        for (int i = 0; i < shorter.length; i++) {
-            String token = shorter[i];
-            for (int j = 0; j < longer.length; j++) {
-                if (!usedLong[j] && token.equals(longer[j])) {
-                    usedLong[j] = true;
-                    matchedShort[i] = true;
-                    exactMatches++;
-                    break;
-                }
-            }
-
-            int remaining = shorter.length - (i + 1);
-            double optimistic = (exactMatches + remaining) / (double) maxLen;
-            if (optimistic < threshold) {
-                return exactMatches / (double) maxLen;
-            }
-        }
-
-        int fuzzyMatches = 0;
-        for (int i = 0; i < shorter.length; i++) {
-            if (matchedShort[i]) {
-                continue;
-            }
-
-            String token = shorter[i];
-            int bestIndex = -1;
-            int bestDistance = Integer.MAX_VALUE;
-
-            for (int j = 0; j < longer.length; j++) {
-                if (usedLong[j]) {
-                    continue;
-                }
-
-                String candidate = longer[j];
-                if (Math.abs(token.length() - candidate.length()) > 2) {
-                    continue;
-                }
-
-                int distance = levenshteinDistance(token, candidate);
-                if (distance <= 2 && distance < bestDistance) {
-                    bestDistance = distance;
-                    bestIndex = j;
-                    if (distance == 0) {
-                        break;
-                    }
-                }
-            }
-
-            if (bestIndex >= 0) {
-                usedLong[bestIndex] = true;
-                fuzzyMatches++;
-            }
-
-            int unmatchedRemaining = shorter.length - (i + 1);
-            double optimistic = (exactMatches + fuzzyMatches + unmatchedRemaining) / (double) maxLen;
-            if (optimistic < threshold) {
-                break;
-            }
-        }
-
-        return (exactMatches + fuzzyMatches) / (double) maxLen;
+        return CurationTextNormalizer.calculateNameSimilarity(parts1, parts2, threshold);
     }
-
-    private static final ThreadLocal<int[]> LEVENSHTEIN_BUFFER = ThreadLocal.withInitial(() -> new int[128]);
 
     private int levenshteinDistance(String a, String b) {
-        if (a.isEmpty()) return b.length();
-        if (b.isEmpty()) return a.length();
-
-        if (a.length() < b.length()) {
-            String temp = a;
-            a = b;
-            b = temp;
-        }
-
-        int bLen = b.length();
-        if (bLen >= 128) {
-            int[] dp = new int[bLen + 1];
-            return levenshteinDistanceWithArray(a, b, dp);
-        }
-
-        int[] dp = LEVENSHTEIN_BUFFER.get();
-        return levenshteinDistanceWithArray(a, b, dp);
-    }
-
-    private int levenshteinDistanceWithArray(String a, String b, int[] dp) {
-        int bLen = b.length();
-        for (int i = 0; i <= bLen; i++) {
-            dp[i] = i;
-        }
-
-        for (int i = 1; i <= a.length(); i++) {
-            int prev = dp[0];
-            dp[0] = i;
-            char charA = a.charAt(i - 1);
-            for (int j = 1; j <= bLen; j++) {
-                int temp = dp[j];
-                int cost = charA == b.charAt(j - 1) ? 0 : 1;
-                dp[j] = Math.min(Math.min(dp[j - 1] + 1, dp[j] + 1), prev + cost);
-                prev = temp;
-            }
-        }
-        return dp[bLen];
+        return CurationTextNormalizer.levenshteinDistance(a, b);
     }
 
     private double calculateStringSimilarity(String s1, String s2) {
-        if (s1 == null || s2 == null) return 0.0;
-        String n1 = normalizeText(s1).replaceAll("\\s+", "");
-        String n2 = normalizeText(s2).replaceAll("\\s+", "");
-        if (n1.isEmpty() && n2.isEmpty()) return 1.0;
-        if (n1.isEmpty() || n2.isEmpty()) return 0.0;
-        if (n1.equals(n2)) return 1.0;
-        int maxLen = Math.max(n1.length(), n2.length());
-        int dist = levenshteinDistance(n1, n2);
-        return Math.max(0.0, (double) (maxLen - dist) / maxLen);
+        return CurationTextNormalizer.calculateStringSimilarity(s1, s2);
     }
 
     // =========================================================================
@@ -3864,15 +3834,15 @@ public class ExternalOrganizationController {
     );
 
     // =========================================================================
-    // Records de inferencia
+    // Records de inferencia (interns al controller)
     // =========================================================================
 
-    private record CountryAggregate(String label, String normalizedLabel, int count) {}
-    private record TypeAggregate   (String label, String normalizedLabel, int count) {}
-    private record InferenceResult    (String countryLabel, double confidence, String reason) {}
-    private record TypeInferenceResult(String typeLabel,   double confidence, String reason) {}
-    private record FundingInferenceResult(String fundingLabel, double confidence, String reason) {}
-    private record MetadataInferenceResult(InferenceResult country, TypeInferenceResult type, FundingInferenceResult funding) {}
+    public static record CountryAggregate(String label, String normalizedLabel, int count) {}
+    public static record TypeAggregate   (String label, String normalizedLabel, int count) {}
+    public static record InferenceResult    (String countryLabel, double confidence, String reason) {}
+    public static record TypeInferenceResult(String typeLabel,   double confidence, String reason) {}
+    public static record FundingInferenceResult(String fundingLabel, double confidence, String reason) {}
+    public static record MetadataInferenceResult(InferenceResult country, TypeInferenceResult type, FundingInferenceResult funding) {}
 
     // =========================================================================
     // Inferencia de país
@@ -8112,6 +8082,9 @@ public class ExternalOrganizationController {
     }
 
     private void logMessage(String message) {
+        if (reconciliationJobRegistry != null) {
+            reconciliationJobRegistry.logMessage(ReconciliationType.COUNTRY, message);
+        }
         String formatted = "[" + java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss")) + "] " + message;
         autoApplyLogs.add(formatted);
         writeLogToFile(formatted);
@@ -8127,6 +8100,9 @@ public class ExternalOrganizationController {
                 
                 synchronized(autoApplyLock) {
                     autoApplyTotal = orgs.size();
+                }
+                if (reconciliationJobRegistry != null) {
+                    reconciliationJobRegistry.setTotal(ReconciliationType.COUNTRY, orgs.size());
                 }
                 
                 logMessage("S'han trobat " + autoApplyTotal + " organitzacions sense pais. Processant en paral·lel (Confiança >= " + Math.round(confidenceThreshold * 100) + "%)...");
@@ -8217,6 +8193,9 @@ public class ExternalOrganizationController {
                                         synchronized(autoApplyLock) {
                                             autoApplyApplied++;
                                         }
+                                        if (reconciliationJobRegistry != null) {
+                                            reconciliationJobRegistry.incrementApplied(ReconciliationType.COUNTRY);
+                                        }
                                         logMessage("[APLICAT] " + name + " -> " + suggestedCountry + " (Font: " + countryResult.reason() + ", Confiança: " + Math.round(confidence * 100) + "%)");
                                     }
                                 }
@@ -8230,6 +8209,9 @@ public class ExternalOrganizationController {
                             synchronized(autoApplyLock) {
                                 autoApplyProcessed++;
                             }
+                            if (reconciliationJobRegistry != null) {
+                                reconciliationJobRegistry.incrementProcessed(ReconciliationType.COUNTRY);
+                            }
                         }
                     }, aiExecutor);
                     
@@ -8238,10 +8220,17 @@ public class ExternalOrganizationController {
                 
                 CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
                 
-                logMessage("Proces finalitzat. Total processades: " + autoApplyProcessed + ", Aplicades: " + autoApplyApplied);
+                String summary = "Proces finalitzat. Total processades: " + autoApplyProcessed + ", Aplicades: " + autoApplyApplied;
+                logMessage(summary);
+                if (reconciliationJobRegistry != null) {
+                    reconciliationJobRegistry.finishRun(ReconciliationType.COUNTRY, summary);
+                }
                 invalidateMetadataCatalogCaches();
             } catch (Exception e) {
                 logMessage("[FATAL ERROR] " + e.getMessage());
+                if (reconciliationJobRegistry != null) {
+                    reconciliationJobRegistry.failRun(ReconciliationType.COUNTRY, e.getMessage());
+                }
             } finally {
                 synchronized(autoApplyLock) {
                     autoApplyRunning = false;
@@ -8254,6 +8243,15 @@ public class ExternalOrganizationController {
     public Map<String, Object> startAutoApplyCountry(
             @RequestParam(defaultValue = "test") String env,
             @RequestParam(defaultValue = "0.90") double confidence) {
+        if (reconciliationJobRegistry != null) {
+            boolean started = reconciliationJobRegistry.startRun(ReconciliationType.COUNTRY, env, confidence, "PROCES NORMALITZACIO DE PAISOS");
+            if (!started) {
+                return Map.of("started", false, "reason", "already-running");
+            }
+            startAutoApplyRun(env, confidence);
+            executeAutoApplyCountry(env, confidence);
+            return Map.of("started", true);
+        }
         synchronized(autoApplyLock) {
             if (autoApplyRunning) {
                 return Map.of("started", false, "reason", "already-running");
@@ -8266,6 +8264,15 @@ public class ExternalOrganizationController {
 
     @PostMapping("/stats/auto-apply-country/stop")
     public Map<String, Object> stopAutoApplyCountry() {
+        if (reconciliationJobRegistry != null) {
+            boolean stopped = reconciliationJobRegistry.requestStop(ReconciliationType.COUNTRY);
+            if (!stopped) {
+                return Map.of("stopped", false, "reason", "not-running");
+            }
+            autoApplyRunning = false;
+            logMessage("Petició d'aturar el procés rebuda.");
+            return Map.of("stopped", true);
+        }
         synchronized(autoApplyLock) {
             if (!autoApplyRunning) {
                 return Map.of("stopped", false, "reason", "not-running");
@@ -8278,6 +8285,9 @@ public class ExternalOrganizationController {
 
     @GetMapping("/stats/auto-apply-country/status")
     public Map<String, Object> getAutoApplyCountryStatus() {
+        if (reconciliationJobRegistry != null) {
+            return reconciliationJobRegistry.getProgress(ReconciliationType.COUNTRY).toMap();
+        }
         synchronized(autoApplyLock) {
             Map<String, Object> status = new java.util.LinkedHashMap<>();
             status.put("running", autoApplyRunning);
@@ -8353,6 +8363,9 @@ public class ExternalOrganizationController {
     }
 
     private void logTypeMessage(String message) {
+        if (reconciliationJobRegistry != null) {
+            reconciliationJobRegistry.logMessage(ReconciliationType.TYPE, message);
+        }
         String formatted = "[" + java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss")) + "] " + message;
         autoApplyTypeLogs.add(formatted);
         writeTypeLogToFile(formatted);
@@ -8368,6 +8381,9 @@ public class ExternalOrganizationController {
                 
                 synchronized(autoApplyTypeLock) {
                     autoApplyTypeTotal = orgs.size();
+                }
+                if (reconciliationJobRegistry != null) {
+                    reconciliationJobRegistry.setTotal(ReconciliationType.TYPE, orgs.size());
                 }
                 
                 logTypeMessage("S'han trobat " + autoApplyTypeTotal + " organitzacions sense tipus. Processant en paral·lel (Confiança >= " + Math.round(confidenceThreshold * 100) + "%)...");
@@ -8449,6 +8465,9 @@ public class ExternalOrganizationController {
                                         synchronized(autoApplyTypeLock) {
                                             autoApplyTypeApplied++;
                                         }
+                                        if (reconciliationJobRegistry != null) {
+                                            reconciliationJobRegistry.incrementApplied(ReconciliationType.TYPE);
+                                        }
                                         logTypeMessage("[APLICAT] " + name + " -> " + suggestedType + " (Font: " + typeResult.reason() + ", Confiança: " + Math.round(confidence * 100) + "%)");
                                     }
                                 }
@@ -8462,6 +8481,9 @@ public class ExternalOrganizationController {
                             synchronized(autoApplyTypeLock) {
                                 autoApplyTypeProcessed++;
                             }
+                            if (reconciliationJobRegistry != null) {
+                                reconciliationJobRegistry.incrementProcessed(ReconciliationType.TYPE);
+                            }
                         }
                     }, aiExecutor);
                     
@@ -8470,10 +8492,17 @@ public class ExternalOrganizationController {
                 
                 CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
                 
-                logTypeMessage("Proces finalitzat. Total processades: " + autoApplyTypeProcessed + ", Aplicades: " + autoApplyTypeApplied);
+                String summary = "Proces finalitzat. Total processades: " + autoApplyTypeProcessed + ", Aplicades: " + autoApplyTypeApplied;
+                logTypeMessage(summary);
+                if (reconciliationJobRegistry != null) {
+                    reconciliationJobRegistry.finishRun(ReconciliationType.TYPE, summary);
+                }
                 invalidateMetadataCatalogCaches();
             } catch (Exception e) {
                 logTypeMessage("[FATAL ERROR] " + e.getMessage());
+                if (reconciliationJobRegistry != null) {
+                    reconciliationJobRegistry.failRun(ReconciliationType.TYPE, e.getMessage());
+                }
             } finally {
                 synchronized(autoApplyTypeLock) {
                     autoApplyTypeRunning = false;
@@ -8486,6 +8515,15 @@ public class ExternalOrganizationController {
     public Map<String, Object> startAutoApplyType(
             @RequestParam(defaultValue = "test") String env,
             @RequestParam(defaultValue = "0.90") double confidence) {
+        if (reconciliationJobRegistry != null) {
+            boolean started = reconciliationJobRegistry.startRun(ReconciliationType.TYPE, env, confidence, "PROCES NORMALITZACIO DE TIPOLOGIES");
+            if (!started) {
+                return Map.of("started", false, "reason", "already-running");
+            }
+            startAutoApplyTypeRun(env, confidence);
+            executeAutoApplyType(env, confidence);
+            return Map.of("started", true);
+        }
         synchronized(autoApplyTypeLock) {
             if (autoApplyTypeRunning) {
                 return Map.of("started", false, "reason", "already-running");
@@ -8498,6 +8536,15 @@ public class ExternalOrganizationController {
 
     @PostMapping("/stats/auto-apply-type/stop")
     public Map<String, Object> stopAutoApplyType() {
+        if (reconciliationJobRegistry != null) {
+            boolean stopped = reconciliationJobRegistry.requestStop(ReconciliationType.TYPE);
+            if (!stopped) {
+                return Map.of("stopped", false, "reason", "not-running");
+            }
+            autoApplyTypeRunning = false;
+            logTypeMessage("Petició d'aturar el procés rebuda.");
+            return Map.of("stopped", true);
+        }
         synchronized(autoApplyTypeLock) {
             if (!autoApplyTypeRunning) {
                 return Map.of("stopped", false, "reason", "not-running");
@@ -8510,6 +8557,9 @@ public class ExternalOrganizationController {
 
     @GetMapping("/stats/auto-apply-type/status")
     public Map<String, Object> getAutoApplyTypeStatus() {
+        if (reconciliationJobRegistry != null) {
+            return reconciliationJobRegistry.getProgress(ReconciliationType.TYPE).toMap();
+        }
         synchronized(autoApplyTypeLock) {
             Map<String, Object> status = new java.util.LinkedHashMap<>();
             status.put("running", autoApplyTypeRunning);
@@ -8585,6 +8635,9 @@ public class ExternalOrganizationController {
     }
 
     private void logFundingMessage(String message) {
+        if (reconciliationJobRegistry != null) {
+            reconciliationJobRegistry.logMessage(ReconciliationType.FUNDING, message);
+        }
         String formatted = "[" + java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss")) + "] " + message;
         autoApplyFundingLogs.add(formatted);
         writeFundingLogToFile(formatted);
@@ -8600,6 +8653,9 @@ public class ExternalOrganizationController {
                 
                 synchronized(autoApplyFundingLock) {
                     autoApplyFundingTotal = orgs.size();
+                }
+                if (reconciliationJobRegistry != null) {
+                    reconciliationJobRegistry.setTotal(ReconciliationType.FUNDING, orgs.size());
                 }
                 
                 logFundingMessage("S'han trobat " + autoApplyFundingTotal + " organitzacions sense finançament. Processant en paral·lel (Confiança >= " + Math.round(confidenceThreshold * 100) + "%)...");
@@ -8681,6 +8737,9 @@ public class ExternalOrganizationController {
                                         synchronized(autoApplyFundingLock) {
                                             autoApplyFundingApplied++;
                                         }
+                                        if (reconciliationJobRegistry != null) {
+                                            reconciliationJobRegistry.incrementApplied(ReconciliationType.FUNDING);
+                                        }
                                         logFundingMessage("[APLICAT] " + name + " -> " + suggestedFunding + " (Font: " + fundingResult.reason() + ", Confiança: " + Math.round(confidence * 100) + "%)");
                                     }
                                 }
@@ -8694,6 +8753,9 @@ public class ExternalOrganizationController {
                             synchronized(autoApplyFundingLock) {
                                 autoApplyFundingProcessed++;
                             }
+                            if (reconciliationJobRegistry != null) {
+                                reconciliationJobRegistry.incrementProcessed(ReconciliationType.FUNDING);
+                            }
                         }
                     }, aiExecutor);
                     
@@ -8702,9 +8764,16 @@ public class ExternalOrganizationController {
                 
                 CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
                 
-                logFundingMessage("Proces finalitzat. Total processades: " + autoApplyFundingProcessed + ", Aplicades: " + autoApplyFundingApplied);
+                String summary = "Proces finalitzat. Total processades: " + autoApplyFundingProcessed + ", Aplicades: " + autoApplyFundingApplied;
+                logFundingMessage(summary);
+                if (reconciliationJobRegistry != null) {
+                    reconciliationJobRegistry.finishRun(ReconciliationType.FUNDING, summary);
+                }
             } catch (Exception e) {
                 logFundingMessage("[FATAL ERROR] " + e.getMessage());
+                if (reconciliationJobRegistry != null) {
+                    reconciliationJobRegistry.failRun(ReconciliationType.FUNDING, e.getMessage());
+                }
             } finally {
                 synchronized(autoApplyFundingLock) {
                     autoApplyFundingRunning = false;
@@ -8717,6 +8786,15 @@ public class ExternalOrganizationController {
     public Map<String, Object> startAutoApplyFunding(
             @RequestParam(defaultValue = "test") String env,
             @RequestParam(defaultValue = "0.90") double confidence) {
+        if (reconciliationJobRegistry != null) {
+            boolean started = reconciliationJobRegistry.startRun(ReconciliationType.FUNDING, env, confidence, "PROCES NORMALITZACIO DE FINANÇAMENT");
+            if (!started) {
+                return Map.of("started", false, "reason", "already-running");
+            }
+            startAutoApplyFundingRun(env, confidence);
+            executeAutoApplyFunding(env, confidence);
+            return Map.of("started", true);
+        }
         synchronized(autoApplyFundingLock) {
             if (autoApplyFundingRunning) {
                 return Map.of("started", false, "reason", "already-running");
@@ -8729,6 +8807,15 @@ public class ExternalOrganizationController {
 
     @PostMapping("/stats/auto-apply-funding/stop")
     public Map<String, Object> stopAutoApplyFunding() {
+        if (reconciliationJobRegistry != null) {
+            boolean stopped = reconciliationJobRegistry.requestStop(ReconciliationType.FUNDING);
+            if (!stopped) {
+                return Map.of("stopped", false, "reason", "not-running");
+            }
+            autoApplyFundingRunning = false;
+            logFundingMessage("Petició d'aturar el procés rebuda.");
+            return Map.of("stopped", true);
+        }
         synchronized(autoApplyFundingLock) {
             if (!autoApplyFundingRunning) {
                 return Map.of("stopped", false, "reason", "not-running");
@@ -8741,6 +8828,9 @@ public class ExternalOrganizationController {
 
     @GetMapping("/stats/auto-apply-funding/status")
     public Map<String, Object> getAutoApplyFundingStatus() {
+        if (reconciliationJobRegistry != null) {
+            return reconciliationJobRegistry.getProgress(ReconciliationType.FUNDING).toMap();
+        }
         synchronized(autoApplyFundingLock) {
             Map<String, Object> status = new java.util.LinkedHashMap<>();
             status.put("running", autoApplyFundingRunning);
@@ -8756,7 +8846,9 @@ public class ExternalOrganizationController {
     @GetMapping("/stats/auto-apply-funding/download-log")
     public org.springframework.http.ResponseEntity<org.springframework.core.io.Resource> downloadAutoApplyFundingLog() {
         try {
-            java.io.File file = new java.io.File(autoApplyFundingLogFilePath);
+            java.io.File file = (reconciliationJobRegistry != null)
+                ? reconciliationJobRegistry.getLogFile(ReconciliationType.FUNDING)
+                : new java.io.File(autoApplyFundingLogFilePath);
             if (!file.exists()) {
                 return org.springframework.http.ResponseEntity.notFound().build();
             }
@@ -8953,6 +9045,9 @@ public class ExternalOrganizationController {
     }
 
     private void logNameMessage(String message) {
+        if (reconciliationJobRegistry != null) {
+            reconciliationJobRegistry.logMessage(ReconciliationType.NAME, message);
+        }
         String formatted = "[" + java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss")) + "] " + message;
         autoApplyNameLogs.add(formatted);
         writeNameLogToFile(formatted);
@@ -8983,6 +9078,9 @@ public class ExternalOrganizationController {
                 
                 synchronized(autoApplyNameLock) {
                     autoApplyNameTotal = orgs.size();
+                }
+                if (reconciliationJobRegistry != null) {
+                    reconciliationJobRegistry.setTotal(ReconciliationType.NAME, orgs.size());
                 }
                 
                 logNameMessage("S'han trobat " + autoApplyNameTotal + " organitzacions (Sense ROR: " + onlyWithoutRor + ", Sense País: " + onlyWithoutCountry + ", Canviar Nom: " + applyName + "). Analitzant propostes de noms ROR/OpenAlex (Similitud >= " + Math.round(similarityThreshold * 100) + "%)...");
@@ -9072,6 +9170,9 @@ public class ExternalOrganizationController {
                                     synchronized(autoApplyNameLock) {
                                         autoApplyNameApplied++;
                                     }
+                                    if (reconciliationJobRegistry != null) {
+                                        reconciliationJobRegistry.incrementApplied(ReconciliationType.NAME);
+                                    }
                                     String countryLog = (updatedCountry != null) ? " + País: \"" + proposal.country() + "\"" : "";
                                     String nameLog = (nameToApply != null) ? " -> Nou Nom: \"" + nameToApply + "\"" : "";
                                     logNameMessage("[ROR/NOM ASSIGNAT] \"" + name + "\"" + nameLog + " (ROR: " + proposal.rorId() + ", Similitud: " + Math.round(proposal.similarity() * 100) + "%, Font: " + proposal.reason() + ")" + countryLog);
@@ -9084,6 +9185,9 @@ public class ExternalOrganizationController {
                             synchronized(autoApplyNameLock) {
                                 autoApplyNameProcessed++;
                             }
+                            if (reconciliationJobRegistry != null) {
+                                reconciliationJobRegistry.incrementProcessed(ReconciliationType.NAME);
+                            }
                         }
                     }, aiExecutor != null ? aiExecutor : asyncExecutor);
                     
@@ -9092,9 +9196,16 @@ public class ExternalOrganizationController {
                 
                 CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
                 
-                logNameMessage("Proces d'assignacio de noms i identificadors finalitzat. Processades: " + autoApplyNameProcessed + ", Assignacions: " + autoApplyNameApplied);
+                String summary = "Proces d'assignacio de noms i identificadors finalitzat. Processades: " + autoApplyNameProcessed + ", Assignacions: " + autoApplyNameApplied;
+                logNameMessage(summary);
+                if (reconciliationJobRegistry != null) {
+                    reconciliationJobRegistry.finishRun(ReconciliationType.NAME, summary);
+                }
             } catch (Exception e) {
                 logNameMessage("[FATAL ERROR] " + e.getMessage());
+                if (reconciliationJobRegistry != null) {
+                    reconciliationJobRegistry.failRun(ReconciliationType.NAME, e.getMessage());
+                }
             } finally {
                 synchronized(autoApplyNameLock) {
                     autoApplyNameRunning = false;
@@ -9110,6 +9221,15 @@ public class ExternalOrganizationController {
             @RequestParam(defaultValue = "true") boolean onlyWithoutRor,
             @RequestParam(defaultValue = "false") boolean onlyWithoutCountry,
             @RequestParam(defaultValue = "false") boolean applyName) {
+        if (reconciliationJobRegistry != null) {
+            boolean started = reconciliationJobRegistry.startRun(ReconciliationType.NAME, env, similarity, "PROCES NORMALITZACIO DE NOMS ROR");
+            if (!started) {
+                return Map.of("started", false, "reason", "already-running");
+            }
+            startAutoApplyNameRun(env, similarity);
+            executeAutoApplyName(env, similarity, onlyWithoutRor, onlyWithoutCountry, applyName);
+            return Map.of("started", true);
+        }
         synchronized(autoApplyNameLock) {
             if (autoApplyNameRunning) {
                 return Map.of("started", false, "reason", "already-running");
@@ -9122,6 +9242,15 @@ public class ExternalOrganizationController {
 
     @PostMapping("/stats/auto-apply-name/stop")
     public Map<String, Object> stopAutoApplyName() {
+        if (reconciliationJobRegistry != null) {
+            boolean stopped = reconciliationJobRegistry.requestStop(ReconciliationType.NAME);
+            if (!stopped) {
+                return Map.of("stopped", false, "reason", "not-running");
+            }
+            autoApplyNameRunning = false;
+            logNameMessage("Petició d'aturar el procés rebuda.");
+            return Map.of("stopped", true);
+        }
         synchronized(autoApplyNameLock) {
             if (!autoApplyNameRunning) {
                 return Map.of("stopped", false, "reason", "not-running");
@@ -9134,6 +9263,9 @@ public class ExternalOrganizationController {
 
     @GetMapping("/stats/auto-apply-name/status")
     public Map<String, Object> getAutoApplyNameStatus() {
+        if (reconciliationJobRegistry != null) {
+            return reconciliationJobRegistry.getProgress(ReconciliationType.NAME).toMap();
+        }
         synchronized(autoApplyNameLock) {
             Map<String, Object> status = new java.util.LinkedHashMap<>();
             status.put("running", autoApplyNameRunning);
@@ -9149,7 +9281,9 @@ public class ExternalOrganizationController {
     @GetMapping("/stats/auto-apply-name/download-log")
     public org.springframework.http.ResponseEntity<org.springframework.core.io.Resource> downloadAutoApplyNameLog() {
         try {
-            java.io.File file = new java.io.File(autoApplyNameLogFilePath);
+            java.io.File file = (reconciliationJobRegistry != null)
+                ? reconciliationJobRegistry.getLogFile(ReconciliationType.NAME)
+                : new java.io.File(autoApplyNameLogFilePath);
             if (!file.exists()) {
                 return org.springframework.http.ResponseEntity.notFound().build();
             }
@@ -9166,6 +9300,15 @@ public class ExternalOrganizationController {
     @PostMapping("/stats/auto-validate/start")
     public Map<String, Object> startAutoValidate(
             @RequestParam(defaultValue = "test") String env) {
+        if (reconciliationJobRegistry != null) {
+            boolean started = reconciliationJobRegistry.startRun(ReconciliationType.VALIDATE, env, 1.0, "PROCES VALIDACIO AUTOMATICA");
+            if (!started) {
+                return Map.of("started", false, "reason", "already-running");
+            }
+            startAutoValidateRun(env);
+            executeAutoValidate(env);
+            return Map.of("started", true);
+        }
         synchronized(autoValidateLock) {
             if (autoValidateRunning) {
                 return Map.of("started", false, "reason", "already-running");
@@ -9178,6 +9321,15 @@ public class ExternalOrganizationController {
 
     @PostMapping("/stats/auto-validate/stop")
     public Map<String, Object> stopAutoValidate() {
+        if (reconciliationJobRegistry != null) {
+            boolean stopped = reconciliationJobRegistry.requestStop(ReconciliationType.VALIDATE);
+            if (!stopped) {
+                return Map.of("stopped", false, "reason", "not-running");
+            }
+            autoValidateRunning = false;
+            logValidateMessage("Petició d'aturar el procés rebuda.");
+            return Map.of("stopped", true);
+        }
         synchronized(autoValidateLock) {
             if (!autoValidateRunning) {
                 return Map.of("stopped", false, "reason", "not-running");
@@ -9190,6 +9342,9 @@ public class ExternalOrganizationController {
 
     @GetMapping("/stats/auto-validate/status")
     public Map<String, Object> getAutoValidateStatus() {
+        if (reconciliationJobRegistry != null) {
+            return reconciliationJobRegistry.getProgress(ReconciliationType.VALIDATE).toMap();
+        }
         synchronized(autoValidateLock) {
             Map<String, Object> status = new java.util.LinkedHashMap<>();
             status.put("running", autoValidateRunning);
@@ -9204,7 +9359,9 @@ public class ExternalOrganizationController {
     @GetMapping("/stats/auto-validate/download-log")
     public org.springframework.http.ResponseEntity<org.springframework.core.io.Resource> downloadAutoValidateLog() {
         try {
-            java.io.File file = new java.io.File(autoValidateLogFilePath);
+            java.io.File file = (reconciliationJobRegistry != null)
+                ? reconciliationJobRegistry.getLogFile(ReconciliationType.VALIDATE)
+                : new java.io.File(autoValidateLogFilePath);
             if (!file.exists()) {
                 return org.springframework.http.ResponseEntity.notFound().build();
             }
@@ -9259,6 +9416,9 @@ public class ExternalOrganizationController {
     }
 
     private void logValidateMessage(String message) {
+        if (reconciliationJobRegistry != null) {
+            reconciliationJobRegistry.logMessage(ReconciliationType.VALIDATE, message);
+        }
         String formatted = "[" + java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss")) + "] " + message;
         autoValidateLogs.add(formatted);
         writeValidateLogToFile(formatted);
@@ -9282,6 +9442,9 @@ public class ExternalOrganizationController {
                 
                 synchronized(autoValidateLock) {
                     autoValidateTotal = orgs.size();
+                }
+                if (reconciliationJobRegistry != null) {
+                    reconciliationJobRegistry.setTotal(ReconciliationType.VALIDATE, orgs.size());
                 }
                 
                 logValidateMessage("S'han trobat " + autoValidateTotal + " organitzacions per validar automàticament.");
@@ -9341,6 +9504,9 @@ public class ExternalOrganizationController {
                                 synchronized(autoValidateLock) {
                                     autoValidateApplied++;
                                 }
+                                if (reconciliationJobRegistry != null) {
+                                    reconciliationJobRegistry.incrementApplied(ReconciliationType.VALIDATE);
+                                }
                                 logValidateMessage("[VALIDAT] " + name + " (UUID: " + uuid + ")");
                             }
                         } catch (Exception e) {
@@ -9350,6 +9516,9 @@ public class ExternalOrganizationController {
                             synchronized(autoValidateLock) {
                                 autoValidateProcessed++;
                             }
+                            if (reconciliationJobRegistry != null) {
+                                reconciliationJobRegistry.incrementProcessed(ReconciliationType.VALIDATE);
+                            }
                         }
                     }, asyncExecutor);
                     
@@ -9358,10 +9527,17 @@ public class ExternalOrganizationController {
                 
                 CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
                 
-                logValidateMessage("Procés de validació automàtica finalitzat. Total processades: " + autoValidateProcessed + ", Validada/es: " + autoValidateApplied);
+                String summary = "Procés de validació automàtica finalitzat. Total processades: " + autoValidateProcessed + ", Validada/es: " + autoValidateApplied;
+                logValidateMessage(summary);
+                if (reconciliationJobRegistry != null) {
+                    reconciliationJobRegistry.finishRun(ReconciliationType.VALIDATE, summary);
+                }
                 invalidateMetadataCatalogCaches();
             } catch (Exception e) {
                 logValidateMessage("[FATAL ERROR] " + e.getMessage());
+                if (reconciliationJobRegistry != null) {
+                    reconciliationJobRegistry.failRun(ReconciliationType.VALIDATE, e.getMessage());
+                }
             } finally {
                 synchronized(autoValidateLock) {
                     autoValidateRunning = false;

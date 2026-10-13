@@ -725,7 +725,13 @@ function renderClusters() {
 // ── Ir a merge con cluster ────────────────────────────────────────────────
 function goToMergeWithCluster(uuids) {
     if (!Array.isArray(uuids) || !uuids.length) return;
-    const url = '../ext-org-merge/index.html?uuids=' + uuids.join(',');
+    let url = '../ext-org-merge/index.html?source=storage';
+    try {
+        sessionStorage.setItem('mergeClusterUuids', JSON.stringify(uuids));
+    } catch (e) {
+        console.warn('Error guardant a sessionStorage, usant URL:', e);
+        url = '../ext-org-merge/index.html?uuids=' + uuids.join(',');
+    }
     const w = 900, h = 700;
     const left = Math.round((window.screen.width - w) / 2);
     const top = Math.round((window.screen.height - h) / 2);
