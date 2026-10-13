@@ -34,14 +34,14 @@ public class UabAffiliationCatalog {
 
     // Institutos consorciados / CERCA / CSIC esfera UAB
     private static final List<InstituteRule> AFFILIATED_INSTITUTES = List.of(
-            new InstituteRule("ICMAB", "icmab", List.of("ciencia de materials de barcelona")),
-            new InstituteRule("ICN2", "icn2", List.of("nanociencia", "nanotechnology")),
-            new InstituteRule("IFAE", "ifae", List.of("altes energies", "high energy physics")),
-            new InstituteRule("CRAG", "crag", List.of("agrigenomica", "agricultural genomics")),
+            new InstituteRule("ICMAB", "icmab", List.of("ciencia de materials de barcelona", "materials science institute of barcelona")),
+            new InstituteRule("ICN2", "icn2", List.of("catalan institute of nanoscience", "institut catala de nanociencia")),
+            new InstituteRule("IFAE", "ifae", List.of("institut de fisica d altes energies", "institute for high energy physics barcelona")),
+            new InstituteRule("CRAG", "crag", List.of("centre de recerca en agrigenomica", "centre for research in agricultural genomics")),
             new InstituteRule("CVC", "cvc", List.of("visio per computador", "computer vision center")),
-            new InstituteRule("ICTA", "icta", List.of("icta uab", "tecnologia ambientals", "environmental science")),
-            new InstituteRule("IIIA", "iiia", List.of("iiia csic", "intelligencia artificial", "artificial intelligence")),
-            new InstituteRule("IBB", "ibb", List.of("biotecnologia i de biomedicina", "biotechnology and biomedicine"))
+            new InstituteRule("ICTA", "icta", List.of("institut de ciencia i tecnologia ambientals", "icta uab")),
+            new InstituteRule("IIIA", "iiia", List.of("institut d investigacio en intelligencia artificial", "artificial intelligence research institute csic", "iiia csic")),
+            new InstituteRule("IBB", "ibb", List.of("institut de biotecnologia i de biomedicina"))
     );
 
     // Palabras institucionales indicadoras de entidades ajenas
@@ -283,8 +283,6 @@ public class UabAffiliationCatalog {
             }
         }
 
-        // Si contiene un nombre sustancial que no es solo país/región
-        String[] tokens = normalizedText.split("\\s+");
-        return tokens.length >= 2;
+        return false;
     }
 }

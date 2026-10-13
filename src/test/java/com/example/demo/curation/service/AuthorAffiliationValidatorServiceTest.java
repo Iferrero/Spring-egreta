@@ -7,6 +7,7 @@ import com.example.demo.curation.model.PersonPublicationCandidate;
 import com.example.demo.curation.service.AuthorAffiliationValidatorService.CandidateEvaluationContext;
 import com.example.demo.curation.util.UabAffiliationCatalog;
 import com.example.demo.curation.util.UabAffiliationCatalog.AffiliationMatch;
+import com.example.demo.model.Persona;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -265,5 +266,116 @@ class AuthorAffiliationValidatorServiceTest {
 
         AffiliationMatch matchBellaterra = catalog.matchAffiliation(List.of("Edifici Eureka, Bellaterra"), Collections.emptyList());
         assertEquals(AffiliationStatus.CONFIRMED_UAB, matchBellaterra.getStatus());
+    }
+
+    @Test
+    @DisplayName("🛡️ Stanford Artificial Intelligence no debe coincidir erróneamente con IIIA/UAB")
+    void testNoFalseMatchOnGenericDiscipline_stanfordArtificialIntelligence() {
+        AffiliationMatch match = catalog.matchAffiliation(
+                List.of("Department of Artificial Intelligence, Stanford University, Stanford, CA, USA"),
+                Collections.emptyList()
+        );
+        assertEquals(AffiliationStatus.OTHER_INSTITUTION, match.getStatus());
+        assertTrue(match.isOtherInstitution());
+        assertFalse(match.isConfirmedUab());
+    }
+
+    @Test
+    @DisplayName("🛡️ Nombres compuestos compartidos sin apellido común (José María García vs José María Rodríguez) no deben coincidir")
+    void testNoFalseMatchOnCompoundFirstNames() {
+        CandidateEvaluationContext context = CandidateEvaluationContext.builder()
+                .personUuid("uuid-garcia")
+                .personName("Garcia, Jose Maria")
+                .doi("10.1000/182")
+                .title("Sample Research Paper")
+                .rawAffiliations(Collections.emptyList())
+                .workCoauthors(List.of("Jose Maria Rodriguez"))
+                .knownCoauthors(Set.of("Jose Maria Garcia"))
+                .build();
+
+        PersonPublicationCandidate candidate = validatorService.evaluateCandidate(context);
+
+        // Sin coincidencia de coautor -> 0 puntos de coautoría
+        assertFalse(candidate.getCoauthorSignals().contains("Rodriguez"));
+        assertEquals(0.0, candidate.getConfidenceScore());
+    }
+
+    @Test
+    @DisplayName("👤 Sobrecarga evaluateCandidate(Persona author, ...) mapea campos correctamente")
+    void testEvaluateCandidateWithPersonaObject() {
+        Persona persona = new Persona();
+        persona.setUuid("person-uuid-777");
+        Persona.Name name = new Persona.Name();
+        name.setFirstName("Laura");
+        name.setLastName("Gomez");
+        persona.setName(name);
+        persona.setOrcid("0000-0003-4567-8901");
+
+        Persona.StaffOrganizationAssociation assoc = new Persona.StaffOrganizationAssociation();
+        Persona.OrgDetail org = new Persona.OrgDetail();
+        org.setUuid("org-dept-chem");
+        Persona.LocalizedName locName = new Persona.LocalizedName();
+        Persona.TextValue tv = new Persona.TextValue();
+        tv.setLocale("ca_ES");
+        tv.setValue("Departament de Química");
+        locName.setText(List.of(tv));
+        org.setName(locName);
+        assoc.setOrganization(org);
+        persona.setStaffOrganizationAssociations(List.of(assoc));
+
+        PersonPublicationCandidate candidate = validatorService.evaluateCandidate(
+                persona,
+                "10.1021/acs.chemrev.2023",
+                "Advanced Chemical Catalysis",
+                2023,
+                "Chemical Reviews",
+                "https://openalex.org/W5555",
+                List.of("Universitat Autònoma de Barcelona"),
+                Collections.emptyList(),
+                "0000-0003-4567-8901",
+                List.of("Perez, Joan"),
+                Set.of("Perez, Joan"),
+                List.of("Catalysis"),
+                Set.of("Catalysis", "Organic Chemistry")
+        );
+
+        assertNotNull(candidate);
+        assertEquals("person-uuid-777", candidate.getPersonUuid());
+        assertEquals("Gomez, Laura", candidate.getPersonName());
+        assertEquals("org-dept-chem", candidate.getDepartmentId());
+        assertEquals("Departament de Química", candidate.getDepartmentName());
+        assertEquals("10.1021/acs.chemrev.2023", candidate.getDoi());
+        assertEquals(CandidateVerdict.HIGH_CONFIDENCE_UAB, candidate.getVerdict());
+        assertEquals(CandidateStatus.PENDING, candidate.getStatus());
+    }
+
+    @Test
+    @DisplayName("📉 Penalización temática aislada: UAB (+40) con disciplina disjunta (-20) resulta en 20.0 puntos (ROJO)")
+    void testStandaloneTopicPenalty_whenUabAffiliationWithDisjointTopic() {
+        CandidateEvaluationContext context = CandidateEvaluationContext.builder()
+                .personUuid("uuid-topic-pen")
+                .personName("Roca, Mireia")
+                .doi("10.1016/j.disjoint.2023")
+                .title("Disjoint Topic Investigation")
+                .rawAffiliations(List.of("Universitat Autònoma de Barcelona"))
+                .workTopics(List.of("Theoretical Astrophysics"))
+                .knownTopics(Set.of("Medieval Catalan Literature"))
+                .build();
+
+        PersonPublicationCandidate candidate = validatorService.evaluateCandidate(context);
+
+        assertEquals(AffiliationStatus.CONFIRMED_UAB, candidate.getAffiliationStatus());
+        assertEquals(20.0, candidate.getConfidenceScore(), "40 UAB - 20 disciplina disjunta debe ser exactamente 20.0");
+        assertEquals(CandidateVerdict.LIKELY_FALSE_POSITIVE, candidate.getVerdict());
+    }
+
+    @Test
+    @DisplayName("🏙️ Cadenas ambiguas o geográficas (Campus Nord, Barcelona Spain) no incurren en penalización de otra institución")
+    void testAmbiguousGeographicStringDoesNotTriggerOtherInstitution() {
+        AffiliationMatch matchCampusNord = catalog.matchAffiliation(List.of("Campus Nord"), Collections.emptyList());
+        assertEquals(AffiliationStatus.AMBIGUOUS_OR_MISSING, matchCampusNord.getStatus());
+
+        AffiliationMatch matchCity = catalog.matchAffiliation(List.of("Barcelona, Spain"), Collections.emptyList());
+        assertEquals(AffiliationStatus.AMBIGUOUS_OR_MISSING, matchCity.getStatus());
     }
 }

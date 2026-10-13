@@ -279,13 +279,6 @@ public class AuthorAffiliationValidatorService {
             }
         }
 
-        // Refuerzo institucional: firma UAB y coautoría conjunta
-        if (isConfirmedUab && coauthorMatched && score < SCORE_THRESHOLD_GREEN) {
-            double reinforcement = SCORE_THRESHOLD_GREEN - score;
-            score += reinforcement;
-            reasons.add("+" + (int) reinforcement + ": Respaldo institucional reforzado (firma UAB conjunta con coautor histórico)");
-        }
-
         // 3. Identificador ORCID coincidente (+20)
         boolean orcidMatched = evaluateOrcidMatch(context);
         if (orcidMatched) {
@@ -317,7 +310,14 @@ public class AuthorAffiliationValidatorService {
             reasons.add("0: Sin evidencia temática concluyente");
         }
 
-        // 5. Ajuste a umbral de revisión cuando ORCID coincide pero la afiliación no consta
+        // 5. Refuerzo institucional: si firma UAB y coautor conocido están presentes pero faltan puntos para verde
+        if (isConfirmedUab && coauthorMatched && score < SCORE_THRESHOLD_GREEN) {
+            double reinforcement = SCORE_THRESHOLD_GREEN - score;
+            score += reinforcement;
+            reasons.add("+" + (int) reinforcement + ": Respaldo institucional reforzado (firma UAB conjunta con coautor histórico)");
+        }
+
+        // 6. Ajuste a umbral de revisión cuando ORCID coincide pero la afiliación no consta
         if (orcidMatched && affMatch.isAmbiguousOrMissing() && score < SCORE_THRESHOLD_YELLOW) {
             score = SCORE_THRESHOLD_YELLOW;
             reasons.add("Ajuste a umbral de revisión (🟡): autor verificado por ORCID con metadatos de afiliación ausentes");
@@ -427,13 +427,11 @@ public class AuthorAffiliationValidatorService {
         List<String> matches = new ArrayList<>();
         for (String workAuthor : context.getWorkCoauthors()) {
             if (workAuthor == null || workAuthor.isBlank()) continue;
-            String normWork = CurationTextNormalizer.normalizeText(workAuthor);
 
             for (String knownAuthor : context.getKnownCoauthors()) {
                 if (knownAuthor == null || knownAuthor.isBlank()) continue;
-                String normKnown = CurationTextNormalizer.normalizeText(knownAuthor);
 
-                if (isAuthorNameMatch(normWork, normKnown)) {
+                if (isAuthorNameMatch(workAuthor, knownAuthor)) {
                     matches.add(workAuthor.trim());
                     break;
                 }
@@ -442,32 +440,92 @@ public class AuthorAffiliationValidatorService {
         return matches;
     }
 
-    private boolean isAuthorNameMatch(String normWork, String normKnown) {
-        if (normWork.equals(normKnown)) {
-            return true;
+    private boolean isAuthorNameMatch(String workAuthor, String knownAuthor) {
+        if (workAuthor == null || knownAuthor == null) return false;
+        String normWork = CurationTextNormalizer.normalizeText(workAuthor);
+        String normKnown = CurationTextNormalizer.normalizeText(knownAuthor);
+
+        if (normWork.isBlank() || normKnown.isBlank()) return false;
+        if (normWork.equals(normKnown)) return true;
+
+        AuthorNameParts partsWork = new AuthorNameParts(workAuthor);
+        AuthorNameParts partsKnown = new AuthorNameParts(knownAuthor);
+
+        // 1. Debe coincidir al menos un apellido principal
+        boolean surnameMatches = partsWork.surnames.stream().anyMatch(partsKnown.surnames::contains);
+        if (!surnameMatches) {
+            return false;
         }
 
-        // Comparación por tokens sin importar orden (ej. "Sole, Joan" vs "Joan Sole")
-        Set<String> tokensWork = new HashSet<>(Arrays.asList(normWork.split("\\s+")));
-        Set<String> tokensKnown = new HashSet<>(Arrays.asList(normKnown.split("\\s+")));
-
-        tokensWork.removeIf(String::isBlank);
-        tokensKnown.removeIf(String::isBlank);
-
-        if (!tokensWork.isEmpty() && tokensWork.equals(tokensKnown)) {
-            return true;
+        // 2. Si ambos tienen nombres de pila especificados, debe coincidir al menos un nombre o inicial
+        if (!partsWork.givenNames.isEmpty() && !partsKnown.givenNames.isEmpty()) {
+            for (String gw : partsWork.givenNames) {
+                for (String gk : partsKnown.givenNames) {
+                    if (gw.equals(gk)) {
+                        return true;
+                    }
+                    if (gw.length() == 1 && gk.startsWith(gw)) {
+                        return true;
+                    }
+                    if (gk.length() == 1 && gw.startsWith(gk)) {
+                        return true;
+                    }
+                }
+            }
+            return false;
         }
 
-        // Si comparten apellido y al menos un nombre o inicial
-        if (tokensWork.size() >= 2 && tokensKnown.size() >= 2) {
-            Set<String> intersection = new HashSet<>(tokensWork);
-            intersection.retainAll(tokensKnown);
-            if (intersection.size() >= 2) {
-                return true;
+        // 3. Si alguno carece de nombre de pila, requiere que el conjunto de apellidos coincida exactamente
+        return partsWork.surnames.equals(partsKnown.surnames);
+    }
+
+    private static class AuthorNameParts {
+        final Set<String> surnames = new HashSet<>();
+        final Set<String> givenNames = new HashSet<>();
+
+        AuthorNameParts(String rawName) {
+            if (rawName == null || rawName.isBlank()) return;
+
+            String trimmed = rawName.trim();
+            if (trimmed.contains(",")) {
+                String[] parts = trimmed.split(",", 2);
+                String normSurname = CurationTextNormalizer.normalizeText(parts[0]);
+                String normGiven = (parts.length > 1) ? CurationTextNormalizer.normalizeText(parts[1]) : "";
+
+                for (String t : normSurname.split("\\s+")) {
+                    if (!t.isBlank()) surnames.add(t);
+                }
+                for (String t : normGiven.split("\\s+")) {
+                    if (!t.isBlank()) givenNames.add(t);
+                }
+            } else {
+                String norm = CurationTextNormalizer.normalizeText(trimmed);
+                String[] tokens = norm.split("\\s+");
+                List<String> cleanTokens = new ArrayList<>();
+                for (String t : tokens) {
+                    if (!t.isBlank()) cleanTokens.add(t);
+                }
+
+                if (cleanTokens.isEmpty()) return;
+
+                if (cleanTokens.size() == 1) {
+                    surnames.add(cleanTokens.get(0));
+                } else {
+                    surnames.add(cleanTokens.get(cleanTokens.size() - 1));
+
+                    if (trimmed.contains("-") && cleanTokens.size() >= 2) {
+                        surnames.add(cleanTokens.get(cleanTokens.size() - 2));
+                        for (int i = 0; i < cleanTokens.size() - 2; i++) {
+                            givenNames.add(cleanTokens.get(i));
+                        }
+                    } else {
+                        for (int i = 0; i < cleanTokens.size() - 1; i++) {
+                            givenNames.add(cleanTokens.get(i));
+                        }
+                    }
+                }
             }
         }
-
-        return CurationTextNormalizer.calculateStringSimilarity(normWork, normKnown) >= 0.88;
     }
 
     private List<String> findMatchedTopics(CandidateEvaluationContext context) {
