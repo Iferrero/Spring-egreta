@@ -60,6 +60,7 @@ public class Persona {
     public String getOrcid() { return orcid; }
     public void setOrcid(String orcid) { this.orcid = orcid; }
     public String getId() { return uuid; }
+    public Name getName() { return name; }
     public void setName(Name name) { this.name = name; }
 
     // Clase interna para el nombre

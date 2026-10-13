@@ -19,5 +19,8 @@ public interface PublicacionRepository extends MongoRepository<Publicacion, Stri
     // Busca en el título ignorando mayúsculas/minúsculas con paginación
     @Query("{ 'title.value': { $regex: ?0, $options: 'i' } }")
     Page<Publicacion> findByTitleValueContainingIgnoreCase(String title, Pageable pageable);
-    
+
+    // Buscar publicaciones asociadas a un autor por su UUID de persona
+    @Query("{ 'contributors.person.uuid': ?0 }")
+    List<Publicacion> findByContributorsPersonUuid(String personUuid);
 }

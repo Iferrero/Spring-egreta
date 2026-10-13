@@ -53,6 +53,8 @@ public class Publicacion {
     public void setIdentifiers(List<Identifier> identifiers) { this.identifiers = identifiers; }
     public Map<String, String> getAbstracts() { return abstracts; }
     public void setAbstracts(Map<String, String> abstracts) { this.abstracts = abstracts; }
+    public List<Contributor> getContributors() { return contributors; }
+    public void setContributors(List<Contributor> contributors) { this.contributors = contributors; }
 
     // Clases internas para el mapeo del JSON anidado
     public static class Title {
@@ -87,8 +89,22 @@ public class Publicacion {
     // Clases internas necesarias para el mapeo
     public static class Contributor {
         private ContributorName name;
+        private PersonRef person;
+
         public ContributorName getName() { return name; }
         public void setName(ContributorName name) { this.name = name; }
+        public PersonRef getPerson() { return person; }
+        public void setPerson(PersonRef person) { this.person = person; }
+    }
+
+    public static class PersonRef {
+        private String uuid;
+
+        public PersonRef() {}
+        public PersonRef(String uuid) { this.uuid = uuid; }
+
+        public String getUuid() { return uuid; }
+        public void setUuid(String uuid) { this.uuid = uuid; }
     }
 
     public static class ContributorName {

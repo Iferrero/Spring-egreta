@@ -6,8 +6,11 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.data.mongodb.repository.Query;
 import java.time.LocalDate;
+import java.util.Optional;
 
 public interface PersonaRepository extends MongoRepository<Persona, String> {
+
+    Optional<Persona> findByUuid(String uuid);
 
     // 1. Búsqueda normal por apellido (ignora mayúsculas/minúsculas)
     Page<Persona> findByNameLastNameContainingIgnoreCase(String lastName, Pageable pageable);
