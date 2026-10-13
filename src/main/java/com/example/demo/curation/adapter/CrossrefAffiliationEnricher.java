@@ -132,6 +132,10 @@ public class CrossrefAffiliationEnricher {
             }
 
             return affiliations.isEmpty() ? Optional.empty() : Optional.of(affiliations);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.debug("Crossref enrichment interrupted for DOI '{}'", doi);
+            return Optional.empty();
         } catch (Exception e) {
             log.debug("Crossref affiliation enrichment failed for DOI '{}': {}", doi, e.getMessage());
             return Optional.empty();

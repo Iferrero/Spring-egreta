@@ -449,4 +449,54 @@ class OpenAlexWorksClientTest {
         assertThat(work.getAllRawAffiliations())
                 .containsExactly("Departament de Bioquimica, Universitat Autonoma de Barcelona, Spain");
     }
+
+    @Test
+    @DisplayName("OpenAlexWorkDto equals and hashCode consistency for IDs, DOIs, and null safety")
+    void testWorkDto_EqualsAndHashCodeContract() {
+        OpenAlexWorkDto w1 = new OpenAlexWorkDto("https://openalex.org/W1", "10.1000/1", "Title 1", 2020, "V1");
+        OpenAlexWorkDto w1Copy = new OpenAlexWorkDto("https://openalex.org/W1", "10.1000/different", "Title 1 Copy", 2020, "V1");
+        OpenAlexWorkDto w2 = new OpenAlexWorkDto("https://openalex.org/W2", "10.1000/1", "Title 2", 2021, "V2");
+
+        // Same ID -> equal and matching hashCode
+        assertThat(w1).isEqualTo(w1Copy);
+        assertThat(w1.hashCode()).isEqualTo(w1Copy.hashCode());
+
+        // Different ID -> not equal
+        assertThat(w1).isNotEqualTo(w2);
+
+        // Null IDs, same normalized DOI -> equal and matching hashCode
+        OpenAlexWorkDto noId1 = new OpenAlexWorkDto(null, "https://doi.org/10.1000/abc", "Title A", 2022, "V");
+        OpenAlexWorkDto noId2 = new OpenAlexWorkDto(null, "10.1000/abc", "Title A", 2022, "V");
+        assertThat(noId1).isEqualTo(noId2);
+        assertThat(noId1.hashCode()).isEqualTo(noId2.hashCode());
+
+        // Null IDs, different DOIs -> not equal
+        OpenAlexWorkDto noIdDiff = new OpenAlexWorkDto(null, "10.1000/xyz", "Title B", 2022, "V");
+        assertThat(noId1).isNotEqualTo(noIdDiff);
+
+        // Null ID and null DOI -> not equal to each other (no null collision)
+        OpenAlexWorkDto blank1 = new OpenAlexWorkDto(null, null, "Blank 1", 2020, "V");
+        OpenAlexWorkDto blank2 = new OpenAlexWorkDto(null, null, "Blank 2", 2020, "V");
+        assertThat(blank1).isNotEqualTo(blank2);
+
+        // Reflexivity, null safety, type safety
+        assertThat(w1).isEqualTo(w1);
+        assertThat(w1).isNotEqualTo(null);
+        assertThat(w1).isNotEqualTo("some string");
+    }
+
+    @Test
+    @DisplayName("CrossrefAffiliationEnricher restores thread interrupt flag on InterruptedException")
+    @SuppressWarnings("unchecked")
+    void testCrossrefAffiliationEnricher_InterruptedExceptionRestoresFlag() throws Exception {
+        when(mockHttpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
+                .thenThrow(new InterruptedException("Interrupted"));
+
+        Optional<List<String>> result = crossrefEnricher.enrichAffiliationsFromCrossref("10.1000/182");
+
+        assertThat(result).isEmpty();
+        assertThat(Thread.currentThread().isInterrupted()).isTrue();
+        // Clear interrupt status so subsequent tests/teardown are not affected
+        Thread.interrupted();
+    }
 }

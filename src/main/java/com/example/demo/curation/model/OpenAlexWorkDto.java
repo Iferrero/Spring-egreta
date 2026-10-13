@@ -195,12 +195,27 @@ public class OpenAlexWorkDto {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         OpenAlexWorkDto that = (OpenAlexWorkDto) o;
-        return Objects.equals(id, that.id) || (doi != null && Objects.equals(getNormalizedDoi(), that.getNormalizedDoi()));
+        if (this.id != null && that.id != null) {
+            return Objects.equals(this.id, that.id);
+        }
+        String thisDoi = this.getNormalizedDoi();
+        String thatDoi = that.getNormalizedDoi();
+        if (thisDoi != null && thatDoi != null) {
+            return Objects.equals(thisDoi, thatDoi);
+        }
+        return false;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(id, getNormalizedDoi());
+        if (id != null) {
+            return Objects.hash(id);
+        }
+        String normDoi = getNormalizedDoi();
+        if (normDoi != null) {
+            return Objects.hash(normDoi);
+        }
+        return 0;
     }
 
     @Override
