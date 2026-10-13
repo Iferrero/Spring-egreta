@@ -195,15 +195,12 @@ public class OpenAlexWorkDto {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         OpenAlexWorkDto that = (OpenAlexWorkDto) o;
-        if (this.id != null && that.id != null) {
+        if (this.id != null || that.id != null) {
             return Objects.equals(this.id, that.id);
         }
-        String thisDoi = this.getNormalizedDoi();
+        String thisDoi = getNormalizedDoi();
         String thatDoi = that.getNormalizedDoi();
-        if (thisDoi != null && thatDoi != null) {
-            return Objects.equals(thisDoi, thatDoi);
-        }
-        return false;
+        return thisDoi != null && Objects.equals(thisDoi, thatDoi);
     }
 
     @Override

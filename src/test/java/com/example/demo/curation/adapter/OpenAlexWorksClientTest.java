@@ -464,6 +464,12 @@ class OpenAlexWorksClientTest {
         // Different ID -> not equal
         assertThat(w1).isNotEqualTo(w2);
 
+        // Work with ID does not equal work with null ID even if both have same DOI
+        OpenAlexWorkDto withId = new OpenAlexWorkDto("https://openalex.org/W1", "10.1000/same", "Title", 2020, "V");
+        OpenAlexWorkDto withoutId = new OpenAlexWorkDto(null, "10.1000/same", "Title", 2020, "V");
+        assertThat(withId).isNotEqualTo(withoutId);
+        assertThat(withoutId).isNotEqualTo(withId);
+
         // Null IDs, same normalized DOI -> equal and matching hashCode
         OpenAlexWorkDto noId1 = new OpenAlexWorkDto(null, "https://doi.org/10.1000/abc", "Title A", 2022, "V");
         OpenAlexWorkDto noId2 = new OpenAlexWorkDto(null, "10.1000/abc", "Title A", 2022, "V");
