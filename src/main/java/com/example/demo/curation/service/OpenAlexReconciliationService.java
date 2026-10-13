@@ -56,7 +56,7 @@ public class OpenAlexReconciliationService {
      *
      * @param personUuid identificador único del investigador en EGRETA
      * @param strictOrcidOnly si es true, busca exclusivamente por ORCID en OpenAlex
-     * @return lista de candidatos persistidos o activos para el investigador
+     * @return lista de nuevas candidatas evaluadas y persistidas en esta ejecución
      */
     public List<PersonPublicationCandidate> scanPerson(String personUuid, boolean strictOrcidOnly) {
         if (personUuid == null || personUuid.isBlank()) {
@@ -75,7 +75,7 @@ public class OpenAlexReconciliationService {
         }
 
         // 3. Extraer red histórica de coautores y tópicos
-        Set<String> knownCoauthors = extractKnownCoauthors(existingWorks, personUuid);
+        Set<String> knownCoauthors = extractKnownCoauthors(existingWorks, persona);
         Set<String> knownTopics = new HashSet<>();
 
         // 4. Preparar parámetros de búsqueda para OpenAlex
@@ -98,30 +98,39 @@ public class OpenAlexReconciliationService {
         for (OpenAlexWorkDto work : openAlexWorks) {
             if (work == null) continue;
 
-            String normalizedDoi = deduplicationService.normalizeDoi(work.getDoi());
-
-            // 5a. Descartar si ya está registrada en el repositorio de candidatos
-            if (normalizedDoi != null && candidateRepository.findByPersonUuidAndDoi(personUuid, normalizedDoi).isPresent()) {
-                log.debug("Skipping work already in candidate repository: doi={}", normalizedDoi);
-                continue;
-            }
-
-            // 5b. Descartar si ya es conocida en EGRETA o candidatos existentes
+            // 5a. Descartar si ya es conocida en EGRETA o en candidatos previos
             if (deduplicationService.isAlreadyKnown(personUuid, work.getDoi(), work.getTitle(), existingWorks)) {
-                log.debug("Skipping already known work in EGRETA: doi={}, title={}", work.getDoi(), work.getTitle());
+                log.debug("Skipping already known work in EGRETA/candidates: doi={}, title={}", work.getDoi(), work.getTitle());
                 continue;
             }
 
-            // 5c. Identificar al autor evaluado dentro de la obra y extraer sus filiaciones
+            // 5b. Identificar al autor evaluado dentro de la obra y extraer sus filiaciones
             AuthorDto targetAuthor = findTargetAuthor(work, persona);
 
-            List<String> rawAffs = (targetAuthor != null && !targetAuthor.getRawAffiliationStrings().isEmpty())
-                    ? targetAuthor.getRawAffiliationStrings()
-                    : work.getAllRawAffiliations();
+            List<String> rawAffs;
+            List<String> instIds;
+            boolean isSingleAuthorOrEmpty = (work.getAuthors() == null || work.getAuthors().size() <= 1);
 
-            List<String> instIds = (targetAuthor != null && !targetAuthor.getInstitutionIds().isEmpty())
-                    ? targetAuthor.getInstitutionIds()
-                    : work.getAllInstitutionIds();
+            if (targetAuthor != null) {
+                if (!targetAuthor.getRawAffiliationStrings().isEmpty()) {
+                    rawAffs = targetAuthor.getRawAffiliationStrings();
+                } else if (isSingleAuthorOrEmpty) {
+                    rawAffs = work.getAllRawAffiliations();
+                } else {
+                    rawAffs = Collections.emptyList();
+                }
+
+                if (!targetAuthor.getInstitutionIds().isEmpty()) {
+                    instIds = targetAuthor.getInstitutionIds();
+                } else if (isSingleAuthorOrEmpty) {
+                    instIds = work.getAllInstitutionIds();
+                } else {
+                    instIds = Collections.emptyList();
+                }
+            } else {
+                rawAffs = work.getAllRawAffiliations();
+                instIds = work.getAllInstitutionIds();
+            }
 
             String workAuthorOrcid = (targetAuthor != null) ? targetAuthor.getOrcid() : null;
 
@@ -138,7 +147,7 @@ public class OpenAlexReconciliationService {
             if (work.getTopics() != null) workTopics.addAll(work.getTopics());
             if (work.getConcepts() != null) workTopics.addAll(work.getConcepts());
 
-            // 5d. Evaluación y semáforo mediante AuthorAffiliationValidatorService
+            // 5c. Evaluación y semáforo mediante AuthorAffiliationValidatorService
             PersonPublicationCandidate candidate = affiliationValidatorService.evaluateCandidate(
                     persona,
                     work.getDoi(),
@@ -155,7 +164,7 @@ public class OpenAlexReconciliationService {
                     knownTopics
             );
 
-            // 5e. Persistencia en MongoDB con estado PENDING
+            // 5d. Persistencia en MongoDB con estado PENDING
             candidate.setStatus(CandidateStatus.PENDING);
             PersonPublicationCandidate saved = candidateRepository.save(candidate);
             newlySavedCandidates.add(saved != null ? saved : candidate);
@@ -163,12 +172,7 @@ public class OpenAlexReconciliationService {
 
         log.info("Scan completed for {}: created {} new candidates", personUuid, newlySavedCandidates.size());
 
-        // 6. Devolver la lista completa de candidatos persistidos para la persona
-        List<PersonPublicationCandidate> allCandidates = candidateRepository.findByPersonUuid(personUuid);
-        if (allCandidates != null && !allCandidates.isEmpty()) {
-            return allCandidates;
-        }
-
+        // 6. Devolver únicamente las nuevas candidatas evaluadas y persistidas en esta ejecución
         return newlySavedCandidates;
     }
 
@@ -199,20 +203,40 @@ public class OpenAlexReconciliationService {
         return getCandidatesForPerson(personUuid, null);
     }
 
-    private Set<String> extractKnownCoauthors(List<Publicacion> existingWorks, String personUuid) {
+    private Set<String> extractKnownCoauthors(List<Publicacion> existingWorks, Persona persona) {
         Set<String> knownCoauthors = new HashSet<>();
-        if (existingWorks == null) return knownCoauthors;
+        if (existingWorks == null || persona == null) return knownCoauthors;
+
+        String personUuid = persona.getUuid();
+        String targetLastName = (persona.getName() != null) ? persona.getName().getLastName() : null;
+        String targetFirstName = (persona.getName() != null) ? persona.getName().getFirstName() : null;
+        String normTargetLn = targetLastName != null ? CurationTextNormalizer.normalizeText(targetLastName) : "";
+        String normTargetFn = targetFirstName != null ? CurationTextNormalizer.normalizeText(targetFirstName) : "";
 
         for (Publicacion pub : existingWorks) {
             if (pub == null || pub.getContributors() == null) continue;
             for (Publicacion.Contributor c : pub.getContributors()) {
                 if (c == null) continue;
-                if (c.getPerson() != null && personUuid.equals(c.getPerson().getUuid())) {
+                if (c.getPerson() != null && personUuid != null && personUuid.equals(c.getPerson().getUuid())) {
                     continue;
                 }
                 if (c.getName() != null) {
                     String ln = c.getName().getLastName();
                     String fn = c.getName().getFirstName();
+
+                    // Evitar incluir al propio investigador si no tiene person.uuid en EGRETA
+                    if (ln != null) {
+                        String normLn = CurationTextNormalizer.normalizeText(ln);
+                        String normFn = (fn != null) ? CurationTextNormalizer.normalizeText(fn) : "";
+                        if (!normTargetLn.isEmpty() && normLn.equals(normTargetLn)) {
+                            if (normTargetFn.isEmpty() || normFn.isEmpty() || normFn.equals(normTargetFn)
+                                    || (normFn.length() == 1 && normTargetFn.startsWith(normFn))
+                                    || (normTargetFn.length() == 1 && normFn.startsWith(normTargetFn))) {
+                                continue;
+                            }
+                        }
+                    }
+
                     if (ln != null && !ln.isBlank()) {
                         if (fn != null && !fn.isBlank()) {
                             knownCoauthors.add(ln.trim() + ", " + fn.trim());

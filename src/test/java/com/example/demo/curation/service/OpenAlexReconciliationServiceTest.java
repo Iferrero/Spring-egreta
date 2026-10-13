@@ -312,4 +312,157 @@ class OpenAlexReconciliationServiceTest {
         List<PersonPublicationCandidate> defaultAll = reconciliationService.getCandidatesForPerson("person-uab-100");
         assertEquals(2, defaultAll.size());
     }
+
+    @Test
+    @DisplayName("🆕 scanPerson: devuelve únicamente las nuevas candidatas de esta ejecución y no el histórico")
+    void testScanPerson_returnsOnlyNewlySavedCandidates_notHistoricalRecords() {
+        when(personaRepository.findByUuid("person-uab-100")).thenReturn(Optional.of(persona));
+        when(publicacionRepository.findByContributorsPersonUuid("person-uab-100")).thenReturn(Collections.emptyList());
+
+        // Historical record already exists in repository for another DOI
+        PersonPublicationCandidate historicalCandidate = new PersonPublicationCandidate();
+        historicalCandidate.setPersonUuid("person-uab-100");
+        historicalCandidate.setDoi("10.1016/j.cell.historical.approved");
+        historicalCandidate.setStatus(CandidateStatus.APPROVED_IMPORT);
+
+        // OpenAlex returns 1 brand new work
+        OpenAlexWorkDto newWork = new OpenAlexWorkDto(
+                "https://openalex.org/W2023",
+                "10.1016/j.cell.2023.new.work",
+                "Brand New Paper",
+                2023,
+                "Cell"
+        );
+        newWork.getAuthors().add(new OpenAlexWorkDto.AuthorDto("A1", "Garcia, Maria", "0000-0002-1825-0097"));
+
+        when(openAlexWorksClient.fetchWorksByAuthor(any(), any(), eq(false)))
+                .thenReturn(List.of(newWork));
+
+        when(candidateRepository.save(any(PersonPublicationCandidate.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        // Stub findByPersonUuid to return both historical and newly saved
+        PersonPublicationCandidate newlyCreated = new PersonPublicationCandidate();
+        newlyCreated.setPersonUuid("person-uab-100");
+        newlyCreated.setDoi("10.1016/j.cell.2023.new.work");
+
+        when(candidateRepository.findByPersonUuid("person-uab-100"))
+                .thenReturn(List.of(historicalCandidate, newlyCreated));
+
+        List<PersonPublicationCandidate> scanResult = reconciliationService.scanPerson("person-uab-100", false);
+
+        // Crucial verification: scanResult contains ONLY the 1 newly evaluated candidate, avoiding double-counting
+        assertEquals(1, scanResult.size());
+        assertEquals("10.1016/j.cell.2023.new.work", scanResult.get(0).getDoi());
+
+        // Historical query returns both
+        List<PersonPublicationCandidate> allCandidates = reconciliationService.getCandidatesForPerson("person-uab-100");
+        assertEquals(2, allCandidates.size());
+    }
+
+    @Test
+    @DisplayName("🛡️ Multi-author paper: autor objetivo sin afiliación declarada NO hereda afiliación ajena de coautores")
+    void testScanPerson_multiAuthorPaperWithEmptyTargetAffiliations_doesNotInheritForeignAffiliations() {
+        when(personaRepository.findByUuid("person-uab-100")).thenReturn(Optional.of(persona));
+        when(publicacionRepository.findByContributorsPersonUuid("person-uab-100")).thenReturn(Collections.emptyList());
+
+        // Multi-author paper: Maria Garcia (author 1) has empty affiliations, Joan Coauthor (author 2) has Harvard University
+        OpenAlexWorkDto work = new OpenAlexWorkDto(
+                "https://openalex.org/W8888",
+                "10.1016/j.nature.2023.collab",
+                "Collaborative Multi-Center Study",
+                2023,
+                "Nature"
+        );
+        work.getAuthors().add(new OpenAlexWorkDto.AuthorDto(
+                "A1",
+                "Maria Garcia",
+                "0000-0002-1825-0097",
+                Collections.emptyList(),
+                Collections.emptyList()
+        ));
+        work.getAuthors().add(new OpenAlexWorkDto.AuthorDto(
+                "A2",
+                "Foreign Coauthor",
+                null,
+                List.of("Harvard University, Cambridge, MA, USA"),
+                List.of("https://openalex.org/I_HARVARD")
+        ));
+
+        when(openAlexWorksClient.fetchWorksByAuthor(any(), any(), eq(false)))
+                .thenReturn(List.of(work));
+
+        when(candidateRepository.save(any(PersonPublicationCandidate.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        List<PersonPublicationCandidate> scanResult = reconciliationService.scanPerson("person-uab-100", false);
+
+        assertEquals(1, scanResult.size());
+        PersonPublicationCandidate candidate = scanResult.get(0);
+
+        // Because multi-author paper did NOT pass foreign Harvard affiliation to our target author,
+        // it should NOT have -50 penalty. With ORCID matched (+20) and no affiliation (0), it qualifies as REQUIRES_REVIEW (🟡)
+        assertFalse(candidate.getReasons().stream().anyMatch(r -> r.contains("-50")),
+                "Should not be penalized with -50 for foreign coauthor's university");
+        assertEquals(CandidateVerdict.REQUIRES_REVIEW, candidate.getVerdict());
+    }
+
+    @Test
+    @DisplayName("👤 extractKnownCoauthors: si un colaborador en EGRETA no tiene person.uuid pero coincide por nombre, no se añade a sí mismo")
+    void testExtractKnownCoauthors_whenPersonUuidMissingInContributor_doesNotAddSelfToCoauthors() {
+        Publicacion pubWithoutPersonUuid = new Publicacion();
+        pubWithoutPersonUuid.setUuid("pub-egreta-003");
+
+        // Contributor is the author herself ("Garcia, Maria") but c.getPerson() is null
+        Publicacion.Contributor selfContrib = new Publicacion.Contributor();
+        Publicacion.ContributorName selfName = new Publicacion.ContributorName();
+        selfName.setLastName("Garcia");
+        selfName.setFirstName("Maria");
+        selfContrib.setName(selfName);
+        selfContrib.setPerson(null); // No person object
+
+        // Real coauthor
+        Publicacion.Contributor coContrib = new Publicacion.Contributor();
+        Publicacion.ContributorName coName = new Publicacion.ContributorName();
+        coName.setLastName("Vidal");
+        coName.setFirstName("Carles");
+        coContrib.setName(coName);
+
+        pubWithoutPersonUuid.setContributors(List.of(selfContrib, coContrib));
+
+        when(personaRepository.findByUuid("person-uab-100")).thenReturn(Optional.of(persona));
+        when(publicacionRepository.findByContributorsPersonUuid("person-uab-100"))
+                .thenReturn(List.of(pubWithoutPersonUuid));
+
+        // OpenAlex returns work with "Vidal, Carles" and "Garcia, Maria"
+        OpenAlexWorkDto work = new OpenAlexWorkDto(
+                "https://openalex.org/W7777",
+                "10.1016/j.cell.2023.vidal",
+                "Cellular Interaction Study",
+                2023,
+                "Cell"
+        );
+        work.getAuthors().add(new OpenAlexWorkDto.AuthorDto(
+                "A1", "Maria Garcia", "0000-0002-1825-0097",
+                List.of("Universitat Autònoma de Barcelona"), List.of("https://openalex.org/I123044942")
+        ));
+        work.getAuthors().add(new OpenAlexWorkDto.AuthorDto(
+                "A2", "Vidal, Carles", null,
+                List.of("Universitat Autònoma de Barcelona"), List.of("https://openalex.org/I123044942")
+        ));
+
+        when(openAlexWorksClient.fetchWorksByAuthor(any(), any(), eq(false)))
+                .thenReturn(List.of(work));
+        when(candidateRepository.save(any(PersonPublicationCandidate.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        List<PersonPublicationCandidate> scanResult = reconciliationService.scanPerson("person-uab-100", false);
+        assertEquals(1, scanResult.size());
+        PersonPublicationCandidate candidate = scanResult.get(0);
+
+        // Coauthor signal should match Vidal Carles, but NOT match Maria Garcia as coauthor
+        assertTrue(candidate.getCoauthorSignals().contains("Vidal"));
+        assertFalse(candidate.getCoauthorSignals().contains("Garcia"));
+    }
 }
+
