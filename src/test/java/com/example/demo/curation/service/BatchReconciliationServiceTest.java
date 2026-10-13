@@ -11,6 +11,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.*;
 
@@ -265,5 +266,55 @@ class BatchReconciliationServiceTest {
         assertNotNull(progress);
         assertEquals(BatchScanStatus.COMPLETED, progress.getStatus());
         verify(openAlexService).scanPerson("p-001", true);
+    }
+
+    @Test
+    @DisplayName("🧹 evictOldJobsIfNeeded: desaloja trabajos terminados más antiguos cuando activeJobs supera 100")
+    void testEvictOldJobs_whenActiveJobsExceeds100_evictsOldestTerminalJobs() {
+        Instant baseTime = Instant.now().minusSeconds(10000);
+
+        // Registrar 105 trabajos completados con tiempos finishedAt incrementales
+        for (int i = 0; i < 105; i++) {
+            String jobId = "job-" + String.format("%03d", i);
+            Instant finishedAt = baseTime.plusSeconds(i * 10);
+            batchService.registerJobStateForTesting(jobId, BatchScanStatus.COMPLETED, finishedAt);
+        }
+
+        assertEquals(105, batchService.getActiveJobsCount());
+
+        // Invocar desalojo
+        batchService.evictOldJobsIfNeeded();
+
+        // Debe haber reducido el tamaño a 100
+        assertEquals(100, batchService.getActiveJobsCount());
+
+        // Los 5 más antiguos (job-000 a job-004) deben haber sido eliminados
+        for (int i = 0; i < 5; i++) {
+            String jobId = "job-" + String.format("%03d", i);
+            assertNull(batchService.getBatchProgress(jobId), "Old job " + jobId + " should have been evicted");
+        }
+
+        // Los trabajos más recientes (job-005 a job-104) deben seguir presentes
+        for (int i = 5; i < 105; i++) {
+            String jobId = "job-" + String.format("%03d", i);
+            assertNotNull(batchService.getBatchProgress(jobId), "Recent job " + jobId + " should remain");
+        }
+    }
+
+    @Test
+    @DisplayName("🛡️ evictOldJobsIfNeeded: no desaloja trabajos en ejecución (RUNNING)")
+    void testEvictOldJobs_doesNotEvictRunningJobs() {
+        // Registrar 105 trabajos en estado RUNNING
+        for (int i = 0; i < 105; i++) {
+            String jobId = "running-job-" + i;
+            batchService.registerJobStateForTesting(jobId, BatchScanStatus.RUNNING, null);
+        }
+
+        assertEquals(105, batchService.getActiveJobsCount());
+
+        batchService.evictOldJobsIfNeeded();
+
+        // Ningún trabajo RUNNING puede ser desalojado
+        assertEquals(105, batchService.getActiveJobsCount());
     }
 }

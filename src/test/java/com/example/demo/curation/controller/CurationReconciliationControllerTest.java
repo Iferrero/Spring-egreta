@@ -98,7 +98,7 @@ class CurationReconciliationControllerTest {
         String personUuid = "person-123";
         PersonPublicationCandidate c1 = createTestCandidate("cand-1", personUuid, "10.1000/1", CandidateVerdict.HIGH_CONFIDENCE_UAB, CandidateStatus.PENDING);
 
-        // Sin filtro de estado
+        // Sin filtro de estado ni veredicto
         when(candidateRepository.findByPersonUuid(personUuid)).thenReturn(List.of(c1));
 
         mockMvc.perform(get("/api/curation/authors/{personUuid}/candidates", personUuid)
@@ -116,6 +116,28 @@ class CurationReconciliationControllerTest {
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", Matchers.hasSize(0)));
+
+        // Con filtro de veredicto
+        when(candidateRepository.findByPersonUuidAndVerdict(personUuid, CandidateVerdict.HIGH_CONFIDENCE_UAB))
+                .thenReturn(List.of(c1));
+
+        mockMvc.perform(get("/api/curation/authors/{personUuid}/candidates", personUuid)
+                        .param("verdict", "HIGH_CONFIDENCE_UAB")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", Matchers.hasSize(1)))
+                .andExpect(jsonPath("$[0].verdict").value("HIGH_CONFIDENCE_UAB"));
+
+        // Con filtro de estado y veredicto combinados
+        when(candidateRepository.findByPersonUuidAndStatusAndVerdict(personUuid, CandidateStatus.PENDING, CandidateVerdict.HIGH_CONFIDENCE_UAB))
+                .thenReturn(List.of(c1));
+
+        mockMvc.perform(get("/api/curation/authors/{personUuid}/candidates", personUuid)
+                        .param("status", "PENDING")
+                        .param("verdict", "HIGH_CONFIDENCE_UAB")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", Matchers.hasSize(1)));
     }
 
     @Test
@@ -160,13 +182,12 @@ class CurationReconciliationControllerTest {
     }
 
     @Test
-    @DisplayName("POST /api/curation/candidates/bulk-action actualiza múltiples candidatos")
+    @DisplayName("POST /api/curation/candidates/bulk-action actualiza múltiples candidatos con findAllById batch query")
     void testBulkCandidateAction_updatesAll() throws Exception {
         PersonPublicationCandidate c1 = createTestCandidate("cand-1", "p-1", "10.1000/1", CandidateVerdict.HIGH_CONFIDENCE_UAB, CandidateStatus.PENDING);
         PersonPublicationCandidate c2 = createTestCandidate("cand-2", "p-1", "10.1000/2", CandidateVerdict.HIGH_CONFIDENCE_UAB, CandidateStatus.PENDING);
 
-        when(candidateRepository.findById("cand-1")).thenReturn(Optional.of(c1));
-        when(candidateRepository.findById("cand-2")).thenReturn(Optional.of(c2));
+        when(candidateRepository.findAllById(List.of("cand-1", "cand-2"))).thenReturn(List.of(c1, c2));
         when(candidateRepository.saveAll(anyList())).thenAnswer(inv -> inv.getArgument(0));
 
         BulkCandidateActionRequest request = new BulkCandidateActionRequest(
@@ -179,6 +200,8 @@ class CurationReconciliationControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.updatedCount").value(2));
 
+        verify(candidateRepository).findAllById(List.of("cand-1", "cand-2"));
+        verify(candidateRepository, never()).findById(anyString());
         verify(candidateRepository).saveAll(argThat(list -> {
             List<PersonPublicationCandidate> items = (List<PersonPublicationCandidate>) list;
             return items.size() == 2 && items.stream().allMatch(c -> c.getStatus() == CandidateStatus.APPROVED_IMPORT);
@@ -266,5 +289,25 @@ class CurationReconciliationControllerTest {
                 .andExpect(content().string(Matchers.containsString("\"10.1016/j.cell.2023.01\"")))
                 .andExpect(content().string(Matchers.containsString("\"HIGH_CONFIDENCE_UAB\"")))
                 .andExpect(content().string(Matchers.containsString("\"APPROVED_IMPORT\"")));
+    }
+
+    @Test
+    @DisplayName("GET /api/curation/candidates/export desinfecta inyección de fórmulas CSV (=, +, -, @)")
+    void testExportCsv_sanitizesFormulaInjection() throws Exception {
+        PersonPublicationCandidate c1 = createTestCandidate("cand-vuln", "person-001", "10.1016/j.cell.2023.01", CandidateVerdict.HIGH_CONFIDENCE_UAB, CandidateStatus.APPROVED_IMPORT);
+        c1.setTitle("=cmd|' /C calc'!A0");
+        c1.setVenue("+Injected Venue");
+        c1.setPersonName("-Negative Author");
+        c1.setReviewedBy("@AdminUser");
+
+        when(candidateRepository.findByDepartmentId("dept-biomed")).thenReturn(List.of(c1));
+
+        mockMvc.perform(get("/api/curation/candidates/export")
+                        .param("departmentId", "dept-biomed"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(Matchers.containsString("\"'=cmd|' /C calc'!A0\"")))
+                .andExpect(content().string(Matchers.containsString("\"'+Injected Venue\"")))
+                .andExpect(content().string(Matchers.containsString("\"'-Negative Author\"")))
+                .andExpect(content().string(Matchers.containsString("\"'@AdminUser\"")));
     }
 }

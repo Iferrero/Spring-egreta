@@ -3,6 +3,7 @@ package com.example.demo.curation.controller;
 import com.example.demo.curation.model.BulkCandidateActionRequest;
 import com.example.demo.curation.model.CandidateStatus;
 import com.example.demo.curation.model.CandidateStatusUpdateRequest;
+import com.example.demo.curation.model.CandidateVerdict;
 import com.example.demo.curation.model.BatchScanProgressDto;
 import com.example.demo.curation.model.BatchScanRequest;
 import com.example.demo.curation.model.PersonPublicationCandidate;
@@ -62,15 +63,20 @@ public class CurationReconciliationController {
     }
 
     /**
-     * Listado de candidatas para un investigador, opcionalmente filtradas por estado.
+     * Listado de candidatas para un investigador, opcionalmente filtradas por estado y/o veredicto (semáforo).
      */
     @GetMapping("/authors/{personUuid}/candidates")
     public ResponseEntity<List<PersonPublicationCandidate>> getCandidates(
             @PathVariable String personUuid,
-            @RequestParam(name = "status", required = false) CandidateStatus status) {
+            @RequestParam(name = "status", required = false) CandidateStatus status,
+            @RequestParam(name = "verdict", required = false) CandidateVerdict verdict) {
         List<PersonPublicationCandidate> candidates;
-        if (status != null) {
+        if (status != null && verdict != null) {
+            candidates = candidateRepository.findByPersonUuidAndStatusAndVerdict(personUuid, status, verdict);
+        } else if (status != null) {
             candidates = candidateRepository.findByPersonUuidAndStatus(personUuid, status);
+        } else if (verdict != null) {
+            candidates = candidateRepository.findByPersonUuidAndVerdict(personUuid, verdict);
         } else {
             candidates = candidateRepository.findByPersonUuid(personUuid);
         }
@@ -116,22 +122,29 @@ public class CurationReconciliationController {
             return ResponseEntity.ok(Map.of("updatedCount", 0, "candidates", Collections.emptyList()));
         }
 
+        List<String> validIds = request.getCandidateIds().stream()
+                .filter(id -> id != null && !id.isBlank())
+                .toList();
+
+        if (validIds.isEmpty()) {
+            return ResponseEntity.ok(Map.of("updatedCount", 0, "candidates", Collections.emptyList()));
+        }
+
         String reviewer = (request.getReviewer() != null && !request.getReviewer().isBlank())
                 ? request.getReviewer().trim()
                 : "analista";
         Instant now = Instant.now();
 
+        Iterable<PersonPublicationCandidate> candidates = candidateRepository.findAllById(validIds);
         List<PersonPublicationCandidate> toUpdate = new ArrayList<>();
-        for (String id : request.getCandidateIds()) {
-            if (id == null || id.isBlank()) continue;
-            candidateRepository.findById(id).ifPresent(c -> {
-                if (request.getTargetStatus() != null) {
-                    c.setStatus(request.getTargetStatus());
-                }
-                c.setReviewedBy(reviewer);
-                c.setReviewedAt(now);
-                toUpdate.add(c);
-            });
+        for (PersonPublicationCandidate c : candidates) {
+            if (c == null) continue;
+            if (request.getTargetStatus() != null) {
+                c.setStatus(request.getTargetStatus());
+            }
+            c.setReviewedBy(reviewer);
+            c.setReviewedAt(now);
+            toUpdate.add(c);
         }
 
         List<PersonPublicationCandidate> saved = candidateRepository.saveAll(toUpdate);
@@ -246,6 +259,11 @@ public class CurationReconciliationController {
         if (value == null) {
             return "\"\"";
         }
-        return "\"" + value.replace("\"", "\"\"") + "\"";
+        String sanitized = value;
+        String trimmed = sanitized.stripLeading();
+        if (trimmed.startsWith("=") || trimmed.startsWith("+") || trimmed.startsWith("-") || trimmed.startsWith("@")) {
+            sanitized = "'" + sanitized;
+        }
+        return "\"" + sanitized.replace("\"", "\"\"") + "\"";
     }
 }

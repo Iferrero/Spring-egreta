@@ -89,6 +89,7 @@ public class BatchReconciliationService {
         String jobId = UUID.randomUUID().toString();
         JobExecutionState jobState = new JobExecutionState(jobId, targetUuids.size());
         activeJobs.put(jobId, jobState);
+        evictOldJobsIfNeeded();
 
         log.info("Launching batch scan job {} for {} authors (strictOrcidOnly={})",
                 jobId, targetUuids.size(), request.isStrictOrcidOnly());
@@ -125,7 +126,51 @@ public class BatchReconciliationService {
         JobExecutionState state = activeJobs.get(jobId);
         if (state != null) {
             state.cancel();
+            evictOldJobsIfNeeded();
         }
+    }
+
+    /**
+     * Limpia trabajos finalizados o fallidos de activeJobs si la colección supera 100 elementos
+     * para evitar crecimiento no acotado en memoria, desalojando primero los más antiguos según finishedAt.
+     */
+    void evictOldJobsIfNeeded() {
+        if (activeJobs.size() > 100) {
+            List<Map.Entry<String, JobExecutionState>> terminalJobs = activeJobs.entrySet().stream()
+                    .filter(e -> {
+                        BatchScanStatus status = e.getValue().getStatus();
+                        return status == BatchScanStatus.COMPLETED
+                                || status == BatchScanStatus.FAILED
+                                || status == BatchScanStatus.CANCELLED;
+                    })
+                    .sorted((e1, e2) -> {
+                        Instant t1 = e1.getValue().getFinishedAt();
+                        Instant t2 = e2.getValue().getFinishedAt();
+                        if (t1 == null && t2 == null) {
+                            return e1.getValue().getStartedAt().compareTo(e2.getValue().getStartedAt());
+                        }
+                        if (t1 == null) return -1;
+                        if (t2 == null) return 1;
+                        return t1.compareTo(t2);
+                    })
+                    .toList();
+
+            int toEvict = activeJobs.size() - 100;
+            for (int i = 0; i < Math.min(toEvict, terminalJobs.size()); i++) {
+                activeJobs.remove(terminalJobs.get(i).getKey());
+            }
+        }
+    }
+
+    void registerJobStateForTesting(String jobId, BatchScanStatus status, Instant finishedAt) {
+        JobExecutionState state = new JobExecutionState(jobId, 1);
+        state.setStatus(status);
+        state.setFinishedAt(finishedAt);
+        activeJobs.put(jobId, state);
+    }
+
+    int getActiveJobsCount() {
+        return activeJobs.size();
     }
 
     private List<String> resolveTargetAuthorUuids(BatchScanRequest request) {
@@ -226,11 +271,13 @@ public class BatchReconciliationService {
                         jobState.getGreenCandidatesCount(), jobState.getYellowCandidatesCount(),
                         jobState.getRedCandidatesCount());
             }
+            evictOldJobsIfNeeded();
         } catch (Exception fatal) {
             log.error("Fatal error running batch job {}: {}", jobId, fatal.getMessage(), fatal);
             jobState.setStatus(BatchScanStatus.FAILED);
             jobState.addError("Fatal error: " + fatal.getMessage());
             jobState.setFinishedAt(Instant.now());
+            evictOldJobsIfNeeded();
         }
     }
 
@@ -336,6 +383,14 @@ public class BatchReconciliationService {
 
         void setStatus(BatchScanStatus status) {
             this.status = status;
+        }
+
+        Instant getStartedAt() {
+            return startedAt;
+        }
+
+        Instant getFinishedAt() {
+            return finishedAt;
         }
 
         void setFinishedAt(Instant finishedAt) {
