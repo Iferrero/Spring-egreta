@@ -794,6 +794,7 @@ public class PersonaController {
                 .append("uuid", 1)
                 .append("firstName", "$name.firstName")
                 .append("lastName", "$name.lastName")
+                .append("orcid", 1)
                 .append("rawEndDate", endDateExpr)));
         pipeline.add(new Document("$sort", new Document("lastName", 1).append("firstName", 1)));
 
@@ -812,6 +813,10 @@ public class PersonaController {
                     Map<String, String> m = new LinkedHashMap<>();
                     m.put("uuid", doc.getString("uuid"));
                     m.put("nombre", nombre.isBlank() ? doc.getString("uuid") : nombre.trim());
+                    String orcid = doc.getString("orcid");
+                    if (orcid != null && !orcid.isBlank()) {
+                        m.put("orcid", orcid.trim());
+                    }
                     Object endDateObj = doc.get("rawEndDate");
                     String endDateStr = null;
                     if (endDateObj instanceof Date d) {

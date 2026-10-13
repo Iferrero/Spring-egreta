@@ -414,8 +414,9 @@
                 personas.forEach(p => {
                     const opt = document.createElement('option');
                     opt.value = p.uuid;
-                    const displayName = p.nom || p.fullName || p.name || 'Sense nom';
-                    opt.textContent = `${displayName} ${p.orcid ? '(' + p.orcid + ')' : '(Sense ORCID)'}`;
+                    const displayName = p.nombre || p.nom || p.fullName || p.name || p.uuid || 'Sense nom';
+                    const orcidSuffix = p.orcid ? ` (${p.orcid})` : '';
+                    opt.textContent = `${displayName}${orcidSuffix}`;
                     opt.dataset.orcid = p.orcid || '';
                     opt.dataset.name = displayName;
                     selectPersona.appendChild(opt);
