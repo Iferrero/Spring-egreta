@@ -18,4 +18,8 @@ public interface PersonPublicationCandidateRepository extends MongoRepository<Pe
     List<PersonPublicationCandidate> findByPersonUuidAndStatus(String personUuid, CandidateStatus status);
 
     List<PersonPublicationCandidate> findByDepartmentIdAndStatus(String departmentId, CandidateStatus status);
+
+    List<PersonPublicationCandidate> findByDepartmentId(String departmentId);
+
+    List<PersonPublicationCandidate> findByStatus(CandidateStatus status);
 }

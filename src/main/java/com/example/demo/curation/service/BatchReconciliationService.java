@@ -189,6 +189,12 @@ public class BatchReconciliationService {
                         }
                     }
                 } catch (Exception e) {
+                    if (e instanceof InterruptedException || (e.getCause() instanceof InterruptedException) || jobState.isCancelled() || Thread.currentThread().isInterrupted()) {
+                        Thread.currentThread().interrupt();
+                        log.info("Batch job {} interrupted or cancelled during author scan.", jobId);
+                        jobState.markCancelled();
+                        return;
+                    }
                     log.error("Job {}: error processing author {}: {}", jobId, authorUuid, e.getMessage(), e);
                     jobState.incrementFailed();
                     jobState.addError("Author " + authorUuid + ": " + e.getMessage());
