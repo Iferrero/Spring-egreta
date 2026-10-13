@@ -59,7 +59,7 @@ import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTBookmark;
 import org.w3c.dom.Node;
 
 @RestController
-@RequestMapping("/api/persons")
+@RequestMapping({"/api/persons", "/api/personas"})
 @CrossOrigin(origins = "*") // Permite llamadas desde tu index.html
 public class PersonaController {
 

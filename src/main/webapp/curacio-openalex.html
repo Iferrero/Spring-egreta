@@ -309,7 +309,15 @@
             batchPollTimer: null
         };
 
-        const apiBase = window.APP_CONFIG?.apiBaseUrl || '/api';
+        // Funció auxiliar per realitzar crides segures utilitzant config.js / apiFetch
+        async function callApi(path, options = {}) {
+            if (typeof window.apiFetch === 'function') {
+                return window.apiFetch(path, options);
+            }
+            const base = (window.APP_CONFIG && window.APP_CONFIG.apiBaseUrl) || '/api';
+            const cleanPath = path.startsWith('/') ? path : `/${path}`;
+            return fetch(`${base}${cleanPath}`, options);
+        }
 
         document.addEventListener('DOMContentLoaded', () => {
             loadDepartments();
@@ -337,26 +345,37 @@
 
         // 1. Carrega de Departaments
         async function loadDepartments() {
+            const selInd = document.getElementById('selectDeptIndividual');
+            const selBat = document.getElementById('selectDeptBatch');
             try {
-                const res = await fetch(`${apiBase}/personas/departamentos`);
-                if (!res.ok) throw new Error('No es poden carregar departaments');
+                const res = await callApi('/persons/departamentos');
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
                 const data = await res.json();
-                state.departments = data || [];
+                state.departments = Array.isArray(data) ? data : [];
+
+                if (state.departments.length === 0) {
+                    if (selInd) selInd.innerHTML = '<option value="">-- No s\'han trobat departaments a la BD --</option>';
+                    if (selBat) selBat.innerHTML = '<option value="">-- No s\'han trobat departaments a la BD --</option>';
+                    return;
+                }
 
                 populateDeptSelect('selectDeptIndividual', state.departments);
                 populateDeptSelect('selectDeptBatch', state.departments);
             } catch (err) {
                 console.error('Error carregant departaments:', err);
+                if (selInd) selInd.innerHTML = `<option value="">Error carregant departaments (${err.message})</option>`;
+                if (selBat) selBat.innerHTML = `<option value="">Error carregant departaments (${err.message})</option>`;
             }
         }
 
         function populateDeptSelect(elementId, depts) {
             const select = document.getElementById(elementId);
+            if (!select) return;
             select.innerHTML = '<option value="">-- Selecciona un departament --</option>';
             depts.forEach(d => {
                 const opt = document.createElement('option');
                 opt.value = d.uuid;
-                opt.textContent = d.nombre || d.uuid;
+                opt.textContent = d.nombre || d.name || d.uuid;
                 select.appendChild(opt);
             });
         }
@@ -382,23 +401,29 @@
             selectPersona.disabled = true;
 
             try {
-                const res = await fetch(`${apiBase}/personas/by-dept?deptUuid=${encodeURIComponent(deptUuid)}&filtrePersonal=vigent`);
-                if (!res.ok) throw new Error('Error al carregar persones');
+                const res = await callApi(`/persons/by-dept?deptUuid=${encodeURIComponent(deptUuid)}&filtrePersonal=vigent`);
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
                 const personas = await res.json();
 
                 selectPersona.innerHTML = '<option value="">-- Tria un investigador --</option>';
+                if (!personas || personas.length === 0) {
+                    selectPersona.innerHTML = '<option value="">-- Sense investigadors vigents en aquest departament --</option>';
+                    return;
+                }
+
                 personas.forEach(p => {
                     const opt = document.createElement('option');
                     opt.value = p.uuid;
-                    opt.textContent = `${p.nom || p.fullName || 'Sense nom'} (${p.orcid || 'Sense ORCID'})`;
+                    const displayName = p.nom || p.fullName || p.name || 'Sense nom';
+                    opt.textContent = `${displayName} ${p.orcid ? '(' + p.orcid + ')' : '(Sense ORCID)'}`;
                     opt.dataset.orcid = p.orcid || '';
-                    opt.dataset.name = p.nom || p.fullName || '';
+                    opt.dataset.name = displayName;
                     selectPersona.appendChild(opt);
                 });
                 selectPersona.disabled = false;
             } catch (err) {
-                console.error(err);
-                selectPersona.innerHTML = '<option value="">Error carregant personal</option>';
+                console.error('Error carregant persones del departament:', err);
+                selectPersona.innerHTML = `<option value="">Error carregant personal (${err.message})</option>`;
             }
         }
 
@@ -415,8 +440,8 @@
             state.currentPersonUuid = uuid;
             state.currentPerson = {
                 uuid: uuid,
-                name: opt.dataset.name,
-                orcid: opt.dataset.orcid
+                name: opt ? opt.dataset.name : uuid,
+                orcid: opt ? opt.dataset.orcid : ''
             };
 
             document.getElementById('btnScanAuthor').disabled = false;
@@ -449,7 +474,7 @@
         // 3. Carregar Candidats Existents
         async function loadExistingCandidates(personUuid) {
             try {
-                const res = await fetch(`${apiBase}/curation/authors/${encodeURIComponent(personUuid)}/candidates`);
+                const res = await callApi(`/curation/authors/${encodeURIComponent(personUuid)}/candidates`);
                 if (res.ok) {
                     const list = await res.json();
                     state.candidates = list || [];
@@ -478,8 +503,9 @@
             btnText.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Escanejant OpenAlex...';
 
             try {
-                const url = `${apiBase}/curation/authors/${encodeURIComponent(state.currentPersonUuid)}/scan?strictOrcidOnly=${strictOrcid}`;
-                const res = await fetch(url, { method: 'POST' });
+                const res = await callApi(`/curation/authors/${encodeURIComponent(state.currentPersonUuid)}/scan?strictOrcidOnly=${strictOrcid}`, {
+                    method: 'POST'
+                });
                 
                 if (!res.ok) {
                     const error = await res.json();
@@ -634,7 +660,7 @@
         // 6. Acció Individual de Canvi d'Estat
         async function updateCandidateStatus(candidateId, newStatus) {
             try {
-                const res = await fetch(`${apiBase}/curation/candidates/${encodeURIComponent(candidateId)}/status`, {
+                const res = await callApi(`/curation/candidates/${encodeURIComponent(candidateId)}/status`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -691,7 +717,7 @@
 
         async function executeBulkAction(ids, targetStatus) {
             try {
-                const res = await fetch(`${apiBase}/curation/candidates/bulk-action`, {
+                const res = await callApi('/curation/candidates/bulk-action', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -727,7 +753,7 @@
             btn.disabled = true;
 
             try {
-                const res = await fetch(`${apiBase}/curation/batch-scan`, {
+                const res = await callApi('/curation/batch-scan', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -763,7 +789,7 @@
 
             state.batchPollTimer = setInterval(async () => {
                 try {
-                    const res = await fetch(`${apiBase}/curation/batch-scan/${encodeURIComponent(jobId)}/progress`);
+                    const res = await callApi(`/curation/batch-scan/${encodeURIComponent(jobId)}/progress`);
                     if (!res.ok) return;
 
                     const progress = await res.json();
@@ -814,7 +840,7 @@
         async function cancelBatchScan() {
             if (!state.batchJobId) return;
             try {
-                await fetch(`${apiBase}/curation/batch-scan/${encodeURIComponent(state.batchJobId)}/cancel`, { method: 'POST' });
+                await callApi(`/curation/batch-scan/${encodeURIComponent(state.batchJobId)}/cancel`, { method: 'POST' });
             } catch (e) {
                 console.error(e);
             }
@@ -822,10 +848,13 @@
 
         function exportBatchCsv() {
             const deptUuid = document.getElementById('selectDeptBatch').value;
-            let url = `${apiBase}/curation/candidates/export`;
+            let path = '/curation/candidates/export';
             if (deptUuid) {
-                url += `?departmentId=${encodeURIComponent(deptUuid)}`;
+                path += `?departmentId=${encodeURIComponent(deptUuid)}`;
             }
+            const url = typeof window.apiUrl === 'function'
+                ? window.apiUrl(path)
+                : `${(window.APP_CONFIG && window.APP_CONFIG.apiBaseUrl) || '/api'}${path}`;
             window.location.href = url;
         }
 
