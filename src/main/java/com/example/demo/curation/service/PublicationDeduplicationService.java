@@ -99,6 +99,20 @@ public class PublicationDeduplicationService {
     }
 
     /**
+     * Determina si una obra ya es conocida para un investigador, verificando primero
+     * por openAlexWorkId, luego por DOI y finalmente por titulo difuso.
+     */
+    public boolean isAlreadyKnown(String personUuid, String rawDoi, String rawTitle, String openAlexWorkId, List<Publicacion> existingEgretaWorks) {
+        if (openAlexWorkId != null && !openAlexWorkId.isBlank() && candidateRepository != null && personUuid != null) {
+            Optional<PersonPublicationCandidate> existingByOpenAlex = candidateRepository.findByPersonUuidAndOpenAlexWorkId(personUuid, openAlexWorkId.trim());
+            if (existingByOpenAlex.isPresent()) {
+                return true;
+            }
+        }
+        return isAlreadyKnown(personUuid, rawDoi, rawTitle, existingEgretaWorks);
+    }
+
+    /**
      * Determina si una obra ya es conocida para un investigador, ya sea porque
      * existe en el catalogo institucional EGRETA o porque ya ha sido persistida
      * en el repositorio de candidatos (incluso si fue previamente descartada).

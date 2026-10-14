@@ -17,7 +17,8 @@ import java.util.Objects;
  */
 @Document(collection = "PersonPublicationCandidates")
 @CompoundIndexes({
-        @CompoundIndex(name = "person_doi_unique_idx", def = "{'personUuid': 1, 'doi': 1}", unique = true),
+        @CompoundIndex(name = "person_doi_unique_idx", def = "{'personUuid': 1, 'doi': 1}", unique = true, partialFilter = "{'doi': {'$type': 'string'}}"),
+        @CompoundIndex(name = "person_openalex_unique_idx", def = "{'personUuid': 1, 'openAlexWorkId': 1}", unique = true, partialFilter = "{'openAlexWorkId': {'$type': 'string'}}"),
         @CompoundIndex(name = "person_status_verdict_idx", def = "{'personUuid': 1, 'status': 1, 'verdict': 1}"),
         @CompoundIndex(name = "department_status_idx", def = "{'departmentId': 1, 'status': 1}")
 })

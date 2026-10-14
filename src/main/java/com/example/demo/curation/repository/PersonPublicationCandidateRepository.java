@@ -14,6 +14,8 @@ public interface PersonPublicationCandidateRepository extends MongoRepository<Pe
 
     Optional<PersonPublicationCandidate> findByPersonUuidAndDoi(String personUuid, String doi);
 
+    Optional<PersonPublicationCandidate> findByPersonUuidAndOpenAlexWorkId(String personUuid, String openAlexWorkId);
+
     List<PersonPublicationCandidate> findByPersonUuid(String personUuid);
 
     List<PersonPublicationCandidate> findByPersonUuidAndStatus(String personUuid, CandidateStatus status);

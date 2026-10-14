@@ -99,8 +99,9 @@ public class OpenAlexReconciliationService {
             if (work == null) continue;
 
             // 5a. Descartar si ya es conocida en EGRETA o en candidatos previos
-            if (deduplicationService.isAlreadyKnown(personUuid, work.getDoi(), work.getTitle(), existingWorks)) {
-                log.debug("Skipping already known work in EGRETA/candidates: doi={}, title={}", work.getDoi(), work.getTitle());
+            if (deduplicationService.isAlreadyKnown(personUuid, work.getDoi(), work.getTitle(), work.getId(), existingWorks)) {
+                log.debug("Skipping already known work in EGRETA/candidates: doi={}, title={}, openAlexWorkId={}",
+                        work.getDoi(), work.getTitle(), work.getId());
                 continue;
             }
 
