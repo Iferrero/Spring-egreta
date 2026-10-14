@@ -56,6 +56,10 @@
                 <p class="text-slate-500 text-sm mt-1">Detecció d'obres pendents, validació d'afiliació de l'esfera UAB i filtratge automàtic d'homònims</p>
             </div>
             <div class="flex items-center gap-3">
+                <button onclick="switchMainTab('methodology')" class="px-4 py-2.5 rounded-xl border border-emerald-200 bg-emerald-50 text-sm font-semibold text-emerald-800 hover:bg-emerald-100 transition-all active:scale-95 flex items-center gap-2 premium-shadow">
+                    <i class="fa-solid fa-book-open text-emerald-600"></i>
+                    <span>Metodologia</span>
+                </button>
                 <a href="index_assesora.html" class="px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 hover:bg-slate-100 transition-all active:scale-95 flex items-center gap-2 premium-shadow">
                     <i class="fa-solid fa-arrow-left text-slate-500"></i>
                     <span>Tornar al Panell</span>
@@ -70,6 +74,9 @@
             </button>
             <button id="tabBtnBatch" onclick="switchMainTab('batch')" class="py-3 px-6 font-semibold text-sm border-b-2 border-transparent text-slate-500 hover:text-slate-800 flex items-center gap-2 transition-colors">
                 <i class="fa-solid fa-layer-group"></i> Escaneig Departamental per Lotes
+            </button>
+            <button id="tabBtnMethodology" onclick="switchMainTab('methodology')" class="py-3 px-6 font-semibold text-sm border-b-2 border-transparent text-slate-500 hover:text-slate-800 flex items-center gap-2 transition-colors">
+                <i class="fa-solid fa-book-open"></i> Metodologia i Funcionament
             </button>
         </nav>
 
@@ -300,6 +307,358 @@
             </div>
         </section>
 
+        <!-- ========================================== -->
+        <!-- SECCIÓ 3: METODOLOGIA I FUNCIONAMENT       -->
+        <!-- ========================================== -->
+        <section id="sectionMethodology" class="hidden space-y-8">
+            
+            <!-- Banner d'Introducció -->
+            <div class="bg-gradient-to-br from-slate-900 via-slate-800 to-emerald-950 text-white p-8 rounded-3xl premium-shadow border border-slate-700/50">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                    <div class="space-y-3 max-w-3xl">
+                        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+                            <i class="fa-solid fa-brain text-[11px]"></i> Motor d'Intel·ligència de Dades i Filiació
+                        </div>
+                        <h2 class="text-2xl md:text-3xl font-black tracking-tight text-white">Metodologia de Conciliació OpenAlex – EGRETA</h2>
+                        <p class="text-slate-300 text-sm leading-relaxed">
+                            Aquest sistema resol el repte de recuperar la producció científica no catalogada a la UAB sense contaminar la base de dades institucional amb homònims ni publicacions foranes. Mitjançant la triangulació d'identificadors persistents (ORCID, DOI), anàlisi d'afiliació institucional, patrons de coautoria històrica i similitud difusa, el motor avalua cada obra i assigna un veredicte explicable en temps real.
+                        </p>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3 shrink-0">
+                        <div class="bg-white/10 backdrop-blur p-4 rounded-2xl border border-white/10 text-center">
+                            <div class="text-2xl font-black text-emerald-400">&gt; 95%</div>
+                            <div class="text-[11px] font-medium text-slate-300 mt-0.5">Precisió en Verds</div>
+                        </div>
+                        <div class="bg-white/10 backdrop-blur p-4 rounded-2xl border border-white/10 text-center">
+                            <div class="text-2xl font-black text-emerald-400">2-3 s</div>
+                            <div class="text-[11px] font-medium text-slate-300 mt-0.5">Temps per Autor</div>
+                        </div>
+                        <div class="bg-white/10 backdrop-blur p-4 rounded-2xl border border-white/10 text-center">
+                            <div class="text-2xl font-black text-emerald-400">12+</div>
+                            <div class="text-[11px] font-medium text-slate-300 mt-0.5">Centres UAB & CERCA</div>
+                        </div>
+                        <div class="bg-white/10 backdrop-blur p-4 rounded-2xl border border-white/10 text-center">
+                            <div class="text-2xl font-black text-emerald-400">100%</div>
+                            <div class="text-[11px] font-medium text-slate-300 mt-0.5">Explicabilitat</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Flux de Treball en 5 Fases -->
+            <div class="bg-white p-8 rounded-3xl border border-slate-200 premium-shadow space-y-6">
+                <div>
+                    <h3 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+                        <i class="fa-solid fa-diagram-project text-emerald-600"></i>
+                        <span>El Flux de Treball en 5 Fases</span>
+                    </h3>
+                    <p class="text-xs text-slate-500 mt-1">Com es processa un autor des de la cerca fins a la presa de decisions de curació</p>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-5 gap-4 relative">
+                    
+                    <!-- Fase 1 -->
+                    <div class="bg-slate-50 border border-slate-200 rounded-2xl p-5 flex flex-col justify-between hover:border-emerald-300 transition-colors">
+                        <div>
+                            <div class="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 font-bold text-sm flex items-center justify-center mb-3">1</div>
+                            <h4 class="font-bold text-slate-800 text-sm mb-1.5">Perfil EGRETA</h4>
+                            <p class="text-xs text-slate-600 leading-relaxed">
+                                Es recupera l'investigador, el seu ORCID i el seu departament. S'extreu la seva <strong>xarxa històrica de coautors</strong> a la UAB mitjançant les seves publicacions prèvies.
+                            </p>
+                        </div>
+                        <div class="mt-4 pt-3 border-t border-slate-200 text-[11px] text-slate-400 font-mono">
+                            Colecció: Persons + Researchoutputs
+                        </div>
+                    </div>
+
+                    <!-- Fase 2 -->
+                    <div class="bg-slate-50 border border-slate-200 rounded-2xl p-5 flex flex-col justify-between hover:border-emerald-300 transition-colors">
+                        <div>
+                            <div class="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 font-bold text-sm flex items-center justify-center mb-3">2</div>
+                            <h4 class="font-bold text-slate-800 text-sm mb-1.5">OpenAlex & Crossref</h4>
+                            <p class="text-xs text-slate-600 leading-relaxed">
+                                Es consulta OpenAlex per ORCID o cerca difusa. Si la publicació té filiacions incompletes a OpenAlex, es triangula directament amb l'API de <strong>Crossref</strong> per DOI.
+                            </p>
+                        </div>
+                        <div class="mt-4 pt-3 border-t border-slate-200 text-[11px] text-slate-400 font-mono">
+                            Polite pool: bibliometria@uab.cat
+                        </div>
+                    </div>
+
+                    <!-- Fase 3 -->
+                    <div class="bg-slate-50 border border-slate-200 rounded-2xl p-5 flex flex-col justify-between hover:border-emerald-300 transition-colors">
+                        <div>
+                            <div class="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 font-bold text-sm flex items-center justify-center mb-3">3</div>
+                            <h4 class="font-bold text-slate-800 text-sm mb-1.5">Deduplicació</h4>
+                            <p class="text-xs text-slate-600 leading-relaxed">
+                                Neteja de DOI canònic. Comparació de títols amb índex <strong>Jaccard (&gt; 0.85)</strong> sobre tokens alfanumèrics per descartar el que l'investigador ja té a EGRETA.
+                            </p>
+                        </div>
+                        <div class="mt-4 pt-3 border-t border-slate-200 text-[11px] text-slate-400 font-mono">
+                            Filtre anti-duplicats actiu
+                        </div>
+                    </div>
+
+                    <!-- Fase 4 -->
+                    <div class="bg-slate-50 border border-slate-200 rounded-2xl p-5 flex flex-col justify-between hover:border-emerald-300 transition-colors">
+                        <div>
+                            <div class="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 font-bold text-sm flex items-center justify-center mb-3">4</div>
+                            <h4 class="font-bold text-slate-800 text-sm mb-1.5">Motor de Scoring</h4>
+                            <p class="text-xs text-slate-600 leading-relaxed">
+                                Contrastació amb el catàleg d'esfera UAB (hospitals i instituts CERCA/CSIC). Aplicació de pesos (+40 UAB, +25 coautors, +20 ORCID, -50 altres universitats).
+                            </p>
+                        </div>
+                        <div class="mt-4 pt-3 border-t border-slate-200 text-[11px] text-slate-400 font-mono">
+                            Confidence Score [0 - 100]
+                        </div>
+                    </div>
+
+                    <!-- Fase 5 -->
+                    <div class="bg-slate-50 border border-slate-200 rounded-2xl p-5 flex flex-col justify-between hover:border-emerald-300 transition-colors">
+                        <div>
+                            <div class="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 font-bold text-sm flex items-center justify-center mb-3">5</div>
+                            <h4 class="font-bold text-slate-800 text-sm mb-1.5">Curació i Semàfor</h4>
+                            <p class="text-xs text-slate-600 leading-relaxed">
+                                Classificació en 🟢 Validat UAB, 🟡 Revisió Necessària o 🔴 Fals Positiu. Possibilitat d'acceptar en bloc, desar a MongoDB i exportar a informe CSV.
+                            </p>
+                        </div>
+                        <div class="mt-4 pt-3 border-t border-slate-200 text-[11px] text-slate-400 font-mono">
+                            PersonPublicationCandidates
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- Matriu de Puntuació i Pesos (Confidence Score) -->
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                
+                <div class="lg:col-span-7 bg-white p-8 rounded-3xl border border-slate-200 premium-shadow space-y-5">
+                    <div>
+                        <h3 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+                            <i class="fa-solid fa-calculator text-emerald-600"></i>
+                            <span>Matriu de Puntuació i Regles d'Afiliació</span>
+                        </h3>
+                        <p class="text-xs text-slate-500 mt-1">Cadascuna de les raons és totalment auditable i s'inclou com a explicació a cada candidat</p>
+                    </div>
+
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-xs border-collapse">
+                            <thead>
+                                <tr class="border-b border-slate-200 text-slate-400 font-bold uppercase text-[10px]">
+                                    <th class="py-2.5 px-3">Pes</th>
+                                    <th class="py-2.5 px-3">Factor d'Avaluació</th>
+                                    <th class="py-2.5 px-3">Racionalitat Metodològica</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                                <tr>
+                                    <td class="py-3 px-3 font-mono font-bold text-emerald-600 bg-emerald-50/50 rounded-l-lg">+40 pts</td>
+                                    <td class="py-3 px-3 font-semibold text-slate-800">Afiliació UAB / Esfera UAB</td>
+                                    <td class="py-3 px-3 text-slate-600">Es detecta la UAB, un hospital universitari vinculat o un institut CERCA/CSIC a la signatura de l'autor.</td>
+                                </tr>
+                                <tr>
+                                    <td class="py-3 px-3 font-mono font-bold text-emerald-600 bg-emerald-50/50 rounded-l-lg">+25 pts</td>
+                                    <td class="py-3 px-3 font-semibold text-slate-800">Coautoria Coincident</td>
+                                    <td class="py-3 px-3 text-slate-600">Signa l'article amb un o més investigadors que figuren com a coautors històrics a EGRETA.</td>
+                                </tr>
+                                <tr>
+                                    <td class="py-3 px-3 font-mono font-bold text-emerald-600 bg-emerald-50/50 rounded-l-lg">+20 pts</td>
+                                    <td class="py-3 px-3 font-semibold text-slate-800">Coincidència d'ORCID</td>
+                                    <td class="py-3 px-3 text-slate-600">L'obra a OpenAlex té enllaçat de manera explícita el mateix ORCID registrat a la fitxa de l'autor a la UAB.</td>
+                                </tr>
+                                <tr>
+                                    <td class="py-3 px-3 font-mono font-bold text-emerald-600 bg-emerald-50/50 rounded-l-lg">+10 pts</td>
+                                    <td class="py-3 px-3 font-semibold text-slate-800">Afinitat Temàtica</td>
+                                    <td class="py-3 px-3 text-slate-600">Els conceptes i subdisciplines de la publicació coincideixen amb la trajectòria habitual de l'autor.</td>
+                                </tr>
+                                <tr>
+                                    <td class="py-3 px-3 font-mono font-bold text-rose-600 bg-rose-50/50 rounded-l-lg">-50 pts</td>
+                                    <td class="py-3 px-3 font-semibold text-slate-800">Afiliació Forana Exclusiva</td>
+                                    <td class="py-3 px-3 text-slate-600">L'autor signa exclusivament amb una altra universitat o centre de recerca forà, sense cap vinculació UAB.</td>
+                                </tr>
+                                <tr>
+                                    <td class="py-3 px-3 font-mono font-bold text-rose-600 bg-rose-50/50 rounded-l-lg">-20 pts</td>
+                                    <td class="py-3 px-3 font-semibold text-slate-800">Desconnexió Temàtica</td>
+                                    <td class="py-3 px-3 text-slate-600">L'àmbit científic de l'article és completament aliè al camp d'expertesa de l'investigador (fort indici d'homònim).</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Semàfor de Veredictes -->
+                <div class="lg:col-span-5 bg-white p-8 rounded-3xl border border-slate-200 premium-shadow space-y-5">
+                    <div>
+                        <h3 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+                            <i class="fa-solid fa-traffic-light text-emerald-600"></i>
+                            <span>El Semàfor de Veredictes</span>
+                        </h3>
+                        <p class="text-xs text-slate-500 mt-1">Llindars establerts per a la presa de decisions ràpides</p>
+                    </div>
+
+                    <div class="space-y-3.5">
+                        <!-- Verd -->
+                        <div class="p-4 rounded-2xl bg-emerald-50/60 border border-emerald-200 space-y-1.5">
+                            <div class="flex items-center justify-between">
+                                <span class="font-bold text-xs text-emerald-800 flex items-center gap-1.5">
+                                    <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block"></span>
+                                    Validat UAB (Alta Certesa)
+                                </span>
+                                <span class="text-[11px] font-mono font-bold text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded">Score &ge; 80</span>
+                            </div>
+                            <p class="text-xs text-emerald-900 leading-relaxed">
+                                Obra legítima de l'investigador amb filiació institucional o ORCID + coautors coneguts. <strong>Es pot acceptar massivament amb seguretat</strong>.
+                            </p>
+                        </div>
+
+                        <!-- Groc -->
+                        <div class="p-4 rounded-2xl bg-amber-50/60 border border-amber-200 space-y-1.5">
+                            <div class="flex items-center justify-between">
+                                <span class="font-bold text-xs text-amber-800 flex items-center gap-1.5">
+                                    <span class="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block"></span>
+                                    Revisió Necessària
+                                </span>
+                                <span class="text-[11px] font-mono font-bold text-amber-700 bg-amber-100/80 px-2 py-0.5 rounded">40 &le; Score &lt; 80</span>
+                            </div>
+                            <p class="text-xs text-amber-900 leading-relaxed">
+                                Casos dubtosos: estades a l'estranger, obres en hospitals vinculats amb filiació incompleta o articles amb coautors parcials. Es recomana clicar el DOI per verificar el PDF original.
+                            </p>
+                        </div>
+
+                        <!-- Vermell -->
+                        <div class="p-4 rounded-2xl bg-rose-50/60 border border-rose-200 space-y-1.5">
+                            <div class="flex items-center justify-between">
+                                <span class="font-bold text-xs text-rose-800 flex items-center gap-1.5">
+                                    <span class="w-2.5 h-2.5 rounded-full bg-rose-500 inline-block"></span>
+                                    Fals Positiu Probable
+                                </span>
+                                <span class="text-[11px] font-mono font-bold text-rose-700 bg-rose-100/80 px-2 py-0.5 rounded">Score &lt; 40</span>
+                            </div>
+                            <p class="text-xs text-rose-900 leading-relaxed">
+                                Homònims que signen exclusivament amb altres universitats (p. ex. Univ. de València, Univ. de Buenos Aires). Es descarten amb un sol clic.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Catàleg d'Entitats Institucionals UAB Integrat -->
+            <div class="bg-white p-8 rounded-3xl border border-slate-200 premium-shadow space-y-6">
+                <div>
+                    <h3 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+                        <i class="fa-solid fa-building-columns text-emerald-600"></i>
+                        <span>Catàleg Institucional de l'Esfera UAB</span>
+                    </h3>
+                    <p class="text-xs text-slate-500 mt-1">El motor reconeix automàticament tant la seu principal com els hospitals universitaris i els instituts mixts de recerca</p>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    
+                    <!-- UAB Central -->
+                    <div class="border border-slate-200 rounded-2xl p-5 bg-slate-50/50 space-y-3">
+                        <div class="flex items-center gap-2.5 text-emerald-700 font-bold text-sm">
+                            <i class="fa-solid fa-landmark"></i>
+                            <span>Campus Central UAB</span>
+                        </div>
+                        <ul class="text-xs text-slate-600 space-y-1.5">
+                            <li><strong>Nom oficial:</strong> Universitat Autònoma de Barcelona</li>
+                            <li><strong>Identificador ROR:</strong> <code class="bg-slate-200/60 px-1.5 py-0.5 rounded text-[11px]">052gg0110</code></li>
+                            <li><strong>OpenAlex Institution:</strong> <code class="bg-slate-200/60 px-1.5 py-0.5 rounded text-[11px]">I123044942</code></li>
+                            <li><strong>Termes geogràfics:</strong> Bellaterra, 08193, Cerdanyola del Vallès</li>
+                        </ul>
+                    </div>
+
+                    <!-- Hospitals Universitaris -->
+                    <div class="border border-slate-200 rounded-2xl p-5 bg-slate-50/50 space-y-3">
+                        <div class="flex items-center gap-2.5 text-blue-700 font-bold text-sm">
+                            <i class="fa-solid fa-hospital"></i>
+                            <span>Hospitals Universitaris Vinculats</span>
+                        </div>
+                        <ul class="text-xs text-slate-600 space-y-1.5">
+                            <li>Hospital Universitari Vall d'Hebron (HUVH / VHIR)</li>
+                            <li>Hospital Germans Trias i Pujol (Can Ruti / IGTP)</li>
+                            <li>Hospital de la Santa Creu i Sant Pau (IIB Sant Pau)</li>
+                            <li>Corporació Sanitària Parc Taulí de Sabadell (I3PT)</li>
+                        </ul>
+                    </div>
+
+                    <!-- Instituts CERCA / CSIC -->
+                    <div class="border border-slate-200 rounded-2xl p-5 bg-slate-50/50 space-y-3">
+                        <div class="flex items-center gap-2.5 text-purple-700 font-bold text-sm">
+                            <i class="fa-solid fa-microscope"></i>
+                            <span>Instituts CERCA / CSIC Vinculats</span>
+                        </div>
+                        <ul class="text-xs text-slate-600 space-y-1.5">
+                            <li><strong>ICMAB:</strong> Inst. Ciència de Materials de Barcelona</li>
+                            <li><strong>ICN2:</strong> Inst. Català de Nanociència i Nanotecnologia</li>
+                            <li><strong>IFAE:</strong> Inst. de Física d'Altes Energies</li>
+                            <li><strong>CRAG:</strong> Centre de Recerca en Agrigenòmica</li>
+                            <li><strong>CVC:</strong> Centre de Visió per Computador</li>
+                            <li><strong>ICTA:</strong> Inst. de Ciència i Tecnologia Ambientals</li>
+                            <li><strong>IIIA:</strong> Inst. Investigació en Intel·ligència Artificial</li>
+                            <li><strong>IBB:</strong> Inst. de Biotecnologia i Biomedicina</li>
+                        </ul>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- Preguntes Freqüents / Recomanacions -->
+            <div class="bg-white p-8 rounded-3xl border border-slate-200 premium-shadow space-y-6">
+                <div>
+                    <h3 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+                        <i class="fa-solid fa-circle-question text-emerald-600"></i>
+                        <span>Preguntes Freqüents i Bones Pràctiques</span>
+                    </h3>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 text-xs text-slate-600">
+                    <div class="space-y-2 p-4 rounded-2xl bg-slate-50 border border-slate-200">
+                        <h4 class="font-bold text-slate-800 text-sm flex items-center gap-2">
+                            <i class="fa-solid fa-shield-halved text-emerald-600"></i>
+                            Quan s'ha d'activar el "Mode Estricte per ORCID"?
+                        </h4>
+                        <p class="leading-relaxed">
+                            És molt recomanable activar-lo quan l'investigador té cognoms molt comuns (per exemple, <em>García, Martínez, López, Fernández</em>) i ja té el seu ORCID registrat a EGRETA. D'aquesta manera s'evita portar centenars d'obres d'altres investigadors homònims.
+                        </p>
+                    </div>
+
+                    <div class="space-y-2 p-4 rounded-2xl bg-slate-50 border border-slate-200">
+                        <h4 class="font-bold text-slate-800 text-sm flex items-center gap-2">
+                            <i class="fa-solid fa-clock-rotate-left text-emerald-600"></i>
+                            Com es gestionen les publicacions anteriors a la incorporació a la UAB?
+                        </h4>
+                        <p class="leading-relaxed">
+                            Aquestes obres acostumen a aparèixer en <strong class="text-amber-700">groc</strong> o <strong class="text-rose-700">vermell</strong> perquè signen amb una altra universitat. Si l'investigador té dret a computar-les al seu historial personal, l'analista pot marcar individualment l'acció <strong>"Acceptar"</strong> des de la pestanya corresponent.
+                        </p>
+                    </div>
+
+                    <div class="space-y-2 p-4 rounded-2xl bg-slate-50 border border-slate-200">
+                        <h4 class="font-bold text-slate-800 text-sm flex items-center gap-2">
+                            <i class="fa-solid fa-file-csv text-emerald-600"></i>
+                            Com s'exporten les dades per a la comissió o informes?
+                        </h4>
+                        <p class="leading-relaxed">
+                            Pots utilitzar el botó <strong>"Exportar CSV"</strong> en qualsevol moment. El fitxer generat conté el nom de l'investigador, el DOI, el títol, les filiacions coincidents, el veredicte, el score de confiança i l'estat de revisió, totalment sanititzat contra injeccions de fórmula.
+                        </p>
+                    </div>
+
+                    <div class="space-y-2 p-4 rounded-2xl bg-slate-50 border border-slate-200">
+                        <h4 class="font-bold text-slate-800 text-sm flex items-center gap-2">
+                            <i class="fa-solid fa-database text-emerald-600"></i>
+                            Es tornaran a escanejar obres ja revisades?
+                        </h4>
+                        <p class="leading-relaxed">
+                            No. El sistema registra permanentment a MongoDB totes les obres revisades (acceptades, rebutjades o descartades). En futurs escanejos de l'autor o del departament, les obres ja conegudes s'ometen automàticament per no repetir la feina de curació.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+        </section>
+
     </div>
 
     <!-- SCRIPT DE CONTROL -->
@@ -335,19 +694,32 @@
         function switchMainTab(tab) {
             const secInd = document.getElementById('sectionIndividual');
             const secBatch = document.getElementById('sectionBatch');
+            const secMeth = document.getElementById('sectionMethodology');
             const btnInd = document.getElementById('tabBtnIndividual');
             const btnBatch = document.getElementById('tabBtnBatch');
+            const btnMeth = document.getElementById('tabBtnMethodology');
+
+            const activeClass = "py-3 px-6 font-bold text-sm border-b-2 border-emerald-600 text-emerald-700 flex items-center gap-2 transition-colors";
+            const inactiveClass = "py-3 px-6 font-semibold text-sm border-b-2 border-transparent text-slate-500 hover:text-slate-800 flex items-center gap-2 transition-colors";
+
+            secInd.classList.add('hidden');
+            secBatch.classList.add('hidden');
+            if (secMeth) secMeth.classList.add('hidden');
+
+            btnInd.className = inactiveClass;
+            btnBatch.className = inactiveClass;
+            if (btnMeth) btnMeth.className = inactiveClass;
 
             if (tab === 'individual') {
                 secInd.classList.remove('hidden');
-                secBatch.classList.add('hidden');
-                btnInd.className = "py-3 px-6 font-bold text-sm border-b-2 border-emerald-600 text-emerald-700 flex items-center gap-2 transition-colors";
-                btnBatch.className = "py-3 px-6 font-semibold text-sm border-b-2 border-transparent text-slate-500 hover:text-slate-800 flex items-center gap-2 transition-colors";
-            } else {
-                secInd.classList.add('hidden');
+                btnInd.className = activeClass;
+            } else if (tab === 'batch') {
                 secBatch.classList.remove('hidden');
-                btnBatch.className = "py-3 px-6 font-bold text-sm border-b-2 border-emerald-600 text-emerald-700 flex items-center gap-2 transition-colors";
-                btnInd.className = "py-3 px-6 font-semibold text-sm border-b-2 border-transparent text-slate-500 hover:text-slate-800 flex items-center gap-2 transition-colors";
+                btnBatch.className = activeClass;
+            } else if (tab === 'methodology') {
+                if (secMeth) secMeth.classList.remove('hidden');
+                if (btnMeth) btnMeth.className = activeClass;
+                window.scrollTo({ top: 0, behavior: 'smooth' });
             }
         }
 
