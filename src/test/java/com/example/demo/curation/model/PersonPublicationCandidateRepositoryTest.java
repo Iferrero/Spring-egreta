@@ -35,10 +35,15 @@ public class PersonPublicationCandidateRepositoryTest {
         testPersonUuid = "test-person-" + UUID.randomUUID();
         testDeptId = "test-dept-" + UUID.randomUUID();
 
-        // Asegurar que el indice compuesto unico este creado en MongoDB
+        // Asegurar que el indice compuesto unico parcial este creado en MongoDB
         try {
+            Document doiKeys = new Document("personUuid", 1).append("doi", 1);
+            Document doiPartial = new Document("doi", new Document("$type", "string"));
             mongoTemplate.indexOps(PersonPublicationCandidate.class)
-                    .ensureIndex(new CompoundIndexDefinition(new Document("personUuid", 1).append("doi", 1)).unique());
+                    .ensureIndex(new CompoundIndexDefinition(doiKeys)
+                            .named("person_doi_unique_idx")
+                            .unique()
+                            .partial(() -> doiPartial));
         } catch (Exception ignored) {
         }
 
@@ -171,5 +176,26 @@ public class PersonPublicationCandidateRepositoryTest {
         assertThrows(DuplicateKeyException.class, () -> {
             mongoTemplate.insert(candidate2);
         }, "No debe permitir insertar un duplicado con el mismo par (personUuid, doi)");
+    }
+
+    @Test
+    public void testAllowMultipleCandidatesWithNullDoi() {
+        PersonPublicationCandidate candidate1 = new PersonPublicationCandidate();
+        candidate1.setPersonUuid(testPersonUuid);
+        candidate1.setDoi(null);
+        candidate1.setOpenAlexWorkId("https://openalex.org/W_test_null_1_" + UUID.randomUUID());
+        candidate1.setTitle("Work without DOI 1");
+        candidate1.setStatus(CandidateStatus.PENDING);
+        repository.save(candidate1);
+
+        PersonPublicationCandidate candidate2 = new PersonPublicationCandidate();
+        candidate2.setPersonUuid(testPersonUuid);
+        candidate2.setDoi(null);
+        candidate2.setOpenAlexWorkId("https://openalex.org/W_test_null_2_" + UUID.randomUUID());
+        candidate2.setTitle("Work without DOI 2");
+        candidate2.setStatus(CandidateStatus.PENDING);
+
+        assertDoesNotThrow(() -> repository.save(candidate2),
+                "Multiple candidates with null DOI must be allowed for the same person");
     }
 }

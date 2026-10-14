@@ -35,12 +35,24 @@ public class CurationMongoIndexInitializer {
             IndexOperations indexOps = mongoTemplate.indexOps(COLLECTION_NAME);
             List<IndexInfo> existingIndexes = indexOps.getIndexInfo();
 
-            // Si existe person_doi_unique_idx sin filtro parcial, eliminarlo para recrearlo con partialFilter
+            // Eliminar indices obsoletos no parciales que causan error 11000 en doi: null
             for (IndexInfo info : existingIndexes) {
-                if ("person_doi_unique_idx".equals(info.getName())) {
+                String name = info.getName();
+                if ("personUuid_1_doi_1".equals(name)) {
+                    log.info("Dropping legacy default-named index '{}' on collection {}", name, COLLECTION_NAME);
+                    try {
+                        indexOps.dropIndex(name);
+                    } catch (Exception e) {
+                        log.warn("Could not drop index {}: {}", name, e.getMessage());
+                    }
+                } else if ("person_doi_unique_idx".equals(name)) {
                     if (info.getPartialFilterExpression() == null || info.getPartialFilterExpression().isBlank()) {
-                        log.info("Dropping obsolete non-partial index 'person_doi_unique_idx' on collection {}", COLLECTION_NAME);
-                        indexOps.dropIndex("person_doi_unique_idx");
+                        log.info("Dropping obsolete non-partial index '{}' on collection {}", name, COLLECTION_NAME);
+                        try {
+                            indexOps.dropIndex(name);
+                        } catch (Exception e) {
+                            log.warn("Could not drop index {}: {}", name, e.getMessage());
+                        }
                     }
                 }
             }
