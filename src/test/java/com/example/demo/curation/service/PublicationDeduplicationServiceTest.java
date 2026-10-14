@@ -194,6 +194,48 @@ public class PublicationDeduplicationServiceTest {
     }
 
     @Test
+    public void testDoiFromElectronicVersionsMatches() {
+        String personUuid = "person-123";
+        String candidateDoi = "10.3390/fi11050104";
+
+        Publicacion pub = new Publicacion();
+        Publicacion.ElectronicVersion ev = new Publicacion.ElectronicVersion();
+        ev.setDoi("https://doi.org/10.3390/fi11050104");
+        pub.setElectronicVersions(List.of(ev));
+
+        when(candidateRepository.findByPersonUuidAndDoi(personUuid, candidateDoi)).thenReturn(Optional.empty());
+
+        boolean known = deduplicationService.isAlreadyKnown(personUuid, candidateDoi, "Some Title", List.of(pub));
+        assertTrue(known, "Debe reconocer el DOI almacenado en electronicVersions de EGRETA");
+    }
+
+    @Test
+    public void testHtmlAndRtfTagsStrippedInTitleSimilarity() {
+        String personUuid = "person-123";
+        String egretaTitleWithHtml = "Improving the nitrogen removal efficiency of an A<sup>2</sup>/O based WWTP by using an on-line Knowledge Based Expert System";
+        String candidateTitle = "Improving the nitrogen removal efficiency of an A2/O based WWTP by using an on-line Knowledge Based Expert System";
+
+        Publicacion pub = new Publicacion();
+        Publicacion.Title title = new Publicacion.Title();
+        title.setValue(egretaTitleWithHtml);
+        pub.setTitle(title);
+
+        boolean known = deduplicationService.isAlreadyKnown(personUuid, null, candidateTitle, List.of(pub));
+        assertTrue(known, "Debe reconocer el titulo aun cuando el registro de EGRETA contenga etiquetas HTML como <sup>");
+
+        String egretaTitleWithRtf = "Continuous enantioselective esterification of \\i trans\\i0 -2-phenyl-l-cyclohexanol using a new \\i Candida rugosa\\i0 lipase in a packed bed bioreactor";
+        String candidateTitleClean = "Continuous enantioselective esterification of trans-2-phenyl-1-cyclohexanol using a new Candida rugosa lipase in a packed bed bioreactor";
+
+        Publicacion pubRtf = new Publicacion();
+        Publicacion.Title titleRtf = new Publicacion.Title();
+        titleRtf.setValue(egretaTitleWithRtf);
+        pubRtf.setTitle(titleRtf);
+
+        boolean knownRtf = deduplicationService.isAlreadyKnown(personUuid, null, candidateTitleClean, List.of(pubRtf));
+        assertTrue(knownRtf, "Debe reconocer el titulo aun cuando el registro de EGRETA contenga etiquetas RTF como \\i y \\i0");
+    }
+
+    @Test
     public void testEdgeCasesAndNullHandling() {
         assertFalse(deduplicationService.isAlreadyKnown(null, null, null, null));
         assertFalse(deduplicationService.isAlreadyKnown("person-123", null, null, Collections.emptyList()));

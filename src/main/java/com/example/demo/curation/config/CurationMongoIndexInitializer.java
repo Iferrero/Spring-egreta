@@ -82,7 +82,17 @@ public class CurationMongoIndexInitializer {
             Document deptStatusKeys = new Document("departmentId", 1).append("status", 1);
             indexOps.ensureIndex(new CompoundIndexDefinition(deptStatusKeys).named("department_status_idx"));
 
-            log.info("Curation indexes successfully verified on {}", COLLECTION_NAME);
+            // Indices para deduplicacion ultrarrapida en Researchoutputs
+            try {
+                IndexOperations roIndexOps = mongoTemplate.indexOps("Researchoutputs");
+                roIndexOps.ensureIndex(new org.springframework.data.mongodb.core.index.Index().on("title.value", org.springframework.data.domain.Sort.Direction.ASC));
+                roIndexOps.ensureIndex(new org.springframework.data.mongodb.core.index.Index().on("identifiers.value", org.springframework.data.domain.Sort.Direction.ASC));
+                roIndexOps.ensureIndex(new org.springframework.data.mongodb.core.index.Index().on("electronicVersions.doi", org.springframework.data.domain.Sort.Direction.ASC));
+            } catch (Exception roEx) {
+                log.warn("Could not ensure indexes on Researchoutputs: {}", roEx.getMessage());
+            }
+
+            log.info("Curation indexes successfully verified on {} and Researchoutputs", COLLECTION_NAME);
         } catch (Exception e) {
             log.warn("Could not ensure indexes on {}: {}", COLLECTION_NAME, e.getMessage());
         }

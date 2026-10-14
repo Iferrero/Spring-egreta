@@ -3,10 +3,13 @@ package com.example.demo.curation.service;
 import com.example.demo.curation.model.PersonPublicationCandidate;
 import com.example.demo.curation.repository.PersonPublicationCandidateRepository;
 import com.example.demo.model.Publicacion;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.stereotype.Service;
 
 import java.text.Normalizer;
 import java.util.*;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
@@ -16,9 +19,10 @@ import java.util.stream.Collectors;
 @Service
 public class PublicationDeduplicationService {
 
-    public static final double TITLE_SIMILARITY_THRESHOLD = 0.85;
+    public static final double TITLE_SIMILARITY_THRESHOLD = 0.80;
 
     private final PersonPublicationCandidateRepository candidateRepository;
+    private final MongoTemplate mongoTemplate;
 
     private static final String[] DOI_PREFIXES = {
             "https://doi.org/",
@@ -31,7 +35,15 @@ public class PublicationDeduplicationService {
     };
 
     public PublicationDeduplicationService(PersonPublicationCandidateRepository candidateRepository) {
+        this(candidateRepository, null);
+    }
+
+    @Autowired
+    public PublicationDeduplicationService(
+            PersonPublicationCandidateRepository candidateRepository,
+            @Autowired(required = false) MongoTemplate mongoTemplate) {
         this.candidateRepository = candidateRepository;
+        this.mongoTemplate = mongoTemplate;
     }
 
     /**
@@ -134,7 +146,7 @@ public class PublicationDeduplicationService {
             }
         }
 
-        // 2. Coincidencia exacta por DOI frente a publicaciones de EGRETA
+        // 2. Coincidencia exacta por DOI frente a publicaciones de EGRETA del autor
         if (normalizedDoi != null && existingEgretaWorks != null) {
             for (Publicacion pub : existingEgretaWorks) {
                 if (pub != null && extractDois(pub).contains(normalizedDoi)) {
@@ -143,21 +155,23 @@ public class PublicationDeduplicationService {
             }
         }
 
-        // 3. Coincidencia difusa por titulo con Jaccard > 0.85 cuando falta DOI
+        // 3. Coincidencia por similitud de titulo frente a las publicaciones de EGRETA del autor
         if (rawTitle != null && !rawTitle.isBlank()) {
-            // Frente a EGRETA (cuando el DOI falta en la candidata o en el registro de EGRETA)
             if (existingEgretaWorks != null) {
                 for (Publicacion pub : existingEgretaWorks) {
                     if (pub != null) {
-                        Set<String> egretaDois = extractDois(pub);
-                        boolean doiMissing = (normalizedDoi == null || egretaDois.isEmpty());
-                        if (doiMissing) {
-                            String egretaTitle = extractTitle(pub);
-                            if (egretaTitle != null && !egretaTitle.isBlank()) {
-                                double sim = calculateTitleSimilarity(rawTitle, egretaTitle);
-                                if (sim > TITLE_SIMILARITY_THRESHOLD) {
+                        String egretaTitle = extractTitle(pub);
+                        if (egretaTitle != null && !egretaTitle.isBlank()) {
+                            double sim = calculateTitleSimilarity(rawTitle, egretaTitle);
+                            Set<String> egretaDois = extractDois(pub);
+                            boolean differentDois = (normalizedDoi != null && !egretaDois.isEmpty() && !egretaDois.contains(normalizedDoi));
+                            if (differentDois) {
+                                // Si ambos tienen DOIs explicitamente distintos, solo es duplicado si el titulo es virtualmente identico (p. ej. preprint vs articulo publicado)
+                                if (sim >= 0.95) {
                                     return true;
                                 }
+                            } else if (sim >= TITLE_SIMILARITY_THRESHOLD) {
+                                return true;
                             }
                         }
                     }
@@ -170,7 +184,7 @@ public class PublicationDeduplicationService {
                 for (PersonPublicationCandidate candidate : candidates) {
                     if (candidate != null && candidate.getTitle() != null) {
                         double sim = calculateTitleSimilarity(rawTitle, candidate.getTitle());
-                        if (sim > TITLE_SIMILARITY_THRESHOLD) {
+                        if (sim >= TITLE_SIMILARITY_THRESHOLD) {
                             return true;
                         }
                     }
@@ -178,19 +192,79 @@ public class PublicationDeduplicationService {
             }
         }
 
+        // 4. Verificacion global en todo el catalogo institucional de EGRETA (Researchoutputs)
+        if (mongoTemplate != null) {
+            // 4a. Busqueda global en EGRETA por DOI
+            if (normalizedDoi != null && existsInEgretaByDoi(normalizedDoi)) {
+                return true;
+            }
+            // 4b. Busqueda global en EGRETA por titulo
+            if (rawTitle != null && !rawTitle.isBlank() && existsInEgretaByTitle(rawTitle)) {
+                return true;
+            }
+        }
+
         return false;
     }
 
+    /**
+     * Comprueba si un DOI normalizado ya existe registrado en la coleccion Researchoutputs de EGRETA,
+     * consultando tanto el array 'identifiers' como 'electronicVersions'.
+     */
+    public boolean existsInEgretaByDoi(String normalizedDoi) {
+        if (normalizedDoi == null || normalizedDoi.isBlank() || mongoTemplate == null) {
+            return false;
+        }
+        String escaped = Pattern.quote(normalizedDoi);
+        org.bson.Document query = new org.bson.Document("$or", List.of(
+                new org.bson.Document("identifiers.value", new org.bson.Document("$regex", escaped).append("$options", "i")),
+                new org.bson.Document("electronicVersions.doi", new org.bson.Document("$regex", escaped).append("$options", "i"))
+        ));
+        return mongoTemplate.getDb().getCollection("Researchoutputs").countDocuments(query) > 0;
+    }
+
+    /**
+     * Comprueba si un titulo de publicacion ya existe registrado en la coleccion Researchoutputs de EGRETA.
+     */
+    public boolean existsInEgretaByTitle(String rawTitle) {
+        if (rawTitle == null || rawTitle.isBlank() || mongoTemplate == null) {
+            return false;
+        }
+        String clean = rawTitle.trim();
+        // 1. Busqueda exacta de titulo
+        org.bson.Document exactQuery = new org.bson.Document("title.value", clean);
+        if (mongoTemplate.getDb().getCollection("Researchoutputs").countDocuments(exactQuery) > 0) {
+            return true;
+        }
+        // 2. Busqueda insensible a mayusculas/minusculas
+        String escaped = Pattern.quote(clean);
+        org.bson.Document caseInsensitiveQuery = new org.bson.Document("title.value",
+                new org.bson.Document("$regex", "^" + escaped + "$").append("$options", "i"));
+        return mongoTemplate.getDb().getCollection("Researchoutputs").countDocuments(caseInsensitiveQuery) > 0;
+    }
+
     private Set<String> extractDois(Publicacion pub) {
-        if (pub == null || pub.getIdentifiers() == null) {
+        if (pub == null) {
             return Collections.emptySet();
         }
         Set<String> dois = new HashSet<>();
-        for (Publicacion.Identifier identifier : pub.getIdentifiers()) {
-            if (identifier != null && identifier.getValue() != null) {
-                String candidateDoi = normalizeDoi(identifier.getValue());
-                if (candidateDoi != null && (isDoiIdentifier(identifier) || candidateDoi.startsWith("10."))) {
-                    dois.add(candidateDoi);
+        if (pub.getIdentifiers() != null) {
+            for (Publicacion.Identifier identifier : pub.getIdentifiers()) {
+                if (identifier != null && identifier.getValue() != null) {
+                    String candidateDoi = normalizeDoi(identifier.getValue());
+                    if (candidateDoi != null && (isDoiIdentifier(identifier) || candidateDoi.startsWith("10."))) {
+                        dois.add(candidateDoi);
+                    }
+                }
+            }
+        }
+        if (pub.getElectronicVersions() != null) {
+            for (Publicacion.ElectronicVersion ev : pub.getElectronicVersions()) {
+                if (ev != null && ev.getDoi() != null) {
+                    String candidateDoi = normalizeDoi(ev.getDoi());
+                    if (candidateDoi != null) {
+                        dois.add(candidateDoi);
+                    }
                 }
             }
         }
@@ -222,7 +296,18 @@ public class PublicationDeduplicationService {
     }
 
     private Set<String> tokenizeTitle(String title) {
-        String clean = Normalizer.normalize(title, Normalizer.Form.NFD)
+        if (title == null || title.isBlank()) {
+            return Collections.emptySet();
+        }
+        // 1. Strip HTML tags like <sup>, </sup>, <i>, </i>, <b>, </b>, <br>, etc.
+        String clean = title.replaceAll("(?i)<[^>]+>", " ");
+        // 2. Strip RTF formatting tags like \i, \i0, \b, \b0, \plain, etc.
+        clean = clean.replaceAll("\\\\[a-zA-Z]+[0-9]*", " ");
+        // 3. Separate numbers from letters: e.g. 1s -> 1 s, A2 -> A 2
+        clean = clean.replaceAll("([0-9]+)([a-zA-Z]+)", "$1 $2");
+        clean = clean.replaceAll("([a-zA-Z]+)([0-9]+)", "$1 $2");
+        // 4. Normalize accents and convert to lower-case
+        clean = Normalizer.normalize(clean, Normalizer.Form.NFD)
                 .replaceAll("\\p{M}+", "")
                 .toLowerCase(Locale.ROOT);
 

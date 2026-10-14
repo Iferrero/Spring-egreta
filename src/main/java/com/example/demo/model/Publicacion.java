@@ -36,6 +36,7 @@ public class Publicacion {
     @com.fasterxml.jackson.annotation.JsonProperty("abstract")
     private Map<String, String> abstracts;
     private List<Identifier> identifiers;
+    private List<ElectronicVersion> electronicVersions;
 
     // Getters y Setters
     public String getId() { return uuid; }
@@ -51,6 +52,8 @@ public class Publicacion {
     public void setSubmissionYear(Integer submissionYear) { this.submissionYear = submissionYear; }
     public List<Identifier> getIdentifiers() { return identifiers; }
     public void setIdentifiers(List<Identifier> identifiers) { this.identifiers = identifiers; }
+    public List<ElectronicVersion> getElectronicVersions() { return electronicVersions; }
+    public void setElectronicVersions(List<ElectronicVersion> electronicVersions) { this.electronicVersions = electronicVersions; }
     public Map<String, String> getAbstracts() { return abstracts; }
     public void setAbstracts(Map<String, String> abstracts) { this.abstracts = abstracts; }
     public List<Contributor> getContributors() { return contributors; }
@@ -130,5 +133,11 @@ public class Publicacion {
         public void setIdSource(String idSource) { this.idSource = idSource; }
         public String getValue() { return value; }
         public void setValue(String value) { this.value = value; }
+    }
+
+    public static class ElectronicVersion {
+        private String doi;
+        public String getDoi() { return doi; }
+        public void setDoi(String doi) { this.doi = doi; }
     }
 }
