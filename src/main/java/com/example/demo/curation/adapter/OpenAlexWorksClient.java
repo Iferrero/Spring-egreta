@@ -51,6 +51,9 @@ public class OpenAlexWorksClient {
     @Value("${app.openalex.crossref-fallback.enabled:true}")
     private boolean crossrefFallbackEnabled = true;
 
+    @Value("${app.openalex.types-filter:type:article|book|book-chapter|review}")
+    private String typesFilter = "type:article|book|book-chapter|review";
+
     private final HttpClient httpClient;
     private final ObjectMapper objectMapper;
     private final CrossrefAffiliationEnricher crossrefEnricher;
@@ -107,6 +110,14 @@ public class OpenAlexWorksClient {
         this.crossrefFallbackEnabled = crossrefFallbackEnabled;
     }
 
+    public String getTypesFilter() {
+        return typesFilter;
+    }
+
+    public void setTypesFilter(String typesFilter) {
+        this.typesFilter = typesFilter;
+    }
+
     /**
      * Delegates Crossref affiliation enrichment directly if needed.
      */
@@ -119,6 +130,8 @@ public class OpenAlexWorksClient {
 
     /**
      * Fetches scholarly works authored by a person from OpenAlex.
+     * Restricts queries to scholarly publications (articles, books, book chapters, reviews)
+     * excluding datasets, conference papers, dissertations, software, etc.
      *
      * @param orcid       ORCID identifier (e.g. "0000-0002-1825-0097" or "https://orcid.org/...")
      * @param authorName  Full or variant name of the author
@@ -127,18 +140,19 @@ public class OpenAlexWorksClient {
      */
     public List<OpenAlexWorkDto> fetchWorksByAuthor(String orcid, String authorName, boolean strictOrcid) {
         String cleanOrcid = cleanOrcid(orcid);
+        String typeFilterSuffix = (typesFilter != null && !typesFilter.isBlank()) ? ("," + typesFilter.trim()) : "";
 
         if (strictOrcid) {
             if (cleanOrcid == null || cleanOrcid.isBlank()) {
                 log.debug("strictOrcid is true but no valid ORCID was provided");
                 return Collections.emptyList();
             }
-            return fetchWorksWithFilter("author.orcid:" + cleanOrcid);
+            return fetchWorksWithFilter("author.orcid:" + cleanOrcid + typeFilterSuffix);
         }
 
         // Non-strict mode:
         if (cleanOrcid != null && !cleanOrcid.isBlank()) {
-            List<OpenAlexWorkDto> worksByOrcid = fetchWorksWithFilter("author.orcid:" + cleanOrcid);
+            List<OpenAlexWorkDto> worksByOrcid = fetchWorksWithFilter("author.orcid:" + cleanOrcid + typeFilterSuffix);
             if (!worksByOrcid.isEmpty()) {
                 return worksByOrcid;
             }
@@ -146,7 +160,7 @@ public class OpenAlexWorksClient {
         }
 
         if (authorName != null && !authorName.isBlank()) {
-            return fetchWorksWithFilter("raw_author_name.search:" + authorName.trim());
+            return fetchWorksWithFilter("raw_author_name.search:" + authorName.trim() + typeFilterSuffix);
         }
 
         return Collections.emptyList();

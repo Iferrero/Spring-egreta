@@ -27,6 +27,7 @@ public class OpenAlexWorkDto {
     private String id;
     private String doi;
     private String title;
+    private String type;
     private Integer publicationYear;
     private String venue;
     private List<AuthorDto> authors = new ArrayList<>();
@@ -87,6 +88,14 @@ public class OpenAlexWorkDto {
 
     public void setTitle(String title) {
         this.title = title;
+    }
+
+    public String getType() {
+        return type;
+    }
+
+    public void setType(String type) {
+        this.type = type;
     }
 
     public Integer getPublicationYear() {
