@@ -4107,7 +4107,9 @@ public class PersonaController {
             String escaped = Pattern.quote(safeQ);
             filter.append("$or", Arrays.asList(
                 new Document("name.lastName",  new Document("$regex", escaped).append("$options", "i")),
-                new Document("name.firstName", new Document("$regex", escaped).append("$options", "i"))
+                new Document("name.firstName", new Document("$regex", escaped).append("$options", "i")),
+                new Document("uuid", safeQ),
+                new Document("orcid", safeQ)
             ));
         }
 
@@ -4115,7 +4117,7 @@ public class PersonaController {
         mongoTemplate.getDb().getCollection("Persons")
             .find(filter)
             .sort(new Document("name.lastName", 1).append("name.firstName", 1))
-            .limit(20)
+            .limit(25)
             .into(docs);
 
         return docs.stream().map(doc -> {
@@ -4126,6 +4128,10 @@ public class PersonaController {
             Map<String, String> m = new LinkedHashMap<>();
             m.put("uuid", doc.getString("uuid"));
             m.put("nombre", nombre.isBlank() ? doc.getString("uuid") : nombre.trim());
+            String orcid = doc.getString("orcid");
+            if (orcid != null && !orcid.isBlank()) {
+                m.put("orcid", orcid.trim());
+            }
             return m;
         }).toList();
     }

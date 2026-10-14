@@ -108,11 +108,18 @@
                     </div>
                 </div>
 
-                <!-- Input directe per UUID o ORCID -->
-                <div class="mt-4 pt-4 border-t border-slate-100 flex items-center gap-3 text-xs text-slate-500">
-                    <span class="font-bold">O cerca directa:</span>
-                    <input type="text" id="manualUuidInput" placeholder="Enganxa UUID d'EGRETA..." class="border border-slate-200 bg-slate-50 rounded-lg px-3 py-1.5 text-xs w-72 focus:outline-none focus:ring-1 focus:ring-emerald-500">
-                    <button onclick="loadManualUuid()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold px-3 py-1.5 rounded-lg border border-slate-200">Carregar</button>
+                <!-- Cerca directa per Nom d'Investigador(a) -->
+                <div class="mt-4 pt-4 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center gap-3 text-xs text-slate-500 relative">
+                    <span class="font-bold flex items-center gap-1.5 shrink-0 text-slate-700">
+                        <i class="fa-solid fa-magnifying-glass text-emerald-600"></i> Cerca directa per nom:
+                    </span>
+                    <div class="relative w-full max-w-md">
+                        <input type="text" id="authorSearchInput" autocomplete="off" placeholder="Escriu cognoms o nom de l'investigador(a)..." class="w-full border border-slate-200 bg-slate-50 rounded-xl px-3.5 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium text-slate-800">
+                        <div id="authorSearchDropdown" class="hidden absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-50 max-h-64 overflow-y-auto divide-y divide-slate-100">
+                            <!-- Items d'autocompletat -->
+                        </div>
+                    </div>
+                    <span class="text-[11px] text-slate-400">També accepta ORCID o UUID</span>
                 </div>
             </div>
 
@@ -321,6 +328,7 @@
 
         document.addEventListener('DOMContentLoaded', () => {
             loadDepartments();
+            initAuthorSearch();
         });
 
         // Canvi de Pestanya Principal
@@ -450,14 +458,113 @@
             loadExistingCandidates(uuid);
         }
 
-        function loadManualUuid() {
-            const uuid = document.getElementById('manualUuidInput').value.trim();
-            if (!uuid) return;
-            state.currentPersonUuid = uuid;
-            state.currentPerson = { uuid: uuid, name: uuid, orcid: '' };
+        // Cerca Directa per Nom amb Autocompletat
+        function initAuthorSearch() {
+            const input = document.getElementById('authorSearchInput');
+            const dropdown = document.getElementById('authorSearchDropdown');
+            if (!input || !dropdown) return;
+
+            let debounceTimer = null;
+
+            input.addEventListener('input', (e) => {
+                const query = e.target.value.trim();
+                clearTimeout(debounceTimer);
+                if (query.length < 2) {
+                    dropdown.innerHTML = '';
+                    dropdown.classList.add('hidden');
+                    return;
+                }
+                debounceTimer = setTimeout(() => {
+                    searchAuthorsByName(query);
+                }, 250);
+            });
+
+            input.addEventListener('blur', () => {
+                setTimeout(() => {
+                    dropdown.classList.add('hidden');
+                }, 250);
+            });
+
+            input.addEventListener('focus', () => {
+                if (dropdown.children.length > 0) {
+                    dropdown.classList.remove('hidden');
+                }
+            });
+        }
+
+        async function searchAuthorsByName(query) {
+            const dropdown = document.getElementById('authorSearchDropdown');
+            if (!dropdown) return;
+            try {
+                const res = await callApi(`/persons/search/active?q=${encodeURIComponent(query)}`);
+                if (!res.ok) return;
+                const authors = await res.json();
+                renderAuthorSearchResults(authors);
+            } catch (err) {
+                console.error("Error cercant investigadors per nom:", err);
+            }
+        }
+
+        function renderAuthorSearchResults(authors) {
+            const dropdown = document.getElementById('authorSearchDropdown');
+            if (!dropdown) return;
+            dropdown.innerHTML = '';
+            if (!authors || authors.length === 0) {
+                dropdown.innerHTML = '<div class="px-4 py-3 text-xs text-slate-400 italic">No s\'ha trobat cap investigador amb aquest nom.</div>';
+                dropdown.classList.remove('hidden');
+                return;
+            }
+
+            authors.forEach(a => {
+                const item = document.createElement('div');
+                item.className = 'px-4 py-2.5 hover:bg-emerald-50 cursor-pointer text-xs flex items-center justify-between transition-colors border-b border-slate-50 last:border-0';
+
+                const nameCol = document.createElement('div');
+                nameCol.className = 'flex flex-col';
+                const nameSpan = document.createElement('span');
+                nameSpan.className = 'font-bold text-slate-800';
+                nameSpan.textContent = a.nombre || a.uuid;
+                const uuidSpan = document.createElement('span');
+                uuidSpan.className = 'text-[10px] text-slate-400 font-mono';
+                uuidSpan.textContent = `UUID: ${a.uuid}`;
+                nameCol.appendChild(nameSpan);
+                nameCol.appendChild(uuidSpan);
+
+                const badgeCol = document.createElement('div');
+                if (a.orcid) {
+                    badgeCol.innerHTML = `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 text-emerald-700 border border-emerald-200"><i class="fa-brands fa-orcid"></i> ${escapeHtml(a.orcid)}</span>`;
+                }
+
+                item.appendChild(nameCol);
+                item.appendChild(badgeCol);
+
+                item.addEventListener('mousedown', () => {
+                    selectAuthorDirectly(a);
+                });
+
+                dropdown.appendChild(item);
+            });
+
+            dropdown.classList.remove('hidden');
+        }
+
+        function selectAuthorDirectly(author) {
+            state.currentPersonUuid = author.uuid;
+            state.currentPerson = {
+                uuid: author.uuid,
+                name: author.nombre || author.uuid,
+                orcid: author.orcid || ''
+            };
+
+            const input = document.getElementById('authorSearchInput');
+            if (input) input.value = author.nombre || author.uuid;
+
+            const dropdown = document.getElementById('authorSearchDropdown');
+            if (dropdown) dropdown.classList.add('hidden');
+
             document.getElementById('btnScanAuthor').disabled = false;
             updateAuthorHeader();
-            loadExistingCandidates(uuid);
+            loadExistingCandidates(author.uuid);
         }
 
         function updateAuthorHeader() {
