@@ -1,6 +1,7 @@
 package com.example.demo;
 
 import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
 import org.springframework.boot.test.context.SpringBootTest;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,8 +25,24 @@ class DemoApplicationTests {
     @Autowired
     private MongoTemplate mongoTemplate;
 
+    @Autowired
+    private com.example.demo.service.PublicacionAbstractsService abstractsService;
+
     @Test
     void contextLoads() {
+    }
+
+    @Test
+    void testDynamicAbstractsStats() {
+        var stats = abstractsService.getAbstractStats(null, null, null);
+        assertNotNull(stats);
+        assertTrue(((Number) stats.get("total")).longValue() > 0);
+        assertTrue(((Number) stats.get("withAbstract")).longValue() > 0);
+        assertTrue(((Number) stats.get("wrongLanguageCount")).longValue() > 0);
+        assertTrue(((Number) stats.get("genuine3Langs")).longValue() > 0);
+        assertNotNull(stats.get("caFieldStats"));
+        assertNotNull(stats.get("esFieldStats"));
+        assertNotNull(stats.get("enFieldStats"));
     }
 
     @Test

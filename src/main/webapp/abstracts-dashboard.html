@@ -1,0 +1,2162 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Anàlisi d'Abstracts de ResearchOutputs | Portal de Recerca UAB</title>
+    <script src="config.js"></script>
+    <script src="uab-brand.js" defer></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="uab-theme.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .premium-shadow {
+            box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05), 0 2px 8px -1px rgba(0, 0, 0, 0.03);
+        }
+        .card-kpi {
+            transition: all 0.25s ease;
+        }
+        .card-kpi:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.08);
+        }
+        .pill-btn {
+            transition: all 0.15s ease;
+        }
+        .pill-btn.active {
+            background-color: #047857;
+            color: #ffffff;
+            font-weight: 600;
+            box-shadow: 0 2px 6px rgba(4, 120, 87, 0.25);
+        }
+        .lang-tag {
+            font-size: 0.68rem;
+            padding: 0.15rem 0.4rem;
+            border-radius: 0.375rem;
+            font-weight: 700;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.2rem;
+        }
+        .lang-ok { background-color: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; }
+        .lang-wrong { background-color: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+        .lang-missing { background-color: #f1f5f9; color: #94a3b8; border: 1px dashed #cbd5e1; }
+        
+        .modal-enter {
+            animation: fadeInScale 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        @keyframes fadeInScale {
+            from { opacity: 0; transform: scale(0.96); }
+            to { opacity: 1; transform: scale(1); }
+        }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen font-sans text-slate-800">
+
+    <div class="mx-auto py-8 px-6 w-[96%] max-w-[1600px]">
+        
+        <!-- Header -->
+        <header class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
+            <div>
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-lg">
+                        <i class="fa-solid fa-align-left"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-2xl sm:text-3xl font-black text-slate-900">Anàlisi d'Abstracts de ResearchOutputs</h1>
+                        <p class="text-slate-500 text-xs sm:text-sm mt-0.5">Auditoria de cobertura lingüística (Català, Castellà, Anglès), percentatges i detecció d'idiomes incorrectes o clonats</p>
+                    </div>
+                </div>
+            </div>
+            <div class="flex items-center gap-3 flex-wrap">
+                <a href="abstracts-discrepancies.html" class="px-4 py-2 rounded-xl border border-amber-200 bg-amber-50/50 text-xs sm:text-sm font-semibold text-amber-700 hover:bg-amber-100 transition-all flex items-center gap-2 premium-shadow">
+                    <i class="fa-solid fa-scale-unbalanced text-amber-600"></i>
+                    <span>Discrepàncies</span>
+                </a>
+                <a href="ai-abstracts-dashboard.html" class="px-4 py-2 rounded-xl border border-indigo-200 bg-indigo-50/50 text-xs sm:text-sm font-semibold text-indigo-700 hover:bg-indigo-100 transition-all flex items-center gap-2 premium-shadow">
+                    <i class="fa-solid fa-wand-magic-sparkles text-indigo-600"></i>
+                    <span>Abstracts IA (Salamandra)</span>
+                </a>
+                <button onclick="forcarRecalculTot()" class="px-4 py-2 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-all flex items-center gap-2 premium-shadow">
+                    <i class="fa-solid fa-rotate" id="refreshIcon"></i>
+                    <span>Actualitzar dades</span>
+                </button>
+                <button onclick="exportarCSV()" class="px-4 py-2 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-all flex items-center gap-2 premium-shadow">
+                    <i class="fa-solid fa-file-csv text-emerald-600"></i>
+                    <span>Exportar CSV</span>
+                </button>
+                <a href="index.html" class="px-4 py-2 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-all flex items-center gap-2 premium-shadow">
+                    <i class="fa-solid fa-arrow-left"></i>
+                    <span>Tornar</span>
+                </a>
+            </div>
+        </header>
+
+        <!-- KPI Cards Summary -->
+        <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-3.5 mb-8">
+            
+            <!-- KPI 1: Total -->
+            <div class="bg-white border border-slate-200 rounded-2xl p-4 flex flex-col justify-between card-kpi premium-shadow relative overflow-hidden">
+                <div class="absolute top-0 left-0 h-1.5 w-full bg-slate-500"></div>
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total</span>
+                    <i class="fa-solid fa-book-open text-slate-400 text-base"></i>
+                </div>
+                <div>
+                    <h3 id="kpiTotal" class="text-xl font-black text-slate-800">...</h3>
+                    <p class="text-slate-400 text-[11px] mt-0.5">Univers a Pure</p>
+                </div>
+            </div>
+
+            <!-- KPI 2: Amb Abstract -->
+            <div class="bg-white border border-slate-200 rounded-2xl p-4 flex flex-col justify-between card-kpi premium-shadow relative overflow-hidden">
+                <div class="absolute top-0 left-0 h-1.5 w-full bg-emerald-500"></div>
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-[10px] font-bold text-emerald-600 uppercase tracking-wider">Amb Abstract</span>
+                    <i class="fa-solid fa-circle-check text-emerald-500 text-base"></i>
+                </div>
+                <div>
+                    <h3 id="kpiWithAbstract" class="text-xl font-black text-emerald-700">...</h3>
+                    <p id="kpiPctWithAbstract" class="text-emerald-600 text-[11px] mt-0.5 font-semibold">... %</p>
+                </div>
+            </div>
+
+            <!-- KPI 3: Sense Abstract -->
+            <div class="bg-white border border-slate-200 rounded-2xl p-4 flex flex-col justify-between card-kpi premium-shadow relative overflow-hidden">
+                <div class="absolute top-0 left-0 h-1.5 w-full bg-rose-500"></div>
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-[10px] font-bold text-rose-600 uppercase tracking-wider">Sense Abstract</span>
+                    <i class="fa-solid fa-circle-xmark text-rose-500 text-base"></i>
+                </div>
+                <div>
+                    <h3 id="kpiNoAbstract" class="text-xl font-black text-rose-700">...</h3>
+                    <p id="kpiPctNoAbstract" class="text-rose-600 text-[11px] mt-0.5 font-semibold">... %</p>
+                </div>
+            </div>
+
+            <!-- KPI 4: En 3 Idiomes -->
+            <div class="bg-white border border-slate-200 rounded-2xl p-4 flex flex-col justify-between card-kpi premium-shadow relative overflow-hidden">
+                <div class="absolute top-0 left-0 h-1.5 w-full bg-blue-500"></div>
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-[10px] font-bold text-blue-600 uppercase tracking-wider">En 3 Idiomes</span>
+                    <i class="fa-solid fa-language text-blue-500 text-base"></i>
+                </div>
+                <div>
+                    <h3 id="kpiIn3Langs" class="text-xl font-black text-blue-700">...</h3>
+                    <p id="kpiPctIn3Langs" class="text-blue-600 text-[11px] mt-0.5 font-semibold">CA + ES + EN</p>
+                </div>
+            </div>
+
+            <!-- KPI 5: ❌ Idioma Incorrecte -->
+            <div class="bg-rose-50/80 border-2 border-rose-300 rounded-2xl p-4 flex flex-col justify-between card-kpi premium-shadow relative overflow-hidden">
+                <div class="absolute top-0 left-0 h-1.5 w-full bg-rose-600"></div>
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-[10px] font-bold text-rose-800 uppercase tracking-wider">❌ Idioma Erroni</span>
+                    <i class="fa-solid fa-triangle-exclamation text-rose-600 text-base"></i>
+                </div>
+                <div>
+                    <h3 id="kpiWrongLanguage" class="text-xl font-black text-rose-800">...</h3>
+                    <p id="kpiPctWrongLanguage" class="text-rose-700 text-[11px] mt-0.5 font-bold">... dels que tenen</p>
+                </div>
+            </div>
+
+            <!-- KPI 6: Idèntics en 3 idiomes -->
+            <div class="bg-amber-50/80 border-2 border-amber-300 rounded-2xl p-4 flex flex-col justify-between card-kpi premium-shadow relative overflow-hidden">
+                <div class="absolute top-0 left-0 h-1.5 w-full bg-amber-500"></div>
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-[10px] font-bold text-amber-800 uppercase tracking-wider">⚠️ 3 Idèntics</span>
+                    <i class="fa-solid fa-clone text-amber-600 text-base"></i>
+                </div>
+                <div>
+                    <h3 id="kpiIdenticalIn3" class="text-xl font-black text-amber-800">...</h3>
+                    <p id="kpiPctIdenticalIn3" class="text-amber-700 text-[11px] mt-0.5 font-bold">... clonats</p>
+                </div>
+            </div>
+
+            <!-- KPI 7: 🎯 3 Genuïns -->
+            <div class="bg-emerald-50/80 border-2 border-emerald-300 rounded-2xl p-4 flex flex-col justify-between card-kpi premium-shadow relative overflow-hidden">
+                <div class="absolute top-0 left-0 h-1.5 w-full bg-emerald-600"></div>
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-[10px] font-bold text-emerald-800 uppercase tracking-wider">🎯 3 Genuïns</span>
+                    <i class="fa-solid fa-bullseye text-emerald-600 text-base"></i>
+                </div>
+                <div>
+                    <h3 id="kpiGenuine3Langs" class="text-xl font-black text-emerald-800">...</h3>
+                    <p id="kpiPctGenuine3Langs" class="text-emerald-700 text-[11px] mt-0.5 font-bold">... 100% correctes</p>
+                </div>
+            </div>
+
+            <!-- KPI 8: En 1 o 2 Idiomes -->
+            <div class="bg-white border border-slate-200 rounded-2xl p-4 flex flex-col justify-between card-kpi premium-shadow relative overflow-hidden">
+                <div class="absolute top-0 left-0 h-1.5 w-full bg-purple-500"></div>
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-[10px] font-bold text-purple-600 uppercase tracking-wider">1 o 2 Idiomes</span>
+                    <i class="fa-solid fa-bars-staggered text-purple-500 text-base"></i>
+                </div>
+                <div>
+                    <h3 id="kpiIn1or2Langs" class="text-xl font-black text-purple-700">...</h3>
+                    <p class="text-purple-600 text-[11px] mt-0.5 font-semibold">Parcial</p>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- Accuracy by Language Field Audit Banner -->
+        <section class="bg-white border border-slate-200 rounded-2xl p-5 premium-shadow mb-8">
+            <div class="flex items-center justify-between mb-3 border-b border-slate-100 pb-3">
+                <h2 class="text-sm font-bold text-slate-800 flex items-center gap-2">
+                    <i class="fa-solid fa-spell-check text-rose-600"></i>
+                    <span>Auditoria de Fidelitat Lingüística per Camp d'Idioma</span>
+                </h2>
+                <span class="text-xs font-semibold text-slate-500">Classificació automàtica del text real vs camp declarat</span>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                
+                <!-- Català Field -->
+                <div class="bg-amber-50/50 border border-amber-200 rounded-xl p-3.5 flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center justify-between mb-1.5">
+                            <span class="font-black text-xs text-amber-900">Camp Català (`ca_ES`)</span>
+                            <span id="auditCaTotal" class="text-[11px] font-bold text-amber-800">...</span>
+                        </div>
+                        <div class="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden flex mb-2.5">
+                            <div id="auditCaBarCorrect" style="width: 0%" class="bg-emerald-500 transition-all duration-300" title="Català real"></div>
+                            <div id="auditCaBarEn" style="width: 0%" class="bg-rose-500 transition-all duration-300" title="Anglès"></div>
+                            <div id="auditCaBarEs" style="width: 0%" class="bg-amber-500 transition-all duration-300" title="Castellà"></div>
+                        </div>
+                        <div class="space-y-1 text-[11px]">
+                            <div class="flex justify-between text-slate-700"><span>✓ Català Real:</span><strong id="auditCaCorrect">...</strong></div>
+                            <div class="flex justify-between text-rose-700 font-bold"><span>❌ En Anglès (`en_GB`):</span><strong id="auditCaWrongEn">...</strong></div>
+                            <div class="flex justify-between text-amber-800"><span>❌ En Castellà (`es_ES`):</span><strong id="auditCaWrongEs">...</strong></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Castellà Field -->
+                <div class="bg-rose-50/50 border border-rose-200 rounded-xl p-3.5 flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center justify-between mb-1.5">
+                            <span class="font-black text-xs text-rose-900">Camp Castellà (`es_ES`)</span>
+                            <span id="auditEsTotal" class="text-[11px] font-bold text-rose-800">...</span>
+                        </div>
+                        <div class="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden flex mb-2.5">
+                            <div id="auditEsBarCorrect" style="width: 0%" class="bg-emerald-500 transition-all duration-300" title="Castellà real"></div>
+                            <div id="auditEsBarEn" style="width: 0%" class="bg-rose-500 transition-all duration-300" title="Anglès"></div>
+                            <div id="auditEsBarCa" style="width: 0%" class="bg-amber-500 transition-all duration-300" title="Català"></div>
+                        </div>
+                        <div class="space-y-1 text-[11px]">
+                            <div class="flex justify-between text-slate-700"><span>✓ Castellà Real:</span><strong id="auditEsCorrect">...</strong></div>
+                            <div class="flex justify-between text-rose-700 font-bold"><span>❌ En Anglès (`en_GB`):</span><strong id="auditEsWrongEn">...</strong></div>
+                            <div class="flex justify-between text-amber-800"><span>❌ En Català (`ca_ES`):</span><strong id="auditEsWrongCa">...</strong></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Anglès Field -->
+                <div class="bg-indigo-50/50 border border-indigo-200 rounded-xl p-3.5 flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center justify-between mb-1.5">
+                            <span class="font-black text-xs text-indigo-900">Camp Anglès (`en_GB`)</span>
+                            <span id="auditEnTotal" class="text-[11px] font-bold text-indigo-800">...</span>
+                        </div>
+                        <div class="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden flex mb-2.5">
+                            <div id="auditEnBarCorrect" style="width: 0%" class="bg-emerald-500 transition-all duration-300" title="Anglès real"></div>
+                            <div id="auditEnBarEs" style="width: 0%" class="bg-rose-500 transition-all duration-300" title="Castellà"></div>
+                            <div id="auditEnBarCa" style="width: 0%" class="bg-amber-500 transition-all duration-300" title="Català"></div>
+                        </div>
+                        <div class="space-y-1 text-[11px]">
+                            <div class="flex justify-between text-emerald-800 font-bold"><span>✓ Anglès Real:</span><strong id="auditEnCorrect">...</strong></div>
+                            <div class="flex justify-between text-slate-700"><span>❌ En Castellà (`es_ES`):</span><strong id="auditEnWrongEs">...</strong></div>
+                            <div class="flex justify-between text-slate-700"><span>❌ En Català (`ca_ES`):</span><strong id="auditEnWrongCa">...</strong></div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- Charts Section -->
+        <section class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            
+            <!-- Chart 1: Language Breakdown -->
+            <div class="bg-white border border-slate-200 rounded-2xl p-5 premium-shadow flex flex-col justify-between">
+                <div>
+                    <div class="flex items-center justify-between mb-3">
+                        <h2 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                            <i class="fa-solid fa-chart-pie text-emerald-600"></i>
+                            <span>Distribució i Qualitat dels Resums</span>
+                        </h2>
+                    </div>
+                    <p class="text-xs text-slate-400 mb-4">Estat global de presència, idiomes i duplicació d'abstracts</p>
+                    <div class="relative h-60 flex items-center justify-center">
+                        <canvas id="chartStatusPie"></canvas>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-2 text-xs mt-4 pt-3 border-t border-slate-100">
+                    <div class="flex items-center gap-2">
+                        <span class="w-3 h-3 rounded-full bg-amber-500"></span>
+                        <span class="text-slate-600 font-medium">3 Idèntics (Clonats)</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="w-3 h-3 rounded-full bg-emerald-500"></span>
+                        <span class="text-slate-600 font-medium">3 Traduïts (Distints)</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="w-3 h-3 rounded-full bg-blue-500"></span>
+                        <span class="text-slate-600 font-medium">1 o 2 Idiomes</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="w-3 h-3 rounded-full bg-rose-400"></span>
+                        <span class="text-slate-600 font-medium">Sense Abstract</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chart 2: Detected Languages in Each Field -->
+            <div class="bg-white border border-slate-200 rounded-2xl p-5 premium-shadow flex flex-col justify-between">
+                <div>
+                    <div class="flex items-center justify-between mb-3">
+                        <h2 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                            <i class="fa-solid fa-language text-indigo-600"></i>
+                            <span>Idiomes Reals Detectats per Camp d'Abstract</span>
+                        </h2>
+                    </div>
+                    <p class="text-xs text-slate-400 mb-4">Llengua real del text guardat a cada camp (ca_ES, es_ES, en_GB)</p>
+                    <div class="relative h-60">
+                        <canvas id="chartDetectedLangsBar"></canvas>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs mt-4 pt-3 border-t border-slate-100">
+                    <div class="flex items-center justify-center gap-1.5">
+                        <span class="w-2.5 h-2.5 rounded-full bg-indigo-500"></span>
+                        <span class="text-slate-600 font-medium text-[11px]">Anglès real</span>
+                    </div>
+                    <div class="flex items-center justify-center gap-1.5">
+                        <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                        <span class="text-slate-600 font-medium text-[11px]">Català real</span>
+                    </div>
+                    <div class="flex items-center justify-center gap-1.5">
+                        <span class="w-2.5 h-2.5 rounded-full bg-rose-500"></span>
+                        <span class="text-slate-600 font-medium text-[11px]">Castellà real</span>
+                    </div>
+                    <div class="flex items-center justify-center gap-1.5">
+                        <span class="w-2.5 h-2.5 rounded-full bg-slate-400"></span>
+                        <span class="text-slate-600 font-medium text-[11px]">Altres / Desc.</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chart 3: Individual Languages -->
+            <div class="bg-white border border-slate-200 rounded-2xl p-5 premium-shadow flex flex-col justify-between">
+                <div>
+                    <div class="flex items-center justify-between mb-3">
+                        <h2 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                            <i class="fa-solid fa-flag text-blue-600"></i>
+                            <span>Presència per Camp d'Idioma</span>
+                        </h2>
+                    </div>
+                    <p class="text-xs text-slate-400 mb-4">Total de publicacions que tenen text en cada camp d'idioma</p>
+                    <div class="relative h-60">
+                        <canvas id="chartLangsBar"></canvas>
+                    </div>
+                </div>
+                <div class="grid grid-cols-3 gap-2 text-center text-xs mt-4 pt-3 border-t border-slate-100">
+                    <div>
+                        <span class="text-slate-400 font-semibold block">Català (ca_ES)</span>
+                        <span id="statHasCa" class="font-bold text-slate-800 text-sm">...</span>
+                    </div>
+                    <div>
+                        <span class="text-slate-400 font-semibold block">Castellà (es_ES)</span>
+                        <span id="statHasEs" class="font-bold text-slate-800 text-sm">...</span>
+                    </div>
+                    <div>
+                        <span class="text-slate-400 font-semibold block">Anglès (en_GB)</span>
+                        <span id="statHasEn" class="font-bold text-slate-800 text-sm">...</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chart 4: Top Typologies -->
+            <div class="bg-white border border-slate-200 rounded-2xl p-5 premium-shadow flex flex-col justify-between">
+                <div>
+                    <div class="flex items-center justify-between mb-3">
+                        <h2 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                            <i class="fa-solid fa-layer-group text-purple-600"></i>
+                            <span>Cobertura per Tipologia</span>
+                        </h2>
+                    </div>
+                    <p class="text-xs text-slate-400 mb-4">Top tipus de document i % de presència d'abstracts</p>
+                    <div class="relative h-60">
+                        <canvas id="chartTypesBar"></canvas>
+                    </div>
+                </div>
+                <div class="text-xs text-slate-400 mt-4 pt-3 border-t border-slate-100 text-center font-medium">
+                    Articles i capítols representen el volum principal
+                </div>
+            </div>
+
+        </section>
+
+        <!-- Evolution by Year Charts (Publication Year & Submission Year) -->
+        <section class="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-8">
+            
+            <!-- Evolution by Publication Year -->
+            <div class="bg-white border border-slate-200 rounded-2xl p-6 premium-shadow flex flex-col justify-between">
+                <div>
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+                        <div>
+                            <h2 class="text-base sm:text-lg font-bold text-slate-800 flex items-center gap-2">
+                                <i class="fa-solid fa-calendar-check text-indigo-600"></i>
+                                <span>Evolució per Any de Publicació</span>
+                            </h2>
+                            <p class="text-xs text-slate-400 mt-0.5">Segons l'any de publicació formal de la recerca</p>
+                        </div>
+                        <span class="text-[11px] font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2.5 py-1 rounded-lg self-start sm:self-auto">
+                            <i class="fa-solid fa-book-journal-whills mr-1"></i> Publication Year
+                        </span>
+                    </div>
+                    <div class="relative h-72 w-full">
+                        <canvas id="chartYearsEvolutionPub"></canvas>
+                    </div>
+                </div>
+                <div class="text-[11px] text-slate-400 mt-3 pt-3 border-t border-slate-100 flex items-center justify-between">
+                    <span><i class="fa-solid fa-hand-pointer text-indigo-500 mr-1"></i> Clica a una barra per filtrar la taula per Any de Publicació</span>
+                    <span class="text-slate-500 font-medium">Pure / Egreta</span>
+                </div>
+            </div>
+
+            <!-- Evolution by Submission Year -->
+            <div class="bg-white border border-slate-200 rounded-2xl p-6 premium-shadow flex flex-col justify-between">
+                <div>
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+                        <div>
+                            <h2 class="text-base sm:text-lg font-bold text-slate-800 flex items-center gap-2">
+                                <i class="fa-solid fa-inbox text-amber-600"></i>
+                                <span>Evolució per Any de Submission</span>
+                            </h2>
+                            <p class="text-xs text-slate-400 mt-0.5">Segons l'any d'ingrés/registre al sistema Pure/Egreta</p>
+                        </div>
+                        <span class="text-[11px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-lg self-start sm:self-auto">
+                            <i class="fa-solid fa-cloud-arrow-up mr-1"></i> Submission Year
+                        </span>
+                    </div>
+                    <div class="relative h-72 w-full">
+                        <canvas id="chartYearsEvolutionSub"></canvas>
+                    </div>
+                </div>
+                <div class="text-[11px] text-slate-400 mt-3 pt-3 border-t border-slate-100 flex items-center justify-between">
+                    <span><i class="fa-solid fa-hand-pointer text-amber-500 mr-1"></i> Clica a una barra per filtrar la taula per Any de Submission</span>
+                    <span class="text-slate-500 font-medium">Pure / Egreta</span>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- Stacked Bar Chart: Recognized Languages in Abstracts by Year -->
+        <section class="bg-white border border-slate-200 rounded-2xl p-6 premium-shadow mb-8">
+            <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-4">
+                <div>
+                    <h2 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                        <i class="fa-solid fa-layer-group text-emerald-600"></i>
+                        <span>Distribució d'Idiomes dels Abstracts per Any (Barra Apilada)</span>
+                    </h2>
+                    <p class="text-xs text-slate-400 mt-0.5">Evolució temporal dels idiomes reals introduïts a les publicacions amb abstract (Anglès, Espanyol, Català, Francès, Italià, Portuguès, Alemany, etc.)</p>
+                </div>
+                <div class="flex items-center gap-2 flex-wrap">
+                    <div class="inline-flex rounded-xl border border-slate-200 bg-slate-100 p-1 text-xs font-semibold text-slate-600">
+                        <button id="btnLangYearPub" onclick="canviarDimensioAnyIdiomes('publicationYear')" class="px-2.5 py-1 rounded-lg bg-white text-slate-900 shadow-sm transition font-bold">
+                            <i class="fa-solid fa-calendar-check mr-1 text-indigo-600"></i> Any Publicació
+                        </button>
+                        <button id="btnLangYearSub" onclick="canviarDimensioAnyIdiomes('submissionYear')" class="px-2.5 py-1 rounded-lg text-slate-500 hover:text-slate-900 transition">
+                            <i class="fa-solid fa-inbox mr-1 text-amber-600"></i> Any Submission
+                        </button>
+                    </div>
+                    <div class="inline-flex rounded-xl border border-slate-200 bg-slate-100 p-1 text-xs font-semibold text-slate-600">
+                        <button id="btnViewCounts" onclick="canviarModeGraficIdiomes('count')" class="px-3 py-1 rounded-lg bg-white text-slate-900 shadow-sm transition">
+                            <i class="fa-solid fa-hashtag mr-1 text-slate-400"></i> Nre. Publicacions
+                        </button>
+                        <button id="btnViewPct" onclick="canviarModeGraficIdiomes('percent')" class="px-3 py-1 rounded-lg text-slate-500 hover:text-slate-900 transition">
+                            <i class="fa-solid fa-percent mr-1 text-slate-400"></i> 100% Apilat
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="relative h-80 w-full">
+                <canvas id="chartYearsLanguagesStacked"></canvas>
+            </div>
+
+            <!-- Dynamic language badges summary -->
+            <div id="languagesLegendBadges" class="flex flex-wrap items-center justify-center gap-2.5 mt-4 pt-4 border-t border-slate-100 text-xs">
+                <!-- Dynamically populated -->
+            </div>
+        </section>
+
+        <!-- Interactive Explorer / Table Section -->
+        <section id="seccioExplorador" class="bg-white border border-slate-200 rounded-2xl premium-shadow overflow-hidden scroll-mt-6">
+            
+            <!-- Toolbar & Filter Header -->
+            <div class="p-6 border-b border-slate-100 bg-slate-50/50">
+                <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                    <div>
+                        <h2 class="text-lg font-black text-slate-800 flex items-center gap-2">
+                            <i class="fa-solid fa-magnifying-glass text-emerald-600"></i>
+                            <span>Explorador de Publicacions i Abstracts</span>
+                        </h2>
+                        <p class="text-xs text-slate-500 mt-0.5">Cerca, filtra i audita els idiomes i el contingut dels abstracts</p>
+                    </div>
+                    <div class="flex items-center gap-2 text-xs font-semibold text-slate-600">
+                        <span>Total filtrat:</span>
+                        <span id="filteredCountBadge" class="px-2.5 py-1 bg-emerald-100 text-emerald-800 rounded-full font-bold">Carregant...</span>
+                    </div>
+                </div>
+
+                <!-- Active Drilldown Filter Indicator Banner -->
+                <div id="filtreActiuDrilldown" class="hidden items-center justify-between bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-2.5 text-xs text-emerald-900 mt-4 transition-all">
+                    <div class="flex items-center gap-2">
+                        <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                        <span>Filtre actiu des del gràfic: <strong id="drilldownFilterText" class="text-emerald-950 font-bold">...</strong></span>
+                    </div>
+                    <button onclick="netejarFiltreDrilldown()" class="px-2.5 py-1 bg-white hover:bg-emerald-100 border border-emerald-300 rounded-lg text-emerald-800 font-bold transition flex items-center gap-1 shadow-sm">
+                        <i class="fa-solid fa-xmark"></i> Netejar filtre del gràfic
+                    </button>
+                </div>
+
+                <!-- Quick Filter Pills -->
+                <div class="flex flex-wrap gap-2 mt-4">
+                    <button class="pill-btn active px-3.5 py-1.5 rounded-xl border border-slate-200 text-xs font-medium bg-white text-slate-700 hover:bg-slate-100" onclick="setFiltreEstat('all', this)">
+                        <i class="fa-solid fa-list mr-1"></i> Tots (<span id="pillCountAll">...</span>)
+                    </button>
+                    <button class="pill-btn px-3.5 py-1.5 rounded-xl border border-rose-200 text-xs font-medium bg-rose-50 text-rose-800 hover:bg-rose-100 font-bold" onclick="setFiltreEstat('wrong_language', this)">
+                        <i class="fa-solid fa-triangle-exclamation text-rose-600 mr-1"></i> ❌ Idioma Incorrecte (<span id="pillCountWrong">...</span>)
+                    </button>
+                    <button class="pill-btn px-3.5 py-1.5 rounded-xl border border-amber-200 text-xs font-medium bg-amber-50 text-amber-800 hover:bg-amber-100" onclick="setFiltreEstat('identical_three_langs', this)">
+                        <i class="fa-solid fa-clone text-amber-600 mr-1"></i> ⚠️ 3 Idiomes Idèntics (<span id="pillCountIdentical">...</span>)
+                    </button>
+                    <button class="pill-btn px-3.5 py-1.5 rounded-xl border border-emerald-200 text-xs font-medium bg-emerald-50 text-emerald-800 hover:bg-emerald-100" onclick="setFiltreEstat('genuine_3_langs', this)">
+                        <i class="fa-solid fa-bullseye text-emerald-600 mr-1"></i> 🎯 3 Idiomes Genuïns (<span id="pillCountGenuine">...</span>)
+                    </button>
+                    <button class="pill-btn px-3.5 py-1.5 rounded-xl border border-slate-200 text-xs font-medium bg-white text-slate-700 hover:bg-slate-100" onclick="setFiltreEstat('different_three_langs', this)">
+                        <i class="fa-solid fa-spell-check text-emerald-600 mr-1"></i> ✓ 3 Idiomes Traduïts (<span id="pillCountDiff3">...</span>)
+                    </button>
+                    <button class="pill-btn px-3.5 py-1.5 rounded-xl border border-slate-200 text-xs font-medium bg-white text-slate-700 hover:bg-slate-100" onclick="setFiltreEstat('three_langs', this)">
+                        <i class="fa-solid fa-language text-blue-500 mr-1"></i> En 3 Idiomes (<span id="pillCountIn3">...</span>)
+                    </button>
+                    <button class="pill-btn px-3.5 py-1.5 rounded-xl border border-slate-200 text-xs font-medium bg-white text-slate-700 hover:bg-slate-100" onclick="setFiltreEstat('one_or_two_langs', this)">
+                        <i class="fa-solid fa-bars-staggered text-purple-500 mr-1"></i> En 1 o 2 Idiomes (<span id="pillCount1or2">...</span>)
+                    </button>
+                    <button class="pill-btn px-3.5 py-1.5 rounded-xl border border-slate-200 text-xs font-medium bg-white text-slate-700 hover:bg-slate-100" onclick="setFiltreEstat('with_abstract', this)">
+                        <i class="fa-solid fa-circle-check text-emerald-600 mr-1"></i> Amb Abstract (<span id="pillCountWithAbs">...</span>)
+                    </button>
+                    <button class="pill-btn px-3.5 py-1.5 rounded-xl border border-slate-200 text-xs font-medium bg-white text-slate-700 hover:bg-slate-100" onclick="setFiltreEstat('without_abstract', this)">
+                        <i class="fa-solid fa-circle-xmark text-rose-500 mr-1"></i> Sense Abstract (<span id="pillCountNoAbs">...</span>)
+                    </button>
+                </div>
+
+                <!-- Search and Fine Filters Bar -->
+                <div class="grid grid-cols-1 md:grid-cols-12 gap-3 mt-4">
+                    <div class="md:col-span-5">
+                        <div class="relative">
+                            <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 transform -translate-y-1/2 text-slate-400 text-xs"></i>
+                            <input type="text" id="inputCerca" oninput="debounceCerca()" placeholder="Cercar per títol, autor, UUID o text del resum..." 
+                                   class="w-full pl-9 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                        </div>
+                    </div>
+                    <div class="md:col-span-3">
+                        <select id="selectTipologia" onchange="aplicarFiltres()" class="w-full py-2.5 px-3 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                            <option value="">Totes les tipologies</option>
+                        </select>
+                    </div>
+                    <div class="md:col-span-2">
+                        <select id="selectYearType" onchange="aplicarFiltres()" class="w-full py-2.5 px-3 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                            <option value="publicationYear">Any Publicació</option>
+                            <option value="submissionYear">Any Submission</option>
+                        </select>
+                    </div>
+                    <div class="md:col-span-2">
+                        <select id="selectAny" onchange="aplicarFiltres()" class="w-full py-2.5 px-3 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                            <option value="">Tots els anys</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Table -->
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse text-xs sm:text-sm">
+                    <thead>
+                        <tr class="bg-slate-100 text-slate-600 font-bold border-b border-slate-200">
+                            <th class="py-3.5 px-4">Títol i Autors</th>
+                            <th class="py-3.5 px-3 text-center w-28">Anys (Pub / Sub)</th>
+                            <th class="py-3.5 px-3 w-36">Tipologia</th>
+                            <th class="py-3.5 px-3 text-center w-36">Idiomes & Detecció</th>
+                            <th class="py-3.5 px-3 w-52">Estat de l'Abstract</th>
+                            <th class="py-3.5 px-4 text-center w-32">Accions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="taulaPublicacions" class="divide-y divide-slate-100">
+                        <tr>
+                            <td colspan="6" class="py-12 text-center text-slate-400">
+                                <i class="fa-solid fa-spinner fa-spin text-2xl mb-2 text-emerald-600 block"></i>
+                                Carregant dades d'abstracts...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination Controls -->
+            <div class="p-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                <div class="text-slate-500 font-medium">
+                    Mostrant <span id="pagMostrant" class="font-bold text-slate-800">0</span> publicacions (Pàgina <span id="pagActual" class="font-bold text-slate-800">1</span> de <span id="pagTotals" class="font-bold text-slate-800">1</span>)
+                </div>
+                <div class="flex items-center gap-2">
+                    <button id="btnPrev" onclick="canviarPagina(-1)" class="px-3 py-1.5 bg-white border border-slate-200 rounded-lg shadow-sm hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed font-semibold text-slate-700">
+                        <i class="fa-solid fa-chevron-left mr-1"></i> Anterior
+                    </button>
+                    <button id="btnNext" onclick="canviarPagina(1)" class="px-3 py-1.5 bg-white border border-slate-200 rounded-lg shadow-sm hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed font-semibold text-slate-700">
+                        Següent <i class="fa-solid fa-chevron-right ml-1"></i>
+                    </button>
+                </div>
+            </div>
+
+        </section>
+
+    </div>
+
+    <!-- Modal Comparador d'Abstracts -->
+    <div id="modalAbstract" class="fixed inset-0 z-50 hidden bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl max-w-5xl w-full max-h-[90vh] flex flex-col premium-shadow modal-enter overflow-hidden">
+            
+            <!-- Modal Header -->
+            <div class="p-6 border-b border-slate-100 bg-slate-50 flex items-start justify-between gap-4">
+                <div>
+                    <span id="modalTypeBadge" class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-200 text-slate-700 mb-1.5 inline-block">Tipus</span>
+                    <h3 id="modalTitle" class="text-lg sm:text-xl font-black text-slate-900 leading-snug">Títol de la publicació</h3>
+                    <div class="flex items-center gap-3 text-xs text-slate-500 mt-1 flex-wrap">
+                        <span class="inline-flex items-center gap-1 bg-indigo-50 border border-indigo-200 text-indigo-800 px-2 py-0.5 rounded font-semibold"><i class="fa-solid fa-calendar-check text-indigo-600"></i> Any Pub: <strong id="modalPubYear" class="text-indigo-950">-</strong></span>
+                        <span class="inline-flex items-center gap-1 bg-amber-50 border border-amber-200 text-amber-800 px-2 py-0.5 rounded font-semibold"><i class="fa-solid fa-inbox text-amber-600"></i> Any Sub: <strong id="modalSubYear" class="text-amber-950">-</strong></span>
+                        <span><i class="fa-solid fa-fingerprint mr-1"></i> UUID: <span id="modalUuid" class="font-mono text-slate-600">...</span></span>
+                    </div>
+                </div>
+                <button onclick="tancarModal()" class="w-9 h-9 rounded-full bg-slate-200/70 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition-colors">
+                    <i class="fa-solid fa-xmark text-base"></i>
+                </button>
+            </div>
+
+            <!-- Duplicate Alert Banner -->
+            <div id="modalAlertBanner" class="px-6 py-3 border-b text-xs font-semibold flex items-center gap-2">
+                <!-- Injected dynamically -->
+            </div>
+
+            <!-- Modal Body (3 Languages Side-by-Side) -->
+            <div class="p-6 overflow-y-auto flex-1 grid grid-cols-1 md:grid-cols-3 gap-5 bg-slate-50/50">
+                
+                <!-- Català -->
+                <div class="bg-white border border-slate-200 rounded-2xl p-4 flex flex-col justify-between premium-shadow">
+                    <div>
+                        <div class="flex items-center justify-between mb-2 pb-2 border-b border-slate-100">
+                            <div>
+                                <span class="px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 font-bold text-xs">Català (ca_ES)</span>
+                                <span id="modalDetectCa" class="ml-1 text-[10px] font-bold"></span>
+                            </div>
+                            <button onclick="copiarText('modalAbstractCa')" class="text-slate-400 hover:text-slate-700 text-xs" title="Copiar text">
+                                <i class="fa-regular fa-copy"></i>
+                            </button>
+                        </div>
+                        <div id="modalAbstractCa" class="text-xs sm:text-sm text-slate-700 leading-relaxed max-h-80 overflow-y-auto whitespace-pre-wrap">Sense text en català</div>
+                    </div>
+                    <div class="text-[11px] text-slate-500 mt-3 pt-2 border-t border-slate-100 flex justify-between items-center font-medium">
+                        <span>Paraules: <strong id="wordCountCa" class="text-slate-800 font-bold">0</strong></span>
+                        <span class="text-[10px] text-slate-400">(<span id="charCountCa">0</span> caràcters)</span>
+                    </div>
+                </div>
+
+                <!-- Castellà -->
+                <div class="bg-white border border-slate-200 rounded-2xl p-4 flex flex-col justify-between premium-shadow">
+                    <div>
+                        <div class="flex items-center justify-between mb-2 pb-2 border-b border-slate-100">
+                            <div>
+                                <span class="px-2 py-0.5 rounded-md bg-rose-100 text-rose-900 font-bold text-xs">Castellà (es_ES)</span>
+                                <span id="modalDetectEs" class="ml-1 text-[10px] font-bold"></span>
+                            </div>
+                            <button onclick="copiarText('modalAbstractEs')" class="text-slate-400 hover:text-slate-700 text-xs" title="Copiar text">
+                                <i class="fa-regular fa-copy"></i>
+                            </button>
+                        </div>
+                        <div id="modalAbstractEs" class="text-xs sm:text-sm text-slate-700 leading-relaxed max-h-80 overflow-y-auto whitespace-pre-wrap">Sense text en castellà</div>
+                    </div>
+                    <div class="text-[11px] text-slate-500 mt-3 pt-2 border-t border-slate-100 flex justify-between items-center font-medium">
+                        <span>Paraules: <strong id="wordCountEs" class="text-slate-800 font-bold">0</strong></span>
+                        <span class="text-[10px] text-slate-400">(<span id="charCountEs">0</span> caràcters)</span>
+                    </div>
+                </div>
+
+                <!-- Anglès -->
+                <div class="bg-white border border-slate-200 rounded-2xl p-4 flex flex-col justify-between premium-shadow">
+                    <div>
+                        <div class="flex items-center justify-between mb-2 pb-2 border-b border-slate-100">
+                            <div>
+                                <span class="px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-900 font-bold text-xs">Anglès (en_GB)</span>
+                                <span id="modalDetectEn" class="ml-1 text-[10px] font-bold"></span>
+                            </div>
+                            <button onclick="copiarText('modalAbstractEn')" class="text-slate-400 hover:text-slate-700 text-xs" title="Copiar text">
+                                <i class="fa-regular fa-copy"></i>
+                            </button>
+                        </div>
+                        <div id="modalAbstractEn" class="text-xs sm:text-sm text-slate-700 leading-relaxed max-h-80 overflow-y-auto whitespace-pre-wrap">Sense text en anglès</div>
+                    </div>
+                    <div class="text-[11px] text-slate-500 mt-3 pt-2 border-t border-slate-100 flex justify-between items-center font-medium">
+                        <span>Paraules: <strong id="wordCountEn" class="text-slate-800 font-bold">0</strong></span>
+                        <span class="text-[10px] text-slate-400">(<span id="charCountEn">0</span> caràcters)</span>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="p-4 border-t border-slate-100 bg-white flex justify-between items-center gap-3">
+                <button id="btnSyncModal" onclick="sincronitzarPublicacioModal()" class="px-4 py-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold transition flex items-center gap-2">
+                    <i id="syncModalIcon" class="fa-solid fa-arrows-rotate"></i>
+                    <span>Sincronitzar des de Pure</span>
+                </button>
+                <button onclick="tancarModal()" class="px-5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-semibold text-slate-700 transition-colors">
+                    Tancar
+                </button>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- JavaScript Application Logic -->
+    <script>
+        let filtreEstatActual = 'all';
+        let paginaActual = 0;
+        const midaPagina = 15;
+        let timeoutCerca = null;
+
+        let chartPieInstance = null;
+        let chartDetectedLangsInstance = null;
+        let chartLangsInstance = null;
+        let chartTypesInstance = null;
+        let chartYearsPubInstance = null;
+        let chartYearsSubInstance = null;
+        let chartYearsLanguagesInstance = null;
+        let modeGraficIdiomes = 'count';
+        let dimensioAnyIdiomes = 'publicationYear';
+        let rawLanguagesByYearData = null;
+        let filtreIdiomaSeleccionat = '';
+        let cachedPubYearsData = null;
+        let cachedSubYearsData = null;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            carregarTot();
+        });
+
+        async function forcarRecalculTot() {
+            const refreshIcon = document.getElementById('refreshIcon');
+            if (refreshIcon) refreshIcon.classList.add('fa-spin');
+
+            // Reset frontend caches
+            cachedPubYearsData = null;
+            cachedSubYearsData = null;
+            rawLanguagesByYearData = null;
+
+            try {
+                // Clear backend in-memory cache to force 100% fresh recalculation
+                await apiFetch(`/pure/abstracts/cache/clear?_t=${Date.now()}`, { 
+                    method: 'POST',
+                    cache: 'no-store',
+                    headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
+                });
+            } catch (err) {
+                console.warn("Avís al netejar la memòria cau:", err);
+            }
+
+            await carregarTot(true);
+        }
+
+        async function carregarTot(isForced = false) {
+            const refreshIcon = document.getElementById('refreshIcon');
+            if (refreshIcon) refreshIcon.classList.add('fa-spin');
+
+            // Feedback visual: atenuar tots els gràfics mentre es refresquen les dades
+            const canvases = document.querySelectorAll('canvas');
+            canvases.forEach(c => {
+                if (c.parentElement) c.parentElement.classList.add('opacity-40', 'transition-opacity', 'duration-300');
+            });
+
+            try {
+                const results = await Promise.allSettled([
+                    carregarKPIsIGrafics(isForced),
+                    carregarEvolucioAnysPub(isForced),
+                    carregarEvolucioAnysSub(isForced),
+                    carregarIdiomesPerAny(isForced),
+                    carregarTipologies(isForced),
+                    carregarTaula(isForced)
+                ]);
+
+                results.forEach((res, idx) => {
+                    if (res.status === 'rejected') {
+                        console.error(`Error en refrescar component #${idx}:`, res.reason);
+                    }
+                });
+            } catch (err) {
+                console.error("Error carregant dades del dashboard:", err);
+            } finally {
+                if (refreshIcon) refreshIcon.classList.remove('fa-spin');
+                canvases.forEach(c => {
+                    if (c.parentElement) c.parentElement.classList.remove('opacity-40');
+                });
+            }
+        }
+
+        async function carregarKPIsIGrafics(isForced = false) {
+            const anySel = document.getElementById('selectAny')?.value;
+            const tipusSel = document.getElementById('selectTipologia')?.value;
+            const yearType = document.getElementById('selectYearType') ? document.getElementById('selectYearType').value : 'publicationYear';
+            let url = `/pure/abstracts/stats?yearType=${encodeURIComponent(yearType)}&`;
+            if (anySel === 'none' || anySel === '0') url += `desde=0&hasta=0&`;
+            else if (anySel) url += `desde=${anySel}&hasta=${anySel}&`;
+            if (tipusSel) url += `type=${encodeURIComponent(tipusSel)}&`;
+            if (filtreIdiomaSeleccionat) url += `language=${encodeURIComponent(filtreIdiomaSeleccionat)}&`;
+            if (isForced) url += `_t=${Date.now()}&`;
+
+            try {
+                const fetchOpts = isForced ? { cache: 'no-store', headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } } : undefined;
+                const res = await apiFetch(url, fetchOpts);
+                const stats = await res.json();
+
+                // Set KPI numbers
+                document.getElementById('kpiTotal').innerText = Number(stats.total || 0).toLocaleString();
+                document.getElementById('kpiWithAbstract').innerText = Number(stats.withAbstract || 0).toLocaleString();
+                document.getElementById('kpiPctWithAbstract').innerText = `${stats.pctWithAbstract || 0}% del total`;
+                
+                document.getElementById('kpiNoAbstract').innerText = Number(stats.noAbstract || 0).toLocaleString();
+                document.getElementById('kpiPctNoAbstract').innerText = `${stats.pctNoAbstract || 0}% del total`;
+
+                document.getElementById('kpiIn3Langs').innerText = Number(stats.in3Langs || 0).toLocaleString();
+                document.getElementById('kpiPctIn3Langs').innerText = `${stats.pctIn3LangsOfTotal || 0}% del total`;
+
+                const in1or2 = (Number(stats.in1Lang || 0) + Number(stats.in2Langs || 0));
+                document.getElementById('kpiIn1or2Langs').innerText = in1or2.toLocaleString();
+
+                document.getElementById('kpiWrongLanguage').innerText = Number(stats.wrongLanguageCount || 0).toLocaleString();
+                document.getElementById('kpiPctWrongLanguage').innerText = `${stats.pctWrongLanguageOfWithAbstract || 0}% dels que tenen`;
+
+                document.getElementById('kpiIdenticalIn3').innerText = Number(stats.identicalIn3 || 0).toLocaleString();
+                document.getElementById('kpiPctIdenticalIn3').innerText = `${stats.pctIdenticalOf3Langs || 0}% dels de 3 idiomes`;
+
+                document.getElementById('kpiGenuine3Langs').innerText = Number(stats.genuine3Langs || 0).toLocaleString();
+                document.getElementById('kpiPctGenuine3Langs').innerText = `${stats.pctGenuine3Langs || 0}% reals dels de 3`;
+
+                document.getElementById('statHasCa').innerText = Number(stats.hasCa || 0).toLocaleString();
+                document.getElementById('statHasEs').innerText = Number(stats.hasEs || 0).toLocaleString();
+                document.getElementById('statHasEn').innerText = Number(stats.hasEn || 0).toLocaleString();
+
+                // Update Quick Filter Pill badges
+                if (document.getElementById('pillCountAll')) document.getElementById('pillCountAll').innerText = Number(stats.total || 0).toLocaleString();
+                if (document.getElementById('pillCountWrong')) document.getElementById('pillCountWrong').innerText = Number(stats.wrongLanguageCount || 0).toLocaleString();
+                if (document.getElementById('pillCountIdentical')) document.getElementById('pillCountIdentical').innerText = Number(stats.identicalIn3 || 0).toLocaleString();
+                if (document.getElementById('pillCountGenuine')) document.getElementById('pillCountGenuine').innerText = Number(stats.genuine3Langs || 0).toLocaleString();
+                if (document.getElementById('pillCountDiff3')) document.getElementById('pillCountDiff3').innerText = Number(stats.differentIn3 || 0).toLocaleString();
+                if (document.getElementById('pillCountIn3')) document.getElementById('pillCountIn3').innerText = Number(stats.in3Langs || 0).toLocaleString();
+                if (document.getElementById('pillCount1or2')) document.getElementById('pillCount1or2').innerText = in1or2.toLocaleString();
+                if (document.getElementById('pillCountWithAbs')) document.getElementById('pillCountWithAbs').innerText = Number(stats.withAbstract || 0).toLocaleString();
+                if (document.getElementById('pillCountNoAbs')) document.getElementById('pillCountNoAbs').innerText = Number(stats.noAbstract || 0).toLocaleString();
+
+                actualitzarAuditoriaBanner(stats);
+                renderChartPie(stats);
+                renderChartDetectedLangs(stats);
+                renderChartLangs(stats);
+            } catch (err) {
+                console.error("Error carregant KPIs i gràfics de resum:", err);
+            }
+        }
+
+        function actualitzarAuditoriaBanner(stats) {
+            const ca = stats.caFieldStats || { total: 0, correct: 0, wrongEn: 0, wrongEs: 0, wrongOther: 0, pctWrongEn: 0, pctWrongEs: 0, pctCorrect: 0 };
+            const es = stats.esFieldStats || { total: 0, correct: 0, wrongEn: 0, wrongCa: 0, wrongOther: 0, pctWrongEn: 0, pctWrongCa: 0, pctCorrect: 0 };
+            const en = stats.enFieldStats || { total: 0, correct: 0, wrongEs: 0, wrongCa: 0, wrongOther: 0, pctWrongEs: 0, pctWrongCa: 0, pctCorrect: 0 };
+
+            // Update CA
+            const caTotalEl = document.getElementById('auditCaTotal');
+            if (caTotalEl) caTotalEl.innerText = `${Number(ca.total || 0).toLocaleString()} registres`;
+            const caCorrectEl = document.getElementById('auditCaCorrect');
+            if (caCorrectEl) caCorrectEl.innerText = `${Number(ca.correct || 0).toLocaleString()} (${ca.pctCorrect || 0}%)`;
+            const caWrongEnEl = document.getElementById('auditCaWrongEn');
+            if (caWrongEnEl) caWrongEnEl.innerText = `${Number(ca.wrongEn || 0).toLocaleString()} (${ca.pctWrongEn || 0}%)`;
+            const caWrongEsEl = document.getElementById('auditCaWrongEs');
+            if (caWrongEsEl) caWrongEsEl.innerText = `${Number(ca.wrongEs || 0).toLocaleString()} (${ca.pctWrongEs || 0}%)`;
+            
+            const caBarCorrect = document.getElementById('auditCaBarCorrect');
+            if (caBarCorrect) {
+                caBarCorrect.style.width = `${ca.pctCorrect || 0}%`;
+                caBarCorrect.title = `Català real: ${ca.pctCorrect || 0}%`;
+            }
+            const caBarEn = document.getElementById('auditCaBarEn');
+            if (caBarEn) {
+                caBarEn.style.width = `${ca.pctWrongEn || 0}%`;
+                caBarEn.title = `Anglès: ${ca.pctWrongEn || 0}%`;
+            }
+            const caBarEs = document.getElementById('auditCaBarEs');
+            if (caBarEs) {
+                caBarEs.style.width = `${ca.pctWrongEs || 0}%`;
+                caBarEs.title = `Castellà: ${ca.pctWrongEs || 0}%`;
+            }
+
+            // Update ES
+            const esTotalEl = document.getElementById('auditEsTotal');
+            if (esTotalEl) esTotalEl.innerText = `${Number(es.total || 0).toLocaleString()} registres`;
+            const esCorrectEl = document.getElementById('auditEsCorrect');
+            if (esCorrectEl) esCorrectEl.innerText = `${Number(es.correct || 0).toLocaleString()} (${es.pctCorrect || 0}%)`;
+            const esWrongEnEl = document.getElementById('auditEsWrongEn');
+            if (esWrongEnEl) esWrongEnEl.innerText = `${Number(es.wrongEn || 0).toLocaleString()} (${es.pctWrongEn || 0}%)`;
+            const esWrongCaEl = document.getElementById('auditEsWrongCa');
+            if (esWrongCaEl) esWrongCaEl.innerText = `${Number(es.wrongCa || 0).toLocaleString()} (${es.pctWrongCa || 0}%)`;
+            
+            const esBarCorrect = document.getElementById('auditEsBarCorrect');
+            if (esBarCorrect) {
+                esBarCorrect.style.width = `${es.pctCorrect || 0}%`;
+                esBarCorrect.title = `Castellà real: ${es.pctCorrect || 0}%`;
+            }
+            const esBarEn = document.getElementById('auditEsBarEn');
+            if (esBarEn) {
+                esBarEn.style.width = `${es.pctWrongEn || 0}%`;
+                esBarEn.title = `Anglès: ${es.pctWrongEn || 0}%`;
+            }
+            const esBarCa = document.getElementById('auditEsBarCa');
+            if (esBarCa) {
+                esBarCa.style.width = `${es.pctWrongCa || 0}%`;
+                esBarCa.title = `Català: ${es.pctWrongCa || 0}%`;
+            }
+
+            // Update EN
+            const enTotalEl = document.getElementById('auditEnTotal');
+            if (enTotalEl) enTotalEl.innerText = `${Number(en.total || 0).toLocaleString()} registres`;
+            const enCorrectEl = document.getElementById('auditEnCorrect');
+            if (enCorrectEl) enCorrectEl.innerText = `${Number(en.correct || 0).toLocaleString()} (${en.pctCorrect || 0}%)`;
+            const enWrongEsEl = document.getElementById('auditEnWrongEs');
+            if (enWrongEsEl) enWrongEsEl.innerText = `${Number(en.wrongEs || 0).toLocaleString()} (${en.pctWrongEs || 0}%)`;
+            const enWrongCaEl = document.getElementById('auditEnWrongCa');
+            if (enWrongCaEl) enWrongCaEl.innerText = `${Number(en.wrongCa || 0).toLocaleString()} (${en.pctWrongCa || 0}%)`;
+            
+            const enBarCorrect = document.getElementById('auditEnBarCorrect');
+            if (enBarCorrect) {
+                enBarCorrect.style.width = `${en.pctCorrect || 0}%`;
+                enBarCorrect.title = `Anglès real: ${en.pctCorrect || 0}%`;
+            }
+            const enBarEs = document.getElementById('auditEnBarEs');
+            if (enBarEs) {
+                enBarEs.style.width = `${en.pctWrongEs || 0}%`;
+                enBarEs.title = `Castellà: ${en.pctWrongEs || 0}%`;
+            }
+            const enBarCa = document.getElementById('auditEnBarCa');
+            if (enBarCa) {
+                enBarCa.style.width = `${en.pctWrongCa || 0}%`;
+                enBarCa.title = `Català: ${en.pctWrongCa || 0}%`;
+            }
+        }
+
+        function renderChartPie(stats) {
+            const ctx = document.getElementById('chartStatusPie');
+            if (!ctx) return;
+            if (chartPieInstance) chartPieInstance.destroy();
+
+            const identicalIn3 = stats.identicalIn3 || 0;
+            const diffIn3 = stats.differentIn3 || 0;
+            const in1or2 = (stats.in1Lang || 0) + (stats.in2Langs || 0);
+            const noAbs = stats.noAbstract || 0;
+
+            chartPieInstance = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['3 Idèntics (⚠️ Clonats)', '3 Traduïts (✓ Distints)', '1 o 2 Idiomes', 'Sense Abstract'],
+                    datasets: [{
+                        data: [identicalIn3, diffIn3, in1or2, noAbs],
+                        backgroundColor: ['#f59e0b', '#10b981', '#3b82f6', '#f43f5e'],
+                        borderWidth: 2,
+                        borderColor: '#ffffff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const total = stats.total || 1;
+                                    const val = context.raw || 0;
+                                    const pct = ((val / total) * 100).toFixed(1);
+                                    return `${context.label}: ${val.toLocaleString()} (${pct}%)`;
+                                }
+                            }
+                        }
+                    },
+                    cutout: '68%'
+                }
+            });
+        }
+
+        function renderChartDetectedLangs(stats) {
+            const ctx = document.getElementById('chartDetectedLangsBar');
+            if (!ctx) return;
+            if (chartDetectedLangsInstance) chartDetectedLangsInstance.destroy();
+
+            const ca = stats.caFieldStats || { total: 0, correct: 0, wrongEn: 0, wrongEs: 0, wrongOther: 0 };
+            const es = stats.esFieldStats || { total: 0, correct: 0, wrongEn: 0, wrongCa: 0, wrongOther: 0 };
+            const en = stats.enFieldStats || { total: 0, correct: 0, wrongEs: 0, wrongCa: 0, wrongOther: 0 };
+
+            chartDetectedLangsInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['Camp Català (ca_ES)', 'Camp Castellà (es_ES)', 'Camp Anglès (en_GB)'],
+                    datasets: [
+                        {
+                            label: 'Anglès real (en_GB)',
+                            data: [ca.wrongEn || 0, es.wrongEn || 0, en.correct || 0],
+                            backgroundColor: '#6366f1',
+                            borderRadius: 4
+                        },
+                        {
+                            label: 'Català real (ca_ES)',
+                            data: [ca.correct || 0, es.wrongCa || 0, en.wrongCa || 0],
+                            backgroundColor: '#10b981',
+                            borderRadius: 4
+                        },
+                        {
+                            label: 'Castellà real (es_ES)',
+                            data: [ca.wrongEs || 0, es.correct || 0, en.wrongEs || 0],
+                            backgroundColor: '#ef4444',
+                            borderRadius: 4
+                        },
+                        {
+                            label: 'Altres / Desconegut',
+                            data: [ca.wrongOther || 0, es.wrongOther || 0, en.wrongOther || 0],
+                            backgroundColor: '#94a3b8',
+                            borderRadius: 4
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            stacked: true,
+                            grid: { display: false }
+                        },
+                        y: {
+                            stacked: true,
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return (value / 1000) + 'k';
+                                }
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const fieldTotals = [ca.total || 1, es.total || 1, en.total || 1];
+                                    const total = fieldTotals[context.dataIndex] || 1;
+                                    const val = context.raw || 0;
+                                    const pct = ((val / total) * 100).toFixed(1);
+                                    return `${context.dataset.label}: ${val.toLocaleString()} (${pct}%)`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function renderChartLangs(stats) {
+            const ctx = document.getElementById('chartLangsBar');
+            if (!ctx) return;
+            if (chartLangsInstance) chartLangsInstance.destroy();
+
+            chartLangsInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['Català (ca_ES)', 'Castellà (es_ES)', 'Anglès (en_GB)'],
+                    datasets: [{
+                        label: 'Publicacions amb text',
+                        data: [stats.hasCa || 0, stats.hasEs || 0, stats.hasEn || 0],
+                        backgroundColor: ['#f59e0b', '#ef4444', '#6366f1'],
+                        borderRadius: 8
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return (value / 1000) + 'k';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function poblarSelectAnys(data) {
+            const selectAny = document.getElementById('selectAny');
+            if (!selectAny || !data || !Array.isArray(data)) return;
+            const currentVal = selectAny.value;
+            const numericYears = data.filter(d => !d.isNoYear && d.year !== 'Sense any' && Number(d.year) > 1900)
+                                     .sort((a, b) => Number(b.year || b) - Number(a.year || a));
+            const noYearItem = data.find(d => d.isNoYear || d.year === 'Sense any' || Number(d.yearValue) === 0);
+            
+            let options = '<option value="">Tots els anys</option>';
+            if (noYearItem && noYearItem.total > 0) {
+                options += `<option value="none" ${currentVal === 'none' || currentVal === '0' ? 'selected' : ''}>⚠️ Sense any (${Number(noYearItem.total).toLocaleString()})</option>`;
+            }
+            numericYears.forEach(d => {
+                const yr = d.year || d;
+                options += `<option value="${yr}" ${currentVal == yr ? 'selected' : ''}>${yr}</option>`;
+            });
+            selectAny.innerHTML = options;
+            if (currentVal) selectAny.value = currentVal;
+        }
+
+        async function carregarEvolucioAnysPub(isForced = false) {
+            const ctx = document.getElementById('chartYearsEvolutionPub');
+            if (!ctx) return;
+
+            try {
+                let url = '/pure/abstracts/years?yearType=publicationYear';
+                if (isForced) url += `&_t=${Date.now()}`;
+                const fetchOpts = isForced ? { cache: 'no-store', headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } } : undefined;
+
+                const res = await apiFetch(url, fetchOpts);
+                const data = await res.json();
+                if (!Array.isArray(data)) {
+                    console.warn("Resposta no vàlida per any de publicació:", data);
+                    return;
+                }
+
+                cachedPubYearsData = data;
+
+                const numericYears = data
+                    .filter(d => !d.isNoYear && d.year !== 'Sense any' && Number(d.year) > 1900)
+                    .sort((a, b) => Number(a.year) - Number(b.year));
+                const noYearItem = data.find(d => d.isNoYear || d.year === 'Sense any' || Number(d.yearValue) === 0);
+                const chartData = (noYearItem && noYearItem.total > 0) ? [...numericYears, noYearItem] : numericYears;
+
+                const selectYearType = document.getElementById('selectYearType');
+                if (!selectYearType || selectYearType.value === 'publicationYear') {
+                    poblarSelectAnys(data);
+                }
+
+                if (chartYearsPubInstance) chartYearsPubInstance.destroy();
+
+                const currentSelectedAny = document.getElementById('selectAny')?.value;
+                const isThisYearTypeSelected = (!selectYearType || selectYearType.value === 'publicationYear');
+
+                const labels = chartData.map(d => (d.isNoYear || d.year === 'Sense any' || d.year === 0) ? 'Sense any' : d.year);
+                const totals = chartData.map(d => d.total);
+                const withAbs = chartData.map(d => d.withAbstract);
+                const identicals = chartData.map(d => d.identicalIn3);
+
+                const totalColors = chartData.map(d => {
+                    const yr = (d.isNoYear || d.year === 'Sense any' || d.year === 0) ? 'none' : String(d.year);
+                    const isSelected = isThisYearTypeSelected && currentSelectedAny && (currentSelectedAny === yr || (currentSelectedAny === 'none' && yr === 'none'));
+                    if (isSelected) return '#a5b4fc';
+                    return (yr === 'none') ? '#cbd5e1' : '#e0e7ff';
+                });
+                const withAbsColors = chartData.map(d => {
+                    const yr = (d.isNoYear || d.year === 'Sense any' || d.year === 0) ? 'none' : String(d.year);
+                    const isSelected = isThisYearTypeSelected && currentSelectedAny && (currentSelectedAny === yr || (currentSelectedAny === 'none' && yr === 'none'));
+                    if (isSelected) return '#4338ca';
+                    return (yr === 'none') ? '#64748b' : '#6366f1';
+                });
+                const identColors = chartData.map(d => (d.isNoYear || d.year === 'Sense any' || d.year === 0) ? '#f59e0b' : '#f59e0b');
+
+                chartYearsPubInstance = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [
+                            {
+                                label: 'Total Publicacions',
+                                data: totals,
+                                backgroundColor: totalColors,
+                                borderRadius: 5,
+                                order: 3
+                            },
+                            {
+                                label: 'Amb Abstract',
+                                data: withAbs,
+                                backgroundColor: withAbsColors,
+                                borderRadius: 5,
+                                order: 2
+                            },
+                            {
+                                label: '⚠️ 3 Idèntics',
+                                data: identicals,
+                                backgroundColor: identColors,
+                                borderRadius: 5,
+                                order: 1
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        onClick: function(event, elements) {
+                            if (!elements || elements.length === 0) return;
+                            const index = elements[0].index;
+                            const item = chartData[index];
+                            if (item) {
+                                const yr = (item.isNoYear || item.year === 'Sense any' || item.year === 0) ? 'none' : item.year;
+                                filtrarPerAnyIIdioma(yr, null, 'publicationYear');
+                            }
+                        },
+                        onHover: function(event, chartElement) {
+                            event.native.target.style.cursor = chartElement[0] ? 'pointer' : 'default';
+                        },
+                        plugins: {
+                            legend: { position: 'top', labels: { boxWidth: 10, font: { size: 10, weight: '600' } } },
+                            tooltip: {
+                                mode: 'index',
+                                intersect: false,
+                                callbacks: {
+                                    footer: function(tooltipItems) {
+                                        return '(Clica per filtrar per Any de Publicació)';
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            x: { stacked: false, grid: { display: false } },
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    callback: function(value) { return value >= 1000 ? (value/1000) + 'k' : value; }
+                                }
+                            }
+                        }
+                    }
+                });
+            } catch (err) {
+                console.error("Error carregant evolució per any de publicació:", err);
+            }
+        }
+
+        async function carregarEvolucioAnysSub(isForced = false) {
+            const ctx = document.getElementById('chartYearsEvolutionSub');
+            if (!ctx) return;
+
+            try {
+                let url = '/pure/abstracts/years-submission';
+                if (isForced) url += `?_t=${Date.now()}`;
+                const fetchOpts = isForced ? { cache: 'no-store', headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } } : undefined;
+
+                const res = await apiFetch(url, fetchOpts);
+                const data = await res.json();
+                if (!Array.isArray(data)) {
+                    console.warn("Resposta no vàlida per any de submission:", data);
+                    return;
+                }
+
+                cachedSubYearsData = data;
+
+                const numericYears = data
+                    .filter(d => !d.isNoYear && d.year !== 'Sense any' && Number(d.year) > 1900)
+                    .sort((a, b) => Number(a.year) - Number(b.year));
+                const noYearItem = data.find(d => d.isNoYear || d.year === 'Sense any' || Number(d.yearValue) === 0);
+                const chartData = (noYearItem && noYearItem.total > 0) ? [...numericYears, noYearItem] : numericYears;
+
+                const selectYearType = document.getElementById('selectYearType');
+                if (selectYearType && selectYearType.value === 'submissionYear') {
+                    poblarSelectAnys(data);
+                }
+
+                if (chartYearsSubInstance) chartYearsSubInstance.destroy();
+
+                const currentSelectedAny = document.getElementById('selectAny')?.value;
+                const isThisYearTypeSelected = (selectYearType && selectYearType.value === 'submissionYear');
+
+                const labels = chartData.map(d => (d.isNoYear || d.year === 'Sense any' || d.year === 0) ? 'Sense any' : d.year);
+                const totals = chartData.map(d => d.total);
+                const withAbs = chartData.map(d => d.withAbstract);
+                const identicals = chartData.map(d => d.identicalIn3);
+
+                const totalColors = chartData.map(d => {
+                    const yr = (d.isNoYear || d.year === 'Sense any' || d.year === 0) ? 'none' : String(d.year);
+                    const isSelected = isThisYearTypeSelected && currentSelectedAny && (currentSelectedAny === yr || (currentSelectedAny === 'none' && yr === 'none'));
+                    if (isSelected) return '#fde68a';
+                    return (yr === 'none') ? '#cbd5e1' : '#fef3c7';
+                });
+                const withAbsColors = chartData.map(d => {
+                    const yr = (d.isNoYear || d.year === 'Sense any' || d.year === 0) ? 'none' : String(d.year);
+                    const isSelected = isThisYearTypeSelected && currentSelectedAny && (currentSelectedAny === yr || (currentSelectedAny === 'none' && yr === 'none'));
+                    if (isSelected) return '#b45309';
+                    return (yr === 'none') ? '#64748b' : '#d97706';
+                });
+                const identColors = chartData.map(d => (d.isNoYear || d.year === 'Sense any' || d.year === 0) ? '#f43f5e' : '#f43f5e');
+
+                chartYearsSubInstance = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [
+                            {
+                                label: 'Total Publicacions',
+                                data: totals,
+                                backgroundColor: totalColors,
+                                borderRadius: 5,
+                                order: 3
+                            },
+                            {
+                                label: 'Amb Abstract',
+                                data: withAbs,
+                                backgroundColor: withAbsColors,
+                                borderRadius: 5,
+                                order: 2
+                            },
+                            {
+                                label: '⚠️ 3 Idèntics',
+                                data: identicals,
+                                backgroundColor: identColors,
+                                borderRadius: 5,
+                                order: 1
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        onClick: function(event, elements) {
+                            if (!elements || elements.length === 0) return;
+                            const index = elements[0].index;
+                            const item = chartData[index];
+                            if (item) {
+                                const yr = (item.isNoYear || item.year === 'Sense any' || item.year === 0) ? 'none' : item.year;
+                                filtrarPerAnyIIdioma(yr, null, 'submissionYear');
+                            }
+                        },
+                        onHover: function(event, chartElement) {
+                            event.native.target.style.cursor = chartElement[0] ? 'pointer' : 'default';
+                        },
+                        plugins: {
+                            legend: { position: 'top', labels: { boxWidth: 10, font: { size: 10, weight: '600' } } },
+                            tooltip: {
+                                mode: 'index',
+                                intersect: false,
+                                callbacks: {
+                                    footer: function(tooltipItems) {
+                                        return '(Clica per filtrar per Any de Submission)';
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            x: { stacked: false, grid: { display: false } },
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    callback: function(value) { return value >= 1000 ? (value/1000) + 'k' : value; }
+                                }
+                            }
+                        }
+                    }
+                });
+            } catch (err) {
+                console.error("Error carregant evolució per any de submission:", err);
+            }
+        }
+
+        function poblarSelectTipologies(typesData) {
+            const selectTipologia = document.getElementById('selectTipologia');
+            if (!selectTipologia || !typesData || !Array.isArray(typesData)) return;
+            const currentVal = selectTipologia.value;
+            let options = '<option value="">Totes les tipologies</option>';
+            typesData.forEach(d => {
+                if (d.type && d.type !== 'Sense tipus') {
+                    options += `<option value="${escapeHtml(d.type)}" ${currentVal === d.type ? 'selected' : ''}>${escapeHtml(d.type)} (${Number(d.total || 0).toLocaleString()})</option>`;
+                }
+            });
+            selectTipologia.innerHTML = options;
+            if (currentVal) selectTipologia.value = currentVal;
+        }
+
+        async function carregarTipologies(isForced = false) {
+            const ctx = document.getElementById('chartTypesBar');
+            if (!ctx) return;
+
+            const anySel = document.getElementById('selectAny')?.value;
+            const yearType = document.getElementById('selectYearType') ? document.getElementById('selectYearType').value : 'publicationYear';
+            
+            let url = `/pure/abstracts/types?yearType=${encodeURIComponent(yearType)}&`;
+            if (anySel === 'none' || anySel === '0') url += `desde=0&hasta=0&`;
+            else if (anySel) url += `desde=${anySel}&hasta=${anySel}&`;
+            if (isForced) url += `_t=${Date.now()}&`;
+
+            try {
+                const fetchOpts = isForced ? { cache: 'no-store', headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } } : undefined;
+                const res = await apiFetch(url, fetchOpts);
+                const data = await res.json();
+
+                // Només repoblem les opcions del select si no s'ha triat cap tipologia prèviament o si estem en recàrrega forçada
+                if (!document.getElementById('selectTipologia')?.value) {
+                    poblarSelectTipologies(data);
+                }
+
+                if (chartTypesInstance) chartTypesInstance.destroy();
+
+                const topData = Array.isArray(data) ? data.slice(0, 6) : [];
+                const labels = topData.map(d => d.type && d.type.length > 20 ? d.type.substring(0, 18) + '...' : (d.type || 'Sense tipus'));
+                const withAbs = topData.map(d => d.withAbstract || 0);
+                const noAbs = topData.map(d => d.noAbstract || 0);
+
+                chartTypesInstance = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [
+                            {
+                                label: 'Amb Abstract',
+                                data: withAbs,
+                                backgroundColor: '#10b981',
+                                borderRadius: 4
+                            },
+                            {
+                                label: 'Sense Abstract',
+                                data: noAbs,
+                                backgroundColor: '#f43f5e',
+                                borderRadius: 4
+                            }
+                        ]
+                    },
+                    options: {
+                        indexAxis: 'y',
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { position: 'top', labels: { boxWidth: 10, font: { size: 10 } } }
+                        },
+                        scales: {
+                            x: { stacked: true },
+                            y: { stacked: true, ticks: { font: { size: 10 } } }
+                        }
+                    }
+                });
+            } catch (err) {
+                console.error("Error carregant tipologies:", err);
+            }
+        }
+
+        function canviarDimensioAnyIdiomes(dim) {
+            dimensioAnyIdiomes = dim;
+            const selectYearType = document.getElementById('selectYearType');
+            if (selectYearType && selectYearType.value !== dim) {
+                selectYearType.value = dim;
+                if (dim === 'submissionYear' && cachedSubYearsData) {
+                    poblarSelectAnys(cachedSubYearsData);
+                } else if (cachedPubYearsData) {
+                    poblarSelectAnys(cachedPubYearsData);
+                }
+            }
+
+            const btnPub = document.getElementById('btnLangYearPub');
+            const btnSub = document.getElementById('btnLangYearSub');
+
+            if (dim === 'publicationYear') {
+                if (btnPub) btnPub.className = 'px-2.5 py-1 rounded-lg bg-white text-slate-900 shadow-sm transition font-bold';
+                if (btnSub) btnSub.className = 'px-2.5 py-1 rounded-lg text-slate-500 hover:text-slate-900 transition font-medium';
+            } else {
+                if (btnSub) btnSub.className = 'px-2.5 py-1 rounded-lg bg-white text-slate-900 shadow-sm transition font-bold';
+                if (btnPub) btnPub.className = 'px-2.5 py-1 rounded-lg text-slate-500 hover:text-slate-900 transition font-medium';
+            }
+
+            carregarIdiomesPerAny();
+        }
+
+        async function carregarIdiomesPerAny(isForced = false) {
+            const ctx = document.getElementById('chartYearsLanguagesStacked');
+            if (!ctx) return;
+
+            const anySel = document.getElementById('selectAny')?.value;
+            const tipusSel = document.getElementById('selectTipologia')?.value;
+            let url = `/pure/abstracts/years-languages?yearType=${encodeURIComponent(dimensioAnyIdiomes)}&`;
+            if (anySel === 'none' || anySel === '0') url += `desde=0&hasta=0&`;
+            else if (anySel) url += `desde=${anySel}&hasta=${anySel}&`;
+            if (tipusSel) url += `type=${encodeURIComponent(tipusSel)}&`;
+            if (isForced) url += `_t=${Date.now()}&`;
+
+            try {
+                const fetchOpts = isForced ? { cache: 'no-store', headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } } : undefined;
+                const res = await apiFetch(url, fetchOpts);
+                rawLanguagesByYearData = await res.json();
+                renderChartYearsLanguagesStacked(rawLanguagesByYearData);
+                renderLanguagesBadges(rawLanguagesByYearData);
+            } catch (err) {
+                console.error("Error carregant idiomes dels abstracts per any:", err);
+            }
+        }
+
+        function renderChartYearsLanguagesStacked(data) {
+            const ctx = document.getElementById('chartYearsLanguagesStacked');
+            if (!ctx) return;
+            if (chartYearsLanguagesInstance) {
+                chartYearsLanguagesInstance.destroy();
+                chartYearsLanguagesInstance = null;
+            }
+            if (!data || !data.years || data.years.length === 0) return;
+
+            const isPct = (modeGraficIdiomes === 'percent');
+            const years = (data.years || []).map(y => (y === 0 || y === '0' || y === 'Sense any') ? 'Sense any' : y);
+            const totalsByYear = data.totalsByYear || [];
+
+            const datasets = (data.series || []).map(s => {
+                const values = isPct ? s.data.map((val, idx) => {
+                    const totalYear = totalsByYear[idx] || 0;
+                    return totalYear > 0 ? Number(((val / totalYear) * 100).toFixed(1)) : 0;
+                }) : s.data;
+
+                return {
+                    label: s.label || s.language,
+                    data: values,
+                    rawCounts: s.data,
+                    backgroundColor: s.color || '#94a3b8',
+                    borderRadius: 3,
+                    borderWidth: 0.5,
+                    borderColor: '#ffffff',
+                    order: 1
+                };
+            });
+
+            chartYearsLanguagesInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: years,
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    onClick: function(event, elements) {
+                        if (!elements || elements.length === 0) return;
+                        const el = elements[0];
+                        const datasetIndex = el.datasetIndex;
+                        const index = el.index;
+                        const clickedYearRaw = years[index];
+                        const clickedYear = (clickedYearRaw === 'Sense any' || clickedYearRaw === 0) ? 'none' : clickedYearRaw;
+                        const clickedDataset = chartYearsLanguagesInstance.data.datasets[datasetIndex];
+                        const clickedLang = clickedDataset.label;
+                        filtrarPerAnyIIdioma(clickedYear, clickedLang, dimensioAnyIdiomes);
+                    },
+                    onHover: function(event, chartElement) {
+                        event.native.target.style.cursor = chartElement[0] ? 'pointer' : 'default';
+                    },
+                    interaction: {
+                        mode: 'index',
+                        intersect: false
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                            labels: {
+                                boxWidth: 12,
+                                font: { size: 11, weight: '600' },
+                                padding: 10
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const dataset = context.dataset;
+                                    const rawCount = dataset.rawCounts ? dataset.rawCounts[context.dataIndex] : context.raw;
+                                    const totalYear = totalsByYear[context.dataIndex] || 1;
+                                    const pct = ((rawCount / totalYear) * 100).toFixed(1);
+                                    if (isPct) {
+                                        return `${dataset.label}: ${context.raw}% (${Number(rawCount).toLocaleString()} docs)`;
+                                    } else {
+                                        return `${dataset.label}: ${Number(rawCount).toLocaleString()} (${pct}%)`;
+                                    }
+                                },
+                                footer: function(tooltipItems) {
+                                    if (tooltipItems.length === 0) return '';
+                                    const index = tooltipItems[0].dataIndex;
+                                    const totalYear = totalsByYear[index] || 0;
+                                    const yearLabel = (dimensioAnyIdiomes === 'submissionYear') ? 'Submission' : 'Publicació';
+                                    const yearVal = years[index];
+                                    const yearDisplay = yearVal === 'Sense any' ? 'Sense any' : `l'Any de ${yearLabel} ${yearVal}`;
+                                    return `Total abstracts ${yearDisplay}: ${Number(totalYear).toLocaleString()} (Clica per filtrar la taula)`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            stacked: true,
+                            grid: { display: false }
+                        },
+                        y: {
+                            stacked: true,
+                            beginAtZero: true,
+                            max: isPct ? 100 : undefined,
+                            ticks: {
+                                callback: function(value) {
+                                    if (isPct) return value + '%';
+                                    return value >= 1000 ? (value / 1000) + 'k' : value;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function renderLanguagesBadges(data) {
+            const container = document.getElementById('languagesLegendBadges');
+            if (!container || !data || !data.series) return;
+
+            const totalAll = (data.totalsByYear || []).reduce((a, b) => a + b, 0) || 1;
+
+            container.innerHTML = data.series.map(s => {
+                const pct = ((s.total / totalAll) * 100).toFixed(1);
+                const isSelected = (filtreIdiomaSeleccionat === s.language);
+                return `
+                    <button onclick="filtrarPerIdioma('${escapeHtml(s.language)}')" title="Clica per filtrar la taula per ${escapeHtml(s.language)}" 
+                            class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border transition cursor-pointer hover:shadow-md hover:scale-105 ${isSelected ? 'bg-emerald-100 border-emerald-400 text-emerald-900 font-bold ring-2 ring-emerald-400' : 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-700 font-medium'}">
+                        <span class="w-2.5 h-2.5 rounded-full" style="background-color: ${s.color};"></span>
+                        <span class="font-bold text-slate-900">${escapeHtml(s.language)}:</span>
+                        <span>${Number(s.total).toLocaleString()}</span>
+                        <span class="text-slate-500 text-[10px]">(${pct}%)</span>
+                    </button>
+                `;
+            }).join('');
+        }
+
+        function canviarModeGraficIdiomes(mode) {
+            modeGraficIdiomes = mode;
+            const btnCounts = document.getElementById('btnViewCounts');
+            const btnPct = document.getElementById('btnViewPct');
+
+            if (mode === 'count') {
+                btnCounts.className = 'px-3 py-1 rounded-lg bg-white text-slate-900 shadow-sm transition';
+                btnPct.className = 'px-3 py-1 rounded-lg text-slate-500 hover:text-slate-900 transition';
+            } else {
+                btnPct.className = 'px-3 py-1 rounded-lg bg-white text-slate-900 shadow-sm transition';
+                btnCounts.className = 'px-3 py-1 rounded-lg text-slate-500 hover:text-slate-900 transition';
+            }
+
+            if (rawLanguagesByYearData) {
+                renderChartYearsLanguagesStacked(rawLanguagesByYearData);
+            }
+        }
+
+        function filtrarPerAnyIIdioma(any, idioma, yearType) {
+            if (yearType) {
+                const selectYearType = document.getElementById('selectYearType');
+                if (selectYearType) {
+                    selectYearType.value = yearType;
+                    if (yearType === 'submissionYear' && cachedSubYearsData) {
+                        poblarSelectAnys(cachedSubYearsData);
+                    } else if (cachedPubYearsData) {
+                        poblarSelectAnys(cachedPubYearsData);
+                    }
+                }
+            }
+            if (any != null) {
+                const selectAny = document.getElementById('selectAny');
+                if (selectAny) {
+                    let valToSet = (any === 'none' || any === 0 || any === 'Sense any') ? 'none' : any;
+                    let exists = false;
+                    for (let i = 0; i < selectAny.options.length; i++) {
+                        if (selectAny.options[i].value == valToSet) { exists = true; break; }
+                    }
+                    if (!exists && valToSet) {
+                        const opt = document.createElement('option');
+                        opt.value = valToSet;
+                        opt.text = (valToSet === 'none') ? '⚠️ Sense any' : valToSet;
+                        selectAny.appendChild(opt);
+                    }
+                    selectAny.value = valToSet;
+                }
+            }
+            if (idioma) {
+                filtreIdiomaSeleccionat = idioma;
+            }
+            actualitzarBannerDrilldown();
+            paginaActual = 0;
+            carregarKPIsIGrafics();
+            carregarIdiomesPerAny();
+            carregarTipologies();
+            carregarEvolucioAnysPub();
+            carregarEvolucioAnysSub();
+            carregarTaula();
+            if (rawLanguagesByYearData) renderLanguagesBadges(rawLanguagesByYearData);
+
+            const el = document.getElementById('seccioExplorador');
+            if (el) el.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function filtrarPerIdioma(idioma) {
+            if (filtreIdiomaSeleccionat === idioma) {
+                filtreIdiomaSeleccionat = '';
+            } else {
+                filtreIdiomaSeleccionat = idioma;
+            }
+            actualitzarBannerDrilldown();
+            paginaActual = 0;
+            carregarKPIsIGrafics();
+            carregarIdiomesPerAny();
+            carregarTipologies();
+            carregarTaula();
+            if (rawLanguagesByYearData) renderLanguagesBadges(rawLanguagesByYearData);
+
+            const el = document.getElementById('seccioExplorador');
+            if (el) el.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function netejarFiltreDrilldown() {
+            filtreIdiomaSeleccionat = '';
+            const selectAny = document.getElementById('selectAny');
+            if (selectAny) selectAny.value = '';
+            actualitzarBannerDrilldown();
+            paginaActual = 0;
+            carregarKPIsIGrafics();
+            carregarIdiomesPerAny();
+            carregarTipologies();
+            carregarEvolucioAnysPub();
+            carregarEvolucioAnysSub();
+            carregarTaula();
+        }
+
+        function actualitzarBannerDrilldown() {
+            const banner = document.getElementById('filtreActiuDrilldown');
+            const txt = document.getElementById('drilldownFilterText');
+            const selectAny = document.getElementById('selectAny');
+            const anySel = selectAny ? selectAny.value : '';
+            const yearType = document.getElementById('selectYearType') ? document.getElementById('selectYearType').value : 'publicationYear';
+            const yearLabel = (yearType === 'submissionYear') ? 'Any Submission' : 'Any Publicació';
+
+            const parts = [];
+            if (anySel) {
+                const anyDisplay = (anySel === 'none' || anySel === '0') ? 'Sense any' : anySel;
+                parts.push(`${yearLabel}: ${anyDisplay}`);
+            }
+            if (filtreIdiomaSeleccionat) parts.push(`Idioma: ${filtreIdiomaSeleccionat}`);
+
+            if (parts.length > 0) {
+                if (txt) txt.innerText = parts.join(' | ');
+                if (banner) {
+                    banner.classList.remove('hidden');
+                    banner.classList.add('flex');
+                }
+            } else {
+                if (banner) {
+                    banner.classList.add('hidden');
+                    banner.classList.remove('flex');
+                }
+            }
+        }
+
+        async function carregarTaula(isForced = false) {
+            const tbody = document.getElementById('taulaPublicacions');
+            if (tbody) tbody.innerHTML = `<tr><td colspan="6" class="py-12 text-center text-slate-400"><i class="fa-solid fa-spinner fa-spin text-2xl mb-2 text-emerald-600 block"></i>Cercant publicacions...</td></tr>`;
+
+            const cerca = document.getElementById('inputCerca') ? document.getElementById('inputCerca').value.trim() : '';
+            const anySel = document.getElementById('selectAny')?.value;
+            const tipusSel = document.getElementById('selectTipologia')?.value;
+            const yearType = document.getElementById('selectYearType') ? document.getElementById('selectYearType').value : 'publicationYear';
+
+            let url = `/pure/abstracts/list?filter=${filtreEstatActual}&page=${paginaActual}&size=${midaPagina}&yearType=${encodeURIComponent(yearType)}`;
+            if (cerca) url += `&search=${encodeURIComponent(cerca)}`;
+            if (anySel === 'none' || anySel === '0') url += `&desde=0&hasta=0`;
+            else if (anySel) url += `&desde=${anySel}&hasta=${anySel}`;
+            if (tipusSel) url += `&type=${encodeURIComponent(tipusSel)}`;
+            if (filtreIdiomaSeleccionat) url += `&language=${encodeURIComponent(filtreIdiomaSeleccionat)}`;
+            if (isForced) url += `&_t=${Date.now()}`;
+
+            try {
+                const fetchOpts = isForced ? { cache: 'no-store', headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } } : undefined;
+                const res = await apiFetch(url, fetchOpts);
+                const data = await res.json();
+
+            const items = data.items || [];
+            document.getElementById('filteredCountBadge').innerText = `${Number(data.totalElements || 0).toLocaleString()} resultats`;
+            document.getElementById('pagMostrant').innerText = items.length;
+            document.getElementById('pagActual').innerText = data.page + 1;
+            document.getElementById('pagTotals').innerText = Math.max(1, data.totalPages);
+
+            document.getElementById('btnPrev').disabled = (data.page <= 0);
+            document.getElementById('btnNext').disabled = (data.page >= data.totalPages - 1);
+
+            if (items.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" class="py-12 text-center text-slate-400"><i class="fa-solid fa-circle-exclamation text-2xl mb-2 text-slate-300 block"></i>No s'han trobat publicacions amb els filtres seleccionats.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = items.map(p => {
+                let caBadge = `<span class="lang-tag lang-missing">-</span>`;
+                if (p.hasCa && !isHtmlEmpty(p.abstractCa)) {
+                    if (p.detectedCa === 'ca_ES') caBadge = `<span class="lang-tag lang-ok" title="Català genuí">CA ✓</span>`;
+                    else if (p.detectedCa === 'unknown' || !p.isWrongCa) caBadge = `<span class="lang-tag bg-slate-100 text-slate-700 border border-slate-200" title="Català (Vocabulari tècnic / científic)">CA ~</span>`;
+                    else caBadge = `<span class="lang-tag lang-wrong" title="Camp CA amb text detectat: ${formatLangName(p.detectedCa)}">CA ❌ (${formatShortLang(p.detectedCa)})</span>`;
+                }
+
+                let esBadge = `<span class="lang-tag lang-missing">-</span>`;
+                if (p.hasEs && !isHtmlEmpty(p.abstractEs)) {
+                    if (p.detectedEs === 'es_ES') esBadge = `<span class="lang-tag lang-ok" title="Castellà genuí">ES ✓</span>`;
+                    else if (p.detectedEs === 'unknown' || !p.isWrongEs) esBadge = `<span class="lang-tag bg-slate-100 text-slate-700 border border-slate-200" title="Castellà (Vocabulari tècnic / científic)">ES ~</span>`;
+                    else esBadge = `<span class="lang-tag lang-wrong" title="Camp ES amb text detectat: ${formatLangName(p.detectedEs)}">ES ❌ (${formatShortLang(p.detectedEs)})</span>`;
+                }
+
+                let enBadge = `<span class="lang-tag lang-missing">-</span>`;
+                if (p.hasEn && !isHtmlEmpty(p.abstractEn)) {
+                    if (p.detectedEn === 'en_GB') enBadge = `<span class="lang-tag lang-ok" title="Anglès genuí">EN ✓</span>`;
+                    else if (p.detectedEn === 'unknown' || !p.isWrongEn) enBadge = `<span class="lang-tag bg-slate-100 text-slate-700 border border-slate-200" title="Anglès (Vocabulari tècnic / científic)">EN ~</span>`;
+                    else enBadge = `<span class="lang-tag lang-wrong" title="Camp EN amb text detectat: ${formatLangName(p.detectedEn)}">EN ❌ (${formatShortLang(p.detectedEn)})</span>`;
+                }
+
+                return `
+                <tr class="hover:bg-slate-50 transition">
+                    <td class="py-3 px-4">
+                        <div class="font-bold text-slate-900 leading-snug mb-1">${escapeHtml(p.title)}</div>
+                        <div class="text-xs text-slate-500 italic truncate max-w-xl">${escapeHtml(p.authors)}</div>
+                        <div class="text-[11px] text-slate-400 font-mono mt-0.5">${p.uuid}</div>
+                    </td>
+                    <td class="py-3 px-3 text-center">
+                        <div class="flex flex-col items-center gap-1">
+                            <span class="inline-flex items-center gap-1 text-xs font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded" title="Any de Publicació formal">
+                                <i class="fa-solid fa-calendar-check text-[10px]"></i> ${p.publicationYear ? p.publicationYear : '<span class="text-slate-400 font-normal italic">Sense any</span>'}
+                            </span>
+                            <span class="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded" title="Any d\'ingrés al Pure (Submission Year)">
+                                <i class="fa-solid fa-inbox text-[10px]"></i> ${p.submissionYear ? p.submissionYear : '<span class="text-slate-400 font-normal italic">Sense any</span>'}
+                            </span>
+                        </div>
+                    </td>
+                    <td class="py-3 px-3">
+                        <span class="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 text-xs font-semibold">${escapeHtml(p.typeName)}</span>
+                        <div class="mt-1"><span class="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100" title="Idioma declarat a la publicació"><i class="fa-solid fa-earth-europe mr-1"></i>${escapeHtml(p.publicationLanguage || 'Sense idioma')}</span></div>
+                    </td>
+                    <td class="py-3 px-3 text-center">
+                        <div class="flex items-center justify-center gap-1 flex-wrap">
+                            ${caBadge}
+                            ${esBadge}
+                            ${enBadge}
+                        </div>
+                    </td>
+                    <td class="py-3 px-3">
+                        <span class="px-2.5 py-1 rounded-full text-xs font-bold border inline-flex items-center gap-1.5 ${p.statusClass}">
+                            ${p.statusLabel}
+                        </span>
+                    </td>
+                    <td class="py-3 px-4 text-center">
+                        <button onclick="obrirModal('${p.uuid}')" class="px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 text-xs font-bold transition flex items-center gap-1.5 mx-auto">
+                            <i class="fa-solid fa-eye"></i>
+                            <span>Comparar</span>
+                        </button>
+                    </td>
+                </tr>
+                `;
+            }).join('');
+            } catch (err) {
+                console.error("Error carregant taula de publicacions:", err);
+                if (tbody) tbody.innerHTML = `<tr><td colspan="6" class="py-12 text-center text-rose-500"><i class="fa-solid fa-triangle-exclamation text-2xl mb-2 text-rose-400 block"></i>Error en carregar les publicacions. Si us plau, torna-ho a provar.</td></tr>`;
+            }
+        }
+
+        async function obrirModal(uuid) {
+            const modal = document.getElementById('modalAbstract');
+            modal.classList.remove('hidden');
+
+            document.getElementById('modalTitle').innerText = 'Carregant...';
+            document.getElementById('modalTypeBadge').innerText = '...';
+            document.getElementById('modalPubYear').innerText = '...';
+            document.getElementById('modalSubYear').innerText = '...';
+            document.getElementById('modalUuid').innerText = uuid;
+
+            document.getElementById('modalAbstractCa').innerText = 'Carregant...';
+            document.getElementById('modalAbstractEs').innerText = 'Carregant...';
+            document.getElementById('modalAbstractEn').innerText = 'Carregant...';
+
+            document.getElementById('modalDetectCa').innerText = '';
+            document.getElementById('modalDetectEs').innerText = '';
+            document.getElementById('modalDetectEn').innerText = '';
+
+            try {
+                const res = await apiFetch(`/pure/abstracts/${uuid}`);
+                const data = await res.json();
+
+                document.getElementById('modalTitle').innerText = data.title || 'Sense títol';
+                document.getElementById('modalTypeBadge').innerText = data.type || 'Sense tipus';
+                document.getElementById('modalPubYear').innerText = data.publicationYear || '-';
+                document.getElementById('modalSubYear').innerText = data.submissionYear || '-';
+
+                const ca = (!isHtmlEmpty(data.abstractCa) && data.hasCa) ? data.abstractCa : '';
+                const es = (!isHtmlEmpty(data.abstractEs) && data.hasEs) ? data.abstractEs : '';
+                const en = (!isHtmlEmpty(data.abstractEn) && data.hasEn) ? data.abstractEn : '';
+
+                document.getElementById('modalAbstractCa').innerText = ca || 'Sense resum en català.';
+                document.getElementById('modalAbstractEs').innerText = es || 'Sense resum en castellà.';
+                document.getElementById('modalAbstractEn').innerText = en || 'Sense resum en anglès.';
+
+                const wordsCa = (data.wordsCa != null) ? data.wordsCa : countWordsJs(ca);
+                const wordsEs = (data.wordsEs != null) ? data.wordsEs : countWordsJs(es);
+                const wordsEn = (data.wordsEn != null) ? data.wordsEn : countWordsJs(en);
+
+                const elWordCa = document.getElementById('wordCountCa');
+                const elWordEs = document.getElementById('wordCountEs');
+                const elWordEn = document.getElementById('wordCountEn');
+                if (elWordCa) elWordCa.innerText = (data.hasCa && ca) ? wordsCa.toLocaleString() : '0';
+                if (elWordEs) elWordEs.innerText = (data.hasEs && es) ? wordsEs.toLocaleString() : '0';
+                if (elWordEn) elWordEn.innerText = (data.hasEn && en) ? wordsEn.toLocaleString() : '0';
+
+                const elCharCa = document.getElementById('charCountCa');
+                const elCharEs = document.getElementById('charCountEs');
+                const elCharEn = document.getElementById('charCountEn');
+                if (elCharCa) elCharCa.innerText = (data.hasCa && ca) ? ca.length.toLocaleString() : '0';
+                if (elCharEs) elCharEs.innerText = (data.hasEs && es) ? es.length.toLocaleString() : '0';
+                if (elCharEn) elCharEn.innerText = (data.hasEn && en) ? en.length.toLocaleString() : '0';
+
+                // Language detection tags
+                if (data.hasCa) {
+                    const ok = data.detectedCa === 'ca_ES';
+                    const wrong = data.isWrongCa;
+                    document.getElementById('modalDetectCa').className = `ml-1 text-[10px] font-bold px-1.5 py-0.5 rounded ${ok ? 'bg-emerald-100 text-emerald-800' : (wrong ? 'bg-rose-100 text-rose-800' : 'bg-slate-100 text-slate-700')}`;
+                    document.getElementById('modalDetectCa').innerText = ok ? '✓ Català real' : (wrong ? `❌ Detectat: ${formatLangName(data.detectedCa)}` : '~ Vocabulari tècnic');
+                }
+                if (data.hasEs) {
+                    const ok = data.detectedEs === 'es_ES';
+                    const wrong = data.isWrongEs;
+                    document.getElementById('modalDetectEs').className = `ml-1 text-[10px] font-bold px-1.5 py-0.5 rounded ${ok ? 'bg-emerald-100 text-emerald-800' : (wrong ? 'bg-rose-100 text-rose-800' : 'bg-slate-100 text-slate-700')}`;
+                    document.getElementById('modalDetectEs').innerText = ok ? '✓ Castellà real' : (wrong ? `❌ Detectat: ${formatLangName(data.detectedEs)}` : '~ Vocabulari tècnic');
+                }
+                if (data.hasEn) {
+                    const ok = data.detectedEn === 'en_GB';
+                    const wrong = data.isWrongEn;
+                    document.getElementById('modalDetectEn').className = `ml-1 text-[10px] font-bold px-1.5 py-0.5 rounded ${ok ? 'bg-emerald-100 text-emerald-800' : (wrong ? 'bg-rose-100 text-rose-800' : 'bg-slate-100 text-slate-700')}`;
+                    document.getElementById('modalDetectEn').innerText = ok ? '✓ Anglès real' : (wrong ? `❌ Detectat: ${formatLangName(data.detectedEn)}` : '~ Vocabulari tècnic');
+                }
+
+                // Alert banner
+                const banner = document.getElementById('modalAlertBanner');
+                if (data.hasAnyWrongLanguage) {
+                    banner.className = 'px-6 py-3 border-b text-xs font-semibold flex items-center gap-2 bg-rose-50 text-rose-900 border-rose-200';
+                    banner.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-rose-600 text-base"></i><span><strong>Discrepància Lingüística:</strong> Un o més camps tenen un abstract escrit en un idioma incorrecte (ex. text en anglès dins del camp de català o castellà).</span>`;
+                } else if (data.allThreeMatch) {
+                    banner.className = 'px-6 py-3 border-b text-xs font-semibold flex items-center gap-2 bg-amber-50 text-amber-900 border-amber-200';
+                    banner.innerHTML = `<i class="fa-solid fa-clone text-amber-600 text-base"></i><span><strong>Resums Idèntics:</strong> Aquesta publicació té exactament el mateix text copiat en els 3 idiomes sense traducció.</span>`;
+                } else if (data.hasCa && data.hasEs && data.hasEn) {
+                    banner.className = 'px-6 py-3 border-b text-xs font-semibold flex items-center gap-2 bg-emerald-50 text-emerald-900 border-emerald-200';
+                    banner.innerHTML = `<i class="fa-solid fa-circle-check text-emerald-600 text-base"></i><span><strong>100% Genuí:</strong> Els resums estan disponibles en els 3 idiomes en la seva llengua corresponent i amb traducció.</span>`;
+                } else {
+                    banner.className = 'px-6 py-3 border-b text-xs font-semibold flex items-center gap-2 bg-slate-100 text-slate-700 border-slate-200';
+                    banner.innerHTML = `<i class="fa-solid fa-circle-info text-slate-500 text-base"></i><span>Publicació amb cobertura lingüística parcial (${data.hasCa ? 'CA ' : ''}${data.hasEs ? 'ES ' : ''}${data.hasEn ? 'EN ' : ''}).</span>`;
+                }
+
+                if (data.diffWords >= 50 || (data.ratioWords && data.ratioWords >= 2.0)) {
+                    banner.innerHTML += `<span class="ml-auto px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">Asimetria: Δ ${data.diffWords} paraules (${data.ratioWords}x)</span>`;
+                }
+
+            } catch (e) {
+                console.error("Error carregant detall:", e);
+                document.getElementById('modalAbstractCa').innerText = 'Error al carregar les dades.';
+            }
+        }
+
+        function countWordsJs(text) {
+            if (!text) return 0;
+            const plain = text.replace(/<[^>]+>/g, ' ').replace(/&(?:nbsp|#160|amp;nbsp);?/gi, ' ').trim();
+            if (!plain) return 0;
+            const tokens = plain.split(/\s+/).filter(w => /\p{L}|\p{N}/u.test(w));
+            return tokens.length;
+        }
+
+        function formatLangName(code) {
+            if (code === 'ca_ES') return 'Català';
+            if (code === 'es_ES') return 'Castellà';
+            if (code === 'en_GB') return 'Anglès';
+            return code || 'Desconegut';
+        }
+
+        function formatShortLang(code) {
+            if (code === 'ca_ES') return 'CA';
+            if (code === 'es_ES') return 'ES';
+            if (code === 'en_GB') return 'EN';
+            return code || '?';
+        }
+
+        function tancarModal() {
+            document.getElementById('modalAbstract').classList.add('hidden');
+        }
+
+        async function sincronitzarPublicacioModal() {
+            const uuid = document.getElementById('modalUuid').innerText;
+            if (!uuid || uuid === '...') return;
+
+            const btn = document.getElementById('btnSyncModal');
+            const icon = document.getElementById('syncModalIcon');
+            if (btn) btn.disabled = true;
+            if (icon) icon.classList.add('fa-spin');
+
+            try {
+                const res = await apiFetch(`/pure/abstracts/sync/${uuid}`, { method: 'POST' });
+                const result = await res.json();
+                if (result.success || result.status === 'success') {
+                    alert('Publicació sincronitzada correctament des de Pure/Egreta!');
+                    await obrirModal(uuid);
+                    await forcarRecalculTot();
+                } else {
+                    alert('Avís en sincronitzar: ' + (result.message || 'Error desconegut'));
+                }
+            } catch (err) {
+                console.error("Error en sincronitzar publicació:", err);
+                alert('Error en connectar amb el servidor per sincronitzar.');
+            } finally {
+                if (btn) btn.disabled = false;
+                if (icon) icon.classList.remove('fa-spin');
+            }
+        }
+
+        function setFiltreEstat(filter, btn) {
+            filtreEstatActual = filter;
+            paginaActual = 0;
+            document.querySelectorAll('.pill-btn').forEach(b => b.classList.remove('active'));
+            if (btn) btn.classList.add('active');
+            carregarTaula();
+        }
+
+        function debounceCerca() {
+            clearTimeout(timeoutCerca);
+            timeoutCerca = setTimeout(() => {
+                paginaActual = 0;
+                carregarTaula();
+            }, 300);
+        }
+
+        function aplicarFiltres() {
+            const selectYearType = document.getElementById('selectYearType');
+            const yt = selectYearType ? selectYearType.value : 'publicationYear';
+            dimensioAnyIdiomes = yt;
+
+            const btnPub = document.getElementById('btnLangYearPub');
+            const btnSub = document.getElementById('btnLangYearSub');
+            if (yt === 'publicationYear') {
+                if (btnPub) btnPub.className = 'px-2.5 py-1 rounded-lg bg-white text-slate-900 shadow-sm transition font-bold';
+                if (btnSub) btnSub.className = 'px-2.5 py-1 rounded-lg text-slate-500 hover:text-slate-900 transition font-medium';
+            } else {
+                if (btnSub) btnSub.className = 'px-2.5 py-1 rounded-lg bg-white text-slate-900 shadow-sm transition font-bold';
+                if (btnPub) btnPub.className = 'px-2.5 py-1 rounded-lg text-slate-500 hover:text-slate-900 transition font-medium';
+            }
+
+            if (yt === 'submissionYear' && cachedSubYearsData) {
+                poblarSelectAnys(cachedSubYearsData);
+            } else if (cachedPubYearsData) {
+                poblarSelectAnys(cachedPubYearsData);
+            }
+            actualitzarBannerDrilldown();
+            paginaActual = 0;
+            carregarKPIsIGrafics();
+            carregarIdiomesPerAny();
+            carregarTipologies();
+            carregarEvolucioAnysPub();
+            carregarEvolucioAnysSub();
+            carregarTaula();
+        }
+
+        function canviarPagina(delta) {
+            paginaActual += delta;
+            if (paginaActual < 0) paginaActual = 0;
+            carregarTaula();
+        }
+
+        function copiarText(elementId) {
+            const text = document.getElementById(elementId).innerText;
+            navigator.clipboard.writeText(text);
+            alert("Text copiat al porta-retalls!");
+        }
+
+        async function exportarCSV() {
+            const anySel = document.getElementById('selectAny').value;
+            const tipusSel = document.getElementById('selectTipologia').value;
+            const yearType = document.getElementById('selectYearType') ? document.getElementById('selectYearType').value : 'publicationYear';
+            let url = `/pure/abstracts/list?filter=${filtreEstatActual}&page=0&size=500&yearType=${encodeURIComponent(yearType)}`;
+            if (anySel === 'none' || anySel === '0') url += `&desde=0&hasta=0`;
+            else if (anySel) url += `&desde=${anySel}&hasta=${anySel}`;
+            if (tipusSel) url += `&type=${encodeURIComponent(tipusSel)}`;
+
+            const res = await apiFetch(url);
+            const data = await res.json();
+            const items = data.items || [];
+
+            if (items.length === 0) {
+                alert("No hi ha dades per exportar.");
+                return;
+            }
+
+            let csvContent = "data:text/csv;charset=utf-8,";
+            csvContent += "UUID,Any_Publicacio,Any_Submission,Tipologia,Titol,Autors,Te_CA,Detect_CA,Te_ES,Detect_ES,Te_EN,Detect_EN,Hi_ha_Error_Idioma,Estat\n";
+
+            items.forEach(p => {
+                const row = [
+                    p.uuid,
+                    p.publicationYear || '',
+                    p.submissionYear || '',
+                    `"${(p.typeName || '').replace(/"/g, '""')}"`,
+                    `"${(p.title || '').replace(/"/g, '""')}"`,
+                    `"${(p.authors || '').replace(/"/g, '""')}"`,
+                    (p.hasCa && !isHtmlEmpty(p.abstractCa)) ? 'SI' : 'NO',
+                    p.detectedCa || '',
+                    (p.hasEs && !isHtmlEmpty(p.abstractEs)) ? 'SI' : 'NO',
+                    p.detectedEs || '',
+                    (p.hasEn && !isHtmlEmpty(p.abstractEn)) ? 'SI' : 'NO',
+                    p.detectedEn || '',
+                    p.hasAnyWrongLanguage ? 'SI' : 'NO',
+                    `"${(p.statusLabel || '').replace(/"/g, '""')}"`
+                ];
+                csvContent += row.join(",") + "\n";
+            });
+
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `abstracts_auditoria_${filtreEstatActual}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function isHtmlEmpty(text) {
+            if (!text) return true;
+            const stripped = text.replace(/<[^>]*>/g, ' ')
+                                 .replace(/&(?:nbsp|#160|#xA0|#xa0|ensp|emsp|thinsp|zwnj|zwj|amp;nbsp);?/gi, ' ')
+                                 .replace(/[\s\u00a0\ufeff]+/g, ' ')
+                                 .trim();
+            return stripped.length === 0;
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            return String(text)
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+    </script>
+</body>
+</html>

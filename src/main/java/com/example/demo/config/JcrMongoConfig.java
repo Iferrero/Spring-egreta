@@ -33,4 +33,11 @@ public class JcrMongoConfig {
     public MongoTemplate jcrMongoTemplate(@Qualifier("jcrMongoClient") MongoClient mongoClient) {
         return new MongoTemplate(mongoClient, "JCR");
     }
+
+    @Bean(name = "rorMongoTemplate")
+    public MongoTemplate rorMongoTemplate(
+            @Qualifier("mongoClient") MongoClient mongoClient,
+            @Value("${app.ror.mongodb.database:Ror}") String database) {
+        return new MongoTemplate(mongoClient, database);
+    }
 }

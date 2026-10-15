@@ -1,0 +1,1399 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Discrepàncies de Longitud d'Abstracts | Portal de Recerca UAB</title>
+    <script src="config.js"></script>
+    <script src="uab-brand.js" defer></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="uab-theme.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .premium-shadow {
+            box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05), 0 2px 8px -1px rgba(0, 0, 0, 0.03);
+        }
+        .card-kpi {
+            transition: all 0.25s ease;
+        }
+        .card-kpi:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.08);
+        }
+        .pill-btn {
+            transition: all 0.15s ease;
+        }
+        .pill-btn.active {
+            background-color: #047857;
+            color: #ffffff;
+            font-weight: 600;
+            box-shadow: 0 2px 6px rgba(4, 120, 87, 0.25);
+        }
+        .lang-tag {
+            font-size: 0.68rem;
+            padding: 0.15rem 0.4rem;
+            border-radius: 0.375rem;
+            font-weight: 700;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.2rem;
+        }
+        .lang-ok { background-color: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; }
+        .lang-wrong { background-color: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+        .lang-missing { background-color: #f1f5f9; color: #94a3b8; border: 1px dashed #cbd5e1; }
+
+        .modal-enter {
+            animation: fadeInScale 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        @keyframes fadeInScale {
+            from { opacity: 0; transform: scale(0.96); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        /* Severity badges */
+        .badge-critical {
+            background-color: #fee2e2;
+            color: #b91c1c;
+            border: 1px solid #fca5a5;
+        }
+        .badge-high {
+            background-color: #ffedd5;
+            color: #c2410c;
+            border: 1px solid #fdba74;
+        }
+        .badge-moderate {
+            background-color: #fef9c3;
+            color: #a16207;
+            border: 1px solid #fde047;
+        }
+
+        /* Language relative ratio bar */
+        .ratio-bar {
+            height: 8px;
+            border-radius: 9999px;
+            overflow: hidden;
+            display: flex;
+            background-color: #e2e8f0;
+        }
+        .ratio-bar-ca { background-color: #10b981; }
+        .ratio-bar-es { background-color: #f59e0b; }
+        .ratio-bar-en { background-color: #6366f1; }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen font-sans text-slate-800">
+
+    <div class="mx-auto py-8 px-6 w-[96%] max-w-[1650px]">
+
+        <!-- Header -->
+        <header class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
+            <div>
+                <div class="flex items-center gap-3">
+                    <div class="w-11 h-11 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center font-bold text-xl shadow-sm">
+                        <i class="fa-solid fa-scale-unbalanced"></i>
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2.5 flex-wrap">
+                            <h1 class="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">Discrepàncies de Longitud d'Abstracts</h1>
+                            <span id="badgeDataSource" class="text-xs px-2.5 py-0.5 rounded-full font-bold bg-purple-100 text-purple-800 border border-purple-200 flex items-center gap-1.5 shadow-sm">
+                                <i class="fa-solid fa-database text-purple-600"></i>
+                                <span>Col·lecció: ResearchoutputsAiAbstracts</span>
+                            </span>
+                        </div>
+                        <p class="text-slate-500 text-xs sm:text-sm mt-0.5">Auditoria de publicacions amb forta asimetria en el nombre de paraules entre els 3 idiomes (Català, Castellà, Anglès)</p>
+                    </div>
+                </div>
+            </div>
+            <div class="flex items-center gap-2.5 flex-wrap">
+                <a href="abstracts-dashboard.html" class="px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-all flex items-center gap-2 premium-shadow">
+                    <i class="fa-solid fa-chart-pie text-emerald-600"></i>
+                    <span>Dashboard General</span>
+                </a>
+                <a href="ai-abstracts-dashboard.html" class="px-3.5 py-2 rounded-xl border border-indigo-200 bg-indigo-50/50 text-xs sm:text-sm font-semibold text-indigo-700 hover:bg-indigo-100 transition-all flex items-center gap-2 premium-shadow">
+                    <i class="fa-solid fa-wand-magic-sparkles text-indigo-600"></i>
+                    <span>Abstracts IA</span>
+                </a>
+                <button onclick="forcarRecalculTot()" class="px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-all flex items-center gap-2 premium-shadow">
+                    <i class="fa-solid fa-rotate" id="refreshIcon"></i>
+                    <span>Actualitzar dades</span>
+                </button>
+                <button onclick="poblarColleccioIA()" class="px-3.5 py-2 rounded-xl border border-purple-200 bg-purple-50 text-xs sm:text-sm font-semibold text-purple-700 hover:bg-purple-100 transition-all flex items-center gap-2 premium-shadow" title="Poblar dades de discrepància a la col·lecció ResearchoutputsAiAbstracts">
+                    <i class="fa-solid fa-database text-purple-600" id="populateIcon"></i>
+                    <span id="populateText">Poblar a Col·lecció IA</span>
+                </button>
+                <button onclick="exportarCSV()" class="px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-all flex items-center gap-2 premium-shadow">
+                    <i class="fa-solid fa-file-csv text-emerald-600"></i>
+                    <span>Exportar CSV</span>
+                </button>
+                <a href="index.html" class="px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-all flex items-center gap-2 premium-shadow">
+                    <i class="fa-solid fa-arrow-left"></i>
+                    <span>Tornar</span>
+                </a>
+            </div>
+        </header>
+
+        <!-- KPI Cards Summary -->
+        <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 mb-8">
+            
+            <!-- KPI 1: Total Multilingües -->
+            <div class="bg-white border border-slate-200 rounded-2xl p-4 flex flex-col justify-between card-kpi premium-shadow relative overflow-hidden">
+                <div class="absolute top-0 left-0 h-1.5 w-full bg-slate-500"></div>
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Multilingües Analitzades</span>
+                    <i class="fa-solid fa-layer-group text-slate-400 text-base"></i>
+                </div>
+                <div>
+                    <h2 class="text-2xl font-black text-slate-900" id="kpiTotalMulti">...</h2>
+                    <p class="text-[11px] text-slate-500 mt-1 flex items-center gap-1">
+                        <i class="fa-solid fa-circle-info text-slate-400"></i>
+                        <span>Amb $\ge$ 2 idiomes amb abstract</span>
+                    </p>
+                </div>
+            </div>
+
+            <!-- KPI 2: Total Discrepants -->
+            <div class="bg-white border border-slate-200 rounded-2xl p-4 flex flex-col justify-between card-kpi premium-shadow relative overflow-hidden">
+                <div class="absolute top-0 left-0 h-1.5 w-full bg-amber-500"></div>
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-[10px] font-bold text-amber-600 uppercase tracking-wider">Amb Discrepància</span>
+                    <i class="fa-solid fa-scale-unbalanced text-amber-500 text-base"></i>
+                </div>
+                <div>
+                    <div class="flex items-baseline gap-2">
+                        <h2 class="text-2xl font-black text-amber-700" id="kpiTotalDiscrepant">...</h2>
+                        <span class="text-xs font-bold text-amber-600" id="kpiPctDiscrepant">(...%)</span>
+                    </div>
+                    <p class="text-[11px] text-slate-500 mt-1">Diferència $\ge$ 50 paraules o ràtio $\ge$ 1.5x</p>
+                </div>
+            </div>
+
+            <!-- KPI 3: Severitat Crítica & Alta -->
+            <div class="bg-white border border-slate-200 rounded-2xl p-4 flex flex-col justify-between card-kpi premium-shadow relative overflow-hidden">
+                <div class="absolute top-0 left-0 h-1.5 w-full bg-rose-500"></div>
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-[10px] font-bold text-rose-600 uppercase tracking-wider">Severitat Crítica / Alta</span>
+                    <i class="fa-solid fa-triangle-exclamation text-rose-500 text-base"></i>
+                </div>
+                <div>
+                    <div class="flex items-center gap-2">
+                        <span class="px-2 py-0.5 rounded text-xs font-bold badge-critical" id="kpiCritical">... Crítiques</span>
+                        <span class="px-2 py-0.5 rounded text-xs font-bold badge-high" id="kpiHigh">... Altes</span>
+                    </div>
+                    <p class="text-[11px] text-slate-500 mt-2">Crítica: ràtio $\ge$ 4x · Alta: ràtio $\ge$ 3x o ($\ge$ 100w i ràtio $\ge$ 2x)</p>
+                </div>
+            </div>
+
+            <!-- KPI 4: Idioma Més Curt (Deficitari) -->
+            <div class="bg-white border border-slate-200 rounded-2xl p-4 flex flex-col justify-between card-kpi premium-shadow relative overflow-hidden">
+                <div class="absolute top-0 left-0 h-1.5 w-full bg-indigo-500"></div>
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-[10px] font-bold text-indigo-600 uppercase tracking-wider">Idioma Més Curt (Deficitari)</span>
+                    <i class="fa-solid fa-compress text-indigo-500 text-base"></i>
+                </div>
+                <div>
+                    <div class="grid grid-cols-3 gap-1.5 text-center mt-1">
+                        <div class="bg-emerald-50 border border-emerald-200 rounded-lg py-1 px-1">
+                            <span class="text-[10px] font-bold text-emerald-800 block">CA</span>
+                            <span class="text-xs font-black text-emerald-700" id="kpiCaShortest">...</span>
+                        </div>
+                        <div class="bg-amber-50 border border-amber-200 rounded-lg py-1 px-1">
+                            <span class="text-[10px] font-bold text-amber-800 block">ES</span>
+                            <span class="text-xs font-black text-amber-700" id="kpiEsShortest">...</span>
+                        </div>
+                        <div class="bg-indigo-50 border border-indigo-200 rounded-lg py-1 px-1">
+                            <span class="text-[10px] font-bold text-indigo-800 block">EN</span>
+                            <span class="text-xs font-black text-indigo-700" id="kpiEnShortest">...</span>
+                        </div>
+                    </div>
+                    <p class="text-[11px] text-slate-500 mt-1">Idioma que presenta menys text</p>
+                </div>
+            </div>
+
+            <!-- KPI 5: Mitjanes de paraules -->
+            <div class="bg-white border border-slate-200 rounded-2xl p-4 flex flex-col justify-between card-kpi premium-shadow relative overflow-hidden">
+                <div class="absolute top-0 left-0 h-1.5 w-full bg-teal-500"></div>
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-[10px] font-bold text-teal-600 uppercase tracking-wider">Mitjana de Paraules</span>
+                    <i class="fa-solid fa-calculator text-teal-500 text-base"></i>
+                </div>
+                <div>
+                    <div class="flex items-center justify-between text-xs font-bold text-slate-700">
+                        <span class="text-emerald-700">CA: <span id="kpiAvgCa">...</span></span>
+                        <span class="text-amber-700">ES: <span id="kpiAvgEs">...</span></span>
+                        <span class="text-indigo-700">EN: <span id="kpiAvgEn">...</span></span>
+                    </div>
+                    <div class="mt-2 text-xs text-slate-600 flex items-center justify-between font-semibold">
+                        <span>Δ Mitjà de marge:</span>
+                        <span class="text-rose-600 font-bold" id="kpiAvgDiff">... w</span>
+                    </div>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- Main Content: Filters & Results -->
+        <main class="bg-white border border-slate-200 rounded-2xl p-6 mb-8 premium-shadow">
+            
+            <!-- Section Header & Filter Pills -->
+            <div class="border-b border-slate-200 pb-5 mb-5">
+                <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-4">
+                    <div>
+                        <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+                            <span>Llistat de Publicacions amb Discrepància</span>
+                            <span class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200" id="badgeTotalItems">0 resultats</span>
+                        </h2>
+                        <p class="text-xs text-slate-500 mt-0.5">Detecta resums on un dels idiomes és un títol/paràgraf curt o buit mentre un altre és l'abstract complet (e.g. 4 paraules vs 280 paraules)</p>
+                    </div>
+
+                    <!-- Severitat Pills -->
+                    <div class="flex items-center gap-1.5 flex-wrap">
+                        <span class="text-xs font-bold text-slate-400 mr-1 uppercase">Severitat:</span>
+                        <button onclick="canviarFiltreSeveritat('all')" id="pill-sev-all" class="pill-btn active px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-medium text-slate-600 hover:bg-slate-50">
+                            Totes
+                        </button>
+                        <button onclick="canviarFiltreSeveritat('critical')" id="pill-sev-critical" class="pill-btn px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-medium text-slate-600 hover:bg-slate-50">
+                            <i class="fa-solid fa-circle-exclamation text-rose-500 mr-1"></i> Crítica (≥4x)
+                        </button>
+                        <button onclick="canviarFiltreSeveritat('high')" id="pill-sev-high" class="pill-btn px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-medium text-slate-600 hover:bg-slate-50">
+                            <i class="fa-solid fa-triangle-exclamation text-amber-500 mr-1"></i> Alta (≥3x o (≥100w i ≥2x))
+                        </button>
+                        <button onclick="canviarFiltreSeveritat('moderate')" id="pill-sev-moderate" class="pill-btn px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-medium text-slate-600 hover:bg-slate-50">
+                            <i class="fa-solid fa-circle-dot text-yellow-500 mr-1"></i> Moderada
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Advanced Filters Row -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-12 gap-3 pt-2">
+                    
+                    <!-- Search Input -->
+                    <div class="md:col-span-4">
+                        <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Cerca de text / UUID / Autor</label>
+                        <div class="relative">
+                            <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 transform -translate-y-1/2 text-slate-400 text-xs"></i>
+                            <input type="text" id="inputCerca" oninput="debounceCerca()" placeholder="Cercar títol, autor, UUID o contingut..." 
+                                   class="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white transition">
+                        </div>
+                    </div>
+
+                    <!-- Idioma més deficitari -->
+                    <div class="md:col-span-2">
+                        <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Idioma més curt</label>
+                        <select id="selectShortestLang" onchange="aplicarFiltres()" class="w-full py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white font-semibold">
+                            <option value="all">Qualsevol idioma</option>
+                            <option value="ca">Català (ca_ES) més curt</option>
+                            <option value="es">Castellà (es_ES) més curt</option>
+                            <option value="en">Anglès (en_GB) més curt</option>
+                        </select>
+                    </div>
+
+                    <!-- Diferència mínima de paraules -->
+                    <div class="md:col-span-2">
+                        <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Diferència mínima (Δ w)</label>
+                        <select id="selectMinDiff" onchange="aplicarFiltres()" class="w-full py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white font-semibold">
+                            <option value="30">≥ 30 paraules</option>
+                            <option value="50" selected>≥ 50 paraules (estàndard)</option>
+                            <option value="80">≥ 80 paraules</option>
+                            <option value="120">≥ 120 paraules</option>
+                            <option value="180">≥ 180 paraules</option>
+                            <option value="250">≥ 250 paraules (extrem)</option>
+                        </select>
+                    </div>
+
+                    <!-- Ràtio mínim -->
+                    <div class="md:col-span-2">
+                        <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Ràtio mínim (Max/Min)</label>
+                        <select id="selectMinRatio" onchange="aplicarFiltres()" class="w-full py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white font-semibold">
+                            <option value="1.3">≥ 1.3x</option>
+                            <option value="1.5" selected>≥ 1.5x (recomanat)</option>
+                            <option value="2.0">≥ 2.0x (doble de text)</option>
+                            <option value="3.0">≥ 3.0x (triple de text)</option>
+                            <option value="5.0">≥ 5.0x (molt asimètric)</option>
+                            <option value="10.0">≥ 10.0x (10 cops més)</option>
+                        </select>
+                    </div>
+
+                    <!-- Cobertura Lingüística -->
+                    <div class="md:col-span-2">
+                        <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Cobertura</label>
+                        <select id="selectMinLangs" onchange="aplicarFiltres()" class="w-full py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white">
+                            <option value="2" selected>≥ 2 idiomes presents</option>
+                            <option value="3">Exactament 3 idiomes</option>
+                        </select>
+                    </div>
+
+                </div>
+
+                <!-- Secondary Filters Row (Tipologia, Anys, Ordre) -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-12 gap-3 pt-3">
+                    
+                    <div class="md:col-span-3">
+                        <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Tipologia documental</label>
+                        <select id="selectTipologia" onchange="aplicarFiltres()" class="w-full py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white">
+                            <option value="">Totes les tipologies</option>
+                        </select>
+                    </div>
+
+                    <div class="md:col-span-2">
+                        <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Tipus d'any</label>
+                        <select id="selectYearType" onchange="aplicarFiltres()" class="w-full py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white">
+                            <option value="publicationYear" selected>Any de Publicació</option>
+                            <option value="submissionYear">Any d'Ingrés (Submission)</option>
+                        </select>
+                    </div>
+
+                    <div class="md:col-span-2">
+                        <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Rang d'anys</label>
+                        <div class="flex items-center gap-1.5">
+                            <input type="number" id="inputAnyDesde" onchange="aplicarFiltres()" placeholder="Des de" min="1900" max="2030"
+                                   class="w-1/2 py-2 px-2 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 text-center focus:outline-none focus:ring-2 focus:ring-amber-500">
+                            <span class="text-slate-400">-</span>
+                            <input type="number" id="inputAnyHasta" onchange="aplicarFiltres()" placeholder="Fins a" min="1900" max="2030"
+                                   class="w-1/2 py-2 px-2 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 text-center focus:outline-none focus:ring-2 focus:ring-amber-500">
+                        </div>
+                    </div>
+
+                    <div class="md:col-span-3">
+                        <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Ordenar per</label>
+                        <select id="selectSortField" onchange="aplicarFiltres()" class="w-full py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white font-semibold">
+                            <option value="diffWords" selected>Diferència de paraules (Δ Max - Min)</option>
+                            <option value="ratioWords">Ràtio de proporció (Max / Min)</option>
+                            <option value="wordsCa">Nombre de paraules en Català</option>
+                            <option value="wordsEs">Nombre de paraules en Castellà</option>
+                            <option value="wordsEn">Nombre de paraules en Anglès</option>
+                            <option value="publicationYear">Any de publicació</option>
+                            <option value="submissionYear">Any d'ingrés</option>
+                        </select>
+                    </div>
+
+                    <div class="md:col-span-2">
+                        <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Sentit</label>
+                        <select id="selectSortDir" onchange="aplicarFiltres()" class="w-full py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white font-semibold">
+                            <option value="desc" selected>Descendent (Més gran primer)</option>
+                            <option value="asc">Ascendent (Més petit primer)</option>
+                        </select>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- Publications Container (Cards / Items) -->
+            <div id="llistatDiscrepancies" class="space-y-4">
+                <div class="py-16 text-center text-slate-400">
+                    <i class="fa-solid fa-spinner fa-spin text-3xl mb-3 text-amber-600 block"></i>
+                    <p class="font-semibold text-slate-600 text-sm">Carregant publicacions amb discrepàncies...</p>
+                    <p class="text-xs text-slate-400 mt-1">S'està avaluant la comparativa de paraules en streaming</p>
+                </div>
+            </div>
+
+            <!-- Pagination Bar -->
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mt-6 pt-5 border-t border-slate-100">
+                <div class="text-xs text-slate-500" id="infoPaginacio">
+                    Mostrant 0 - 0 de 0 publicacions
+                </div>
+                <div class="flex items-center gap-2">
+                    <button id="btnPrevPage" onclick="canviarPagina(-1)" class="px-3.5 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition flex items-center gap-1.5">
+                        <i class="fa-solid fa-chevron-left text-[10px]"></i>
+                        <span>Anterior</span>
+                    </button>
+                    <span id="labelPaginaActual" class="text-xs font-bold text-slate-800 px-3 py-1.5 bg-slate-100 rounded-xl">Pàgina 1</span>
+                    <button id="btnNextPage" onclick="canviarPagina(1)" class="px-3.5 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition flex items-center gap-1.5">
+                        <span>Següent</span>
+                        <i class="fa-solid fa-chevron-right text-[10px]"></i>
+                    </button>
+                </div>
+            </div>
+
+        </main>
+
+        <!-- Footer -->
+        <footer class="mt-8 mb-6 text-center text-xs text-slate-400">
+            <p>Portal de Recerca &bull; Universitat Autònoma de Barcelona &bull; Auditoria de Qualitat de Dades de Recerca</p>
+        </footer>
+
+    </div>
+
+    <!-- Modal de Comparació de Textos d'Abstracts -->
+    <div id="modalDetall" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-6xl w-full max-h-[92vh] flex flex-col overflow-hidden modal-enter border border-slate-200">
+            
+            <!-- Modal Header -->
+            <div class="p-5 border-b border-slate-100 flex items-start justify-between gap-4 bg-slate-50/70">
+                <div>
+                    <div class="flex items-center gap-2 mb-1.5 flex-wrap">
+                        <span id="modalAny" class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-200 text-slate-800">2024</span>
+                        <span id="modalTipus" class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">Article</span>
+                        <span id="modalSeveritat" class="px-2.5 py-0.5 rounded-full text-xs font-bold badge-critical">Crítica</span>
+                        <span id="modalUUID" class="text-[11px] font-mono text-slate-400 select-all">uuid</span>
+                    </div>
+                    <h3 id="modalTitol" class="text-base sm:text-lg font-black text-slate-900 leading-snug">Títol de la publicació</h3>
+                    <p id="modalAutors" class="text-xs text-slate-500 mt-1 italic">Autors de la publicació</p>
+                </div>
+                <button onclick="tancarModal()" class="w-8 h-8 rounded-full bg-slate-200/80 hover:bg-slate-300 text-slate-600 flex items-center justify-center transition-colors">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <!-- Modal Metrics Summary -->
+            <div class="px-5 py-3 bg-amber-50/60 border-b border-amber-100 flex items-center justify-between gap-4 flex-wrap text-xs">
+                <div class="flex items-center gap-4 flex-wrap">
+                    <span class="font-bold text-slate-700">Mètriques comparatives:</span>
+                    <span class="text-emerald-800 font-semibold"><i class="fa-solid fa-circle text-[8px] text-emerald-500 mr-1"></i>Català: <strong id="modalWordsCa">0</strong> paraules (<span id="modalCharsCa">0</span> caràcters)</span>
+                    <span class="text-amber-800 font-semibold"><i class="fa-solid fa-circle text-[8px] text-amber-500 mr-1"></i>Castellà: <strong id="modalWordsEs">0</strong> paraules (<span id="modalCharsEs">0</span> caràcters)</span>
+                    <span class="text-indigo-800 font-semibold"><i class="fa-solid fa-circle text-[8px] text-indigo-500 mr-1"></i>Anglès: <strong id="modalWordsEn">0</strong> paraules (<span id="modalCharsEn">0</span> caràcters)</span>
+                </div>
+                <div class="flex items-center gap-3">
+                    <span class="font-bold text-rose-700">Δ Diferència: <strong id="modalDiffWords">0</strong> w</span>
+                    <span class="font-bold text-purple-700">Ràtio: <strong id="modalRatioWords">1.0x</strong></span>
+                </div>
+            </div>
+
+            <!-- Modal Body: 3 side-by-side columns -->
+            <div class="p-6 grid grid-cols-1 md:grid-cols-3 gap-4 overflow-y-auto flex-1 bg-slate-50/30">
+                
+                <!-- Català -->
+                <div class="bg-white border border-slate-200 rounded-xl p-4 flex flex-col justify-between shadow-sm">
+                    <div>
+                        <div class="flex items-center justify-between pb-2 mb-3 border-b border-slate-100">
+                            <div class="flex items-center gap-2">
+                                <span class="w-3 h-3 rounded-full bg-emerald-500"></span>
+                                <span class="text-xs font-bold text-slate-800">Català (ca_ES)</span>
+                            </div>
+                            <div class="flex items-center gap-1.5">
+                                <span id="modalTagCa" class="lang-tag lang-ok">Lingua: ca</span>
+                                <button onclick="copiarText('modalAbstractCa')" title="Copiar text" class="text-slate-400 hover:text-slate-600 text-xs p-1">
+                                    <i class="fa-regular fa-copy"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div id="modalAbstractCa" class="text-xs sm:text-sm text-slate-700 leading-relaxed max-h-96 overflow-y-auto whitespace-pre-wrap select-text">Sense text en català</div>
+                    </div>
+                    <div class="text-[11px] text-slate-400 mt-3 pt-2 border-t border-slate-100 flex justify-between font-medium">
+                        <span>Paraules: <strong id="modalFooterWordsCa" class="text-slate-700">0</strong></span>
+                        <span>Caràcters: <strong id="modalFooterCharsCa" class="text-slate-700">0</strong></span>
+                    </div>
+                </div>
+
+                <!-- Castellà -->
+                <div class="bg-white border border-slate-200 rounded-xl p-4 flex flex-col justify-between shadow-sm">
+                    <div>
+                        <div class="flex items-center justify-between pb-2 mb-3 border-b border-slate-100">
+                            <div class="flex items-center gap-2">
+                                <span class="w-3 h-3 rounded-full bg-amber-500"></span>
+                                <span class="text-xs font-bold text-slate-800">Castellà (es_ES)</span>
+                            </div>
+                            <div class="flex items-center gap-1.5">
+                                <span id="modalTagEs" class="lang-tag lang-ok">Lingua: es</span>
+                                <button onclick="copiarText('modalAbstractEs')" title="Copiar text" class="text-slate-400 hover:text-slate-600 text-xs p-1">
+                                    <i class="fa-regular fa-copy"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div id="modalAbstractEs" class="text-xs sm:text-sm text-slate-700 leading-relaxed max-h-96 overflow-y-auto whitespace-pre-wrap select-text">Sense text en castellà</div>
+                    </div>
+                    <div class="text-[11px] text-slate-400 mt-3 pt-2 border-t border-slate-100 flex justify-between font-medium">
+                        <span>Paraules: <strong id="modalFooterWordsEs" class="text-slate-700">0</strong></span>
+                        <span>Caràcters: <strong id="modalFooterCharsEs" class="text-slate-700">0</strong></span>
+                    </div>
+                </div>
+
+                <!-- Anglès -->
+                <div class="bg-white border border-slate-200 rounded-xl p-4 flex flex-col justify-between shadow-sm">
+                    <div>
+                        <div class="flex items-center justify-between pb-2 mb-3 border-b border-slate-100">
+                            <div class="flex items-center gap-2">
+                                <span class="w-3 h-3 rounded-full bg-indigo-500"></span>
+                                <span class="text-xs font-bold text-slate-800">Anglès (en_GB)</span>
+                            </div>
+                            <div class="flex items-center gap-1.5">
+                                <span id="modalTagEn" class="lang-tag lang-ok">Lingua: en</span>
+                                <button onclick="copiarText('modalAbstractEn')" title="Copiar text" class="text-slate-400 hover:text-slate-600 text-xs p-1">
+                                    <i class="fa-regular fa-copy"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div id="modalAbstractEn" class="text-xs sm:text-sm text-slate-700 leading-relaxed max-h-96 overflow-y-auto whitespace-pre-wrap select-text">Sense text en anglès</div>
+                    </div>
+                    <div class="text-[11px] text-slate-400 mt-3 pt-2 border-t border-slate-100 flex justify-between font-medium">
+                        <span>Paraules: <strong id="modalFooterWordsEn" class="text-slate-700">0</strong></span>
+                        <span>Caràcters: <strong id="modalFooterCharsEn" class="text-slate-700">0</strong></span>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="p-4 border-t border-slate-100 bg-white flex justify-between items-center gap-3">
+                <div class="flex items-center gap-2">
+                    <button id="btnSyncModal" onclick="sincronitzarPublicacioModal()" class="px-4 py-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold transition flex items-center gap-2">
+                        <i id="syncModalIcon" class="fa-solid fa-arrows-rotate"></i>
+                        <span>Sincronitzar des de Pure</span>
+                    </button>
+                    <a id="btnEgretaLink" href="#" target="_blank" class="px-4 py-2 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 text-xs font-bold transition flex items-center gap-1.5">
+                        <i class="fa-solid fa-arrow-up-right-from-square text-xs text-slate-500"></i>
+                        <span>Obrir a Egreta</span>
+                    </a>
+                </div>
+                <button onclick="tancarModal()" class="px-5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-semibold text-slate-700 transition-colors">
+                    Tancar
+                </button>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="toastNotification" class="fixed bottom-6 right-6 bg-slate-900 text-white px-4 py-2.5 rounded-xl shadow-xl text-xs font-semibold flex items-center gap-2 opacity-0 pointer-events-none transition-opacity duration-300 z-50">
+        <i class="fa-solid fa-check text-emerald-400"></i>
+        <span id="toastMessage">Text copiat al porta-retalls</span>
+    </div>
+
+    <!-- JavaScript Application Logic -->
+    <script>
+        let filtreSeveritat = 'all';
+        let paginaActual = 0;
+        const midaPagina = 15;
+        let timeoutCerca = null;
+        let dadesActuals = [];
+        let totalItemsTotal = 0;
+        let currentModalUuid = null;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            carregarTipologies();
+            carregarTot();
+        });
+
+        function debounceCerca() {
+            if (timeoutCerca) clearTimeout(timeoutCerca);
+            timeoutCerca = setTimeout(() => {
+                paginaActual = 0;
+                carregarLlistat();
+            }, 350);
+        }
+
+        function canviarFiltreSeveritat(sev) {
+            filtreSeveritat = sev;
+            document.querySelectorAll('.pill-btn').forEach(btn => btn.classList.remove('active'));
+            const activeBtn = document.getElementById(`pill-sev-${sev}`);
+            if (activeBtn) activeBtn.classList.add('active');
+            paginaActual = 0;
+            carregarLlistat();
+        }
+
+        function aplicarFiltres() {
+            paginaActual = 0;
+            carregarTot();
+        }
+
+        async function forcarRecalculTot() {
+            const refreshIcon = document.getElementById('refreshIcon');
+            if (refreshIcon) refreshIcon.classList.add('fa-spin');
+
+            try {
+                await apiFetch(`/pure/abstracts/cache/clear?_t=${Date.now()}`, {
+                    method: 'POST',
+                    cache: 'no-store',
+                    headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
+                });
+            } catch (err) {
+                console.warn("Avís al netejar la memòria cau:", err);
+            }
+
+            await carregarTot(true);
+        }
+
+        async function carregarTot(isForced = false) {
+            const refreshIcon = document.getElementById('refreshIcon');
+            if (refreshIcon) refreshIcon.classList.add('fa-spin');
+
+            try {
+                await Promise.allSettled([
+                    carregarKPIs(isForced),
+                    carregarLlistat(isForced)
+                ]);
+            } catch (err) {
+                console.error("Error carregant dades de discrepàncies:", err);
+            } finally {
+                if (refreshIcon) refreshIcon.classList.remove('fa-spin');
+            }
+        }
+
+        function getParametresFiltre() {
+            const minDiff = document.getElementById('selectMinDiff')?.value || '50';
+            const minRatio = document.getElementById('selectMinRatio')?.value || '1.5';
+            const minLangs = document.getElementById('selectMinLangs')?.value || '2';
+            const shortestLang = document.getElementById('selectShortestLang')?.value || 'all';
+            const type = document.getElementById('selectTipologia')?.value || '';
+            const yearType = document.getElementById('selectYearType')?.value || 'publicationYear';
+            const desde = document.getElementById('inputAnyDesde')?.value || '';
+            const hasta = document.getElementById('inputAnyHasta')?.value || '';
+            const search = document.getElementById('inputCerca')?.value?.trim() || '';
+            const sortField = document.getElementById('selectSortField')?.value || 'diffWords';
+            const sortDir = document.getElementById('selectSortDir')?.value || 'desc';
+
+            return {
+                minDiff, minRatio, minLangs, shortestLang, type, yearType, desde, hasta, search, sortField, sortDir
+            };
+        }
+
+        async function carregarKPIs(isForced = false) {
+            const params = getParametresFiltre();
+            const queryParams = new URLSearchParams();
+            if (params.minDiff) queryParams.set('minDiff', params.minDiff);
+            if (params.minRatio) queryParams.set('minRatio', params.minRatio);
+            if (params.minLangs) queryParams.set('minLangs', params.minLangs);
+            if (params.type) queryParams.set('type', params.type);
+            if (params.yearType) queryParams.set('yearType', params.yearType);
+            if (params.desde) queryParams.set('desde', params.desde);
+            if (params.hasta) queryParams.set('hasta', params.hasta);
+            if (isForced) queryParams.set('_t', Date.now());
+
+            try {
+                const res = await apiFetch(`/pure/abstracts/discrepancies/stats?${queryParams.toString()}`);
+                if (!res.ok) throw new Error("Error en carregar estadístiques de discrepàncies");
+                const data = await res.json();
+
+                document.getElementById('kpiTotalMulti').textContent = (data.totalMultiLangs || 0).toLocaleString();
+                document.getElementById('kpiTotalDiscrepant').textContent = (data.totalDiscrepant || 0).toLocaleString();
+                document.getElementById('kpiPctDiscrepant').textContent = `(${data.pctDiscrepant || 0}%)`;
+
+                document.getElementById('kpiCritical').textContent = `${(data.criticalCount || 0).toLocaleString()} Crítiques`;
+                document.getElementById('kpiHigh').textContent = `${(data.highCount || 0).toLocaleString()} Altes`;
+
+                document.getElementById('kpiCaShortest').textContent = (data.caShortestCount || 0).toLocaleString();
+                document.getElementById('kpiEsShortest').textContent = (data.esShortestCount || 0).toLocaleString();
+                document.getElementById('kpiEnShortest').textContent = (data.enShortestCount || 0).toLocaleString();
+
+                document.getElementById('kpiAvgCa').textContent = `${data.avgWordsCa || 0} w`;
+                document.getElementById('kpiAvgEs').textContent = `${data.avgWordsEs || 0} w`;
+                document.getElementById('kpiAvgEn').textContent = `${data.avgWordsEn || 0} w`;
+                document.getElementById('kpiAvgDiff').textContent = `+${data.avgDiffWords || 0} w`;
+
+                actualitzarBadgeSource(data.source);
+            } catch (err) {
+                console.error("Error carregarKPIs:", err);
+            }
+        }
+
+        function actualitzarBadgeSource(source) {
+            const badge = document.getElementById('badgeDataSource');
+            if (!badge) return;
+            if (source && source.includes('AiAbstracts')) {
+                badge.className = "text-xs px-2.5 py-0.5 rounded-full font-bold bg-purple-100 text-purple-800 border border-purple-200 flex items-center gap-1.5 shadow-sm";
+                badge.innerHTML = `<i class="fa-solid fa-bolt text-purple-600"></i><span>Col·lecció: ResearchoutputsAiAbstracts</span>`;
+            } else {
+                badge.className = "text-xs px-2.5 py-0.5 rounded-full font-bold bg-slate-100 text-slate-700 border border-slate-200 flex items-center gap-1.5";
+                badge.innerHTML = `<i class="fa-solid fa-server text-slate-500"></i><span>Càlcul en viu: Researchoutputs</span>`;
+            }
+        }
+
+        async function carregarLlistat(isForced = false) {
+            const container = document.getElementById('llistatDiscrepancies');
+            container.innerHTML = `
+                <div class="py-16 text-center text-slate-400">
+                    <i class="fa-solid fa-spinner fa-spin text-3xl mb-3 text-amber-600 block"></i>
+                    <p class="font-semibold text-slate-600 text-sm">Carregant publicacions amb discrepàncies...</p>
+                    <p class="text-xs text-slate-400 mt-1">S'està avaluant la comparativa de paraules en streaming</p>
+                </div>
+            `;
+
+            const params = getParametresFiltre();
+            const queryParams = new URLSearchParams();
+            queryParams.set('page', paginaActual);
+            queryParams.set('size', midaPagina);
+            if (params.minDiff) queryParams.set('minDiff', params.minDiff);
+            if (params.minRatio) queryParams.set('minRatio', params.minRatio);
+            if (params.minLangs) queryParams.set('minLangs', params.minLangs);
+            if (params.shortestLang && params.shortestLang !== 'all') queryParams.set('shortestLang', params.shortestLang);
+            if (filtreSeveritat && filtreSeveritat !== 'all') queryParams.set('severity', filtreSeveritat);
+            if (params.type) queryParams.set('type', params.type);
+            if (params.yearType) queryParams.set('yearType', params.yearType);
+            if (params.desde) queryParams.set('desde', params.desde);
+            if (params.hasta) queryParams.set('hasta', params.hasta);
+            if (params.search) queryParams.set('search', params.search);
+            if (params.sortField) queryParams.set('sortField', params.sortField);
+            if (params.sortDir) queryParams.set('sortDir', params.sortDir);
+            if (isForced) queryParams.set('_t', Date.now());
+
+            try {
+                const res = await apiFetch(`/pure/abstracts/discrepancies/list?${queryParams.toString()}`);
+                if (!res.ok) throw new Error("Error obtenint la llista de discrepàncies");
+                const data = await res.json();
+
+                dadesActuals = data.items || [];
+                totalItemsTotal = data.totalElements || 0;
+                actualitzarBadgeSource(data.source);
+                renderitzarLlistat(data);
+            } catch (err) {
+                console.error("Error carregarLlistat:", err);
+                container.innerHTML = `
+                    <div class="py-12 text-center text-rose-500">
+                        <i class="fa-solid fa-triangle-exclamation text-3xl mb-2 block"></i>
+                        <p class="font-bold">Error en carregar les dades</p>
+                        <p class="text-xs text-slate-500 mt-1">${err.message}</p>
+                        <button onclick="carregarLlistat()" class="mt-4 px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-semibold text-slate-700">Reintentar</button>
+                    </div>
+                `;
+            }
+        }
+
+        function renderitzarLlistat(data) {
+            const container = document.getElementById('llistatDiscrepancies');
+            const items = data.items || [];
+            const total = data.totalElements || 0;
+
+            document.getElementById('badgeTotalItems').textContent = `${total.toLocaleString()} resultats`;
+
+            if (items.length === 0) {
+                container.innerHTML = `
+                    <div class="py-16 text-center text-slate-400 bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
+                        <i class="fa-solid fa-scale-balanced text-4xl mb-3 text-slate-300 block"></i>
+                        <p class="font-bold text-slate-600 text-sm">No s'han trobat publicacions amb aquests criteris</p>
+                        <p class="text-xs text-slate-400 mt-1">Prova a reduir la diferència mínima o el ràtio de filtre</p>
+                    </div>
+                `;
+                actualitzarPaginacio(0, 0, 0);
+                return;
+            }
+
+            container.innerHTML = '';
+
+            items.forEach(item => {
+                const card = document.createElement('div');
+                card.className = "bg-white border border-slate-200 rounded-2xl p-5 hover:border-amber-300 hover:shadow-md transition-all flex flex-col gap-4";
+
+                // Badges
+                let sevBadgeClass = "badge-moderate";
+                let sevLabel = "Moderada";
+                if (item.severity === 'critical') {
+                    sevBadgeClass = "badge-critical";
+                    sevLabel = "Crítica";
+                } else if (item.severity === 'high') {
+                    sevBadgeClass = "badge-high";
+                    sevLabel = "Alta";
+                }
+
+                // Relative bar calculation
+                const wCa = item.wordsCa || 0;
+                const wEs = item.wordsEs || 0;
+                const wEn = item.wordsEn || 0;
+                const totalWordsInItem = wCa + wEs + wEn;
+
+                const pctCa = totalWordsInItem > 0 ? ((wCa / totalWordsInItem) * 100).toFixed(1) : 0;
+                const pctEs = totalWordsInItem > 0 ? ((wEs / totalWordsInItem) * 100).toFixed(1) : 0;
+                const pctEn = totalWordsInItem > 0 ? ((wEn / totalWordsInItem) * 100).toFixed(1) : 0;
+
+                // Lang tags
+                const tagCa = formatDetectedTag(item.hasCa, item.detectedCa, 'ca');
+                const tagEs = formatDetectedTag(item.hasEs, item.detectedEs, 'es');
+                const tagEn = formatDetectedTag(item.hasEn, item.detectedEn, 'en');
+
+                const egretaUrl = `https://egreta.uab.cat/admin/workspace.xhtml?uuid=${item.uuid}`;
+
+                card.innerHTML = `
+                    <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
+                        <div class="flex-1">
+                            <div class="flex items-center gap-2 mb-2 flex-wrap">
+                                <span class="px-2 py-0.5 rounded text-[11px] font-bold ${sevBadgeClass}">
+                                    <i class="fa-solid fa-circle-exclamation text-[10px] mr-1"></i>${sevLabel}
+                                </span>
+                                <span class="px-2 py-0.5 rounded text-[11px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                                    ${item.publicationYear > 0 ? item.publicationYear : 'Sense any'}
+                                </span>
+                                ${item.submissionYear > 0 ? `<span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">Sub: ${item.submissionYear}</span>` : ''}
+                                <span class="px-2 py-0.5 rounded text-[11px] font-medium bg-slate-50 text-slate-600 border border-slate-200">
+                                    ${escapeHtml(item.typeName || 'Sense tipus')}
+                                </span>
+                                <button onclick="copiarAlPortaretalls('${item.uuid}')" title="Copiar UUID" class="text-[11px] font-mono text-slate-400 hover:text-slate-600 flex items-center gap-1 bg-slate-50 px-2 py-0.5 rounded border border-slate-200 transition">
+                                    <span>${item.uuid.substring(0, 8)}...</span>
+                                    <i class="fa-regular fa-copy text-[10px]"></i>
+                                </button>
+                            </div>
+                            <h3 class="text-sm sm:text-base font-bold text-slate-900 hover:text-amber-700 transition cursor-pointer" onclick="obrirModal('${item.uuid}')">
+                                ${escapeHtml(item.title || 'Sense títol')}
+                            </h3>
+                            <p class="text-xs text-slate-500 mt-1 italic line-clamp-1">${escapeHtml(item.authors || 'Sense autors')}</p>
+                        </div>
+                        
+                        <!-- Metric Indicator Header -->
+                        <div class="flex flex-row md:flex-col items-end justify-between md:justify-start gap-1 shrink-0 bg-slate-50 p-2.5 rounded-xl border border-slate-100 min-w-[200px]">
+                            <div class="flex items-baseline gap-1.5">
+                                <span class="text-xs text-slate-500 font-semibold">Δ Marge:</span>
+                                <span class="text-base font-black text-rose-600">+${item.diffWords} w</span>
+                            </div>
+                            <div class="flex items-baseline gap-1.5 text-xs">
+                                <span class="text-slate-400">Ràtio:</span>
+                                <span class="font-extrabold text-purple-700">${item.ratioWords}x</span>
+                                <span class="text-slate-400 ml-1">(${item.pctDiscrepancy}%)</span>
+                            </div>
+                            <div class="text-[11px] text-slate-500 mt-0.5">
+                                Deficitari: <strong class="uppercase text-slate-800 font-bold">${item.shortestLang}</strong>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Visual Segmented Word Proportion Bar -->
+                    <div class="bg-slate-50 p-3 rounded-xl border border-slate-100 flex flex-col gap-2">
+                        <div class="flex items-center justify-between text-xs font-semibold text-slate-600">
+                            <span class="flex items-center gap-1.5 text-emerald-800">
+                                <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                                Català: <strong>${wCa} w</strong> (${pctCa}%)
+                            </span>
+                            <span class="flex items-center gap-1.5 text-amber-800">
+                                <span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+                                Castellà: <strong>${wEs} w</strong> (${pctEs}%)
+                            </span>
+                            <span class="flex items-center gap-1.5 text-indigo-800">
+                                <span class="w-2.5 h-2.5 rounded-full bg-indigo-500"></span>
+                                Anglès: <strong>${wEn} w</strong> (${pctEn}%)
+                            </span>
+                        </div>
+                        <div class="ratio-bar">
+                            <div class="ratio-bar-ca transition-all" style="width: ${pctCa}%;" title="Català: ${wCa} paraules (${pctCa}%)"></div>
+                            <div class="ratio-bar-es transition-all" style="width: ${pctEs}%;" title="Castellà: ${wEs} paraules (${pctEs}%)"></div>
+                            <div class="ratio-bar-en transition-all" style="width: ${pctEn}%;" title="Anglès: ${wEn} paraules (${pctEn}%)"></div>
+                        </div>
+                    </div>
+
+                    <!-- 3 Side-by-Side Preview Columns -->
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        
+                        <!-- Snippet CA -->
+                        <div class="bg-slate-50/70 border ${wCa === Math.min(wCa, wEs, wEn) && item.hasCa ? 'border-amber-300 ring-1 ring-amber-200' : 'border-slate-200'} rounded-xl p-3 flex flex-col justify-between">
+                            <div>
+                                <div class="flex items-center justify-between mb-2">
+                                    <span class="text-xs font-bold text-emerald-800 flex items-center gap-1">
+                                        <i class="fa-solid fa-align-left text-emerald-600 text-[10px]"></i> Català
+                                    </span>
+                                    <div class="flex items-center gap-1">
+                                        <span class="text-[11px] font-bold px-1.5 py-0.5 rounded bg-white border border-slate-200 text-slate-700">${wCa} w</span>
+                                        ${tagCa}
+                                    </div>
+                                </div>
+                                <p class="text-xs text-slate-600 leading-relaxed line-clamp-3 select-text italic">
+                                    ${item.abstractPreviewCa ? escapeHtml(item.abstractPreviewCa) : '<span class="text-slate-400 not-italic">Buit o no introduït</span>'}
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- Snippet ES -->
+                        <div class="bg-slate-50/70 border ${wEs === Math.min(wCa, wEs, wEn) && item.hasEs ? 'border-amber-300 ring-1 ring-amber-200' : 'border-slate-200'} rounded-xl p-3 flex flex-col justify-between">
+                            <div>
+                                <div class="flex items-center justify-between mb-2">
+                                    <span class="text-xs font-bold text-amber-800 flex items-center gap-1">
+                                        <i class="fa-solid fa-align-left text-amber-600 text-[10px]"></i> Castellà
+                                    </span>
+                                    <div class="flex items-center gap-1">
+                                        <span class="text-[11px] font-bold px-1.5 py-0.5 rounded bg-white border border-slate-200 text-slate-700">${wEs} w</span>
+                                        ${tagEs}
+                                    </div>
+                                </div>
+                                <p class="text-xs text-slate-600 leading-relaxed line-clamp-3 select-text italic">
+                                    ${item.abstractPreviewEs ? escapeHtml(item.abstractPreviewEs) : '<span class="text-slate-400 not-italic">Buit o no introduït</span>'}
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- Snippet EN -->
+                        <div class="bg-slate-50/70 border ${wEn === Math.min(wCa, wEs, wEn) && item.hasEn ? 'border-amber-300 ring-1 ring-amber-200' : 'border-slate-200'} rounded-xl p-3 flex flex-col justify-between">
+                            <div>
+                                <div class="flex items-center justify-between mb-2">
+                                    <span class="text-xs font-bold text-indigo-800 flex items-center gap-1">
+                                        <i class="fa-solid fa-align-left text-indigo-600 text-[10px]"></i> Anglès
+                                    </span>
+                                    <div class="flex items-center gap-1">
+                                        <span class="text-[11px] font-bold px-1.5 py-0.5 rounded bg-white border border-slate-200 text-slate-700">${wEn} w</span>
+                                        ${tagEn}
+                                    </div>
+                                </div>
+                                <p class="text-xs text-slate-600 leading-relaxed line-clamp-3 select-text italic">
+                                    ${item.abstractPreviewEn ? escapeHtml(item.abstractPreviewEn) : '<span class="text-slate-400 not-italic">Buit o no introduït</span>'}
+                                </p>
+                            </div>
+                        </div>
+
+                    </div>
+
+                    <!-- Actions Footer -->
+                    <div class="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
+                        <div class="flex items-center gap-2">
+                            <button onclick="obrirModal('${item.uuid}')" class="px-3.5 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 font-bold transition flex items-center gap-1.5">
+                                <i class="fa-solid fa-magnifying-glass-plus text-amber-600"></i>
+                                <span>Comparar textos complets</span>
+                            </button>
+                            <a href="${egretaUrl}" target="_blank" class="px-3 py-1.5 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200 font-semibold transition flex items-center gap-1">
+                                <i class="fa-solid fa-arrow-up-right-from-square text-[10px] text-slate-400"></i>
+                                <span>Egreta</span>
+                            </a>
+                        </div>
+                        <button onclick="sincronitzarItem('${item.uuid}', this)" class="text-slate-400 hover:text-indigo-600 transition flex items-center gap-1 p-1" title="Sincronitzar d'Egreta">
+                            <i class="fa-solid fa-arrows-rotate text-xs"></i>
+                            <span class="text-[11px]">Sincronitzar</span>
+                        </button>
+                    </div>
+                `;
+
+                container.appendChild(card);
+            });
+
+            const fromItem = total > 0 ? (paginaActual * midaPagina) + 1 : 0;
+            const toItem = Math.min((paginaActual + 1) * midaPagina, total);
+            actualitzarPaginacio(fromItem, toItem, total);
+        }
+
+        function formatDetectedTag(hasText, detected, expected) {
+            if (!hasText) return `<span class="lang-tag lang-missing">Buit</span>`;
+            if (detected === expected) {
+                return `<span class="lang-tag lang-ok"><i class="fa-solid fa-check text-[9px]"></i>${detected}</span>`;
+            }
+            return `<span class="lang-tag lang-wrong" title="Camp ${expected}, però Lingua detecta ${detected}"><i class="fa-solid fa-triangle-exclamation text-[9px]"></i>${detected}</span>`;
+        }
+
+        function actualitzarPaginacio(from, to, total) {
+            document.getElementById('infoPaginacio').textContent = `Mostrant ${from} - ${to} de ${total.toLocaleString()} publicacions`;
+            document.getElementById('labelPaginaActual').textContent = `Pàgina ${paginaActual + 1} de ${Math.max(1, Math.ceil(total / midaPagina))}`;
+            
+            const btnPrev = document.getElementById('btnPrevPage');
+            const btnNext = document.getElementById('btnNextPage');
+            
+            btnPrev.disabled = (paginaActual <= 0);
+            btnNext.disabled = ((paginaActual + 1) * midaPagina >= total);
+        }
+
+        function canviarPagina(delta) {
+            const nova = paginaActual + delta;
+            if (nova >= 0 && (nova * midaPagina < totalItemsTotal || delta < 0)) {
+                paginaActual = nova;
+                carregarLlistat();
+                window.scrollTo({ top: 350, behavior: 'smooth' });
+            }
+        }
+
+        async function carregarTipologies() {
+            try {
+                const res = await apiFetch('/pure/abstracts/types');
+                if (!res.ok) return;
+                const types = await res.json();
+                const sel = document.getElementById('selectTipologia');
+                types.forEach(t => {
+                    const opt = document.createElement('option');
+                    opt.value = t.type;
+                    opt.textContent = `${t.type} (${(t.total || 0).toLocaleString()})`;
+                    sel.appendChild(opt);
+                });
+            } catch (e) {
+                console.warn("No s'han pogut carregar les tipologies", e);
+            }
+        }
+
+        function isHtmlEmpty(text) {
+            if (!text) return true;
+            const stripped = String(text).replace(/<[^>]*>/g, ' ')
+                                 .replace(/&(?:nbsp|#160|#xA0|#xa0|ensp|emsp|thinsp|zwnj|zwj|amp;nbsp);?/gi, ' ')
+                                 .replace(/[\s\u00a0\ufeff]+/g, ' ')
+                                 .trim();
+            return stripped.length === 0;
+        }
+
+        function cleanAbstractHtml(raw) {
+            if (!raw || isHtmlEmpty(raw)) return '';
+            return String(raw)
+                .replace(/<\/(p|div)>/gi, '\n\n')
+                .replace(/<br\s*[\/]?>/gi, '\n')
+                .replace(/<[^>]+>/g, '')
+                .replace(/&(?:nbsp|#160|#xA0|#xa0|ensp|emsp|thinsp|zwnj|zwj|amp;nbsp);?/gi, ' ')
+                .replace(/&amp;/gi, '&')
+                .replace(/&lt;/gi, '<')
+                .replace(/&gt;/gi, '>')
+                .replace(/&quot;/gi, '"')
+                .replace(/&#039;/gi, "'")
+                .trim();
+        }
+
+        function countWordsJs(text) {
+            if (!text || isHtmlEmpty(text)) return 0;
+            const cleaned = String(text).replace(/<[^>]*>/g, ' ')
+                                .replace(/&(?:nbsp|#160|#xA0|#xa0|ensp|emsp|thinsp|zwnj|zwj|amp;nbsp);?/gi, ' ')
+                                .replace(/[\s\u00a0\ufeff]+/g, ' ')
+                                .trim();
+            return cleaned ? cleaned.split(/\s+/).length : 0;
+        }
+
+        // Modal Logic
+        async function obrirModal(uuid) {
+            currentModalUuid = uuid;
+            const modal = document.getElementById('modalDetall');
+            modal.classList.remove('hidden');
+
+            const itemCached = dadesActuals.find(it => it.uuid === uuid);
+            if (itemCached) {
+                document.getElementById('modalTitol').textContent = itemCached.title || "Sense títol";
+                document.getElementById('modalAutors').textContent = itemCached.authors || "Sense autors";
+                document.getElementById('modalAny').textContent = itemCached.publicationYear > 0 ? itemCached.publicationYear : "Sense any";
+                document.getElementById('modalTipus').textContent = itemCached.typeName || "Sense tipus";
+            } else {
+                document.getElementById('modalTitol').textContent = "Carregant detall...";
+                document.getElementById('modalAutors').textContent = "";
+            }
+
+            document.getElementById('modalUUID').textContent = uuid;
+            document.getElementById('modalAbstractCa').textContent = "Carregant...";
+            document.getElementById('modalAbstractEs').textContent = "Carregant...";
+            document.getElementById('modalAbstractEn').textContent = "Carregant...";
+
+            document.getElementById('btnEgretaLink').href = `https://egreta.uab.cat/admin/workspace.xhtml?uuid=${uuid}`;
+
+            try {
+                const res = await apiFetch(`/pure/abstracts/${uuid}`);
+                if (!res.ok) throw new Error("No s'ha pogut obtenir el detall");
+                const data = await res.json();
+
+                document.getElementById('modalTitol').textContent = data.title || itemCached?.title || "Sense títol";
+                document.getElementById('modalAutors').textContent = data.authors || itemCached?.authors || "Sense autors";
+                const pubYear = data.publicationYear || itemCached?.publicationYear;
+                document.getElementById('modalAny').textContent = (pubYear > 0) ? pubYear : "Sense any";
+                document.getElementById('modalTipus').textContent = data.typeName || data.type || itemCached?.typeName || "Sense tipus";
+
+                // Raw texts: support both data.abstractCa/Es/En and data.ca_ES/es_ES/en_GB
+                const rawCa = data.abstractCa || data.ca_ES || '';
+                const rawEs = data.abstractEs || data.es_ES || '';
+                const rawEn = data.abstractEn || data.en_GB || '';
+
+                const textCa = cleanAbstractHtml(rawCa);
+                const textEs = cleanAbstractHtml(rawEs);
+                const textEn = cleanAbstractHtml(rawEn);
+
+                const hasCa = Boolean(textCa);
+                const hasEs = Boolean(textEs);
+                const hasEn = Boolean(textEn);
+
+                // Populate Text Containers
+                const elCa = document.getElementById('modalAbstractCa');
+                if (hasCa) {
+                    elCa.textContent = textCa;
+                    elCa.className = "text-xs sm:text-sm text-slate-700 leading-relaxed max-h-96 overflow-y-auto whitespace-pre-wrap select-text";
+                } else {
+                    elCa.innerHTML = '<span class="text-slate-400 italic">Sense abstract en català</span>';
+                    elCa.className = "text-xs sm:text-sm text-slate-400 leading-relaxed max-h-96 overflow-y-auto select-text italic";
+                }
+
+                const elEs = document.getElementById('modalAbstractEs');
+                if (hasEs) {
+                    elEs.textContent = textEs;
+                    elEs.className = "text-xs sm:text-sm text-slate-700 leading-relaxed max-h-96 overflow-y-auto whitespace-pre-wrap select-text";
+                } else {
+                    elEs.innerHTML = '<span class="text-slate-400 italic">Sense abstract en castellà</span>';
+                    elEs.className = "text-xs sm:text-sm text-slate-400 leading-relaxed max-h-96 overflow-y-auto select-text italic";
+                }
+
+                const elEn = document.getElementById('modalAbstractEn');
+                if (hasEn) {
+                    elEn.textContent = textEn;
+                    elEn.className = "text-xs sm:text-sm text-slate-700 leading-relaxed max-h-96 overflow-y-auto whitespace-pre-wrap select-text";
+                } else {
+                    elEn.innerHTML = '<span class="text-slate-400 italic">Sense abstract en anglès</span>';
+                    elEn.className = "text-xs sm:text-sm text-slate-400 leading-relaxed max-h-96 overflow-y-auto select-text italic";
+                }
+
+                // Word metrics
+                const wCa = (data.wordsCa != null) ? data.wordsCa : countWordsJs(textCa);
+                const wEs = (data.wordsEs != null) ? data.wordsEs : countWordsJs(textEs);
+                const wEn = (data.wordsEn != null) ? data.wordsEn : countWordsJs(textEn);
+
+                document.getElementById('modalWordsCa').textContent = (hasCa ? wCa : 0).toLocaleString();
+                document.getElementById('modalWordsEs').textContent = (hasEs ? wEs : 0).toLocaleString();
+                document.getElementById('modalWordsEn').textContent = (hasEn ? wEn : 0).toLocaleString();
+
+                document.getElementById('modalFooterWordsCa').textContent = (hasCa ? wCa : 0).toLocaleString();
+                document.getElementById('modalFooterWordsEs').textContent = (hasEs ? wEs : 0).toLocaleString();
+                document.getElementById('modalFooterWordsEn').textContent = (hasEn ? wEn : 0).toLocaleString();
+
+                // Characters
+                const cCa = data.charsCa ?? data.lengthCa ?? textCa.length;
+                const cEs = data.charsEs ?? data.lengthEs ?? textEs.length;
+                const cEn = data.charsEn ?? data.lengthEn ?? textEn.length;
+
+                document.getElementById('modalCharsCa').textContent = (hasCa ? cCa : 0).toLocaleString();
+                document.getElementById('modalCharsEs').textContent = (hasEs ? cEs : 0).toLocaleString();
+                document.getElementById('modalCharsEn').textContent = (hasEn ? cEn : 0).toLocaleString();
+
+                document.getElementById('modalFooterCharsCa').textContent = (hasCa ? cCa : 0).toLocaleString();
+                document.getElementById('modalFooterCharsEs').textContent = (hasEs ? cEs : 0).toLocaleString();
+                document.getElementById('modalFooterCharsEn').textContent = (hasEn ? cEn : 0).toLocaleString();
+
+                // Diff & Ratio
+                let diff = data.diffWords;
+                let ratio = data.ratioWords;
+                if (diff == null || ratio == null) {
+                    const counts = [];
+                    if (hasCa) counts.push(wCa);
+                    if (hasEs) counts.push(wEs);
+                    if (hasEn) counts.push(wEn);
+                    if (counts.length >= 2) {
+                        const maxW = Math.max(...counts);
+                        const minW = Math.min(...counts);
+                        diff = maxW - minW;
+                        ratio = minW > 0 ? (Math.round((maxW / minW) * 10) / 10) : (maxW > 0 ? 99.0 : 1.0);
+                    } else {
+                        diff = 0;
+                        ratio = 1.0;
+                    }
+                }
+
+                document.getElementById('modalDiffWords').textContent = `${diff}`;
+                document.getElementById('modalRatioWords').textContent = `${ratio}x`;
+
+                // Detected tags
+                renderModalTag('modalTagCa', hasCa, data.detectedCa, 'ca');
+                renderModalTag('modalTagEs', hasEs, data.detectedEs, 'es');
+                renderModalTag('modalTagEn', hasEn, data.detectedEn, 'en');
+
+                // Severity badge in modal
+                const sevElem = document.getElementById('modalSeveritat');
+                if (ratio >= 4.0) {
+                    sevElem.className = "px-2.5 py-0.5 rounded-full text-xs font-bold badge-critical";
+                    sevElem.textContent = "Crítica";
+                } else if (ratio >= 3.0 || (diff >= 100 && ratio >= 2.0)) {
+                    sevElem.className = "px-2.5 py-0.5 rounded-full text-xs font-bold badge-high";
+                    sevElem.textContent = "Alta";
+                } else {
+                    sevElem.className = "px-2.5 py-0.5 rounded-full text-xs font-bold badge-moderate";
+                    sevElem.textContent = "Moderada";
+                }
+
+            } catch (err) {
+                console.error("Error en obrir modal:", err);
+                document.getElementById('modalTitol').textContent = "Error al carregar el document";
+            }
+        }
+
+        function renderModalTag(elemId, hasText, detected, expected) {
+            const el = document.getElementById(elemId);
+            if (!el) return;
+            if (!hasText) {
+                el.className = "lang-tag lang-missing";
+                el.textContent = "Buit";
+                return;
+            }
+            const det = detected || 'unknown';
+            const isOk = det.toLowerCase() === expected.toLowerCase() ||
+                         det.toLowerCase().startsWith(expected.toLowerCase() + '_') ||
+                         det.toLowerCase().startsWith(expected.toLowerCase());
+            if (isOk) {
+                el.className = "lang-tag lang-ok";
+                el.innerHTML = `<i class="fa-solid fa-check text-[9px]"></i>Lingua: ${det}`;
+            } else {
+                el.className = "lang-tag lang-wrong";
+                el.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-[9px]"></i>Lingua: ${det} (!=${expected})`;
+            }
+        }
+
+        function tancarModal() {
+            document.getElementById('modalDetall').classList.add('hidden');
+            currentModalUuid = null;
+        }
+
+        async function sincronitzarItem(uuid, btnElement) {
+            if (!uuid) return;
+            const icon = btnElement ? btnElement.querySelector('i') : null;
+            if (icon) icon.classList.add('fa-spin');
+
+            try {
+                const res = await apiFetch(`/pure/abstracts/sync/${uuid}`, { method: 'POST' });
+                if (res.ok) {
+                    mostrarToast("Sincronitzat correctament des de Pure!");
+                    carregarLlistat();
+                } else {
+                    mostrarToast("Error en sincronitzar.");
+                }
+            } catch (e) {
+                mostrarToast("Error de connexió.");
+            } finally {
+                if (icon) icon.classList.remove('fa-spin');
+            }
+        }
+
+        async function sincronitzarPublicacioModal() {
+            if (!currentModalUuid) return;
+            const icon = document.getElementById('syncModalIcon');
+            if (icon) icon.classList.add('fa-spin');
+
+            try {
+                const res = await apiFetch(`/pure/abstracts/sync/${currentModalUuid}`, { method: 'POST' });
+                if (res.ok) {
+                    mostrarToast("Sincronitzat amb èxit!");
+                    await obrirModal(currentModalUuid);
+                    carregarLlistat();
+                }
+            } catch (e) {
+                mostrarToast("Error en sincronitzar.");
+            } finally {
+                if (icon) icon.classList.remove('fa-spin');
+            }
+        }
+
+        function copiarText(elemId) {
+            const txt = document.getElementById(elemId)?.innerText || '';
+            if (txt) {
+                navigator.clipboard.writeText(txt);
+                mostrarToast("Abstract copiat al porta-retalls!");
+            }
+        }
+
+        function copiarAlPortaretalls(text) {
+            if (text) {
+                navigator.clipboard.writeText(text);
+                mostrarToast("UUID copiat al porta-retalls!");
+            }
+        }
+
+        function mostrarToast(msg) {
+            const toast = document.getElementById('toastNotification');
+            const txt = document.getElementById('toastMessage');
+            txt.textContent = msg;
+            toast.classList.remove('opacity-0', 'pointer-events-none');
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'pointer-events-none');
+            }, 2500);
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        async function exportarCSV() {
+            mostrarToast("Generant exportació CSV...");
+            const params = getParametresFiltre();
+            const queryParams = new URLSearchParams();
+            queryParams.set('page', '0');
+            queryParams.set('size', '500'); // Export current top 500 discrepant
+            if (params.minDiff) queryParams.set('minDiff', params.minDiff);
+            if (params.minRatio) queryParams.set('minRatio', params.minRatio);
+            if (params.minLangs) queryParams.set('minLangs', params.minLangs);
+            if (params.shortestLang && params.shortestLang !== 'all') queryParams.set('shortestLang', params.shortestLang);
+            if (filtreSeveritat && filtreSeveritat !== 'all') queryParams.set('severity', filtreSeveritat);
+            if (params.type) queryParams.set('type', params.type);
+            if (params.yearType) queryParams.set('yearType', params.yearType);
+            if (params.desde) queryParams.set('desde', params.desde);
+            if (params.hasta) queryParams.set('hasta', params.hasta);
+            if (params.search) queryParams.set('search', params.search);
+            if (params.sortField) queryParams.set('sortField', params.sortField);
+            if (params.sortDir) queryParams.set('sortDir', params.sortDir);
+
+            try {
+                const res = await apiFetch(`/pure/abstracts/discrepancies/list?${queryParams.toString()}`);
+                if (!res.ok) throw new Error("Error obtenint dades per exportar");
+                const data = await res.json();
+                const items = data.items || [];
+
+                if (items.length === 0) {
+                    mostrarToast("No hi ha dades per exportar.");
+                    return;
+                }
+
+                let csv = '\uFEFF'; // UTF-8 BOM
+                csv += "UUID;Títol;Any Publicació;Any Ingrés;Tipologia;Autors;Paraules CA;Paraules ES;Paraules EN;Diferència Paraules;Ràtio Longitud;Idioma Més Curt;Severitat;Lingua CA;Lingua ES;Lingua EN\n";
+
+                items.forEach(it => {
+                    const row = [
+                        `"${(it.uuid || '').replace(/"/g, '""')}"`,
+                        `"${(it.title || '').replace(/"/g, '""')}"`,
+                        it.publicationYear || '',
+                        it.submissionYear || '',
+                        `"${(it.typeName || '').replace(/"/g, '""')}"`,
+                        `"${(it.authors || '').replace(/"/g, '""')}"`,
+                        it.wordsCa || 0,
+                        it.wordsEs || 0,
+                        it.wordsEn || 0,
+                        it.diffWords || 0,
+                        it.ratioWords || 1.0,
+                        it.shortestLang || '',
+                        it.severity || '',
+                        it.detectedCa || '',
+                        it.detectedEs || '',
+                        it.detectedEn || ''
+                    ];
+                    csv += row.join(';') + '\n';
+                });
+
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `abstracts_discrepancies_${new Date().toISOString().slice(0, 10)}.csv`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                mostrarToast("Fitxer CSV descarregat!");
+            } catch (err) {
+                console.error("Error exportarCSV:", err);
+                mostrarToast("Error en generar el fitxer CSV");
+            }
+        }
+
+        async function poblarColleccioIA() {
+            if (!confirm("Vols iniciar la població i indexació d'aquestes mètriques de discrepància a la col·lecció 'ResearchoutputsAiAbstracts'? El procés s'executarà en segon pla.")) {
+                return;
+            }
+            const icon = document.getElementById('populateIcon');
+            const txt = document.getElementById('populateText');
+            if (icon) icon.className = "fa-solid fa-spinner fa-spin text-purple-600";
+            if (txt) txt.textContent = "Iniciant...";
+
+            try {
+                const res = await apiFetch('/pure/ai-abstracts/discrepancies/populate', { method: 'POST' });
+                const data = await res.json();
+                mostrarToast(data.message || "Procés iniciat en segon pla!");
+                comprovarEstatPoblacio();
+            } catch (err) {
+                mostrarToast("Error en iniciar la població: " + err.message);
+                if (icon) icon.className = "fa-solid fa-database text-purple-600";
+                if (txt) txt.textContent = "Poblar a Col·lecció IA";
+            }
+        }
+
+        async function comprovarEstatPoblacio() {
+            const icon = document.getElementById('populateIcon');
+            const txt = document.getElementById('populateText');
+            const interval = setInterval(async () => {
+                try {
+                    const res = await apiFetch('/pure/ai-abstracts/discrepancies/populate/status');
+                    if (!res.ok) return;
+                    const st = await res.json();
+                    if (st.status === 'RUNNING') {
+                        if (icon) icon.className = "fa-solid fa-spinner fa-spin text-purple-600";
+                        if (txt) txt.textContent = `Poblant... (${(st.updated || 0).toLocaleString()})`;
+                    } else if (st.status === 'COMPLETED') {
+                        clearInterval(interval);
+                        if (icon) icon.className = "fa-solid fa-check text-emerald-600";
+                        if (txt) txt.textContent = `Completat (${(st.updated || 0).toLocaleString()})`;
+                        mostrarToast(`Completat! ${(st.updated || 0).toLocaleString()} documents actualitzats a ResearchoutputsAiAbstracts.`);
+                        carregarDades(true);
+                        setTimeout(() => {
+                            if (icon) icon.className = "fa-solid fa-database text-purple-600";
+                            if (txt) txt.textContent = "Poblar a Col·lecció IA";
+                        }, 6000);
+                    } else if (st.status === 'ERROR') {
+                        clearInterval(interval);
+                        if (icon) icon.className = "fa-solid fa-triangle-exclamation text-rose-600";
+                        if (txt) txt.textContent = "Error en poblar";
+                        mostrarToast("Error en la tasca: " + (st.error || 'Desconegut'));
+                    } else {
+                        clearInterval(interval);
+                        if (icon) icon.className = "fa-solid fa-database text-purple-600";
+                        if (txt) txt.textContent = "Poblar a Col·lecció IA";
+                    }
+                } catch (e) {
+                    clearInterval(interval);
+                }
+            }, 3000);
+        }
+    </script>
+</body>
+</html>

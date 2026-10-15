@@ -125,7 +125,7 @@
                 <div class="md:col-span-2">
                     <label for="buscarTexto" class="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">Cercar</label>
                     <div class="relative">
-                        <input id="buscarTexto" type="text" placeholder="Títol, autors, tipus, UUID..." class="w-full border border-slate-300 rounded-xl pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#008037]/20 focus:border-[#008037] transition-all font-medium text-slate-700">
+                        <input id="buscarTexto" oninput="applyFilters()" type="text" placeholder="Títol, autors, tipus, UUID..." class="w-full border border-slate-300 rounded-xl pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#008037]/20 focus:border-[#008037] transition-all font-medium text-slate-700">
                         <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
                             <i class="fa-solid fa-magnifying-glass text-sm"></i>
                         </div>
@@ -149,7 +149,7 @@
                 <div class="md:col-span-2">
                     <label for="filtroError" class="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">Tipus d'error</label>
                     <div class="relative">
-                        <select id="filtroError" class="w-full pl-3 pr-8 py-2.5 bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#008037]/20 focus:border-[#008037] transition-all font-medium text-sm text-slate-700 appearance-none cursor-pointer">
+                        <select id="filtroError" onchange="applyFilters()" class="w-full pl-3 pr-8 py-2.5 bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#008037]/20 focus:border-[#008037] transition-all font-medium text-sm text-slate-700 appearance-none cursor-pointer">
                             <option value="all">Tots els errors</option>
                             <option value="MISSING_ABSTRACT">Sense resum / abstract</option>
                             <option value="UNDEFINED_LANGUAGE">Idioma indefinit</option>
@@ -175,7 +175,7 @@
                 <div class="md:col-span-2">
                     <label for="filtroEstado" class="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">Estat de resolució</label>
                     <div class="relative">
-                        <select id="filtroEstado" class="w-full pl-3 pr-8 py-2.5 bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#008037]/20 focus:border-[#008037] transition-all font-medium text-sm text-slate-700 appearance-none cursor-pointer">
+                        <select id="filtroEstado" onchange="onFiltroEstadoChange(this.value)" class="w-full pl-3 pr-8 py-2.5 bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#008037]/20 focus:border-[#008037] transition-all font-medium text-sm text-slate-700 appearance-none cursor-pointer">
                             <option value="pendientes" selected>Pendents</option>
                             <option value="corregidas">Revisades</option>
                             <option value="all">Totes</option>
@@ -186,24 +186,43 @@
                     </div>
                 </div>
 
-                <!-- Environment Selector -->
+                <!-- Sort Selector -->
                 <div class="md:col-span-2">
-                    <label for="selectEntorn" class="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">Entorn Egreta</label>
+                    <label for="selectOrden" class="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">Ordenació</label>
                     <div class="relative">
-                        <select id="selectEntorn" class="w-full pl-3 pr-8 py-2.5 bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#008037]/20 focus:border-[#008037] transition-all font-medium text-sm text-slate-700 appearance-none cursor-pointer">
-                            <option value="test" selected>Test (egretat)</option>
-                            <option value="prod">Producció (egreta)</option>
+                        <select id="selectOrden" onchange="onSortDropdownChange(this.value)" class="w-full pl-3 pr-8 py-2.5 bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#008037]/20 focus:border-[#008037] transition-all font-medium text-sm text-slate-700 appearance-none cursor-pointer">
+                            <option value="default" selected>Per defecte (Any descendent)</option>
+                            <option value="titulo_asc">Títol (A → Z)</option>
+                            <option value="titulo_desc">Títol (Z → A)</option>
+                            <option value="anio_desc">Any (més recent primer)</option>
+                            <option value="anio_asc">Any (més antic primer)</option>
+                            <option value="tipo_asc">Tipus (A → Z)</option>
+                            <option value="tipo_desc">Tipus (Z → A)</option>
                         </select>
                         <span class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-slate-400">
+                            <i class="fa-solid fa-arrow-down-a-z text-xs"></i>
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Environment Selector -->
+                <div class="md:col-span-1">
+                    <label for="selectEntorn" class="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">Entorn</label>
+                    <div class="relative">
+                        <select id="selectEntorn" class="w-full pl-2 pr-6 py-2.5 bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#008037]/20 focus:border-[#008037] transition-all font-medium text-sm text-slate-700 appearance-none cursor-pointer">
+                            <option value="test">Test</option>
+                            <option value="prod" selected>Prod</option>
+                        </select>
+                        <span class="absolute inset-y-0 right-0 pr-2 flex items-center pointer-events-none text-slate-400">
                             <i class="fa-solid fa-server text-xs"></i>
                         </span>
                     </div>
                 </div>
 
                 <!-- Export / Summary Status info -->
-                <div class="md:col-span-2 flex items-center justify-center">
-                    <div class="text-center font-bold text-sm text-[#008037] bg-emerald-50 border border-emerald-100 rounded-xl w-full py-2.5 shadow-sm">
-                        <span id="contadorMostrados">0</span> / <span id="contadorTotal">0</span> pub.
+                <div class="md:col-span-1 flex items-center justify-center">
+                    <div class="text-center font-bold text-xs text-[#008037] bg-emerald-50 border border-emerald-100 rounded-xl w-full py-2.5 shadow-sm">
+                        <span id="contadorMostrados">0</span> / <span id="contadorTotal">0</span>
                     </div>
                 </div>
             </div>
@@ -227,7 +246,11 @@
                         <i class="fa-solid fa-magnifying-glass text-[10px]"></i> Cercar DOI
                     </span>
                     <p>
-                        Si a l'article li manca el DOI, es fa una consulta a l'API de <strong>CrossRef</strong> utilitzant el paràmetre <code>query</code> per cercar conjuntament pel <strong>títol + subtítol, autors i any de publicació originals</strong> (sense traduccions automàtiques). Es realitza una comparació de textos (algorisme de Levenshtein) exigint un mínim del <strong>85% de similitud</strong> per acceptar la suggestió.
+                        Consulta l'API de <strong>Crossref</strong> mitjançant cerca segmentada per camps natius (títol, autor, revista i filtre per ISSN si està disponible).<br>
+                        • <strong>Idioma</strong>: Si a Pure existeix versió en anglès (<code>translatedTitle</code> o <code>title.en_GB</code>), es prioritza per a la cerca; en cas contrari, s'utilitza el títol original.<br>
+                        • <strong>Filtre estricte d'autoria</strong>: El registre trobat <strong>ha de coincidir obligatòriament en almenys un dels autors/cognoms</strong> de la publicació.<br>
+                        • <strong>Similitud</strong>: S'exigeix un mínim del <strong>85% de similitud</strong> (Levenshtein) respecte al títol.<br>
+                        • <strong>Entrada manual</strong>: Icona de llapis <i class="fa-solid fa-pen text-[9px] text-slate-500"></i> per introduir un DOI directament si no és a les bases de dades.
                     </p>
                 </div>
                 <!-- ISBN -->
@@ -236,8 +259,8 @@
                         <i class="fa-solid fa-book text-[10px]"></i> Cercar ISBN
                     </span>
                     <p>
-                        Per als llibres sense ISBN, es fan cerques concurrents a <strong>Crossref</strong>, <strong>Google Books</strong> i <strong>Open Library</strong>. 
-                        Els resultats es classifiquen a la taula diferenciant clarament entre <strong>Imprès</strong> i <strong>Electrònic</strong>.
+                        Per als llibres sense ISBN, es fan cerques concurrents a <strong>Crossref</strong>, <strong>Google Books</strong> i <strong>Open Library</strong> pel títol i autors. 
+                        Els resultats es classifiquen diferenciant clarament entre <strong>Imprès</strong> i <strong>Electrònic</strong>.
                     </p>
                 </div>
                 <!-- ISSN -->
@@ -247,7 +270,7 @@
                     </span>
                     <p>
                         <strong>1. Suggeriment Local</strong>: Mostra per defecte els ISSNs de la revista si ja està vinculada a la base de dades local.<br>
-                        <strong>2. Cerca en línia</strong>: Al clicar "Cercar ISSN", consulta l'API externa de <strong>CrossRef</strong> pel títol de l'article per trobar l'ISSN oficial de la revista. Al desar, actualitza primer la revista a Egreta per evitar errors de validació.
+                        <strong>2. Cerca en línia</strong>: Consulta l'API de <strong>Crossref</strong> pel títol de l'article i de la revista per recuperar l'ISSN oficial. Al desar, actualitza la revista i la publicació a Egreta.
                     </p>
                 </div>
                 <!-- Abstract -->
@@ -256,9 +279,23 @@
                         <i class="fa-solid fa-align-left text-[10px]"></i> Cercar resum (Abstract)
                     </span>
                     <p>
-                        <strong>1. DDD UAB</strong>: Si té enllaç al DDD, descarrega la fitxa i llegeix metadades Dublin Core.<br>
-                        <strong>2. Dialnet</strong>: Si té enllaç a Dialnet, extreu tots els resums llistats a <code>ul#resumen</code>.<br>
-                        <strong>3. APIs</strong>: Si no té enllaços, consulta <strong>Semantic Scholar</strong> i <strong>OpenAlex</strong> (reconstruint l'índex invertit si cal).
+                        <strong>1. Crossref (prioritari)</strong>: Si la publicació té DOI, consulta en primer terme l'API de <strong>Crossref</strong> per obtenir el resum oficial de l'editorial (JATS XML / text net).<br>
+                        <strong>2. DDD UAB</strong>: Si té enllaç al repositori institucional DDD, extreu les metadades Dublin Core i el resum del document.<br>
+                        <strong>3. Dialnet</strong>: Si té enllaç o fent cerca pel títol i autor a Dialnet, recupera els resums estructurats per idiomes (<code>ul#resumen</code>, <code>div#resumen</code>).<br>
+                        <strong>4. Altres fonts</strong>: Si no es troba, cerca a altres repositoris acadèmics com <strong>Semantic Scholar</strong>.<br>
+                        • <strong>Detecció d'idioma</strong>: Cada resum s'analitza amb el detector de llengua per assignar automàticament el codi correcte (<code>ca_ES</code>, <code>es_ES</code>, <code>en_GB</code>, etc.).
+                    </p>
+                </div>
+                <!-- Text Quality -->
+                <div class="bg-slate-50 p-3.5 rounded-xl border border-slate-100 flex flex-col gap-1.5">
+                    <span class="font-bold text-[#008037] flex items-center gap-1.5">
+                        <i class="fa-solid fa-wand-magic-sparkles text-[10px]"></i> Qualitat de text (Títol i Subtítol)
+                    </span>
+                    <p>
+                        <strong>1. Detecció d'errors</strong>: Detecta caràcters danyats per mala codificació (<em>mojibake</em>: <code>Ã</code>, <code>Â·</code>, <code>â€™</code>, etc.) i títols de més d'una paraula escrits íntegrament en majúscules (s'exclouen títols d'un sol mot com <em>ERRATUM</em>, <em>EDITORIAL</em> o acrònims).<br>
+                        <strong>2. Cerca a Crossref</strong>: Si té DOI, obté el títol i subtítol oficials de l'editorial mantenint les majúscules correctes dels noms propis (p. ex. <em>Ricci</em>, <em>Einstein</em>, <em>Fourier</em>).<br>
+                        <strong>3. Format oració (Sentence Case)</strong>: Si no té DOI, converteix les majúscules a format oració (majúscula inicial i després de punts o dos punts) preservant acrònims habituals (<code>DNA</code>, <code>COVID</code>, <code>UAB</code>, números romans, etc.).<br>
+                        <strong>4. Separació de subtítol</strong>: Separa automàticament el títol principal del subtítol després dels dos punts (<code>:</code>) i permet revisar-los i sincronitzar-los a Egreta.
                     </p>
                 </div>
                 <!-- Language -->
@@ -267,8 +304,8 @@
                         <i class="fa-solid fa-language text-[10px]"></i> Detectar idioma
                     </span>
                     <p>
-                        Analitza el títol del document. Si la probabilitat és baixa, utilitza una heurística tolerant local (admetent $\ge 10\%$ de confiança). 
-                        Com a última instància, fa una consulta de traducció automàtica a <strong>MyMemory</strong> per verificar l'idioma original real.
+                        Analitza el títol del document amb el detector de llenguatge estadístic (admetent $\ge 10\%$ de confiança). 
+                        Com a última instància, fa una consulta d'autodetecció a <strong>MyMemory</strong> per verificar l'idioma original real.
                     </p>
                 </div>
                 <!-- Unpaywall -->
@@ -278,6 +315,16 @@
                     </span>
                     <p>
                         Consulta en temps real l'API d'<strong>Unpaywall</strong> mitjançant el DOI per detectar versions lliures de pagament (ruta verda, daurada o híbrida) i enllaça el PDF original, canviant l'estat del document a <strong>Local OA</strong>.
+                    </p>
+                </div>
+                <!-- Identifiers & Duplicates -->
+                <div class="bg-slate-50 p-3.5 rounded-xl border border-slate-100 flex flex-col gap-1.5">
+                    <span class="font-bold text-[#008037] flex items-center gap-1.5">
+                        <i class="fa-solid fa-fingerprint text-[10px]"></i> Identificadors i Duplicats
+                    </span>
+                    <p>
+                        <strong>1. Identificadors externs</strong>: Mostra els codis procedents de les bases de dades científiques integrades a Pure (<strong>Scopus ID</strong>, <strong>WOS / Web of Science</strong>, <strong>PubMed</strong>, <strong>Dialnet</strong>, <strong>ORCID</strong>, etc.).<br>
+                        <strong>2. Detecció de duplicats</strong>: Comprova automàticament si coincideix el mateix identificador extern, DOI, URL o el <strong>mateix títol dins del mateix tipus de publicació</strong> a la base de dades.
                     </p>
                 </div>
             </div>
@@ -295,11 +342,27 @@
                 <table class="w-full text-left border-collapse">
                     <thead>
                         <tr class="bg-slate-50 text-slate-500 border-b border-slate-200 text-xs font-bold uppercase tracking-wider">
-                            <th class="px-5 py-4 w-12 text-center">Any</th>
-                            <th class="px-5 py-4 w-24">Tipus</th>
-                            <th class="px-5 py-4 w-1/3">Títol i Autors</th>
+                            <th onclick="toggleSort('anio')" class="px-5 py-4 w-14 text-center cursor-pointer hover:bg-slate-100/80 hover:text-slate-800 transition-colors select-none group" title="Ordenar per any">
+                                <div class="inline-flex items-center justify-center gap-1">
+                                    <span>Any</span>
+                                    <i id="sort-icon-anio" class="fa-solid fa-sort text-slate-300 text-xs opacity-60 group-hover:opacity-100"></i>
+                                </div>
+                            </th>
+                            <th onclick="toggleSort('tipo')" class="px-5 py-4 w-28 cursor-pointer hover:bg-slate-100/80 hover:text-slate-800 transition-colors select-none group" title="Ordenar per tipus">
+                                <div class="inline-flex items-center gap-1">
+                                    <span>Tipus</span>
+                                    <i id="sort-icon-tipo" class="fa-solid fa-sort text-slate-300 text-xs opacity-60 group-hover:opacity-100"></i>
+                                </div>
+                            </th>
+                            <th onclick="toggleSort('titulo')" class="px-5 py-4 w-1/3 cursor-pointer hover:bg-slate-100/80 hover:text-slate-800 transition-colors select-none group" title="Ordenar per títol (A-Z / Z-A)">
+                                <div class="inline-flex items-center gap-1.5">
+                                    <span>Títol i Autors</span>
+                                    <i id="sort-icon-titulo" class="fa-solid fa-sort text-slate-300 text-xs opacity-60 group-hover:opacity-100"></i>
+                                </div>
+                            </th>
                             <th class="px-5 py-4 w-1/5">Errors Detectats</th>
                             <th class="px-5 py-4 w-36">DOI i URLs</th>
+                            <th class="px-5 py-4 w-36">Identificadors</th>
                             <th class="px-5 py-4 w-32">ISBN</th>
                             <th class="px-5 py-4 w-32">ISSN</th>
                             <th class="px-5 py-4 w-28 text-center">Accés Obert</th>
@@ -350,6 +413,97 @@
         let currentPage = 1;
         let pageSize = 50;
         let languagesList = [];
+        let currentSortCol = null;
+        let currentSortDir = 'asc';
+
+        function getCleanTitleForSort(str) {
+            if (!str) return '';
+            let s = String(str)
+                .replace(/&quot;/g, '"')
+                .replace(/&#039;/g, "'")
+                .replace(/&amp;/g, '&')
+                .replace(/&lt;/g, '<')
+                .replace(/&gt;/g, '>');
+            // Strip leading quotation marks, inverted punctuation, brackets, slashes, dashes, whitespace
+            s = s.replace(/^[\s"“'‘«»`\(\[\{\-_–—¿¡.*#@~+=<>|\\/]+/u, '');
+            return s.trim();
+        }
+
+        function toggleSort(column) {
+            if (currentSortCol === column) {
+                if (currentSortDir === 'asc') {
+                    currentSortDir = 'desc';
+                } else {
+                    currentSortCol = null;
+                    currentSortDir = 'asc';
+                }
+            } else {
+                currentSortCol = column;
+                currentSortDir = 'asc';
+            }
+            updateSortIcons();
+            applyFilters();
+        }
+
+        function onSortDropdownChange(val) {
+            if (val === 'titulo_asc') {
+                currentSortCol = 'titulo';
+                currentSortDir = 'asc';
+            } else if (val === 'titulo_desc') {
+                currentSortCol = 'titulo';
+                currentSortDir = 'desc';
+            } else if (val === 'anio_asc') {
+                currentSortCol = 'anio';
+                currentSortDir = 'asc';
+            } else if (val === 'anio_desc') {
+                currentSortCol = 'anio';
+                currentSortDir = 'desc';
+            } else if (val === 'tipo_asc') {
+                currentSortCol = 'tipo';
+                currentSortDir = 'asc';
+            } else if (val === 'tipo_desc') {
+                currentSortCol = 'tipo';
+                currentSortDir = 'desc';
+            } else {
+                currentSortCol = null;
+                currentSortDir = 'asc';
+            }
+            updateSortIcons();
+            applyFilters();
+        }
+
+        function updateSortIcons() {
+            const selectOrden = document.getElementById('selectOrden');
+            if (selectOrden) {
+                if (!currentSortCol) {
+                    selectOrden.value = 'default';
+                } else {
+                    selectOrden.value = `${currentSortCol}_${currentSortDir}`;
+                }
+            }
+
+            ['titulo', 'anio', 'tipo'].forEach(col => {
+                const icon = document.getElementById(`sort-icon-${col}`);
+                if (!icon) return;
+                if (currentSortCol === col) {
+                    if (col === 'titulo' || col === 'tipo') {
+                        icon.className = currentSortDir === 'asc' 
+                            ? 'fa-solid fa-arrow-down-a-z text-[#008037] text-xs' 
+                            : 'fa-solid fa-arrow-down-z-a text-[#008037] text-xs';
+                    } else if (col === 'anio') {
+                        icon.className = currentSortDir === 'asc' 
+                            ? 'fa-solid fa-arrow-down-1-9 text-[#008037] text-xs' 
+                            : 'fa-solid fa-arrow-down-9-1 text-[#008037] text-xs';
+                    } else {
+                        icon.className = currentSortDir === 'asc' 
+                            ? 'fa-solid fa-arrow-up text-[#008037] text-xs' 
+                            : 'fa-solid fa-arrow-down text-[#008037] text-xs';
+                    }
+                } else {
+                    icon.className = 'fa-solid fa-sort text-slate-300 text-xs opacity-60 group-hover:opacity-100';
+                }
+            });
+        }
 
         // Initialize Years Select Box
         function initYearsFilter() {
@@ -373,7 +527,7 @@
             event.preventDefault();
             
             const selectEntorn = document.getElementById('selectEntorn');
-            const env = selectEntorn ? selectEntorn.value : 'test';
+            const env = selectEntorn ? selectEntorn.value : ((typeof window.getDefaultEnv === 'function') ? window.getDefaultEnv() : 'prod');
             const host = (env === 'prod') ? 'egreta.uab.cat' : 'egretat.uab.cat';
             
             const typeLower = (typeDiscriminator || 'ContributionToJournal').toLowerCase();
@@ -387,8 +541,26 @@
             }
         }
 
+        function decodeHtmlEntities(value) {
+            if (!value) return '';
+            return String(value)
+                .replace(/&apos;/gi, "'")
+                .replace(/&#39;/g, "'")
+                .replace(/&#039;/g, "'")
+                .replace(/&quot;/gi, '"')
+                .replace(/&amp;/gi, '&')
+                .replace(/&lt;/gi, '<')
+                .replace(/&gt;/gi, '>')
+                .replace(/&nbsp;/gi, ' ')
+                .replace(/&ndash;/gi, '-')
+                .replace(/&mdash;/gi, '-')
+                .replace(/&lsquo;|&rsquo;|&#8216;|&#8217;/gi, "'")
+                .replace(/&ldquo;|&rdquo;|&#8220;|&#8221;/gi, '"');
+        }
+
         function escapeHtml(value) {
-            return String(value ?? '')
+            const decoded = decodeHtmlEntities(value);
+            return String(decoded ?? '')
                 .replace(/&/g, '&amp;')
                 .replace(/</g, '&lt;')
                 .replace(/>/g, '&gt;')
@@ -456,6 +628,16 @@
             document.getElementById('kpiDuplicates').textContent = duplicates;
         }
 
+        function onFiltroEstadoChange(val) {
+            if (val === 'corregidas') {
+                const filtroError = document.getElementById('filtroError');
+                if (filtroError) {
+                    filtroError.value = 'all';
+                }
+            }
+            applyFilters();
+        }
+
         function applyFilters() {
             recalculateKpiStats();
             const buscar = document.getElementById('buscarTexto').value.toLowerCase().trim();
@@ -485,6 +667,37 @@
                 filtered = filtered.filter(p => !p.reviewed);
             } else if (estadoFiltro === 'corregidas') {
                 filtered = filtered.filter(p => p.reviewed);
+            }
+
+            // Apply sorting
+            if (currentSortCol) {
+                filtered = [...filtered].sort((a, b) => {
+                    if (currentSortCol === 'titulo') {
+                        const rawA = (a.titulo || '').trim();
+                        const rawB = (b.titulo || '').trim();
+                        const cleanA = getCleanTitleForSort(rawA);
+                        const cleanB = getCleanTitleForSort(rawB);
+
+                        let comp = cleanA.localeCompare(cleanB, 'ca', { sensitivity: 'base', numeric: true });
+                        if (comp === 0) {
+                            comp = cleanA.localeCompare(cleanB, 'ca', { numeric: true });
+                        }
+                        if (comp === 0) {
+                            comp = rawA.localeCompare(rawB, 'ca', { numeric: true });
+                        }
+                        return currentSortDir === 'asc' ? comp : -comp;
+                    } else if (currentSortCol === 'anio') {
+                        const yA = a.anio || 0;
+                        const yB = b.anio || 0;
+                        return currentSortDir === 'asc' ? (yA - yB) : (yB - yA);
+                    } else if (currentSortCol === 'tipo') {
+                        const tpA = (a.tipo || '').trim();
+                        const tpB = (b.tipo || '').trim();
+                        const comp = tpA.localeCompare(tpB, 'ca', { sensitivity: 'base', numeric: true });
+                        return currentSortDir === 'asc' ? comp : -comp;
+                    }
+                    return 0;
+                });
             }
 
             filteredPubs = filtered;
@@ -610,17 +823,47 @@
 
                 if (!hasDoi) {
                     doiUrlHtml += `
-                        <div id="doi-search-container-${p.uuid}" class="mt-1.5">
-                            <button onclick="cercarDoiWeb(event, '${p.uuid}')" class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-indigo-50 border border-indigo-200 text-[10px] font-semibold text-indigo-700 hover:bg-indigo-100 transition-all active:scale-95 shadow-sm">
-                                <i class="fa-solid fa-magnifying-glass text-[8px]"></i>
-                                <span>Cercar DOI</span>
-                            </button>
+                        <div id="doi-search-container-${p.uuid}" class="mt-1.5 flex flex-col gap-1">
+                            <div class="flex items-center gap-1">
+                                <button onclick="cercarDoiWeb(event, '${p.uuid}')" class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-indigo-50 border border-indigo-200 text-[10px] font-semibold text-indigo-700 hover:bg-indigo-100 transition-all active:scale-95 shadow-sm" title="Cercar automàticament a Crossref">
+                                    <i class="fa-solid fa-magnifying-glass text-[8px]"></i>
+                                    <span>Cercar DOI</span>
+                                </button>
+                                <button onclick="mostrarInputManualDoi(event, '${p.uuid}')" class="inline-flex items-center px-1.5 py-0.5 rounded bg-slate-50 border border-slate-200 text-[10px] font-medium text-slate-600 hover:bg-slate-100 transition-all active:scale-95 shadow-sm" title="Introduir DOI manualment">
+                                    <i class="fa-solid fa-pen text-[8px]"></i>
+                                </button>
+                            </div>
                         </div>
                     `;
                 }
 
                 if (!doiUrlHtml) {
                     doiUrlHtml = `<span class="text-slate-400 italic text-[11px]">Sense enllaços</span>`;
+                }
+
+                // Render Identifiers
+                let identifiersHtml = '<span class="text-slate-300 italic text-xs">-</span>';
+                if (p.identifiers && p.identifiers.length > 0) {
+                    identifiersHtml = `
+                        <div class="flex flex-col gap-1 max-w-[200px]">
+                            ${p.identifiers.map(id => {
+                                let badgeColor = 'bg-slate-50 text-slate-700 border-slate-200';
+                                const srcLower = (id.source || '').toLowerCase();
+                                if (srcLower.includes('scopus')) badgeColor = 'bg-orange-50 text-orange-800 border-orange-200';
+                                else if (srcLower.includes('wos') || srcLower.includes('web of science')) badgeColor = 'bg-amber-50 text-amber-800 border-amber-200';
+                                else if (srcLower.includes('pubmed') || srcLower.includes('pmid')) badgeColor = 'bg-blue-50 text-blue-800 border-blue-200';
+                                else if (srcLower.includes('dialnet')) badgeColor = 'bg-red-50 text-red-800 border-red-200';
+                                else if (srcLower.includes('orcid')) badgeColor = 'bg-emerald-50 text-emerald-800 border-emerald-200';
+
+                                return `
+                                    <div class="flex items-center gap-1.5 py-0.5 text-xs">
+                                        <span class="font-bold uppercase tracking-wider text-[9px] px-1 rounded border ${badgeColor}" title="${escapeHtml(id.source)}">${escapeHtml(id.source)}</span>
+                                        <span class="text-slate-600 font-mono text-[11px] select-all truncate" title="${escapeHtml(id.value)}">${escapeHtml(id.value)}</span>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    `;
                 }
 
                 // Render ISBN
@@ -748,6 +991,18 @@
                     `;
                 }
 
+                let textQualityHtml = '';
+                if (p.errors && p.errors.includes("TEXT_QUALITY")) {
+                    textQualityHtml = `
+                        <div id="textquality-container-${p.uuid}" class="mt-1">
+                            <button onclick="corregirQualitatText(event, '${p.uuid}')" class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-purple-50 border border-purple-200 text-[10px] font-semibold text-purple-700 hover:bg-purple-100 transition-all active:scale-95 shadow-sm" title="Corregir majúscules o caràcters danyats">
+                                <i class="fa-solid fa-wand-magic-sparkles text-[8px]"></i>
+                                <span>Corregir text</span>
+                            </button>
+                        </div>
+                    `;
+                }
+
                 return `
                     <tr class="pub-row transition-colors align-top ${p.reviewed ? 'bg-emerald-50/20' : ''}" data-uuid="${escapeHtml(p.uuid)}">
                         <td class="px-5 py-4 text-center font-bold text-slate-500">${pYear}</td>
@@ -765,10 +1020,12 @@
                                 <span class="text-[10px] text-slate-300 font-mono">${escapeHtml(p.uuid)}</span>
                                 ${langHtml}
                                 ${abstractHtml}
+                                ${textQualityHtml}
                             </div>
                         </td>
                         <td class="px-5 py-4">${badges}</td>
                         <td class="px-5 py-4 text-xs whitespace-nowrap">${doiUrlHtml}</td>
+                        <td class="px-5 py-4 text-xs">${identifiersHtml}</td>
                         <td class="px-5 py-4 text-xs whitespace-nowrap">${isbnHtml}</td>
                         <td class="px-5 py-4 text-xs whitespace-nowrap">${issnHtml}</td>
                         <td class="px-5 py-4 text-center whitespace-nowrap">${oaHtml}</td>
@@ -882,6 +1139,46 @@
             );
         }
 
+        function mostrarInputManualDoi(event, uuid) {
+            event.preventDefault();
+            const container = document.getElementById(`doi-search-container-${uuid}`);
+            if (!container) return;
+            if (!container.originalHtml) {
+                container.originalHtml = container.innerHTML;
+            }
+            container.innerHTML = `
+                <div class="bg-slate-50 border border-slate-200 p-1.5 rounded-lg max-w-[210px] mt-1 shadow-sm flex flex-col gap-1 text-left">
+                    <div class="flex items-center justify-between">
+                        <span class="text-[9px] font-bold text-slate-600 uppercase">DOI manual:</span>
+                        <button onclick="cancelarDoiWeb(event, '${uuid}')" class="text-slate-400 hover:text-slate-600">
+                            <i class="fa-solid fa-xmark text-[9px]"></i>
+                        </button>
+                    </div>
+                    <input type="text" id="manual-doi-input-${uuid}" placeholder="10.xxxx/..." class="w-full px-1.5 py-0.5 border border-slate-300 rounded text-[10px] font-mono focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white" onkeydown="if(event.key==='Enter') afegirDoiManual(event, '${uuid}')" />
+                    <div class="flex items-center justify-end gap-1">
+                        <button onclick="cancelarDoiWeb(event, '${uuid}')" class="px-1.5 py-0.5 text-[9px] text-slate-500 hover:bg-slate-200 rounded">Cancel·lar</button>
+                        <button onclick="afegirDoiManual(event, '${uuid}')" class="px-1.5 py-0.5 text-[9px] font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded shadow-sm">Guardar</button>
+                    </div>
+                </div>
+            `;
+            setTimeout(() => {
+                const input = document.getElementById(`manual-doi-input-${uuid}`);
+                if (input) input.focus();
+            }, 50);
+        }
+
+        async function afegirDoiManual(event, uuid) {
+            event.preventDefault();
+            const input = document.getElementById(`manual-doi-input-${uuid}`);
+            if (!input) return;
+            const doiVal = input.value.trim();
+            if (!doiVal) {
+                alert("Si us plau, introdueix un DOI.");
+                return;
+            }
+            await afegirDoiSuggerit(event, uuid, doiVal);
+        }
+
         async function cercarDoiWeb(event, uuid) {
             event.preventDefault();
             const container = document.getElementById(`doi-search-container-${uuid}`);
@@ -925,7 +1222,7 @@
                     }).join('');
 
                     container.innerHTML = `
-                        <div class="bg-indigo-50/50 border border-indigo-100 p-2 rounded-xl max-w-[200px] mt-1 text-left premium-shadow">
+                        <div class="bg-indigo-50/50 border border-indigo-100 p-2 rounded-xl max-w-[210px] mt-1 text-left premium-shadow">
                             <div class="flex items-center justify-between mb-1">
                                 <span class="text-[9px] font-bold text-indigo-800 uppercase tracking-wider"><i class="fa-solid fa-circle-info"></i> Crossref:</span>
                                 <button onclick="cancelarDoiWeb(event, '${uuid}')" class="text-slate-400 hover:text-slate-600 transition-colors">
@@ -939,24 +1236,37 @@
                     `;
                 } else {
                     container.innerHTML = `
-                        <div class="text-rose-600 text-[10px] font-semibold flex items-center gap-1">
-                            <i class="fa-solid fa-triangle-exclamation"></i> No s'han trobat suggeriments
+                        <div class="bg-amber-50 border border-amber-200 p-2 rounded-xl max-w-[210px] mt-1 text-left shadow-sm">
+                            <div class="flex items-center justify-between mb-1">
+                                <span class="text-[9px] font-bold text-amber-800"><i class="fa-solid fa-triangle-exclamation"></i> Sense resultats</span>
+                                <button onclick="cancelarDoiWeb(event, '${uuid}')" class="text-slate-400 hover:text-slate-600">
+                                    <i class="fa-solid fa-xmark text-[10px]"></i>
+                                </button>
+                            </div>
+                            <p class="text-[9px] text-slate-500 mb-1.5">No s'ha trobat a Crossref. Introdueix-lo manualment:</p>
+                            <div class="flex items-center gap-1">
+                                <input type="text" id="manual-doi-input-${uuid}" placeholder="10.xxxx/..." class="w-full px-1.5 py-0.5 border border-slate-300 rounded text-[10px] font-mono bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500" onkeydown="if(event.key==='Enter') afegirDoiManual(event, '${uuid}')" />
+                                <button onclick="afegirDoiManual(event, '${uuid}')" class="px-1.5 py-0.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-[9px] font-bold">Afegir</button>
+                            </div>
                         </div>
                     `;
-                    setTimeout(() => {
-                        container.innerHTML = container.originalHtml;
-                    }, 3000);
                 }
             } catch (err) {
                 console.error("Error searching DOI:", err);
                 container.innerHTML = `
-                    <div class="text-rose-600 text-[10px] font-semibold flex items-center gap-1">
-                        <i class="fa-solid fa-triangle-exclamation"></i> Error de cerca
+                    <div class="bg-rose-50 border border-rose-200 p-2 rounded-xl max-w-[210px] mt-1 text-left shadow-sm">
+                        <div class="flex items-center justify-between mb-1">
+                            <span class="text-[9px] font-bold text-rose-700"><i class="fa-solid fa-triangle-exclamation"></i> Error de cerca</span>
+                            <button onclick="cancelarDoiWeb(event, '${uuid}')" class="text-slate-400 hover:text-slate-600">
+                                <i class="fa-solid fa-xmark text-[10px]"></i>
+                            </button>
+                        </div>
+                        <div class="flex items-center gap-1 mt-1">
+                            <input type="text" id="manual-doi-input-${uuid}" placeholder="10.xxxx/..." class="w-full px-1.5 py-0.5 border border-slate-300 rounded text-[10px] font-mono bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500" onkeydown="if(event.key==='Enter') afegirDoiManual(event, '${uuid}')" />
+                            <button onclick="afegirDoiManual(event, '${uuid}')" class="px-1.5 py-0.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-[9px] font-bold">Afegir</button>
+                        </div>
                     </div>
                 `;
-                setTimeout(() => {
-                    container.innerHTML = container.originalHtml;
-                }, 3000);
             }
         }
 
@@ -974,7 +1284,7 @@
             if (!container) return;
 
             const selectEntorn = document.getElementById('selectEntorn');
-            const env = selectEntorn ? selectEntorn.value : 'test';
+            const env = selectEntorn ? selectEntorn.value : ((typeof window.getDefaultEnv === 'function') ? window.getDefaultEnv() : 'prod');
 
             container.innerHTML = `
                 <span class="inline-flex items-center gap-1 text-[10px] text-slate-500 font-medium">
@@ -1001,11 +1311,14 @@
 
                 if (resData.success) {
                     container.innerHTML = `<span class="text-[10px] text-emerald-600 font-bold"><i class="fa-solid fa-circle-check"></i> DOI afegit!</span>`;
+                    const cleanDoi = doi.replace(/^https?:\/\/(dx\.)?doi\.org\//i, '').replace(/^doi:/i, '').trim();
                     const pub = rawData.publications.find(p => p.uuid === uuid);
                     if (pub) {
-                        pub.doi = doi;
+                        pub.doi = cleanDoi;
+                        if (!pub.dois) pub.dois = [];
+                        if (!pub.dois.includes(cleanDoi)) pub.dois.push(cleanDoi);
                         if (!pub.electronicVersions) pub.electronicVersions = [];
-                        pub.electronicVersions.push({ doi: doi });
+                        pub.electronicVersions.push({ doi: cleanDoi, typeDiscriminator: "DoiElectronicVersion" });
                         if (pub.errors) {
                             pub.errors = pub.errors.filter(e => e !== "MISSING_DOI" && e !== "MISSING_DOI_AND_LINK");
                         }
@@ -1116,14 +1429,25 @@
         }
 
         function generateLanguageSelectOptions(selectedLang) {
-            const langs = {
-                'en_GB': 'Anglès (en_GB)',
-                'ca_ES': 'Català (ca_ES)',
-                'es_ES': 'Castellà (es_ES)'
-            };
+            const list = (typeof languagesList !== 'undefined' && languagesList && languagesList.length > 0) ? languagesList : [
+                { code: "ca_ES", label: "Català (ca_ES)" },
+                { code: "es_ES", label: "Espanyol (es_ES)" },
+                { code: "en_GB", label: "Anglès (en_GB)" },
+                { code: "fr_FR", label: "Francès (fr_FR)" },
+                { code: "de_DE", label: "Alemany (de_DE)" },
+                { code: "it_IT", label: "Italià (it_IT)" },
+                { code: "pt_PT", label: "Portuguès (pt_PT)" }
+            ];
             let html = '';
-            for (const [code, name] of Object.entries(langs)) {
-                html += `<option value="${code}" ${code === selectedLang ? 'selected' : ''}>${name}</option>`;
+            let found = false;
+            list.forEach(lang => {
+                const isSel = lang.code === selectedLang;
+                if (isSel) found = true;
+                const label = lang.label.includes('(') ? lang.label : `${lang.label} (${lang.code})`;
+                html += `<option value="${escapeHtml(lang.code)}" ${isSel ? 'selected' : ''}>${escapeHtml(label)}</option>`;
+            });
+            if (!found && selectedLang) {
+                html += `<option value="${escapeHtml(selectedLang)}" selected>${escapeHtml(selectedLang)}</option>`;
             }
             return html;
         }
@@ -1177,7 +1501,6 @@
 
             try {
                 const response = await apiFetch(`/pure/corrections/${uuid}/suggest-abstract`);
-                if (!response.ok) throw new Error("Search failed");
                 const data = await response.json();
 
                 if (data.success && data.abstracts && Object.keys(data.abstracts).length > 0) {
@@ -1274,7 +1597,7 @@
             }
 
             const selectEntorn = document.getElementById('selectEntorn');
-            const env = selectEntorn ? selectEntorn.value : 'test';
+            const env = selectEntorn ? selectEntorn.value : ((typeof window.getDefaultEnv === 'function') ? window.getDefaultEnv() : 'prod');
 
             container.innerHTML = `
                 <span class="inline-flex items-center gap-1 text-[10px] text-slate-500 font-medium">
@@ -1326,6 +1649,147 @@
             }
         }
 
+        async function corregirQualitatText(event, uuid) {
+            event.preventDefault();
+            const container = document.getElementById(`textquality-container-${uuid}`);
+            if (!container) return;
+
+            container.originalHtml = container.innerHTML;
+            container.innerHTML = `
+                <span class="inline-flex items-center gap-1 text-[10px] text-purple-600 font-semibold">
+                    <i class="fa-solid fa-spinner fa-spin text-purple-600"></i> Analitzant text...
+                </span>
+            `;
+
+            try {
+                const response = await apiFetch(`/pure/corrections/${uuid}/suggest-text-quality-fix`);
+                const data = await response.json();
+
+                if (data.success && data.hasChanges) {
+                    const explanationsHtml = (data.explanations && data.explanations.length > 0)
+                        ? `<ul class="list-disc list-inside text-[9px] text-purple-800 space-y-0.5 mb-1.5">
+                            ${data.explanations.map(e => `<li>${escapeHtml(e)}</li>`).join('')}
+                           </ul>`
+                        : '';
+
+                    container.innerHTML = `
+                        <div class="border border-purple-200 rounded-lg p-2.5 bg-purple-50/60 mt-2 flex flex-col gap-1.5 w-[280px] md:w-[420px] text-left shadow-sm">
+                            <span class="text-[9px] font-bold text-purple-800 uppercase tracking-wider flex items-center gap-1">
+                                <i class="fa-solid fa-wand-magic-sparkles text-[9px]"></i> Proposta de correcció:
+                            </span>
+                            ${explanationsHtml}
+                            <div class="flex flex-col gap-1">
+                                <label class="text-[9px] font-bold text-slate-700">Títol:</label>
+                                <textarea id="quality-title-${uuid}" class="w-full p-1.5 border border-slate-200 rounded text-[10px] leading-normal font-sans focus:outline-none focus:ring-1 focus:ring-purple-500 bg-white" rows="2">${escapeHtml(data.suggestedTitle)}</textarea>
+                            </div>
+                            <div class="flex flex-col gap-1 mt-1">
+                                <label class="text-[9px] font-bold text-slate-700">Subtítol <span class="text-[8px] font-normal text-slate-400">(opcional)</span>:</label>
+                                <input type="text" id="quality-subtitle-${uuid}" value="${escapeHtml(data.suggestedSubTitle || '')}" placeholder="Subtítol si n'hi ha..." class="w-full p-1.5 border border-slate-200 rounded text-[10px] bg-white focus:outline-none focus:ring-1 focus:ring-purple-500" />
+                            </div>
+                            <div class="flex items-center gap-1.5 mt-2 justify-end">
+                                <button onclick="cancelarCorregirText(event, '${uuid}')" class="px-2 py-0.5 rounded border border-slate-200 text-[9px] font-bold bg-white text-slate-600 hover:bg-slate-50">Cancel·lar</button>
+                                <button onclick="desarTextCorregit(event, '${uuid}')" class="px-2.5 py-0.5 rounded bg-purple-700 text-white text-[9px] font-bold hover:bg-purple-800 shadow-sm flex items-center gap-1">
+                                    <i class="fa-solid fa-check text-[8px]"></i> Aplicar canvis
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    const msg = data.message || "No s'han detectat canvis automàtics a fer.";
+                    container.innerHTML = `
+                        <div class="text-slate-600 text-[10px] font-semibold flex items-center gap-1">
+                            <i class="fa-solid fa-circle-info text-indigo-500"></i> ${escapeHtml(msg)}
+                        </div>
+                    `;
+                    setTimeout(() => { container.innerHTML = container.originalHtml; }, 3500);
+                }
+            } catch (err) {
+                console.error("Error analyzing text quality:", err);
+                container.innerHTML = `
+                    <div class="text-rose-600 text-[10px] font-semibold flex items-center gap-1">
+                        <i class="fa-solid fa-triangle-exclamation"></i> Error al consultar
+                    </div>
+                `;
+                setTimeout(() => { container.innerHTML = container.originalHtml; }, 3000);
+            }
+        }
+
+        function cancelarCorregirText(event, uuid) {
+            event.preventDefault();
+            const container = document.getElementById(`textquality-container-${uuid}`);
+            if (container && container.originalHtml) {
+                container.innerHTML = container.originalHtml;
+            }
+        }
+
+        async function desarTextCorregit(event, uuid) {
+            event.preventDefault();
+            const container = document.getElementById(`textquality-container-${uuid}`);
+            if (!container) return;
+
+            const titleInput = document.getElementById(`quality-title-${uuid}`);
+            const title = titleInput ? titleInput.value.trim() : '';
+            if (!title) {
+                alert("El títol no pot quedar buit.");
+                return;
+            }
+
+            const subTitleInput = document.getElementById(`quality-subtitle-${uuid}`);
+            const subTitle = subTitleInput ? subTitleInput.value.trim() : '';
+
+            const env = document.querySelector('input[name="envType"]:checked')?.value || 'test';
+
+            container.innerHTML = `
+                <span class="inline-flex items-center gap-1 text-[10px] text-purple-700 font-bold bg-purple-50 border border-purple-200 px-2 py-1 rounded">
+                    <i class="fa-solid fa-spinner fa-spin text-purple-600 mr-1"></i>Sincronitzant amb Egreta...
+                </span>
+            `;
+
+            try {
+                const response = await apiFetch(`/pure/corrections/${uuid}/apply-text-quality-fix`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title, subTitle, env })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    container.innerHTML = `
+                        <span class="inline-flex items-center gap-0.5 text-[10px] text-emerald-700 font-bold bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">
+                            <i class="fa-solid fa-circle-check"></i> Text corregit i sincronitzat
+                        </span>
+                    `;
+                    const pub = rawData.publications.find(p => p.uuid === uuid);
+                    if (pub) {
+                        pub.titulo = title + (subTitle ? ': ' + subTitle : '');
+                        if (pub.errors) {
+                            pub.errors = pub.errors.filter(e => e !== "TEXT_QUALITY");
+                        }
+                        pub.reviewed = true;
+                        guardarRevisio(uuid, true, pub.observations || '');
+                    }
+                    setTimeout(() => { applyFilters(); }, 600);
+                } else {
+                    container.innerHTML = `
+                        <div class="text-rose-600 text-[10px] font-semibold flex flex-col gap-0.5 items-start">
+                            <span class="flex items-center gap-1"><i class="fa-solid fa-triangle-exclamation"></i> Error al guardar</span>
+                            <span class="text-[9px] font-normal leading-normal whitespace-pre-wrap">${escapeHtml(data.message)}</span>
+                            <button onclick="cancelarCorregirText(event, '${uuid}')" class="mt-1 px-1 py-0.5 rounded border border-slate-200 text-[8px] bg-white text-slate-600">Torna-ho a provar</button>
+                        </div>
+                    `;
+                }
+            } catch (err) {
+                console.error("Error applying text quality fix:", err);
+                container.innerHTML = `
+                    <div class="text-rose-600 text-[10px] font-semibold flex flex-col gap-0.5 items-start">
+                        <span class="flex items-center gap-1"><i class="fa-solid fa-triangle-exclamation"></i> Error de xarxa</span>
+                        <span class="text-[9px] font-normal leading-normal whitespace-pre-wrap">${escapeHtml(err.message)}</span>
+                        <button onclick="cancelarCorregirText(event, '${uuid}')" class="mt-1 px-1 py-0.5 rounded border border-slate-200 text-[8px] bg-white text-slate-600">Torna-ho a provar</button>
+                    </div>
+                `;
+            }
+        }
+
         function cancelarIsbnWeb(event, uuid) {
             event.preventDefault();
             const container = document.getElementById(`isbn-search-container-${uuid}`);
@@ -1340,7 +1804,7 @@
             if (!container) return;
 
             const selectEntorn = document.getElementById('selectEntorn');
-            const env = selectEntorn ? selectEntorn.value : 'test';
+            const env = selectEntorn ? selectEntorn.value : ((typeof window.getDefaultEnv === 'function') ? window.getDefaultEnv() : 'prod');
 
             container.innerHTML = `
                 <span class="inline-flex items-center gap-1 text-[10px] text-slate-500 font-medium">
@@ -1492,7 +1956,7 @@
             if (!container) return;
 
             const selectEntorn = document.getElementById('selectEntorn');
-            const env = selectEntorn ? selectEntorn.value : 'test';
+            const env = selectEntorn ? selectEntorn.value : ((typeof window.getDefaultEnv === 'function') ? window.getDefaultEnv() : 'prod');
 
             container.innerHTML = `
                 <span class="inline-flex items-center gap-1 text-[10px] text-slate-500 font-medium">
@@ -1779,7 +2243,7 @@
             const selectedLang = select.value;
             
             const selectEntorn = document.getElementById('selectEntorn');
-            const env = selectEntorn ? selectEntorn.value : 'test';
+            const env = selectEntorn ? selectEntorn.value : ((typeof window.getDefaultEnv === 'function') ? window.getDefaultEnv() : 'prod');
             
             const container = document.getElementById(`lang-detect-${uuid}`);
             if (container) {

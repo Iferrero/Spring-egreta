@@ -12,6 +12,26 @@ function detectDefaultApiBaseUrl() {
     return '/api';
 }
 
+function getDefaultEnv() {
+    return 'prod';
+}
+
+function initEnvironmentSelectors() {
+    const defaultEnv = getDefaultEnv();
+    const selectors = document.querySelectorAll('#selectEntorn, #autoApplyEnv, #autoValidateEnv, select[name="entorn"], select[name="env"]');
+    selectors.forEach(sel => {
+        if (sel) {
+            sel.value = defaultEnv;
+        }
+    });
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initEnvironmentSelectors);
+} else {
+    initEnvironmentSelectors();
+}
+
 const resolvedApiBase =
     appConfigFromWindow.apiBaseUrl ||
     metaApiBase ||
@@ -31,6 +51,8 @@ window.APP_CONFIG = {
         ...configuredCandidates
     ].filter(Boolean)
 };
+
+window.getDefaultEnv = getDefaultEnv;
 
 window.apiUrl = window.apiUrl || function(path, baseOverride) {
     const baseFromConfig = baseOverride || window.APP_CONFIG.apiBaseUrl || '/api';
@@ -54,11 +76,13 @@ window.apiFetch = window.apiFetch || async function(path, options) {
         try {
             const response = await fetch(url, options);
             if (response.ok) {
+                window.APP_CONFIG.apiBaseUrl = base;
                 return response;
             }
 
             lastResponse = response;
-            if (response.status !== 404) {
+            const contentType = response.headers.get('content-type') || '';
+            if (response.status !== 404 || contentType.includes('application/json')) {
                 return response;
             }
         } catch (error) {

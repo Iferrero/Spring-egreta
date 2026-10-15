@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html lang="ca">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Identificadors ROR per Similitud - Organitzacions Externes</title>
+    <script src="config.js"></script>
+    <script src="uab-brand.js" defer></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="uab-theme.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .similarity-badge {
+            font-variant-numeric: tabular-nums;
+        }
+    </style>
+</head>
+
+<body class="bg-slate-50 min-h-screen">
+    <div class="mx-auto w-[95%] px-4 py-8">
+        <!-- Header -->
+        <header class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+            <a href="index-orgaext.html" class="hover:opacity-80 transition-opacity flex items-center gap-3">
+                <span class="inline-flex items-center justify-center w-11 h-11 rounded-xl bg-gradient-to-tr from-cyan-600 to-indigo-600 text-white shadow-md shadow-cyan-100">
+                    <i class="fa-solid fa-link text-lg"></i>
+                </span>
+                <div>
+                    <h1 class="text-xl font-extrabold text-slate-800 tracking-tight">Assignació d'Identificadors ROR</h1>
+                    <p class="text-xs text-slate-500">Detecció per similitud de noms i vinculació de l'identificador ROR oficial (sense alterar el nom existent)</p>
+                </div>
+            </a>
+            <div class="flex items-center gap-2">
+                <a href="organizaciones-externas-kpis.html" class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 active:scale-95 text-xs font-semibold text-slate-700 shadow-sm transition-all hover:border-slate-300">
+                    <i class="fa-solid fa-gauge-high text-indigo-500"></i> Gestió KPI
+                </a>
+                <a href="organizaciones-externas.html" class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 active:scale-95 text-xs font-semibold text-slate-700 shadow-sm transition-all hover:border-slate-300">
+                    <i class="fa-solid fa-list text-slate-500"></i> Llistat
+                </a>
+            </div>
+        </header>
+
+        <!-- Quick Tester & Diagnostic -->
+        <section class="mb-6 bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
+                <div>
+                    <h3 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                        <i class="fa-solid fa-magnifying-glass text-cyan-600"></i>
+                        Comprovació puntual d'un nom d'organització
+                    </h3>
+                    <p class="text-xs text-slate-500 mt-0.5">
+                        Introdueix un nom o UUID per verificar la coincidència amb el registre ROR i obtenir el seu identificador.
+                    </p>
+                </div>
+            </div>
+
+            <form id="singleTestForm" class="flex flex-col sm:flex-row gap-3">
+                <div class="relative flex-1">
+                    <i class="fa-solid fa-building absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+                    <input type="text" id="singleTestInput" placeholder="Ex: Akademie für Führungs-kräfte der Wirtschaft, E.W."
+                        class="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:bg-white transition-all text-slate-800 font-medium placeholder-slate-400" />
+                </div>
+                <button type="submit" id="btnSingleTest" class="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-cyan-600 hover:bg-cyan-700 active:scale-95 text-white text-sm font-semibold rounded-xl shadow-sm transition-all">
+                    <i class="fa-solid fa-bolt"></i>
+                    <span>Analitzar</span>
+                </button>
+            </form>
+
+            <div id="singleTestResult" class="hidden mt-4 pt-4 border-t border-slate-100"></div>
+        </section>
+
+        <!-- Batch Normalization / Auto-Apply section -->
+        <section class="mb-6 bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
+                <div>
+                    <h3 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                        <i class="fa-solid fa-wand-magic-sparkles text-amber-500"></i>
+                        Procés d'assignació d'identificadors ROR en bloc (Auto-Apply)
+                    </h3>
+                    <p class="text-xs text-slate-500 mt-0.5">
+                        Vincula l'identificador ROR oficial en segon pla per a totes les organitzacions sense ROR que superin el llindar de similitud de nom, conservant el seu nom actual intacte.
+                    </p>
+                </div>
+                <div class="flex items-center gap-3">
+                    <span id="autoApplyBadge" class="hidden px-3 py-1 bg-amber-50 text-amber-700 border border-amber-200 rounded-full text-xs font-semibold items-center gap-1.5 animate-pulse">
+                        <i class="fa-solid fa-spinner fa-spin"></i> Executant en segon pla...
+                    </span>
+                    <button id="btnToggleAutoApplyDrawer" type="button" class="text-xs font-semibold text-cyan-600 hover:text-cyan-800 flex items-center gap-1">
+                        <span>Mostrar panell de control</span>
+                        <i class="fa-solid fa-chevron-down text-[10px] transition-transform" id="drawerChevron"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div id="autoApplyDrawer" class="hidden pt-4 border-t border-slate-100">
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4 mb-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">Entorn de sincronització:</label>
+                        <select id="autoApplyEnv" class="w-full bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-700 font-semibold focus:outline-none focus:ring-1 focus:ring-cyan-500">
+                            <option value="test" selected>Test (egretat.uab.cat)</option>
+                            <option value="prod">Producció (egreta.uab.cat)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">Filtre d'identificador:</label>
+                        <select id="autoApplyOnlyWithoutRor" class="w-full bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-700 font-semibold focus:outline-none focus:ring-1 focus:ring-cyan-500">
+                            <option value="true" selected>Només sense ROR (Recomanat)</option>
+                            <option value="false">Totes les organitzacions</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">Filtre de país:</label>
+                        <select id="autoApplyOnlyWithoutCountry" class="w-full bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-700 font-semibold focus:outline-none focus:ring-1 focus:ring-cyan-500">
+                            <option value="false" selected>Tots els països</option>
+                            <option value="true">Només sense país</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">Llindar mínim similitud:</label>
+                        <select id="autoApplyThreshold" class="w-full bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-700 font-semibold focus:outline-none focus:ring-1 focus:ring-cyan-500">
+                            <option value="0.95">95% (Només molt evidents)</option>
+                            <option value="0.90" selected>90% (Recomanat)</option>
+                            <option value="0.85">85% (Més flexible)</option>
+                            <option value="0.80">80% (Permet canvis majors)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">Acció sobre el nom:</label>
+                        <select id="autoApplyChangeName" class="w-full bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-700 font-semibold focus:outline-none focus:ring-1 focus:ring-cyan-500">
+                            <option value="false" selected>Conservar nom (Només ROR)</option>
+                            <option value="true">Substituir pel nom canònic</option>
+                        </select>
+                    </div>
+                    <div class="flex items-end gap-2">
+                        <button id="btnStartAutoApply" type="button" class="flex-1 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs font-semibold rounded-lg shadow-sm transition-all flex items-center justify-center gap-1.5">
+                            <i class="fa-solid fa-play"></i> Iniciar
+                        </button>
+                        <button id="btnStopAutoApply" type="button" disabled class="px-4 py-2 bg-rose-600 hover:bg-rose-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-semibold rounded-lg shadow-sm transition-all flex items-center justify-center gap-1.5">
+                            <i class="fa-solid fa-stop"></i> Aturar
+                        </button>
+                        <button id="btnDownloadLog" type="button" class="px-3 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-lg shadow-sm transition-all" title="Descarregar log complet">
+                            <i class="fa-solid fa-download"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Progress Bar & Counter -->
+                <div class="space-y-2 mb-4">
+                    <div class="flex justify-between text-xs text-slate-600">
+                        <span id="autoApplyProgressLabel">Estat: Inactiu</span>
+                        <span id="autoApplyStats">0 / 0 processades (0 aplicades)</span>
+                    </div>
+                    <div class="w-full bg-slate-200 rounded-full h-2.5 overflow-hidden">
+                        <div id="autoApplyProgressBar" class="bg-cyan-600 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+                    </div>
+                </div>
+
+                <!-- Live Log Terminal -->
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">Registre d'activitat en directe:</label>
+                    <pre id="autoApplyLogTerminal" class="w-full h-40 bg-slate-900 text-slate-200 p-3 rounded-xl text-xs font-mono overflow-y-auto leading-relaxed border border-slate-800">Cap procés actiu.</pre>
+                </div>
+            </div>
+        </section>
+
+        <!-- Proposals Explorer Table -->
+        <section class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+            <!-- Table Toolbar -->
+            <div class="p-6 border-b border-slate-100">
+                <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                    <div>
+                        <h2 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                            <i class="fa-solid fa-table-list text-cyan-600"></i>
+                            Propostes d'Identificadors ROR
+                        </h2>
+                        <p class="text-xs text-slate-500 mt-0.5" id="proposalsSubheader">
+                            Llistat d'organitzacions candidates a vincular el seu identificador ROR segons la similitud de nom amb el registre oficial.
+                        </p>
+                    </div>
+
+                    <!-- Filters -->
+                    <div class="flex flex-wrap items-center gap-3">
+                        <div class="relative">
+                            <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                            <input type="text" id="filterSearch" placeholder="Filtrar per nom..."
+                                class="pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-cyan-500 text-slate-800 font-medium" />
+                        </div>
+
+                        <div class="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs text-slate-600">
+                            <span>Similitud:</span>
+                            <select id="filterMinSim" class="bg-transparent font-bold text-slate-800 focus:outline-none cursor-pointer">
+                                <option value="0.70">≥ 70%</option>
+                                <option value="0.75" selected>≥ 75%</option>
+                                <option value="0.80">≥ 80%</option>
+                                <option value="0.85">≥ 85%</option>
+                                <option value="0.90">≥ 90%</option>
+                            </select>
+                        </div>
+
+                        <div class="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs text-slate-600">
+                            <span>Analitzar:</span>
+                            <select id="filterLimit" class="bg-transparent font-bold text-slate-800 focus:outline-none cursor-pointer">
+                                <option value="100">100 orgs</option>
+                                <option value="200">200 orgs</option>
+                                <option value="500" selected>500 orgs</option>
+                                <option value="1000">1.000 orgs</option>
+                                <option value="5000">5.000 orgs</option>
+                                <option value="10000">10.000 orgs</option>
+                                <option value="0">Totes les organitzacions (Sense límit)</option>
+                            </select>
+                        </div>
+
+                        <label class="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs text-slate-700 font-medium cursor-pointer hover:bg-slate-100 transition-colors">
+                            <input type="checkbox" id="filterOnlyWithoutRor" checked class="rounded text-cyan-600 focus:ring-cyan-500 cursor-pointer" />
+                            <span>Només sense ROR</span>
+                        </label>
+
+                        <label class="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs text-slate-700 font-medium cursor-pointer hover:bg-slate-100 transition-colors">
+                            <input type="checkbox" id="filterOnlyWithoutCountry" class="rounded text-cyan-600 focus:ring-cyan-500 cursor-pointer" />
+                            <span>Només sense país</span>
+                        </label>
+
+                        <div class="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs text-slate-600">
+                            <span>Entorn:</span>
+                            <select id="applyEnvSelect" class="bg-transparent font-bold text-slate-800 focus:outline-none cursor-pointer">
+                                <option value="test" selected>Test (egretat)</option>
+                                <option value="prod">Prod (egreta)</option>
+                            </select>
+                        </div>
+
+                        <button id="btnFetchProposals" type="button" class="inline-flex items-center gap-2 px-4 py-1.5 bg-cyan-600 hover:bg-cyan-700 active:scale-95 text-white text-xs font-semibold rounded-xl shadow-sm transition-all">
+                            <i class="fa-solid fa-arrows-rotate"></i> Cercar propostes
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Table content -->
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-xs text-slate-700">
+                    <thead class="bg-slate-50/80 text-slate-500 font-semibold border-b border-slate-100 uppercase tracking-wider text-[11px]">
+                        <tr>
+                            <th class="py-3 px-4 w-12">#</th>
+                            <th class="py-3 px-4">Nom Actual (Egreta / BBDD)</th>
+                            <th class="py-3 px-4">Entitat ROR Coincident</th>
+                            <th class="py-3 px-4 text-center w-28">Similitud</th>
+                            <th class="py-3 px-4 w-44">País / Tipus ROR</th>
+                            <th class="py-3 px-4 text-right w-40">Accions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="proposalsTableBody" class="divide-y divide-slate-100">
+                        <tr>
+                            <td colspan="6" class="py-12 text-center text-slate-400">
+                                <i class="fa-solid fa-magnifying-glass text-3xl mb-3 block text-slate-300"></i>
+                                Feu clic a "Cercar propostes" per escanejar organitzacions i detectar noms a normalitzar.
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Table Footer / Pagination -->
+            <div id="tableFooter" class="hidden p-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
+                <div id="paginationInfo">Mostrant 0 de 0 propostes</div>
+                <div class="flex items-center gap-2">
+                    <button id="btnPrevPage" class="px-3 py-1.5 border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed font-medium text-slate-700">
+                        <i class="fa-solid fa-chevron-left text-[10px] mr-1"></i> Anterior
+                    </button>
+                    <span id="pageIndicator" class="font-semibold text-slate-700 px-2">1</span>
+                    <button id="btnNextPage" class="px-3 py-1.5 border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed font-medium text-slate-700">
+                        Següent <i class="fa-solid fa-chevron-right text-[10px] ml-1"></i>
+                    </button>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="toast" class="fixed bottom-6 right-6 z-50 transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none flex items-center gap-3 px-4 py-3 rounded-xl shadow-xl border text-sm font-medium"></div>
+
+    <script>
+        const extOrgUrl = (path) => (window.apiUrl ? window.apiUrl('/external-organizations' + path) : ('/api/external-organizations' + path));
+        const extOrgFetch = (path, opts) => (window.apiFetch ? window.apiFetch('/external-organizations' + path, opts) : fetch('/api/external-organizations' + path, opts));
+        
+        let currentPage = 0;
+        const pageSize = 20;
+        let totalItems = 0;
+        let autoApplyPollingInterval = null;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            initSingleTester();
+            initProposalsExplorer();
+            initAutoApplySection();
+        });
+
+        // =========================================================================
+        // Toast Helper
+        // =========================================================================
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            toast.className = `fixed bottom-6 right-6 z-50 transform translate-y-0 opacity-100 transition-all duration-300 flex items-center gap-3 px-4 py-3 rounded-xl shadow-xl border text-sm font-medium ${
+                type === 'success' ? 'bg-emerald-900 text-white border-emerald-700' : 'bg-rose-900 text-white border-rose-700'
+            }`;
+            const icon = type === 'success' ? '<i class="fa-solid fa-circle-check text-emerald-400"></i>' : '<i class="fa-solid fa-circle-exclamation text-rose-400"></i>';
+            toast.innerHTML = `${icon} <span>${message}</span>`;
+            
+            setTimeout(() => {
+                toast.classList.add('translate-y-20', 'opacity-0');
+            }, 4000);
+        }
+
+        // =========================================================================
+        // 1. Single Organization Tester
+        // =========================================================================
+        function initSingleTester() {
+            const form = document.getElementById('singleTestForm');
+            const input = document.getElementById('singleTestInput');
+            const btn = document.getElementById('btnSingleTest');
+            const resultDiv = document.getElementById('singleTestResult');
+
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const query = input.value.trim();
+                if (!query) return;
+
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Analitzant...';
+                resultDiv.classList.remove('hidden');
+                resultDiv.innerHTML = '<div class="text-xs text-slate-500 py-2 flex items-center gap-2"><i class="fa-solid fa-spinner fa-spin text-cyan-600"></i> Consultant el registre ROR (col·lecció ror_data)...</div>';
+
+                try {
+                    const isUuid = /^[0-9a-fA-F-]{36}$/.test(query);
+                    const path = `/stats/suggest-name?${isUuid ? 'uuid=' : 'name='}${encodeURIComponent(query)}`;
+                    const res = await extOrgFetch(path);
+                    const data = await res.json();
+
+                    if (!data || !data.suggestedName || data.suggestedName === '') {
+                        resultDiv.innerHTML = `
+                            <div class="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800 flex items-center gap-2">
+                                <i class="fa-solid fa-circle-info text-amber-500 text-sm"></i>
+                                <span>No s'ha trobat cap proposta de nom diferent per a <strong>"${escapeHtml(query)}"</strong> a ROR o ja és idèntic al canònic.</span>
+                            </div>`;
+                        return;
+                    }
+
+                    const simPercent = Math.round(data.similarity * 100);
+                    const simColor = simPercent >= 90 ? 'bg-emerald-100 text-emerald-800 border-emerald-300' :
+                                     simPercent >= 80 ? 'bg-cyan-100 text-cyan-800 border-cyan-300' : 'bg-amber-100 text-amber-800 border-amber-300';
+
+                    resultDiv.innerHTML = `
+                        <div class="bg-slate-50 border border-slate-200 rounded-xl p-4">
+                            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
+                                <div>
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <span class="text-xs font-semibold text-slate-500">Nom Actual:</span>
+                                        <span class="text-xs font-bold text-slate-800">${escapeHtml(data.currentName)}</span>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-xs font-semibold text-slate-500">Entitat ROR Coincident:</span>
+                                        <span class="text-sm font-extrabold text-emerald-700">${escapeHtml(data.suggestedName)}</span>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <span class="px-2.5 py-1 rounded-full text-xs font-bold border ${simColor}">
+                                        ${simPercent}% similitud
+                                    </span>
+                                    ${data.rorId ? `<a href="${data.rorId}" onclick="openRorWindow('${escapeJs(data.rorId)}'); return false;" class="inline-flex items-center gap-1 px-2.5 py-1 bg-white border border-slate-200 hover:border-cyan-400 hover:text-cyan-600 rounded-full text-xs font-semibold text-slate-600 transition-colors shadow-xs cursor-pointer" title="Obrir fitxa a ROR (Finestra flotant)"><i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i> ROR</a>` : ''}
+                                </div>
+                            </div>
+
+                            <div class="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-200/80 text-xs text-slate-600">
+                                <div class="flex items-center gap-4">
+                                    ${data.country ? `<span><i class="fa-solid fa-globe text-slate-400 mr-1"></i> ${escapeHtml(data.country)}</span>` : ''}
+                                    ${data.type ? `<span><i class="fa-solid fa-tag text-slate-400 mr-1"></i> ${escapeHtml(data.type)}</span>` : ''}
+                                    ${data.uuid ? `<button type="button" onclick="openEgretaOrg('${data.pureId || ''}', '${data.uuid}')" class="font-mono text-[11px] text-cyan-600 hover:text-cyan-800 hover:underline inline-flex items-center gap-1 cursor-pointer bg-cyan-50/70 border border-cyan-200 px-2 py-0.5 rounded transition-colors" title="Obrir fitxa a Egreta en finestra flotant"><i class="fa-solid fa-arrow-up-right-from-square text-[9px]"></i> UUID: ${data.uuid}</button>` : ''}
+                                </div>
+                                ${data.uuid && data.rorId ? `
+                                <button type="button" onclick="applySingleProposal('${data.uuid}', '${escapeJs(data.rorId)}', '${escapeJs(data.currentName)}', this)" class="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-lg font-semibold text-xs transition-all shadow-xs">
+                                    <i class="fa-solid fa-link"></i> Vincular ROR a Egreta
+                                </button>` : ''}
+                            </div>
+                        </div>`;
+                } catch (err) {
+                    resultDiv.innerHTML = `<div class="text-xs text-rose-600 py-2"><i class="fa-solid fa-triangle-exclamation mr-1"></i> Error en analitzar: ${escapeHtml(err.message)}</div>`;
+                } finally {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fa-solid fa-bolt"></i> <span>Analitzar</span>';
+                }
+            });
+        }
+
+        // =========================================================================
+        // 2. Proposals Explorer Table
+        // =========================================================================
+        function initProposalsExplorer() {
+            const btnFetch = document.getElementById('btnFetchProposals');
+            const searchInput = document.getElementById('filterSearch');
+            const minSimSelect = document.getElementById('filterMinSim');
+            const limitSelect = document.getElementById('filterLimit');
+            const btnPrev = document.getElementById('btnPrevPage');
+            const btnNext = document.getElementById('btnNextPage');
+
+            btnFetch.addEventListener('click', () => {
+                currentPage = 0;
+                fetchProposals();
+            });
+
+            btnPrev.addEventListener('click', () => {
+                if (currentPage > 0) {
+                    currentPage--;
+                    fetchProposals();
+                }
+            });
+
+            btnNext.addEventListener('click', () => {
+                if ((currentPage + 1) * pageSize < totalItems) {
+                    currentPage++;
+                    fetchProposals();
+                }
+            });
+
+            minSimSelect.addEventListener('change', () => { currentPage = 0; fetchProposals(); });
+            limitSelect.addEventListener('change', () => { currentPage = 0; fetchProposals(); });
+            const onlyWithoutRorCheckbox = document.getElementById('filterOnlyWithoutRor');
+            if (onlyWithoutRorCheckbox) {
+                onlyWithoutRorCheckbox.addEventListener('change', () => { currentPage = 0; fetchProposals(); });
+            }
+            const onlyWithoutCountryCheckbox = document.getElementById('filterOnlyWithoutCountry');
+            if (onlyWithoutCountryCheckbox) {
+                onlyWithoutCountryCheckbox.addEventListener('change', () => { currentPage = 0; fetchProposals(); });
+            }
+            searchInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    currentPage = 0;
+                    fetchProposals();
+                }
+            });
+        }
+
+        async function fetchProposals() {
+            const tableBody = document.getElementById('proposalsTableBody');
+            const tableFooter = document.getElementById('tableFooter');
+            const paginationInfo = document.getElementById('paginationInfo');
+            const pageIndicator = document.getElementById('pageIndicator');
+            const btnPrev = document.getElementById('btnPrevPage');
+            const btnNext = document.getElementById('btnNextPage');
+            const btnFetch = document.getElementById('btnFetchProposals');
+
+            const minSim = document.getElementById('filterMinSim').value;
+            const limit = document.getElementById('filterLimit').value;
+            const search = document.getElementById('filterSearch').value.trim();
+            const onlyWithoutRor = document.getElementById('filterOnlyWithoutRor') ? document.getElementById('filterOnlyWithoutRor').checked : true;
+            const onlyWithoutCountry = document.getElementById('filterOnlyWithoutCountry') ? document.getElementById('filterOnlyWithoutCountry').checked : false;
+
+            btnFetch.disabled = true;
+            btnFetch.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Escanejant...';
+
+            tableBody.innerHTML = `
+                <tr>
+                    <td colspan="6" class="py-12 text-center text-slate-500">
+                        <i class="fa-solid fa-spinner fa-spin text-3xl mb-3 block text-cyan-600"></i>
+                        Escanejant organitzacions i consultant la col·lecció ROR (ror_data)...
+                    </td>
+                </tr>`;
+
+            try {
+                const params = new URLSearchParams({
+                    page: currentPage,
+                    size: pageSize,
+                    minSimilarity: minSim,
+                    limit: limit,
+                    onlyWithoutRor: onlyWithoutRor,
+                    onlyWithoutCountry: onlyWithoutCountry
+                });
+                if (search) params.append('search', search);
+
+                const res = await extOrgFetch(`/stats/name-proposals?${params.toString()}`);
+                const data = await res.json();
+
+                totalItems = data.total || 0;
+                const items = data.items || [];
+
+                if (items.length === 0) {
+                    tableBody.innerHTML = `
+                        <tr>
+                            <td colspan="6" class="py-12 text-center text-slate-400">
+                                <i class="fa-solid fa-check-double text-3xl mb-3 block text-emerald-500"></i>
+                                No s'han trobat discrepàncies de noms pendents amb els filtres seleccionats.
+                            </td>
+                        </tr>`;
+                    tableFooter.classList.add('hidden');
+                    return;
+                }
+
+                tableBody.innerHTML = items.map((item, idx) => {
+                    const rowNum = (currentPage * pageSize) + idx + 1;
+                    const simPercent = Math.round(item.similarity * 100);
+                    const simColor = simPercent >= 90 ? 'bg-emerald-100 text-emerald-800 border-emerald-300' :
+                                     simPercent >= 80 ? 'bg-cyan-100 text-cyan-800 border-cyan-300' : 'bg-amber-100 text-amber-800 border-amber-300';
+
+                    return `
+                        <tr class="hover:bg-slate-50/80 transition-colors" id="row-${item.uuid}">
+                            <td class="py-3 px-4 font-mono text-[11px] text-slate-400">${rowNum}</td>
+                            <td class="py-3 px-4">
+                                <div class="font-bold text-slate-800 text-xs">${escapeHtml(item.currentName)}</div>
+                                <div class="mt-0.5">
+                                    <button type="button" onclick="openEgretaOrg('${item.pureId || ''}', '${item.uuid}')" class="font-mono text-[10px] text-cyan-600 hover:text-cyan-800 hover:underline inline-flex items-center gap-1 cursor-pointer bg-cyan-50/70 border border-cyan-200 px-1.5 py-0.5 rounded transition-colors" title="Obrir fitxa a Egreta en finestra flotant">
+                                        <i class="fa-solid fa-arrow-up-right-from-square text-[8px]"></i> ${item.uuid}
+                                    </button>
+                                </div>
+                            </td>
+                            <td class="py-3 px-4">
+                                <div class="font-extrabold text-emerald-700 text-xs flex items-center gap-1.5">
+                                    <span>${escapeHtml(item.suggestedName)}</span>
+                                </div>
+                                ${item.rorId ? `
+                                <div class="mt-0.5">
+                                    <a href="${item.rorId}" onclick="openRorWindow('${escapeJs(item.rorId)}'); return false;" class="inline-flex items-center gap-1 text-[10px] text-slate-500 hover:text-cyan-600 hover:underline cursor-pointer" title="Obrir fitxa a ROR (Finestra flotant)">
+                                        <i class="fa-solid fa-arrow-up-right-from-square text-[8px]"></i> ${item.rorId.replace('https://ror.org/', 'ror:')}
+                                    </a>
+                                </div>` : ''}
+                            </td>
+                            <td class="py-3 px-4 text-center">
+                                <span class="px-2 py-0.5 rounded-full text-xs font-bold border ${simColor} similarity-badge">
+                                    ${simPercent}%
+                                </span>
+                            </td>
+                            <td class="py-3 px-4">
+                                <div class="text-[11px] text-slate-700 font-medium">${escapeHtml(item.country || '—')}</div>
+                                <div class="text-[10px] text-slate-400">${escapeHtml(item.type || '—')}</div>
+                            </td>
+                            <td class="py-3 px-4 text-right">
+                                <div class="inline-flex items-center gap-1.5">
+                                    ${item.rorId ? `
+                                    <button type="button" onclick="applySingleProposal('${item.uuid}', '${escapeJs(item.rorId)}', '${escapeJs(item.currentName)}', '${escapeJs(item.suggestedName)}', false, this)" 
+                                        class="inline-flex items-center gap-1 px-2.5 py-1.5 bg-cyan-600 hover:bg-cyan-700 active:scale-95 text-white rounded-lg font-semibold text-[11px] transition-all shadow-xs" title="Assignar identificador ROR conservant el nom actual">
+                                        <i class="fa-solid fa-link"></i> <span>Assignar ROR</span>
+                                    </button>` : ''}
+                                    <button type="button" onclick="applySingleProposal('${item.uuid}', '${escapeJs(item.rorId)}', '${escapeJs(item.currentName)}', '${escapeJs(item.suggestedName)}', true, this)" 
+                                        class="inline-flex items-center gap-1 px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-lg font-semibold text-[11px] transition-all shadow-xs" title="Substituir nom actual pel nom canònic oficial">
+                                        <i class="fa-solid fa-pen-to-square"></i> <span>Canviar Nom</span>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>`;
+                }).join('');
+
+                tableFooter.classList.remove('hidden');
+                const fromNum = (currentPage * pageSize) + 1;
+                const toNum = Math.min((currentPage + 1) * pageSize, totalItems);
+                paginationInfo.textContent = `Mostrant ${fromNum} - ${toNum} de ${totalItems} propostes`;
+                pageIndicator.textContent = `${currentPage + 1} / ${Math.ceil(totalItems / pageSize) || 1}`;
+                btnPrev.disabled = currentPage === 0;
+                btnNext.disabled = (currentPage + 1) * pageSize >= totalItems;
+
+            } catch (err) {
+                tableBody.innerHTML = `<tr><td colspan="6" class="py-8 text-center text-rose-600"><i class="fa-solid fa-triangle-exclamation mr-1"></i> Error en carregar propostes: ${escapeHtml(err.message)}</td></tr>`;
+            } finally {
+                btnFetch.disabled = false;
+                btnFetch.innerHTML = '<i class="fa-solid fa-arrows-rotate"></i> Cercar propostes';
+            }
+        }
+
+        async function applySingleProposal(uuid, rorId, currentName, suggestedName, applyName, btnElement) {
+            const env = document.getElementById('applyEnvSelect') ? document.getElementById('applyEnvSelect').value : 'test';
+            const actionText = applyName
+                ? `Vols substituir el nom "${currentName}" pel nom canònic oficial "${suggestedName}" ${rorId ? `i assignar l'identificador ROR [${rorId}]` : ''} a Egreta [${env.toUpperCase()}]?`
+                : `Vols associar l'identificador ROR [${rorId}] a l'organització "${currentName}" a Egreta [${env.toUpperCase()}]?\n\n- El nom actual es conservarà intacte.`;
+
+            if (!confirm(actionText + `\n\n- El país només s'assignarà en cas que l'organització no en tingui cap.`)) {
+                return;
+            }
+
+            const originalHtml = btnElement.innerHTML;
+            btnElement.disabled = true;
+            btnElement.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+
+            try {
+                const res = await extOrgFetch(`/stats/apply-suggested-name`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ uuid, rorId, suggestedName, applyName, env })
+                });
+                const data = await res.json();
+
+                if (data.updated) {
+                    if (data.appliedName) {
+                        showToast(`Nom canviat a "${data.appliedName}" ${data.appliedRor ? 'i ROR vinculat' : ''} correctament!`, 'success');
+                    } else if (data.appliedCountry) {
+                        showToast(`Identificador ROR i país [${data.appliedCountry}] assignats correctament!`, 'success');
+                    } else {
+                        showToast(`Identificador ROR vinculat correctament!`, 'success');
+                    }
+                    const row = document.getElementById(`row-${uuid}`);
+                    if (row) {
+                        row.classList.add('bg-emerald-50');
+                        btnElement.className = 'inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-700 text-white rounded-lg font-semibold text-xs cursor-default';
+                        btnElement.innerHTML = '<i class="fa-solid fa-check-double"></i> Actualitzat';
+                    }
+                } else {
+                    showToast(`Error: ${data.reason || 'Sincronització fallida'}`, 'error');
+                    btnElement.disabled = false;
+                    btnElement.innerHTML = originalHtml;
+                }
+            } catch (err) {
+                showToast(`Error: ${err.message}`, 'error');
+                btnElement.disabled = false;
+                btnElement.innerHTML = originalHtml;
+            }
+        }
+
+        // =========================================================================
+        // 3. Auto-Apply Section & Live Polling
+        // =========================================================================
+        function initAutoApplySection() {
+            const btnToggle = document.getElementById('btnToggleAutoApplyDrawer');
+            const drawer = document.getElementById('autoApplyDrawer');
+            const chevron = document.getElementById('drawerChevron');
+            const btnStart = document.getElementById('btnStartAutoApply');
+            const btnStop = document.getElementById('btnStopAutoApply');
+            const btnDownload = document.getElementById('btnDownloadLog');
+
+            btnToggle.addEventListener('click', () => {
+                drawer.classList.toggle('hidden');
+                chevron.classList.toggle('rotate-180');
+            });
+
+            btnStart.addEventListener('click', async () => {
+                const env = document.getElementById('autoApplyEnv').value;
+                const similarity = document.getElementById('autoApplyThreshold').value;
+                const onlyWithoutRor = document.getElementById('autoApplyOnlyWithoutRor') ? document.getElementById('autoApplyOnlyWithoutRor').value : 'true';
+                const onlyWithoutCountry = document.getElementById('autoApplyOnlyWithoutCountry') ? document.getElementById('autoApplyOnlyWithoutCountry').value : 'false';
+                const applyName = document.getElementById('autoApplyChangeName') ? document.getElementById('autoApplyChangeName').value : 'false';
+
+                const renameMsg = applyName === 'true'
+                    ? '- ATENCIÓ: Es canviarà el nom actual de les organitzacions pel nom canònic oficial proposat.\n'
+                    : '- El nom actual de cada organització es mantindrà intacte.\n';
+
+                if (!confirm(`Estàs a punt d'iniciar el procés en bloc a Egreta [${env.toUpperCase()}] per a organitzacions amb similitud >= ${Math.round(similarity * 100)}% (Només sense ROR: ${onlyWithoutRor === 'true' ? 'Sí' : 'No'}, Només sense país: ${onlyWithoutCountry === 'true' ? 'Sí' : 'No'}).\n\n${renameMsg}- El país només s'assignarà en aquelles organitzacions que no en tinguin cap.\n\nVols continuar?`)) {
+                    return;
+                }
+
+                try {
+                    const res = await extOrgFetch(`/stats/auto-apply-name/start?env=${encodeURIComponent(env)}&similarity=${encodeURIComponent(similarity)}&onlyWithoutRor=${encodeURIComponent(onlyWithoutRor)}&onlyWithoutCountry=${encodeURIComponent(onlyWithoutCountry)}&applyName=${encodeURIComponent(applyName)}`, {
+                        method: 'POST'
+                    });
+                    const data = await res.json();
+                    if (data.started) {
+                        showToast('Procés en bloc iniciat en segon pla.', 'success');
+                        startAutoApplyPolling();
+                    } else {
+                        showToast(`No s'ha pogut iniciar: ${data.reason}`, 'error');
+                    }
+                } catch (e) {
+                    showToast(`Error: ${e.message}`, 'error');
+                }
+            });
+
+            btnStop.addEventListener('click', async () => {
+                try {
+                    const res = await extOrgFetch(`/stats/auto-apply-name/stop`, { method: 'POST' });
+                    const data = await res.json();
+                    if (data.stopped) {
+                        showToast('Petició d\'aturar enviada.', 'success');
+                    }
+                } catch (e) {
+                    showToast(`Error: ${e.message}`, 'error');
+                }
+            });
+
+            btnDownload.addEventListener('click', () => {
+                window.location.href = extOrgUrl('/stats/auto-apply-name/download-log');
+            });
+
+            // Check initial status
+            checkAutoApplyStatus();
+        }
+
+        async function checkAutoApplyStatus() {
+            try {
+                const res = await extOrgFetch(`/stats/auto-apply-name/status`);
+                const data = await res.json();
+                updateAutoApplyUI(data);
+
+                if (data.running) {
+                    startAutoApplyPolling();
+                }
+            } catch (e) {
+                console.error('Error fetching auto-apply status', e);
+            }
+        }
+
+        function startAutoApplyPolling() {
+            if (autoApplyPollingInterval) return;
+            autoApplyPollingInterval = setInterval(async () => {
+                try {
+                    const res = await extOrgFetch(`/stats/auto-apply-name/status`);
+                    const data = await res.json();
+                    updateAutoApplyUI(data);
+
+                    if (!data.running) {
+                        clearInterval(autoApplyPollingInterval);
+                        autoApplyPollingInterval = null;
+                    }
+                } catch (e) {
+                    console.error('Error polling auto-apply status', e);
+                }
+            }, 1500);
+        }
+
+        function updateAutoApplyUI(data) {
+            const badge = document.getElementById('autoApplyBadge');
+            const btnStart = document.getElementById('btnStartAutoApply');
+            const btnStop = document.getElementById('btnStopAutoApply');
+            const label = document.getElementById('autoApplyProgressLabel');
+            const stats = document.getElementById('autoApplyStats');
+            const bar = document.getElementById('autoApplyProgressBar');
+            const terminal = document.getElementById('autoApplyLogTerminal');
+
+            if (data.running) {
+                badge.classList.remove('hidden');
+                badge.classList.add('flex');
+                btnStart.disabled = true;
+                btnStop.disabled = false;
+                label.textContent = 'Estat: Executant...';
+            } else {
+                badge.classList.add('hidden');
+                badge.classList.remove('flex');
+                btnStart.disabled = false;
+                btnStop.disabled = true;
+                label.textContent = 'Estat: Inactiu / Finalitzat';
+            }
+
+            const total = data.total || 0;
+            const processed = data.processed || 0;
+            const applied = data.applied || 0;
+            const pct = total > 0 ? Math.round((processed / total) * 100) : (data.running ? 0 : 100);
+
+            stats.textContent = `${processed} / ${total} processades (${applied} aplicades)`;
+            bar.style.width = `${pct}%`;
+
+            if (data.logs) {
+                terminal.textContent = data.logs;
+                terminal.scrollTop = terminal.scrollHeight;
+            }
+        }
+
+        // =========================================================================
+        // Helpers & Floating Windows
+        // =========================================================================
+        function openFloatingWindow(url, title = 'egreta_popup', w = 1200, h = 800) {
+            if (!url) return;
+            const width = Math.min(window.screen.availWidth * 0.92, w);
+            const height = Math.min(window.screen.availHeight * 0.90, h);
+            const left = Math.round((window.screen.availWidth - width) / 2 + (window.screen.availLeft || 0));
+            const top = Math.round((window.screen.availHeight - height) / 2 + (window.screen.availTop || 0));
+            const features = `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes,status=yes,toolbar=no,menubar=no,location=yes`;
+            window.open(url, title, features);
+        }
+
+        function openEgretaOrg(pureId, uuid) {
+            const envSelect = document.getElementById('applyEnvSelect') || document.getElementById('autoApplyEnv');
+            const env = envSelect ? envSelect.value : 'test';
+            const baseUrl = env === 'prod' ? 'https://egreta.uab.cat' : 'https://egretat.uab.cat';
+            let url = '';
+            if (pureId && String(pureId).trim() !== '') {
+                url = `${baseUrl}/admin/editor/dk/atira/pure/api/shared/model/ueo/externalorganisation/editor/ueoexternalorganisationeditor.xhtml?scheme=&type=&id=${encodeURIComponent(pureId)}`;
+            } else if (uuid && String(uuid).trim() !== '') {
+                url = `${baseUrl}/ws/api/external-organizations/${encodeURIComponent(uuid)}`;
+            }
+            if (url) {
+                openFloatingWindow(url, 'egreta_org_editor_' + (pureId || uuid), 1300, 850);
+            }
+        }
+
+        function openRorWindow(rorUrl) {
+            if (!rorUrl) return;
+            openFloatingWindow(rorUrl, 'ror_entity_window', 1150, 800);
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/&/g, '&amp;')
+                      .replace(/</g, '&lt;')
+                      .replace(/>/g, '&gt;')
+                      .replace(/"/g, '&quot;')
+                      .replace(/'/g, '&#039;');
+        }
+
+        function escapeJs(str) {
+            if (!str) return '';
+            return str.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+        }
+    </script>
+</body>
+
+</html>

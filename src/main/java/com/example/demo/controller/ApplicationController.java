@@ -194,16 +194,31 @@ public class ApplicationController {
                 .toList();
 
             if (!uuids.isEmpty()) {
-                List<Document> fundingDocs = mongoTemplate
+                Document proj = new Document("uuid", 1)
+                    .append("title", 1)
+                    .append("type", 1)
+                    .append("openingDate", 1)
+                    .append("submissionPeriod", 1)
+                    .append("submissionYear", 1)
+                    .append("pureId", 1);
+                try (var cursor = mongoTemplate
                     .getCollection(fundingCollection)
                     .find(new Document("uuid", new Document("$in", uuids)))
-                    .into(new ArrayList<>());
-
-                for (Document doc : fundingDocs) {
-                    String uuid = doc.getString("uuid");
-                    if (uuid != null && !uuid.isBlank()) {
-                        fundingByUuid.put(uuid, doc);
+                    .projection(proj)
+                    .cursor()) {
+                    while (cursor.hasNext()) {
+                        try {
+                            Document doc = cursor.next();
+                            String uuid = doc.getString("uuid");
+                            if (uuid != null && !uuid.isBlank()) {
+                                fundingByUuid.put(uuid, doc);
+                            }
+                        } catch (Exception e) {
+                            // Skip corrupted BSON document
+                        }
                     }
+                } catch (Exception e) {
+                    // Ignore query failure
                 }
             }
         }

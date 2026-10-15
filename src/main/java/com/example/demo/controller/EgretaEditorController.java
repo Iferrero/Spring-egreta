@@ -1,5 +1,6 @@
 package com.example.demo.controller;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.client.HttpClientErrorException;
@@ -16,15 +17,15 @@ import org.apache.poi.ss.usermodel.*;
  * Endpoints:
  *   GET  /api/egreta-editor/fetch   → cerca un document per UUID a l'API d'Egreta
  *   POST /api/egreta-editor/process → processa un lot de files (GET + edita + PUT opcional)
- *
- * La API key d'Egreta queda fixa al codi (no es configura des de la UI).
  */
 @RestController
 @RequestMapping("/api/egreta-editor")
 @CrossOrigin(origins = "*")
 public class EgretaEditorController {
 
-    private static final String API_KEY  = "9971c3cc-b3e0-48e3-9ff9-e990c795e92f";
+    @Value("${app.api.key}")
+    private String apiKey;
+
     private static final String URL_TEST = "https://egretat.uab.cat/ws/api/";
     private static final String URL_PROD = "https://egreta.uab.cat/ws/api/";
 
@@ -44,7 +45,7 @@ public class EgretaEditorController {
     private HttpHeaders buildHeaders() {
         HttpHeaders h = new HttpHeaders();
         h.set("Content-Type", "application/json;charset=utf-8");
-        h.set("api-key", API_KEY);
+        h.set("api-key", apiKey);
         h.set("Accept-Charset", "UTF-8");
         return h;
     }

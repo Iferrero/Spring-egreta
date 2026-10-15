@@ -98,6 +98,7 @@ public class EgretaSyncController {
     @Autowired private PublishersSyncService publishersSyncService;
     @Autowired private ResearchoutputsSyncService researchoutputsSyncService;
     @Autowired private StudentthesesSyncService studentthesesSyncService;
+    @Autowired private UsersSyncService usersSyncService;
     @PostMapping("/sync/authorcollaborations")
     public ResponseEntity<String> syncAuthorcollaborations() {
         authorcollaborationsSyncService.sync();
@@ -206,9 +207,34 @@ public class EgretaSyncController {
         return ResponseEntity.ok("Sincronització de 'researchoutputs' iniciada.");
     }
 
+    @PostMapping("/sync/researchoutputs/{uuid}")
+    public ResponseEntity<Map<String, Object>> syncResearchoutputOne(@PathVariable String uuid) {
+        Map<String, Object> updated = researchoutputsSyncService.syncOne(uuid);
+        return ResponseEntity.ok(updated);
+    }
+
+    @PostMapping("/sync/{collection}/{uuid}")
+    public ResponseEntity<Map<String, Object>> syncOneGeneric(
+            @PathVariable String collection,
+            @PathVariable String uuid) {
+        for (AbstractEgretaSyncService service : syncServices) {
+            if (service.collectionName().equalsIgnoreCase(collection) || service.getEndpoint().equalsIgnoreCase(collection)) {
+                Map<String, Object> updated = service.syncOne(uuid);
+                return ResponseEntity.ok(updated);
+            }
+        }
+        return ResponseEntity.notFound().build();
+    }
+
     @PostMapping("/sync/studenttheses")
     public ResponseEntity<String> syncStudenttheses() {
         studentthesesSyncService.sync();
         return ResponseEntity.ok("Sincronització de 'studenttheses' iniciada.");
+    }
+
+    @PostMapping("/sync/users")
+    public ResponseEntity<String> syncUsers() {
+        usersSyncService.sync();
+        return ResponseEntity.ok("Sincronització de 'users' iniciada.");
     }
 }

@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -42,6 +43,9 @@ import java.util.LinkedHashMap;
 @RequestMapping("/api/student-theses")
 @CrossOrigin(origins = "*")
 public class StudentThesisController {
+
+    @Value("${app.api.key}")
+    private String egretaApiKey;
 
     private final StudentThesisRepository repository;
     private final MongoTemplate mongoTemplate;
@@ -1306,7 +1310,7 @@ public class StudentThesisController {
             RestTemplate restTemplate = new RestTemplate();
             HttpHeaders headers = new HttpHeaders();
             headers.set("Content-Type", "application/json;charset=utf-8");
-            headers.set("api-key", "9971c3cc-b3e0-48e3-9ff9-e990c795e92f");
+            headers.set("api-key", egretaApiKey);
             headers.set("Accept", "application/json");
 
             String baseUrl = "prod".equalsIgnoreCase(targetEnv) ? "https://egreta.uab.cat/ws/api/" : "https://egretat.uab.cat/ws/api/";
@@ -1388,7 +1392,7 @@ public class StudentThesisController {
             RestTemplate restTemplate = new RestTemplate();
             HttpHeaders headers = new HttpHeaders();
             headers.set("Content-Type", "application/json;charset=utf-8");
-            headers.set("api-key", "9971c3cc-b3e0-48e3-9ff9-e990c795e92f");
+            headers.set("api-key", egretaApiKey);
             headers.set("Accept", "application/json");
 
             String baseUrl = "prod".equalsIgnoreCase(targetEnv) ? "https://egreta.uab.cat/ws/api/" : "https://egretat.uab.cat/ws/api/";
@@ -1506,7 +1510,7 @@ public class StudentThesisController {
         try {
             RestTemplate restTemplate = new RestTemplate();
             HttpHeaders headers = new HttpHeaders();
-            headers.set("api-key", "9971c3cc-b3e0-48e3-9ff9-e990c795e92f");
+            headers.set("api-key", egretaApiKey);
             headers.set("Accept", "application/json");
             String baseUrl = "prod".equalsIgnoreCase(env) ? "https://egreta.uab.cat/ws/api/" : "https://egretat.uab.cat/ws/api/";
             String url = baseUrl + "student-theses/" + uuid;
@@ -1628,7 +1632,7 @@ public class StudentThesisController {
         try {
             RestTemplate restTemplate = new RestTemplate();
             HttpHeaders headers = new HttpHeaders();
-            headers.set("api-key", "9971c3cc-b3e0-48e3-9ff9-e990c795e92f");
+            headers.set("api-key", egretaApiKey);
             headers.set("Accept", "application/json");
             String baseUrl = "prod".equalsIgnoreCase(env) ? "https://egreta.uab.cat/ws/api/" : "https://egretat.uab.cat/ws/api/";
             String url = baseUrl + "student-theses/" + uuid;
@@ -1675,7 +1679,7 @@ public class StudentThesisController {
             RestTemplate restTemplate = new RestTemplate();
             HttpHeaders headers = new HttpHeaders();
             headers.set("Content-Type", "application/json;charset=utf-8");
-            headers.set("api-key", "9971c3cc-b3e0-48e3-9ff9-e990c795e92f");
+            headers.set("api-key", egretaApiKey);
             headers.set("Accept", "application/json");
 
             String baseUrl = "prod".equalsIgnoreCase(targetEnv) ? "https://egreta.uab.cat/ws/api/" : "https://egretat.uab.cat/ws/api/";
@@ -1715,7 +1719,7 @@ public class StudentThesisController {
             RestTemplate restTemplate = new RestTemplate();
             HttpHeaders headers = new HttpHeaders();
             headers.set("Content-Type", "application/json;charset=utf-8");
-            headers.set("api-key", "9971c3cc-b3e0-48e3-9ff9-e990c795e92f");
+            headers.set("api-key", egretaApiKey);
             headers.set("Accept", "application/json");
 
             String baseUrl = "prod".equalsIgnoreCase(targetEnv) ? "https://egreta.uab.cat/ws/api/" : "https://egretat.uab.cat/ws/api/";
@@ -1787,7 +1791,7 @@ public class StudentThesisController {
             RestTemplate restTemplate = new RestTemplate();
             HttpHeaders headers = new HttpHeaders();
             headers.set("Content-Type", "application/json;charset=utf-8");
-            headers.set("api-key", "9971c3cc-b3e0-48e3-9ff9-e990c795e92f");
+            headers.set("api-key", egretaApiKey);
             headers.set("Accept", "application/json");
 
             String baseUrl = "prod".equalsIgnoreCase(targetEnv) ? "https://egreta.uab.cat/ws/api/" : "https://egretat.uab.cat/ws/api/";

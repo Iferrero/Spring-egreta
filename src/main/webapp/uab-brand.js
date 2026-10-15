@@ -27,7 +27,7 @@
         if (fileName === 'index-orgaext.html') return 'index-orgaext.html';
         if (fileName === 'index-tesis.html') return 'index-tesis.html';
 
-        if (fileName === 'awards-convocatorias.html' || fileName === 'publicacions-correccions.html') {
+        if (fileName === 'awards-convocatorias.html' || fileName === 'awards-sense-naturalesa.html' || fileName === 'publicacions-correccions.html') {
             return 'index_assesora.html';
         }
 

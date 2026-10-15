@@ -32,3 +32,11 @@ build/
 ### VS Code ###
 .vscode/
 .classpath
+logs/auto-apply-country.log
+err.json
+logs/auto-apply-country.log
+logs/auto-apply-name.log
+.gitignore
+logs/auto-apply-country.log
+logs/auto-validate.log
+/.agents

@@ -1,0 +1,2078 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Filtrador d'Ajuts sense Naturalesa | Pure</title>
+    <script src="config.js"></script>
+    <script src="uab-brand.js" defer></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="uab-theme.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link href="https://unpkg.com/tabulator-tables@6.3.0/dist/css/tabulator.min.css" rel="stylesheet">
+    <script src="https://unpkg.com/tabulator-tables@6.3.0/dist/js/tabulator.min.js"></script>
+    <!-- SheetJS for Excel export -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <style>
+        /* Modern backdrop blur and gradients */
+        .glass-card {
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+        }
+
+        /* Excel-like Tabulator Table Styling */
+        .tabulator {
+            border: 1px solid #e2e8f0 !important;
+            border-radius: 12px;
+            font-family: inherit;
+            font-size: 11.5px !important;
+            background-color: #ffffff !important;
+        }
+        .tabulator .tabulator-header {
+            background-color: #f1f5f9 !important; /* slate-100 */
+            border-bottom: 2px solid #cbd5e1 !important; /* slate-300 */
+            color: #334155 !important; /* slate-700 */
+            font-weight: 700 !important;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+        .tabulator .tabulator-header .tabulator-col {
+            background-color: transparent !important;
+            border-right: 1px solid #e2e8f0 !important;
+            padding: 4px !important;
+        }
+        .tabulator .tabulator-header .tabulator-col:hover {
+            background-color: #e2e8f0 !important;
+        }
+        .tabulator .tabulator-header .tabulator-col .tabulator-col-content {
+            padding: 6px 8px !important;
+        }
+        /* Excel Header Filter Inputs & Selects */
+        .tabulator-header-filter input,
+        .tabulator-header-filter select {
+            width: 100% !important;
+            padding: 4px 6px !important;
+            font-size: 10.5px !important;
+            border: 1px solid #cbd5e1 !important;
+            border-radius: 6px !important;
+            background-color: #ffffff !important;
+            color: #1e293b !important;
+            font-weight: 500 !important;
+            margin-top: 4px !important;
+            outline: none !important;
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            transition: all 0.15s ease-in-out;
+        }
+        .tabulator-header-filter input:focus,
+        .tabulator-header-filter select:focus {
+            border-color: #6366f1 !important; /* indigo-500 */
+            box-ring: 2px solid rgba(99, 102, 241, 0.2) !important;
+        }
+        .tabulator-row {
+            border-bottom: 1px solid #f1f5f9 !important;
+            background-color: #ffffff !important;
+            min-height: 48px !important;
+            display: flex;
+            align-items: center;
+        }
+        .tabulator-row:hover {
+            background-color: #f8fafc !important; /* slate-50 */
+        }
+        .tabulator-row.tabulator-selected {
+            background-color: #eef2ff !important; /* indigo-50 */
+            border-left: 3px solid #6366f1 !important;
+        }
+        .tabulator-cell {
+            padding: 6px 10px !important;
+            border-right: 1px solid #f1f5f9 !important;
+            display: flex;
+            align-items: center;
+            height: 100% !important;
+        }
+        /* Excel Tree & Popup Styles */
+        .excel-popup {
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.25), 0 8px 10px -6px rgba(0, 0, 0, 0.15);
+        }
+        .excel-tree-container {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }
+        .excel-tree-group {
+            position: relative;
+        }
+        .excel-tree-branch {
+            position: relative;
+            padding-left: 18px;
+            margin-left: 6px;
+        }
+        .excel-tree-branch::before {
+            content: '';
+            position: absolute;
+            top: -4px;
+            left: 6px;
+            bottom: 8px;
+            border-left: 1px dotted #94a3b8;
+        }
+        .excel-tree-node {
+            position: relative;
+        }
+        .excel-tree-node::before {
+            content: '';
+            position: absolute;
+            top: 10px;
+            left: -12px;
+            width: 12px;
+            border-top: 1px dotted #94a3b8;
+        }
+        .tabulator-placeholder {
+            background-color: transparent !important;
+        }
+        .tabulator-placeholder span {
+            color: #94a3b8 !important;
+            font-style: italic;
+        }
+
+        /* Hierarchical Dropdown Styles */
+        .nature-hierarchical-dropdown {
+            font-family: inherit;
+            overflow: hidden;
+        }
+        .nature-popup-shadow {
+            box-shadow: 0 10px 30px -5px rgba(99, 102, 241, 0.15), 0 25px 60px -15px rgba(0, 0, 0, 0.2);
+        }
+        .nature-hierarchical-dropdown ::-webkit-scrollbar {
+            width: 4px;
+        }
+        .nature-hierarchical-dropdown ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .nature-hierarchical-dropdown ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        .nature-hierarchical-dropdown ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen text-slate-800">
+
+    <!-- Header for uab-brand.js -->
+    <header class="hidden">
+        <h1>Filtrador d'Ajuts sense Naturalesa</h1>
+        <p>Taula interactiva tipus Excel per filtrar per qualsevol identificador o atribut i assignar la naturalesa en bloc</p>
+    </header>
+
+    <main class="w-full py-8 px-6 max-w-full">
+
+        <!-- Top Navigation / Subheader Bar -->
+        <section class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+            <div class="flex items-center gap-3">
+                <a href="awards-convocatorias.html" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:text-indigo-600 bg-white border border-slate-200/80 shadow-xs hover:border-indigo-200 transition-all">
+                    <i class="fa-solid fa-arrow-left text-[10px]"></i>
+                    <span>Tornar a Ajuts i Convocatòries</span>
+                </a>
+                <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                    <i class="fa-solid fa-filter text-[10px]"></i> Només ajuts sense naturalesa
+                </span>
+            </div>
+            <div class="flex items-center gap-2">
+                <button type="button" onclick="exportarExcel()" class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 shadow-xs transition-all cursor-pointer">
+                    <i class="fa-solid fa-file-excel text-emerald-600"></i>
+                    <span>Exportar Excel</span>
+                </button>
+                <button type="button" onclick="carregarDades()" class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 shadow-xs transition-all cursor-pointer" title="Recarregar dades">
+                    <i class="fa-solid fa-rotate text-xs"></i>
+                    <span>Refrescar</span>
+                </button>
+            </div>
+        </section>
+
+        <!-- Stats Counter Cards -->
+        <section class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <div class="glass-card rounded-2xl p-5 border border-slate-200/80 shadow-xs">
+                <div class="flex items-center justify-between mb-1">
+                    <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Pendents de Naturalesa</span>
+                    <div class="w-7 h-7 rounded-lg bg-rose-50 flex items-center justify-center text-rose-600 text-xs">
+                        <i class="fa-solid fa-circle-exclamation"></i>
+                    </div>
+                </div>
+                <div class="flex items-baseline gap-2">
+                    <span id="stat-total-sense" class="text-2xl font-black text-slate-800">-</span>
+                </div>
+                <p class="text-[10px] text-slate-400 mt-1">Total d'ajuts competitius sense assignació</p>
+            </div>
+
+            <div class="glass-card rounded-2xl p-5 border border-slate-200/80 shadow-xs">
+                <div class="flex items-center justify-between mb-1">
+                    <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Amb Convocatòria</span>
+                    <div class="w-7 h-7 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600 text-xs">
+                        <i class="fa-solid fa-list-check"></i>
+                    </div>
+                </div>
+                <div class="flex items-baseline gap-2">
+                    <span id="stat-amb-convocatoria" class="text-2xl font-black text-indigo-700">-</span>
+                </div>
+                <p class="text-[10px] text-slate-400 mt-1">Vinculats a una convocatòria oficial</p>
+            </div>
+
+            <div class="glass-card rounded-2xl p-5 border border-slate-200/80 shadow-xs">
+                <div class="flex items-center justify-between mb-1">
+                    <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Sense Convocatòria</span>
+                    <div class="w-7 h-7 rounded-lg bg-amber-50 flex items-center justify-center text-amber-600 text-xs">
+                        <i class="fa-solid fa-handshake"></i>
+                    </div>
+                </div>
+                <div class="flex items-baseline gap-2">
+                    <span id="stat-sense-convocatoria" class="text-2xl font-black text-amber-700">-</span>
+                </div>
+                <p class="text-[10px] text-slate-400 mt-1">Convenis directes o no competitius</p>
+            </div>
+
+            <div class="glass-card rounded-2xl p-5 border border-slate-200/80 shadow-xs">
+                <div class="flex items-center justify-between mb-1">
+                    <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Tipus Discordants</span>
+                    <div class="w-7 h-7 rounded-lg bg-rose-50 flex items-center justify-center text-rose-600 text-xs">
+                        <i class="fa-solid fa-triangle-exclamation"></i>
+                    </div>
+                </div>
+                <div class="flex items-baseline gap-2">
+                    <span id="stat-discordants" class="text-2xl font-black text-rose-600">-</span>
+                </div>
+                <p class="text-[10px] text-slate-400 mt-1">Tipus d'ajut ≠ tipus convocatòria</p>
+            </div>
+        </section>
+
+        <!-- FILTERS TOOLBAR SECTION (Identical to Convocatòries Page) -->
+        <section class="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            
+            <!-- Search & Convocatoria Filter Toggle -->
+            <div class="flex items-center gap-4 flex-1 flex-wrap">
+                <!-- Quick Search Input -->
+                <div class="relative flex-1 max-w-sm w-full">
+                    <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                        <i class="fa-solid fa-magnifying-glass text-xs"></i>
+                    </span>
+                    <input type="text" id="top-search-input" oninput="aplicarFiltreGlobal()" placeholder="Cerca ràpida (Codi referència, títol...)" 
+                           class="w-full pl-8 pr-3 py-1.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-xs transition-all bg-slate-50/60 hover:bg-slate-50">
+                </div>
+
+                <div class="flex items-center gap-2">
+                    <span class="text-xs font-bold text-slate-500 uppercase whitespace-nowrap">Convocatòria:</span>
+                    <div class="flex bg-slate-100 p-1 rounded-xl">
+                        <button onclick="setFilterConvocatoria('all')" id="top-filter-all" class="px-3 py-1.5 text-xs font-bold rounded-lg transition-all text-indigo-600 bg-white shadow-xs">Tots els Ajuts</button>
+                        <button onclick="setFilterConvocatoria('yes')" id="top-filter-yes" class="px-3 py-1.5 text-xs font-bold rounded-lg transition-all text-slate-500 hover:text-slate-800">Amb Convocatòria</button>
+                        <button onclick="setFilterConvocatoria('no')" id="top-filter-no" class="px-3 py-1.5 text-xs font-bold rounded-lg transition-all text-slate-500 hover:text-slate-800">Sense Convocatòria</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Filters Toolbar (Reference Code, Award Type, Nature & Coincidence) -->
+            <div class="flex flex-wrap items-center gap-4">
+                
+                <!-- Reference Code Excel Filter Trigger -->
+                <div class="flex items-center gap-2">
+                    <label class="text-xs font-bold text-slate-500 uppercase whitespace-nowrap">Codi Referència:</label>
+                    <div class="relative">
+                        <button type="button" id="btn-excel-filter-identifiers" onclick="obrirExcelFilterPopup('identifiers', this, event)" class="w-full pl-3 pr-8 py-2 bg-white border border-slate-200 rounded-xl hover:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-xs font-medium text-slate-700 flex items-center justify-between shadow-2xs transition-all cursor-pointer min-w-[210px]">
+                            <span id="label-excel-filter-identifiers" class="truncate">Tots els Codis de Ref.</span>
+                            <span class="absolute inset-y-0 right-0 pr-2.5 flex items-center pointer-events-none text-slate-400">
+                                <i class="fa-solid fa-filter text-[10px]"></i>
+                            </span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Award Type Excel Filter Trigger -->
+                <div class="flex items-center gap-2">
+                    <label class="text-xs font-bold text-slate-500 uppercase whitespace-nowrap">Tipus d'Ajut:</label>
+                    <div class="relative">
+                        <button type="button" id="btn-excel-filter-awardTypes" onclick="obrirExcelFilterPopup('awardTypes', this, event)" class="w-full pl-3 pr-8 py-2 bg-white border border-slate-200 rounded-xl hover:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-xs font-medium text-slate-700 flex items-center justify-between shadow-2xs transition-all cursor-pointer min-w-[200px]">
+                            <span id="label-excel-filter-awardTypes" class="truncate">Tots els Tipus d'Ajut</span>
+                            <span class="absolute inset-y-0 right-0 pr-2.5 flex items-center pointer-events-none text-slate-400">
+                                <i class="fa-solid fa-award text-[10px]"></i>
+                            </span>
+                        </button>
+                    </div>
+                </div>
+
+
+
+                <!-- Type Match Filter Select -->
+                <div class="flex items-center gap-2">
+                    <label for="selectTypeMatchFilter" class="text-xs font-bold text-slate-500 uppercase whitespace-nowrap">Coincidència:</label>
+                    <div class="relative min-w-[170px]">
+                        <select id="selectTypeMatchFilter" onchange="aplicarFiltreGlobal()" class="w-full pl-3 pr-8 py-2 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium text-xs text-slate-700 appearance-none cursor-pointer">
+                            <option value="all">Tots els Tipus</option>
+                            <option value="match">✓ Només Coincidents</option>
+                            <option value="mismatch">⚠️ Només Discordants</option>
+                        </select>
+                        <span class="absolute inset-y-0 right-0 pr-2.5 flex items-center pointer-events-none text-slate-400">
+                            <i class="fa-solid fa-code-compare text-[10px]"></i>
+                        </span>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- STICKY BATCH ACTIONS BAR -->
+        <section class="sticky top-4 z-40 bg-white/95 backdrop-blur-md rounded-2xl border-2 border-indigo-200/90 p-4 shadow-lg mb-6 transition-all duration-200">
+            <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                
+                <!-- Left: Selection Info & Quick Buttons -->
+                <div class="flex flex-wrap items-center gap-3">
+                    <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-indigo-50 border border-indigo-200">
+                        <span class="w-2.5 h-2.5 rounded-full bg-indigo-600 animate-pulse"></span>
+                        <span class="text-xs font-bold text-indigo-900 font-mono">
+                            <span id="selected-count" class="text-sm font-black text-indigo-600">0</span> ajuts seleccionats
+                        </span>
+                    </div>
+
+                    <div class="flex items-center gap-1.5">
+                        <button type="button" onclick="seleccionarVisibles()" class="px-2.5 py-1.5 rounded-lg text-xs font-bold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 transition-colors cursor-pointer" title="Seleccionar totes les files visibles de la pàgina">
+                            <i class="fa-solid fa-check text-[10px] mr-1"></i> Pàgina
+                        </button>
+                        <button type="button" onclick="seleccionarTotsFiltrats()" class="px-2.5 py-1.5 rounded-lg text-xs font-bold text-indigo-700 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100 transition-colors cursor-pointer" title="Seleccionar totes les files que compleixen els filtres">
+                            <i class="fa-solid fa-check-double text-[10px] mr-1"></i> Tots filtrats (<span id="btn-count-filtrats">0</span>)
+                        </button>
+                        <button type="button" onclick="deseleccionarTot()" class="px-2.5 py-1.5 rounded-lg text-xs font-bold text-slate-500 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 transition-colors cursor-pointer" title="Netejar selecció">
+                            <i class="fa-solid fa-xmark text-[10px] mr-1"></i> Deseleccionar
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Right: Target Nature Selector, Environment & Batch Update Button -->
+                <div class="flex flex-wrap items-center gap-3">
+                    
+                    <!-- Environment Selector -->
+                    <div class="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1.5 rounded-xl border border-slate-200">
+                        <label for="selectEntorn" class="text-[10px] font-bold text-slate-400 uppercase whitespace-nowrap">Entorn:</label>
+                        <select id="selectEntorn" class="bg-transparent text-xs font-bold text-slate-700 focus:outline-none cursor-pointer">
+                            <option value="test" selected>Test (egretat)</option>
+                            <option value="prod">Producció (egreta)</option>
+                        </select>
+                    </div>
+
+                    <!-- Target Nature Picker (Hierarchical Trigger) -->
+                    <div class="relative flex items-center gap-1.5">
+                        <input type="hidden" id="target-nature-index" value="">
+                        <button type="button" id="btn-target-nature" onclick="obrirSelectorJerarquicGlobal(this)" class="px-3 py-2 rounded-xl text-xs font-bold bg-white border border-slate-300 hover:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700 flex items-center gap-2 shadow-xs transition-colors cursor-pointer max-w-[280px]">
+                            <i class="fa-solid fa-tag text-indigo-500 text-[11px]"></i>
+                            <span id="label-target-nature" class="truncate text-slate-500">-- Tria Naturalesa Destí --</span>
+                            <i class="fa-solid fa-chevron-down text-[9px] text-slate-400 ml-auto"></i>
+                        </button>
+                        <button type="button" id="btn-clear-target-nature" onclick="netejarNaturalesaDesti()" class="hidden p-1.5 rounded-lg text-slate-400 hover:text-rose-600 transition-colors cursor-pointer" title="Netejar naturalesa">
+                            <i class="fa-solid fa-xmark text-xs"></i>
+                        </button>
+                    </div>
+
+                    <!-- Batch Update Action Buttons -->
+                    <div class="flex items-center gap-2">
+                        <button type="button" id="btn-batch-apply-nature" onclick="executarActualitzacioMassiva()" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 transition-all cursor-pointer shadow-sm disabled:opacity-40 disabled:pointer-events-none hover:scale-[1.02] active:scale-[0.98]">
+                            <i class="fa-solid fa-bolt"></i>
+                            <span>Actualitzar Seleccionats</span>
+                        </button>
+
+                        <button type="button" id="btn-batch-apply-suggestions" onclick="executarAplicacioSuggerencies()" class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition-all cursor-pointer disabled:opacity-40 disabled:pointer-events-none" title="Aplica a cadascun dels ajuts seleccionats la seva naturalesa suggerida de la convocatòria">
+                            <i class="fa-solid fa-wand-magic-sparkles text-[10px]"></i>
+                            <span>Aplicar Suggerències</span>
+                        </button>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- Active Filters Quick Bar -->
+            <div id="filter-summary-bar" class="mt-2.5 pt-2.5 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
+                <div class="flex items-center gap-2 flex-wrap">
+                    <span class="font-bold text-slate-400 uppercase tracking-wider text-[9px]">Filtres Excel actius:</span>
+                    <span id="active-filter-tags" class="italic text-slate-400">Cap filtre actiu (es mostren tots els pendents)</span>
+                </div>
+                <button type="button" onclick="netejarTotsElsFiltres()" class="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 hover:underline cursor-pointer">
+                    Netejar tots els filtres
+                </button>
+            </div>
+        </section>
+
+        <!-- Main Excel-Like Tabulator Table Section -->
+        <section class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden mb-8">
+            <div id="excel-tabulator-table" class="w-full"></div>
+        </section>
+
+    </main>
+
+    <!-- Modal de Progrés de Batch Update -->
+    <div id="modal-batch-progress" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 flex flex-col gap-4">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 text-lg font-bold">
+                    <i class="fa-solid fa-spinner fa-spin"></i>
+                </div>
+                <div>
+                    <h3 class="text-base font-black text-slate-800">Actualitzant Ajuts a Egreta...</h3>
+                    <p class="text-xs text-slate-400">Sincronitzant naturalesa amb l'API Pure i la base de dades</p>
+                </div>
+            </div>
+
+            <div class="w-full bg-slate-100 rounded-full h-3 overflow-hidden">
+                <div id="batch-progress-bar" class="bg-indigo-600 h-full rounded-full transition-all duration-300" style="width: 10%;"></div>
+            </div>
+            
+            <div class="flex justify-between items-center text-xs font-mono font-bold text-slate-600">
+                <span id="batch-progress-text">Processant...</span>
+                <span id="batch-progress-pct">0%</span>
+            </div>
+
+            <div id="batch-result-summary" class="hidden p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs flex flex-col gap-1"></div>
+
+            <div class="flex justify-end gap-2 mt-2">
+                <button type="button" id="btn-close-progress-modal" onclick="tancarModalProgres()" class="hidden px-4 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 cursor-pointer transition-colors">
+                    Tancar i Actualitzar Taula
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- EXCEL-STYLE MULTI-SELECT DROPDOWN FILTER POPUP -->
+    <div id="excel-filter-popup" class="fixed z-50 bg-white border border-slate-300 rounded-lg excel-popup p-3 text-xs text-slate-800 excel-tree-container hidden flex flex-col w-80 max-w-[92vw]">
+        <!-- Search Input with 'Cerca' -->
+        <div class="relative mb-2">
+            <input type="text" id="ef-search-input" oninput="excelFilterOnSearchInput()" onkeydown="if(event.key==='Enter'){event.preventDefault(); excelFilterApply();}" placeholder="Cerca" 
+                   class="w-full pl-7 pr-7 py-1.5 border border-slate-300 rounded bg-white text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 shadow-2xs font-sans">
+            <span class="absolute inset-y-0 left-0 pl-2 flex items-center pointer-events-none text-slate-400">
+                <i class="fa-solid fa-magnifying-glass text-[10px]"></i>
+            </span>
+            <button type="button" id="ef-search-clear" onclick="excelFilterClearSearch()" class="absolute inset-y-0 right-0 pr-2 flex items-center text-slate-400 hover:text-slate-600 hidden">
+                <i class="fa-solid fa-xmark text-xs"></i>
+            </button>
+        </div>
+
+        <!-- Scrollable Tree Box with Dotted Lines -->
+        <div id="ef-items-container" class="border border-slate-200 rounded p-1.5 max-h-60 overflow-y-auto bg-slate-50/40 text-xs select-none">
+            <!-- (Selecciona-ho tot) Master Checkbox -->
+            <label class="flex items-center gap-2 hover:bg-slate-100 px-1.5 py-1 rounded cursor-pointer font-semibold border-b border-slate-200 pb-1.5 mb-1 text-slate-800">
+                <input type="checkbox" id="ef-select-all" onchange="excelFilterToggleSelectAll(this)" class="w-3.5 h-3.5 rounded border-slate-400 text-indigo-600 focus:ring-indigo-500 cursor-pointer">
+                <span>(Selecciona-ho tot)</span>
+            </label>
+
+            <!-- Tree / Branches Container -->
+            <div id="ef-tree-content" class="space-y-1"></div>
+        </div>
+
+        <!-- Popup Footer Actions -->
+        <div class="flex items-center justify-between gap-2 mt-2.5 pt-2 border-t border-slate-100">
+            <button type="button" onclick="excelFilterResetCurrent()" class="text-[11px] text-slate-500 hover:text-indigo-600 font-medium cursor-pointer">
+                Netejar filtre
+            </button>
+            <div class="flex items-center gap-1.5">
+                <button type="button" onclick="excelFilterApply()" class="px-3.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded text-xs shadow-2xs cursor-pointer transition-colors">
+                    D'acord
+                </button>
+                <button type="button" onclick="excelFilterClose()" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-600 font-semibold rounded text-xs cursor-pointer transition-colors">
+                    Cancel·lar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let rawAwardsData = [];
+        let excelTable = null;
+        let filtroConvocatoria = 'all'; // 'all', 'yes', 'no'
+        window.availableNatures = [];
+        window.natureHierarchy = [];
+        let selectedTargetNature = null;
+
+        // ==========================================
+        // EXCEL-STYLE MULTI-SELECT TREE FILTER STATE
+        // ==========================================
+        window.excelFilters = {
+            identifiers: {
+                selected: null, // null means all selected
+                allKeys: [],
+                treeData: []
+            },
+            awardTypes: {
+                selected: null, // null means all selected
+                allKeys: [],
+                treeData: []
+            }
+        };
+
+        let currentExcelFilterType = null;
+        let currentExcelFilterTrigger = null;
+        let excelDraftSelected = new Set();
+        let currentSearchTerm = '';
+
+        function apiFetchWrapper(path, options) {
+            if (typeof apiFetch === 'function') return apiFetch(path, options);
+            const url = (typeof apiUrl === 'function') ? apiUrl(path) : ('/api' + (path.startsWith('/') ? path : '/' + path));
+            return fetch(url, options);
+        }
+
+        // Normalizer for multi-language & object values
+        function normalitzarText(value, fallback = '') {
+            if (value == null) return fallback;
+            if (typeof value === 'string') return value.trim() || fallback;
+            if (Array.isArray(value)) {
+                for (const loc of ['ca_ES', 'es_ES', 'en_GB']) {
+                    const found = value.find(item => item && (item.locale === loc || item.lang === loc));
+                    if (found && found.value) return found.value.trim();
+                }
+                if (value.length > 0 && value[0].value) return value[0].value.trim();
+            }
+            if (typeof value === 'object') {
+                if (value.text) return normalitzarText(value.text, fallback);
+                if (value.term) return normalitzarText(value.term, fallback);
+                if (typeof value.ca_ES === 'string' && value.ca_ES.trim()) return value.ca_ES.trim();
+                if (typeof value.es_ES === 'string' && value.es_ES.trim()) return value.es_ES.trim();
+                if (typeof value.en_GB === 'string' && value.en_GB.trim()) return value.en_GB.trim();
+                const first = Object.values(value).find((v) => typeof v === 'string' && v.trim());
+                return first ? first.trim() : fallback;
+            }
+            return String(value).trim() || fallback;
+        }
+
+        // Extract parent type code (PRO, GAC, BEC, ESA, ESF, INF, etc.)
+        function extreureTipusConvocatoria(fOppType) {
+            if (!fOppType) return null;
+            let uri = '';
+            if (typeof fOppType === 'object' && fOppType !== null) {
+                if (fOppType.uri) uri = fOppType.uri;
+            } else if (typeof fOppType === 'string' && fOppType.startsWith('/')) {
+                uri = fOppType;
+            }
+            if (uri) {
+                const parts = uri.split('/').filter(Boolean);
+                if (parts.length >= 2) {
+                    return parts[parts.length - 2].toUpperCase();
+                }
+            }
+            return null;
+        }
+
+        // Extract parent code for Award
+        function extreureTipusAjut(awardType) {
+            if (!awardType) return null;
+            const uri = (typeof awardType === 'object' ? (awardType.uri || '') : '') || '';
+            const term = normalitzarText(awardType, '').toLowerCase();
+
+            if (uri.includes('/research_projects') || uri.includes('/uab_external_research_projects') || 
+                uri.includes('/international_award') || uri.includes('/international_educational') || 
+                uri.includes('/rtc_award') || term.includes('projecte')) {
+                return 'PRO';
+            }
+            if (uri.includes('/fellowship') || uri.includes('/international_fellowships') || term.includes('beques')) {
+                return 'BEC';
+            }
+            if (uri.includes('/mobility') || term.includes('mobilitat')) {
+                return 'ESF';
+            }
+            if (uri.includes('/staff_to_incorporate') || term.includes('incorporaci')) {
+                return 'ESA';
+            }
+            if (uri.includes('/infraestructure') || term.includes('infraestructura')) {
+                return 'INF';
+            }
+            if (uri.includes('/uab_research_group') || uri.includes('/external_research_groups_and_networks') || term.includes('grups') || term.includes('xarxes')) {
+                return 'GAC';
+            }
+            if (uri.includes('/other_grants') || uri.includes('/other_international_grants') || term.includes('accions') || term.includes('altres')) {
+                return 'GAC';
+            }
+            if (uri.includes('/avr_award') || term.includes('vicerectorat')) {
+                return 'AVR';
+            }
+            if (uri.includes('/fin_award') || term.includes('finan')) {
+                return 'FIN';
+            }
+            return null;
+        }
+
+        function getBadgeForCode(code) {
+            if (!code) return '';
+            const c = code.toUpperCase();
+            let colorClasses = 'bg-slate-100 text-slate-700 border-slate-200';
+            if (c === 'PRO') colorClasses = 'bg-indigo-50 text-indigo-700 border-indigo-200';
+            else if (c === 'GAC') colorClasses = 'bg-purple-50 text-purple-700 border-purple-200';
+            else if (c === 'BEC') colorClasses = 'bg-emerald-50 text-emerald-700 border-emerald-200';
+            else if (c === 'ESA') colorClasses = 'bg-amber-50 text-amber-800 border-amber-200';
+            else if (c === 'ESF') colorClasses = 'bg-yellow-50 text-yellow-800 border-yellow-200';
+            else if (c === 'XAT') colorClasses = 'bg-cyan-50 text-cyan-700 border-cyan-200';
+            else if (c === 'INF') colorClasses = 'bg-sky-50 text-sky-700 border-sky-200';
+            else if (c === 'ALT') colorClasses = 'bg-rose-50 text-rose-700 border-rose-200';
+            return `<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-black border uppercase tracking-wider font-mono ${colorClasses}">${c}</span>`;
+        }
+
+        // Check if an Award and its linked Convocatòria have matching types
+        function comprovarCoincidenciaTipus(awardType, fOppType) {
+            if (!fOppType) return null;
+            const fCat = extreureTipusConvocatoria(fOppType);
+            if (!fCat) return null;
+            
+            const aCat = extreureTipusAjut(awardType);
+            if (!aCat) return null;
+
+            const isMatch = (aCat === fCat);
+
+            return {
+                isMatch,
+                awardCategory: aCat,
+                foppCategory: fCat
+            };
+        }
+
+        // Unified API fetch helper that works in both standard and sub-path deployments
+        async function apiFetchWrapper(path, opts = {}) {
+            if (typeof apiFetch === 'function') {
+                return apiFetch(path, opts);
+            }
+            if (typeof apiUrl === 'function') {
+                return fetch(apiUrl(path), opts);
+            }
+            return fetch('/api' + path, opts);
+        }
+
+        async function carregarNatures() {
+            try {
+                const [resN, resH] = await Promise.all([
+                    apiFetchWrapper('/awards/natures'),
+                    apiFetchWrapper('/awards/nature-hierarchy')
+                ]);
+                if (resN.ok) {
+                    window.availableNatures = await resN.json();
+                    window.availableNatures.sort((a, b) => {
+                        const nameA = normalitzarText(a.term || a, '');
+                        const nameB = normalitzarText(b.term || b, '');
+                        return nameA.localeCompare(nameB, 'ca-ES');
+                    });
+                }
+                if (resH.ok) {
+                    window.natureHierarchy = await resH.json();
+                }
+            } catch (e) {
+                console.error("Error al carregar natures:", e);
+            }
+        }
+
+        async function carregarDades() {
+            const tableContainer = document.getElementById('excel-tabulator-table');
+            tableContainer.innerHTML = `
+                <div class="flex flex-col items-center justify-center py-24 gap-3">
+                    <div class="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+                    <span class="text-slate-400 italic font-medium">Carregant ajuts sense naturalesa i identificadors...</span>
+                </div>
+            `;
+
+            try {
+                // Fetch all unassigned awards
+                const res = await apiFetchWrapper('/awards/all-unassigned-nature');
+                if (!res.ok) throw new Error('Error al carregar dades: ' + res.status);
+                const json = await res.json();
+                rawAwardsData = json.content || [];
+
+                // Flatten and compute helper properties for easy Excel table filtering
+                rawAwardsData.forEach(item => {
+                    item.titleText = normalitzarText(item.title, 'Sense títol');
+                    item.awardTypeText = normalitzarText(item.type, 'General');
+                    item.awardParentCode = extreureTipusAjut(item.type) || 'ALT';
+                    
+                    item.hasConvocatoria = item.fOppUuid ? 'Sí' : 'No';
+                    item.fOppTitleText = normalitzarText(item.fOppTitle, 'Conveni direct / No competitiu');
+                    item.fOppTypeText = normalitzarText(item.fOppType, 'General');
+                    item.fOppParentCode = extreureTipusConvocatoria(item.fOppType) || '';
+
+                    // Type match calculation
+                    const matchCheck = comprovarCoincidenciaTipus(item.type, item.fOppType);
+                    item.typeMatchCheck = matchCheck;
+                    if (matchCheck) {
+                        item.typeMatchStatus = matchCheck.isMatch ? 'match' : 'mismatch';
+                        item.typeMatchText = matchCheck.isMatch ? 'Coincident' : `Discordant (${matchCheck.awardCategory} ≠ ${matchCheck.foppCategory})`;
+                    } else {
+                        item.typeMatchStatus = 'none';
+                        item.typeMatchText = 'Sense Convocatòria';
+                    }
+
+                    // Parsed identifiers
+                    const pIds = item.parsedIdentifiers || {};
+                    item.idFenixText = item.idFenix || pIds.id_fenix || '';
+                    item.refCodeText = item.referenceCode || pIds.referenceCode || '';
+                    item.agaurCodeText = item.agaurCode || pIds.agaurCode || pIds.agaurCode2 || '';
+                    item.primaryIdText = item.primaryId || pIds.primaryId || '';
+
+                    // Formatted all-identifiers search string
+                    item.allIdentifiersSearch = [
+                        item.uuid,
+                        item.pureId,
+                        item.primaryIdText,
+                        item.idFenixText,
+                        item.refCodeText,
+                        item.agaurCodeText
+                    ].filter(Boolean).join(' ');
+
+                    item.ipNameText = item.ipName || 'No informat';
+                    item.managingOrgText = item.managingOrgName || 'No informada';
+                    item.awardYearText = item.awardYear ? String(item.awardYear) : (item.awardDate ? new Date(item.awardDate).getFullYear() : 'No informat');
+
+                    // Suggested nature
+                    if (item.suggestedNature) {
+                        item.suggestedNatureText = normalitzarText(item.suggestedNature.term || item.suggestedNature, '');
+                    } else {
+                        item.suggestedNatureText = 'Sense suggerència';
+                    }
+                });
+
+                buildExcelFilterData();
+                actualitzarLabelsExcelFilter('identifiers');
+                actualitzarLabelsExcelFilter('awardTypes');
+
+                actualitzarStats(rawAwardsData);
+                renderitzarTaula(rawAwardsData);
+
+            } catch (err) {
+                console.error("Error:", err);
+                tableContainer.innerHTML = `
+                    <div class="py-16 text-center text-rose-600 font-semibold flex flex-col items-center gap-2">
+                        <i class="fa-solid fa-triangle-exclamation text-2xl"></i>
+                        <span>Error al connectar amb el servidor o obtenir els ajuts sense naturalesa.</span>
+                    </div>
+                `;
+            }
+        }
+
+        // ==========================================
+        // EXCEL MULTI-SELECT TREE LOGIC & HELPERS
+        // ==========================================
+
+        function buildExcelFilterData() {
+            // 1. Reference Code Data (Grouped by Year, with Reference Code items)
+            const yearMap = new Map();
+            const allIdKeys = [];
+
+            rawAwardsData.forEach(item => {
+                const yr = item.awardYearText || 'Sense Any';
+                if (!yearMap.has(yr)) {
+                    yearMap.set(yr, []);
+                }
+                const refCode = item.refCodeText ? item.refCodeText : '(Sense codi de ref.)';
+                
+                yearMap.get(yr).push({
+                    id: item.uuid,
+                    label: refCode,
+                    details: item.titleText,
+                    searchStr: `${yr} ${item.refCodeText || 'sense codi'} ${item.titleText || ''}`.toLowerCase(),
+                    parentGroup: yr
+                });
+                allIdKeys.push(item.uuid);
+            });
+
+            const yearsSorted = Array.from(yearMap.keys()).sort((a, b) => b.localeCompare(a, 'ca-ES', { numeric: true }));
+            const idTree = yearsSorted.map(yr => ({
+                groupKey: yr,
+                groupLabel: yr,
+                items: yearMap.get(yr)
+            }));
+
+            window.excelFilters.identifiers.allKeys = allIdKeys;
+            window.excelFilters.identifiers.treeData = idTree;
+
+            // 2. Award Types Data (Grouped by Parent Category PRO, BEC, GAC, etc.)
+            const catMap = new Map();
+            const typeCountMap = new Map();
+            const allTypeKeys = [];
+
+            rawAwardsData.forEach(item => {
+                const typeText = item.awardTypeText || 'General';
+                const pCode = item.awardParentCode || 'ALT';
+                typeCountMap.set(typeText, (typeCountMap.get(typeText) || 0) + 1);
+
+                if (!catMap.has(pCode)) {
+                    catMap.set(pCode, new Set());
+                }
+                catMap.get(pCode).add(typeText);
+            });
+
+            const categoryNames = {
+                'PRO': 'Projectes de recerca',
+                'BEC': 'Beques i ajuts a persones investigadores',
+                'GAC': 'Grups de recerca (SGR)',
+                'ESA': 'Projectes d\'especialització i suport',
+                'ESF': 'Fons Social Europeu',
+                'INF': 'Infraestructures de recerca',
+                'XAT': 'Xarxes temàtiques',
+                'AVR': 'Valorització i transferència',
+                'FIN': 'Finançament institucional',
+                'ALT': 'Altres ajuts'
+            };
+
+            const typeTree = [];
+            catMap.forEach((typesSet, pCode) => {
+                const catLabel = `[${pCode}] ${categoryNames[pCode] || pCode}`;
+                const items = Array.from(typesSet).sort().map(typeText => {
+                    allTypeKeys.push(typeText);
+                    return {
+                        id: typeText,
+                        label: `${typeText} (${typeCountMap.get(typeText) || 0})`,
+                        details: catLabel,
+                        searchStr: `${pCode} ${catLabel} ${typeText}`.toLowerCase(),
+                        parentGroup: pCode
+                    };
+                });
+                typeTree.push({
+                    groupKey: pCode,
+                    groupLabel: catLabel,
+                    items: items
+                });
+            });
+
+            window.excelFilters.awardTypes.allKeys = allTypeKeys;
+            window.excelFilters.awardTypes.treeData = typeTree;
+        }
+
+        function obrirExcelFilterPopup(type, triggerEl, event) {
+            if (event) event.stopPropagation();
+
+            const popup = document.getElementById('excel-filter-popup');
+            if (!popup) return;
+
+            if (currentExcelFilterType === type && !popup.classList.contains('hidden')) {
+                excelFilterClose();
+                return;
+            }
+
+            currentExcelFilterType = type;
+            currentExcelFilterTrigger = triggerEl;
+
+            // Position popup right below trigger element
+            const rect = triggerEl.getBoundingClientRect();
+            const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+            const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
+
+            let top = rect.bottom + scrollTop + 6;
+            let left = rect.left + scrollLeft;
+
+            // Prevent overflow on right edge of screen
+            const popupWidth = 320;
+            if (left + popupWidth > window.innerWidth - 16) {
+                left = Math.max(16, window.innerWidth - popupWidth - 16);
+            }
+
+            popup.style.top = `${top}px`;
+            popup.style.left = `${left}px`;
+            popup.classList.remove('hidden');
+
+            // Initialize draft selected
+            const filterObj = window.excelFilters[type];
+            if (filterObj.selected === null) {
+                excelDraftSelected = new Set(filterObj.allKeys);
+            } else {
+                excelDraftSelected = new Set(filterObj.selected);
+            }
+
+            // Reset search input
+            const searchInput = document.getElementById('ef-search-input');
+            if (searchInput) {
+                searchInput.value = '';
+                currentSearchTerm = '';
+                document.getElementById('ef-search-clear').classList.add('hidden');
+                setTimeout(() => searchInput.focus(), 50);
+            }
+
+            excelFilterRenderTree();
+
+            // Attach click outside listener
+            setTimeout(() => {
+                document.removeEventListener('click', excelFilterHandleClickOutside);
+                document.addEventListener('click', excelFilterHandleClickOutside);
+            }, 10);
+        }
+
+        function excelFilterHandleClickOutside(e) {
+            const popup = document.getElementById('excel-filter-popup');
+            if (!popup || popup.classList.contains('hidden')) return;
+
+            if (!popup.contains(e.target) && (!currentExcelFilterTrigger || !currentExcelFilterTrigger.contains(e.target))) {
+                excelFilterClose();
+            }
+        }
+
+        function excelFilterClose() {
+            const popup = document.getElementById('excel-filter-popup');
+            if (popup) popup.classList.add('hidden');
+            currentExcelFilterType = null;
+            currentExcelFilterTrigger = null;
+            document.removeEventListener('click', excelFilterHandleClickOutside);
+        }
+
+        function excelFilterOnSearchInput() {
+            const input = document.getElementById('ef-search-input');
+            const newTerm = input ? input.value.trim().toLowerCase() : '';
+            
+            // Quan s'utilitza la cerca, deseleccionem tot perquè la tria de l'usuari sigui la que mani
+            if (newTerm && (!currentSearchTerm || (currentExcelFilterType && window.excelFilters[currentExcelFilterType] && excelDraftSelected.size === window.excelFilters[currentExcelFilterType].allKeys.length))) {
+                excelDraftSelected.clear();
+            }
+
+            currentSearchTerm = newTerm;
+            const clearBtn = document.getElementById('ef-search-clear');
+            if (clearBtn) {
+                if (currentSearchTerm) clearBtn.classList.remove('hidden');
+                else clearBtn.classList.add('hidden');
+            }
+            excelFilterRenderTree();
+        }
+
+        function excelFilterClearSearch() {
+            const input = document.getElementById('ef-search-input');
+            if (input) {
+                input.value = '';
+                currentSearchTerm = '';
+                document.getElementById('ef-search-clear').classList.add('hidden');
+                input.focus();
+            }
+            excelFilterRenderTree();
+        }
+
+        function excelFilterRenderTree() {
+            if (!currentExcelFilterType) return;
+            const filterObj = window.excelFilters[currentExcelFilterType];
+            const treeContainer = document.getElementById('ef-tree-content');
+            if (!treeContainer) return;
+
+            let visibleItemsCount = 0;
+            let visibleSelectedCount = 0;
+
+            let html = '';
+
+            filterObj.treeData.forEach(group => {
+                // Filter items matching search
+                const matchingItems = group.items.filter(item => {
+                    if (!currentSearchTerm) return true;
+                    return item.searchStr.includes(currentSearchTerm);
+                });
+
+                if (matchingItems.length === 0) return;
+
+                // Group status
+                const groupSelectedCount = matchingItems.filter(item => excelDraftSelected.has(item.id)).length;
+                visibleItemsCount += matchingItems.length;
+                visibleSelectedCount += groupSelectedCount;
+
+                const isGroupAllChecked = (groupSelectedCount === matchingItems.length);
+
+                html += `
+                    <div class="excel-tree-group">
+                        <!-- Group Header Row (e.g. Year or Category) -->
+                        <div class="flex items-center gap-1.5 py-0.5 hover:bg-slate-100 rounded px-1 cursor-pointer select-none">
+                            <input type="checkbox" id="ef-grp-${group.groupKey}" 
+                                   data-group-key="${group.groupKey}"
+                                   onchange="excelFilterToggleGroup('${group.groupKey}', this)"
+                                   ${isGroupAllChecked ? 'checked' : ''}
+                                   class="w-3.5 h-3.5 rounded border-slate-400 text-indigo-600 focus:ring-indigo-500 cursor-pointer">
+                            <label for="ef-grp-${group.groupKey}" class="font-bold text-slate-700 text-xs cursor-pointer truncate flex-1">
+                                ${group.groupLabel}
+                            </label>
+                        </div>
+
+                        <!-- Tree Branch with Dotted Lines -->
+                        <div class="excel-tree-branch space-y-0.5 mt-0.5">
+                            ${matchingItems.map(item => {
+                                const isChecked = excelDraftSelected.has(item.id);
+                                return `
+                                    <div class="excel-tree-node flex items-center gap-1.5 py-0.5 hover:bg-indigo-50/50 rounded px-1 cursor-pointer select-none">
+                                        <input type="checkbox" id="ef-item-${item.id}"
+                                               data-item-id="${item.id}"
+                                               data-parent-group="${group.groupKey}"
+                                               onchange="excelFilterToggleItem('${item.id}', '${group.groupKey}', this)"
+                                               ${isChecked ? 'checked' : ''}
+                                               class="w-3.5 h-3.5 rounded border-slate-400 text-indigo-600 focus:ring-indigo-500 cursor-pointer">
+                                        <label for="ef-item-${item.id}" class="text-xs text-slate-700 hover:text-slate-900 cursor-pointer truncate flex-1 font-mono text-[11px]" title="${item.details || item.label}">
+                                            ${item.label}
+                                        </label>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    </div>
+                `;
+            });
+
+            if (visibleItemsCount === 0) {
+                treeContainer.innerHTML = `<div class="py-4 text-center text-slate-400 italic text-xs">Cap element coincideix amb "${currentSearchTerm}"</div>`;
+            } else {
+                treeContainer.innerHTML = html;
+            }
+
+            // Update (Selecciona-ho tot) Master Checkbox
+            const selectAllCb = document.getElementById('ef-select-all');
+            if (selectAllCb) {
+                if (visibleItemsCount === 0) {
+                    selectAllCb.checked = false;
+                    selectAllCb.indeterminate = false;
+                } else if (visibleSelectedCount === visibleItemsCount) {
+                    selectAllCb.checked = true;
+                    selectAllCb.indeterminate = false;
+                } else if (visibleSelectedCount === 0) {
+                    selectAllCb.checked = false;
+                    selectAllCb.indeterminate = false;
+                } else {
+                    selectAllCb.checked = false;
+                    selectAllCb.indeterminate = true;
+                }
+            }
+        }
+
+        function excelFilterToggleSelectAll(cb) {
+            if (!currentExcelFilterType) return;
+            const filterObj = window.excelFilters[currentExcelFilterType];
+            
+            filterObj.treeData.forEach(group => {
+                group.items.forEach(item => {
+                    const isMatch = !currentSearchTerm || item.searchStr.includes(currentSearchTerm);
+                    if (isMatch) {
+                        if (cb.checked) {
+                            excelDraftSelected.add(item.id);
+                        } else {
+                            excelDraftSelected.delete(item.id);
+                        }
+                    }
+                });
+            });
+
+            excelFilterRenderTree();
+        }
+
+        function excelFilterToggleGroup(groupKey, cb) {
+            if (!currentExcelFilterType) return;
+            const filterObj = window.excelFilters[currentExcelFilterType];
+            const group = filterObj.treeData.find(g => g.groupKey === groupKey);
+            if (!group) return;
+
+            group.items.forEach(item => {
+                const isMatch = !currentSearchTerm || item.searchStr.includes(currentSearchTerm);
+                if (isMatch) {
+                    if (cb.checked) {
+                        excelDraftSelected.add(item.id);
+                    } else {
+                        excelDraftSelected.delete(item.id);
+                    }
+                }
+            });
+
+            excelFilterRenderTree();
+        }
+
+        function excelFilterToggleItem(itemId, groupKey, cb) {
+            if (cb.checked) {
+                excelDraftSelected.add(itemId);
+            } else {
+                excelDraftSelected.delete(itemId);
+            }
+            excelFilterRenderTree();
+        }
+
+        function excelFilterResetCurrent() {
+            if (!currentExcelFilterType) return;
+            const filterObj = window.excelFilters[currentExcelFilterType];
+            excelDraftSelected = new Set(filterObj.allKeys);
+            const input = document.getElementById('ef-search-input');
+            if (input) {
+                input.value = '';
+                currentSearchTerm = '';
+                const clearBtn = document.getElementById('ef-search-clear');
+                if (clearBtn) clearBtn.classList.add('hidden');
+            }
+            excelFilterRenderTree();
+        }
+
+        function excelFilterApply() {
+            if (!currentExcelFilterType) return;
+            const type = currentExcelFilterType;
+            const filterObj = window.excelFilters[type];
+
+            if (excelDraftSelected.size === filterObj.allKeys.length) {
+                filterObj.selected = null; // All selected
+            } else {
+                filterObj.selected = new Set(excelDraftSelected);
+            }
+
+            actualitzarLabelsExcelFilter(type);
+            excelFilterClose();
+            aplicarFiltreGlobal();
+        }
+
+        function actualitzarLabelsExcelFilter(type) {
+            const filterObj = window.excelFilters[type];
+            if (!filterObj || !filterObj.allKeys) return;
+            const total = filterObj.allKeys.length;
+            const count = filterObj.selected === null ? total : filterObj.selected.size;
+
+            const isAll = (filterObj.selected === null || filterObj.selected.size === total);
+
+            if (type === 'identifiers') {
+                const topLabel = document.getElementById('label-excel-filter-identifiers');
+                if (topLabel) {
+                    topLabel.innerText = isAll ? 'Tots els Codis de Ref.' : `Codis Ref. (${count}/${total})`;
+                    topLabel.className = isAll ? 'truncate text-slate-700' : 'truncate text-indigo-700 font-bold';
+                }
+                const tabLabel = document.getElementById('tab-label-identifiers');
+                if (tabLabel) {
+                    tabLabel.innerText = isAll ? '(Tots)' : `(${count})`;
+                    tabLabel.className = isAll ? 'truncate font-medium text-slate-600' : 'truncate font-bold text-indigo-600';
+                }
+            } else if (type === 'awardTypes') {
+                const topLabel = document.getElementById('label-excel-filter-awardTypes');
+                if (topLabel) {
+                    topLabel.innerText = isAll ? 'Tots els Tipus d\'Ajut' : `Tipus Ajut (${count}/${total})`;
+                    topLabel.className = isAll ? 'truncate text-slate-700' : 'truncate text-indigo-700 font-bold';
+                }
+                const tabLabel = document.getElementById('tab-label-awardTypes');
+                if (tabLabel) {
+                    tabLabel.innerText = isAll ? '(Tots)' : `(${count})`;
+                    tabLabel.className = isAll ? 'truncate font-medium text-slate-600' : 'truncate font-bold text-indigo-600';
+                }
+            }
+        }
+
+        function actualitzarStats(data) {
+            const total = data.length;
+            const ambConv = data.filter(d => d.fOppUuid).length;
+            const senseConv = total - ambConv;
+            const discordants = data.filter(d => d.typeMatchCheck && !d.typeMatchCheck.isMatch).length;
+
+            document.getElementById('stat-total-sense').innerText = total.toLocaleString('ca-ES');
+            document.getElementById('stat-amb-convocatoria').innerText = ambConv.toLocaleString('ca-ES');
+            document.getElementById('stat-sense-convocatoria').innerText = senseConv.toLocaleString('ca-ES');
+            document.getElementById('stat-discordants').innerText = discordants.toLocaleString('ca-ES');
+        }
+
+        // Helper to extract unique values for Tabulator header select filters
+        function getUniqueValues(data, field) {
+            const set = new Set();
+            data.forEach(item => {
+                const val = item[field];
+                if (val && String(val).trim()) set.add(String(val).trim());
+            });
+            const list = Array.from(set).sort((a, b) => a.localeCompare(b, 'ca-ES', { numeric: true }));
+            const obj = { "": "-- Tots --" };
+            list.forEach(v => { obj[v] = v; });
+            return obj;
+        }
+
+        function renderitzarTaula(data) {
+            const tableEl = document.getElementById('excel-tabulator-table');
+            tableEl.innerHTML = '';
+
+            const fOppParentValues = getUniqueValues(data, 'fOppParentCode');
+            const yearValues = getUniqueValues(data, 'awardYearText');
+            const suggestedValues = getUniqueValues(data, 'suggestedNatureText');
+
+            excelTable = new Tabulator(tableEl, {
+                data: data,
+                index: "uuid",
+                layout: 'fitColumns',
+                pagination: true,
+                paginationSize: 25,
+                paginationSizeSelector: [15, 25, 50, 100, true],
+                selectableRows: "highlight",
+                placeholder: "<span>No hi ha cap ajut que compleixi els filtres seleccionats</span>",
+                columns: [
+                    // Columna 0: Checkbox
+                    {
+                        formatter: "rowSelection",
+                        titleFormatter: function() {
+                            return `<input type="checkbox" id="tabulator-select-all-checkbox" class="w-3.5 h-3.5 rounded border-slate-400 text-indigo-600 focus:ring-indigo-500 cursor-pointer" title="Seleccionar/Deseleccionar tots els ajuts filtrats">`;
+                        },
+                        headerClick: function(e, column) {
+                            const headerCb = document.getElementById('tabulator-select-all-checkbox');
+                            if (!headerCb) return;
+
+                            let checked;
+                            if (e.target && e.target.id === 'tabulator-select-all-checkbox') {
+                                checked = e.target.checked;
+                            } else {
+                                checked = !headerCb.checked;
+                                headerCb.checked = checked;
+                            }
+
+                            const activeRows = excelTable.getRows("active");
+                            if (checked) {
+                                excelTable.selectRow(activeRows);
+                            } else {
+                                excelTable.deselectRow(activeRows);
+                            }
+                            actualitzarComptadorSeleccionats();
+                        },
+                        cellClick: function(e, cell) {
+                            if (e.target && e.target.tagName !== 'INPUT') {
+                                cell.getRow().toggleSelect();
+                            }
+                        },
+                        hozAlign: "center",
+                        headerHozAlign: "center",
+                        width: 45,
+                        headerSort: false,
+                        cssClass: "tabulator-col-checkbox cursor-pointer"
+                    },
+
+                    // Columna 1: Codi de Referència (Filtre Excel Tree amb Checkboxes)
+                    {
+                        title: "Codi de Referència",
+                        field: "refCodeText",
+                        headerFilter: function(cell, onRendered, success, cancel, editorParams) {
+                            const btn = document.createElement("button");
+                            btn.type = "button";
+                            btn.className = "w-full flex items-center justify-between px-2 py-1 bg-white border border-slate-200 rounded text-[10.5px] hover:border-indigo-400 text-slate-700 shadow-2xs transition-colors cursor-pointer";
+                            btn.innerHTML = `
+                                <span id="tab-label-identifiers" class="truncate font-medium text-slate-600">(Tots)</span>
+                                <i class="fa-solid fa-filter text-[10px] text-indigo-500 ml-1"></i>
+                            `;
+                            btn.onclick = (e) => {
+                                e.stopPropagation();
+                                obrirExcelFilterPopup('identifiers', btn, e);
+                            };
+                            return btn;
+                        },
+                        widthGrow: 1.4,
+                        formatter: function(cell) {
+                            const d = cell.getRow().getData();
+                            if (d.refCodeText) {
+                                return `
+                                    <div class="flex items-center gap-1.5 py-1 flex-wrap">
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-mono font-bold bg-slate-100 text-slate-800 border border-slate-200 shadow-2xs" title="Codi de referència: ${d.refCodeText}">
+                                            ${d.refCodeText}
+                                        </span>
+                                        ${d.pureId ? `<button type="button" data-egreta-id="${d.pureId}" data-egreta-title="${d.titleText.replace(/"/g, '&quot;')}" class="text-[10px] font-bold text-indigo-600 hover:underline cursor-pointer" title="Pure ID: ${d.pureId}">Pure ${d.pureId}</button>` : ''}
+                                    </div>
+                                `;
+                            } else {
+                                return `
+                                    <div class="flex items-center gap-1 py-1 flex-wrap">
+                                        <span class="text-[10px] text-slate-400 italic">Sense codi</span>
+                                        ${d.pureId ? `<button type="button" data-egreta-id="${d.pureId}" data-egreta-title="${d.titleText.replace(/"/g, '&quot;')}" class="text-[10px] font-bold text-indigo-400 hover:text-indigo-600 hover:underline cursor-pointer" title="Pure ID: ${d.pureId}">Pure ${d.pureId}</button>` : ''}
+                                    </div>
+                                `;
+                            }
+                        }
+                    },
+
+                    // Columna 2: Títol de l'Ajut
+                    {
+                        title: "Títol de l'Ajut",
+                        field: "titleText",
+                        headerFilter: "input",
+                        headerFilterPlaceholder: "Cerca títol...",
+                        widthGrow: 2.3,
+                        formatter: function(cell) {
+                            const d = cell.getRow().getData();
+                            const badge = getBadgeForCode(d.awardParentCode);
+                            return `
+                                <div class="flex flex-col py-1">
+                                    <span class="font-bold text-slate-800 text-xs line-clamp-2" title="${d.titleText}">${d.titleText}</span>
+                                    <div class="flex items-center gap-1 mt-0.5">
+                                        ${badge}
+                                        <span class="text-[10px] text-slate-400 truncate">${d.awardTypeText}</span>
+                                    </div>
+                                </div>
+                            `;
+                        }
+                    },
+
+                    // Columna 3: Tipus d'Ajut (Filtre Excel Tree amb Checkboxes)
+                    {
+                        title: "Tipus d'Ajut",
+                        field: "awardTypeText",
+                        headerFilter: function(cell, onRendered, success, cancel, editorParams) {
+                            const btn = document.createElement("button");
+                            btn.type = "button";
+                            btn.className = "w-full flex items-center justify-between px-2 py-1 bg-white border border-slate-200 rounded text-[10.5px] hover:border-indigo-400 text-slate-700 shadow-2xs transition-colors cursor-pointer";
+                            btn.innerHTML = `
+                                <span id="tab-label-awardTypes" class="truncate font-medium text-slate-600">(Tots)</span>
+                                <i class="fa-solid fa-filter text-[10px] text-indigo-500 ml-1"></i>
+                            `;
+                            btn.onclick = (e) => {
+                                e.stopPropagation();
+                                obrirExcelFilterPopup('awardTypes', btn, e);
+                            };
+                            return btn;
+                        },
+                        width: 150,
+                        formatter: function(cell) {
+                            const val = cell.getValue();
+                            return `<span class="text-xs font-semibold text-slate-700 truncate" title="${val}">${val}</span>`;
+                        }
+                    },
+
+                    // Columna 4: Convocatòria Associada (Identical to Convocatòries Page)
+                    {
+                        title: "Convocatòria Associada",
+                        field: "fOppTitleText",
+                        headerFilter: "input",
+                        headerFilterPlaceholder: "Cerca convocatòria...",
+                        widthGrow: 2.6,
+                        formatter: function(cell) {
+                            const a = cell.getRow().getData();
+                            if (a.fOppUuid) {
+                                const oppTitle = a.fOppTitleText;
+                                const oppType = a.fOppTypeText;
+                                const parentCode = a.fOppParentCode;
+                                const badge = parentCode ? getBadgeForCode(parentCode) : '';
+
+                                // Check type matching between Award and Convocatoria
+                                let matchHtml = '';
+                                if (a.typeMatchCheck) {
+                                    if (a.typeMatchCheck.isMatch) {
+                                        matchHtml = `
+                                            <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200" title="Tipus coincidents: Ajut (${a.typeMatchCheck.awardCategory}) i Convocatòria (${a.typeMatchCheck.foppCategory})">
+                                                <i class="fa-solid fa-check text-[8px]"></i> Coincident
+                                            </span>
+                                        `;
+                                    } else {
+                                        matchHtml = `
+                                            <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-rose-50 text-rose-700 border border-rose-200" title="Discrepància de tipus: Ajut (${a.typeMatchCheck.awardCategory}) vs Convocatòria (${a.typeMatchCheck.foppCategory})">
+                                                 <i class="fa-solid fa-triangle-exclamation text-[8px] text-rose-500"></i> Discordant (${a.typeMatchCheck.awardCategory} ≠ ${a.typeMatchCheck.foppCategory})
+                                             </span>
+                                        `;
+                                    }
+                                }
+
+                                return `
+                                    <div class="flex flex-col py-1">
+                                        <span class="text-xs font-semibold text-slate-700 line-clamp-1" title="${oppTitle}">${oppTitle}</span>
+                                        <div class="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                                            ${badge}
+                                            <span class="text-[10px] text-slate-400 font-medium">${oppType}</span>
+                                            ${matchHtml}
+                                        </div>
+                                    </div>
+                                `;
+                            } else {
+                                return `
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-100 my-1">
+                                        Conveni direct / No competitiu
+                                    </span>
+                                `;
+                            }
+                        }
+                    },
+
+                    // Columna 5: Categoria Convocatòria (Select PRO, BEC...)
+                    {
+                        title: "Cat. Conv.",
+                        field: "fOppParentCode",
+                        headerFilter: "select",
+                        headerFilterParams: { values: fOppParentValues },
+                        hozAlign: "center",
+                        headerHozAlign: "center",
+                        width: 95,
+                        formatter: function(cell) {
+                            const code = cell.getValue();
+                            return code ? getBadgeForCode(code) : `<span class="text-slate-300">-</span>`;
+                        }
+                    },
+
+                    // Columna 6: Any Concessió
+                    {
+                        title: "Any",
+                        field: "awardYearText",
+                        headerFilter: "select",
+                        headerFilterParams: { values: yearValues },
+                        hozAlign: "center",
+                        headerHozAlign: "center",
+                        width: 80,
+                        formatter: function(cell) {
+                            const y = cell.getValue();
+                            return `<span class="font-mono font-bold text-xs text-slate-600">${y}</span>`;
+                        }
+                    },
+
+                    // Columna 7: Suggerència de Naturalesa
+                    {
+                        title: "Naturalesa Proposada",
+                        field: "suggestedNatureText",
+                        widthGrow: 1.6,
+                        formatter: function(cell) {
+                            const d = cell.getRow().getData();
+                            if (d.suggestedNature) {
+                                const name = d.suggestedNatureText;
+                                return `
+                                    <div class="flex items-center gap-1.5 py-1">
+                                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-900 border border-amber-200 shadow-xs truncate" title="${name}">
+                                            <i class="fa-solid fa-wand-magic-sparkles text-[9px] text-amber-600"></i> ${name}
+                                        </span>
+                                        <button type="button" onclick="aplicarSuggerenciaIndividual('${d.uuid}', this)" class="px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 text-[10px] font-bold transition-colors cursor-pointer" title="Aplicar aquesta suggerència">
+                                            Aplica
+                                        </button>
+                                    </div>
+                                `;
+                            } else {
+                                return `<span class="text-[10px] italic text-slate-400">Sense suggerència</span>`;
+                            }
+                        }
+                    },
+
+                    // Columna 10: Assignació Individual Ràpida
+                    {
+                        title: "Assignar",
+                        field: "uuid",
+                        hozAlign: "center",
+                        headerHozAlign: "center",
+                        headerSort: false,
+                        width: 90,
+                        formatter: function(cell) {
+                            const uuid = cell.getValue();
+                            return `
+                                <button type="button" onclick="obrirSelectorFila(this, '${uuid}')" class="px-2 py-1 rounded-lg text-[10px] font-bold bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 text-slate-600 border border-slate-200 transition-colors cursor-pointer" title="Assignar naturalesa a aquesta fila">
+                                    <i class="fa-solid fa-tag mr-0.5"></i> Tria...
+                                </button>
+                            `;
+                        }
+                    }
+                ]
+            });
+
+            // Tabulator Selection and Filtering Event Listeners
+            excelTable.on("rowSelectionChanged", function(data, rows) {
+                actualitzarComptadorSeleccionats();
+            });
+            excelTable.on("rowSelected", function(row) {
+                actualitzarComptadorSeleccionats();
+            });
+            excelTable.on("rowDeselected", function(row) {
+                actualitzarComptadorSeleccionats();
+            });
+            excelTable.on("dataFiltered", function(filters, rows) {
+                const count = Array.isArray(rows) ? rows.length : (rows ? rows.length : 0);
+                const countBtn = document.getElementById('btn-count-filtrats');
+                if (countBtn) countBtn.innerText = count;
+                actualitzarResumFiltres();
+                actualitzarComptadorSeleccionats();
+            });
+            excelTable.on("tableBuilt", function() {
+                const countBtn = document.getElementById('btn-count-filtrats');
+                if (countBtn) countBtn.innerText = data.length;
+                actualitzarComptadorSeleccionats();
+            });
+        }
+
+        // Top Filter Bar Functions
+        function setFilterConvocatoria(tipo) {
+            filtroConvocatoria = tipo;
+            ['all', 'yes', 'no'].forEach(t => {
+                const btn = document.getElementById(`top-filter-${t}`);
+                if (btn) {
+                    if (t === tipo) {
+                        btn.className = "px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all text-indigo-600 bg-white shadow-xs";
+                    } else {
+                        btn.className = "px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all text-slate-500 hover:text-slate-800";
+                    }
+                }
+            });
+            aplicarFiltreGlobal();
+        }
+
+        function aplicarFiltreGlobal() {
+            if (!excelTable) return;
+
+            // Deseleccionem les files prèviament seleccionades per assegurar que només mana la tria sobre la vista actual
+            excelTable.deselectRow();
+
+            const searchInput = document.getElementById('top-search-input');
+            const searchVal = searchInput ? searchInput.value.trim().toLowerCase() : '';
+            const matchSelect = document.getElementById('selectTypeMatchFilter');
+            const selTypeMatch = matchSelect ? matchSelect.value : 'all';
+
+            // Excel Tree Filters sets
+            const selIds = window.excelFilters.identifiers.selected;
+            const selTypes = window.excelFilters.awardTypes.selected;
+
+            // Custom Tabulator filter function combining top toolbar filters
+            excelTable.setFilter(function(data) {
+                // 0. Quick Search Filter (Title, Identifiers, Convocatoria)
+                if (searchVal) {
+                    const fullText = (data.titleText + ' ' + (data.allIdentifiersSearch || '') + ' ' + (data.fOppTitleText || '')).toLowerCase();
+                    if (!fullText.includes(searchVal)) return false;
+                }
+
+                // 1. Identifiers / Reference Code Excel Tree Filter
+                if (selIds !== null) {
+                    if (!selIds.has(data.uuid)) return false;
+                }
+
+                // 2. Award Type Excel Tree Filter
+                if (selTypes !== null) {
+                    if (!selTypes.has(data.awardTypeText)) return false;
+                }
+
+                // 3. Convocatoria Presence Filter
+                if (filtroConvocatoria === 'yes' && !data.fOppUuid) return false;
+                if (filtroConvocatoria === 'no' && data.fOppUuid) return false;
+
+                // 5. Type Match Filter
+                if (selTypeMatch === 'match') {
+                    if (!data.typeMatchCheck || !data.typeMatchCheck.isMatch) return false;
+                } else if (selTypeMatch === 'mismatch') {
+                    if (!data.typeMatchCheck || data.typeMatchCheck.isMatch) return false;
+                }
+
+                return true;
+            });
+
+            actualitzarResumFiltres();
+            actualitzarComptadorSeleccionats();
+        }
+
+        function getSelectedActiveRows() {
+            if (!excelTable) return [];
+            return excelTable.getRows("active").filter(row => row.isSelected());
+        }
+
+        function getSelectedActiveData() {
+            return getSelectedActiveRows().map(row => row.getData());
+        }
+
+        function actualitzarComptadorSeleccionats() {
+            if (!excelTable) return;
+            const selectedRows = getSelectedActiveRows();
+            const count = selectedRows.length;
+            const countEl = document.getElementById('selected-count');
+            if (countEl) countEl.innerText = count.toLocaleString('ca-ES');
+            
+            const btnBatch = document.getElementById('btn-batch-apply-nature');
+            const btnSugg = document.getElementById('btn-batch-apply-suggestions');
+            if (btnBatch) btnBatch.disabled = (count === 0);
+            if (btnSugg) btnSugg.disabled = (count === 0);
+
+            // Synchronize header master checkbox state with active filtered rows
+            const headerCb = document.getElementById('tabulator-select-all-checkbox');
+            if (headerCb) {
+                const activeRows = excelTable.getRows("active");
+                if (activeRows.length === 0) {
+                    headerCb.checked = false;
+                    headerCb.indeterminate = false;
+                } else if (count === activeRows.length) {
+                    headerCb.checked = true;
+                    headerCb.indeterminate = false;
+                } else if (count === 0) {
+                    headerCb.checked = false;
+                    headerCb.indeterminate = false;
+                } else {
+                    headerCb.checked = false;
+                    headerCb.indeterminate = true;
+                }
+            }
+        }
+
+        function actualitzarResumFiltres() {
+            if (!excelTable) return;
+            const filters = excelTable.getFilters();
+            const container = document.getElementById('active-filter-tags');
+            if (!container) return;
+
+            const tags = [];
+            
+            // Reference Code Excel Filter tag
+            const filterIds = window.excelFilters.identifiers;
+            if (filterIds.selected !== null) {
+                tags.push(`Codi Ref.: ${filterIds.selected.size}/${filterIds.allKeys.length}`);
+            }
+
+            // Award Types Excel Filter tag
+            const filterTypes = window.excelFilters.awardTypes;
+            if (filterTypes.selected !== null) {
+                tags.push(`Tipus Ajut: ${filterTypes.selected.size}/${filterTypes.allKeys.length}`);
+            }
+
+            if (filtroConvocatoria === 'yes') tags.push("Amb Convocatòria");
+            if (filtroConvocatoria === 'no') tags.push("Sense Convocatòria");
+            const selTypeMatch = document.getElementById('selectTypeMatchFilter').value;
+            if (selTypeMatch === 'match') tags.push("Només Coincidents");
+            if (selTypeMatch === 'mismatch') tags.push("Només Discordants");
+
+            filters.forEach(f => {
+                if (f.field) {
+                    tags.push(`${f.field}: ${f.value}`);
+                }
+            });
+
+            if (tags.length === 0) {
+                container.innerHTML = `<span class="italic text-slate-400">Cap filtre actiu (es mostren tots els pendents)</span>`;
+            } else {
+                container.innerHTML = tags.map(t => `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">${t}</span>`).join(' ');
+            }
+        }
+
+        function netejarTotsElsFiltres() {
+            if (excelTable) {
+                excelTable.clearFilter();
+                excelTable.clearHeaderFilter();
+            }
+            // Reset Excel Filters
+            window.excelFilters.identifiers.selected = null;
+            window.excelFilters.awardTypes.selected = null;
+            actualitzarLabelsExcelFilter('identifiers');
+            actualitzarLabelsExcelFilter('awardTypes');
+
+            filtroConvocatoria = 'all';
+            ['all', 'yes', 'no'].forEach(t => {
+                const btn = document.getElementById(`top-filter-${t}`);
+                if (btn) {
+                    if (t === 'all') {
+                        btn.className = "px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all text-indigo-600 bg-white shadow-xs";
+                    } else {
+                        btn.className = "px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all text-slate-500 hover:text-slate-800";
+                    }
+                }
+            });
+            const topSearch = document.getElementById('top-search-input');
+            if (topSearch) topSearch.value = '';
+            const matchEl = document.getElementById('selectTypeMatchFilter');
+            if (matchEl) matchEl.value = 'all';
+            actualitzarResumFiltres();
+        }
+
+        function seleccionarVisibles() {
+            if (excelTable) {
+                const visibleRows = excelTable.getRows("visible");
+                if (visibleRows && visibleRows.length > 0) {
+                    excelTable.selectRow(visibleRows);
+                } else {
+                    excelTable.selectRow("visible");
+                }
+                actualitzarComptadorSeleccionats();
+            }
+        }
+
+        function seleccionarTotsFiltrats() {
+            if (excelTable) {
+                const activeRows = excelTable.getRows("active");
+                if (activeRows && activeRows.length > 0) {
+                    excelTable.selectRow(activeRows);
+                } else {
+                    excelTable.selectRow();
+                }
+                actualitzarComptadorSeleccionats();
+            }
+        }
+
+        function deseleccionarTot() {
+            if (excelTable) {
+                excelTable.deselectRow();
+                actualitzarComptadorSeleccionats();
+            }
+        }
+
+        function copiarAlClipboard(text, btn) {
+            navigator.clipboard.writeText(text).then(() => {
+                const orig = btn.innerHTML;
+                btn.innerHTML = `<i class="fa-solid fa-check text-emerald-600"></i> Copiat!`;
+                setTimeout(() => { btn.innerHTML = orig; }, 1500);
+            }).catch(e => console.error("Error al copiar:", e));
+        }
+
+        // ==========================================
+        // HIERARCHICAL NATURE SELECTOR
+        // ==========================================
+
+        function obrirSelectorJerarquicGlobal(buttonEl) {
+            obrirSelectorJerarquicComu(buttonEl, (natureIndex, natureDoc, natureName) => {
+                selectedTargetNature = natureDoc;
+                document.getElementById('target-nature-index').value = natureIndex;
+                const label = document.getElementById('label-target-nature');
+                label.textContent = natureName;
+                label.classList.remove('text-slate-500');
+                label.classList.add('text-indigo-900', 'font-black');
+                document.getElementById('btn-clear-target-nature').classList.remove('hidden');
+            });
+        }
+
+        function netejarNaturalesaDesti() {
+            selectedTargetNature = null;
+            document.getElementById('target-nature-index').value = '';
+            const label = document.getElementById('label-target-nature');
+            label.textContent = '-- Tria Naturalesa Destí --';
+            label.classList.remove('text-indigo-900', 'font-black');
+            label.classList.add('text-slate-500');
+            document.getElementById('btn-clear-target-nature').classList.add('hidden');
+        }
+
+        function obrirSelectorFila(buttonEl, uuid) {
+            obrirSelectorJerarquicComu(buttonEl, async (natureIndex, natureDoc, natureName) => {
+                const env = document.getElementById('selectEntorn').value || 'test';
+                if (!confirm(`Vols assignar la naturalesa "${natureName}" a aquest ajut a l'entorn ${env}?`)) {
+                    return;
+                }
+
+                try {
+                    const res = await apiFetchWrapper(`/awards/${uuid}/nature?env=${env}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(natureDoc)
+                    });
+                    const resData = await res.json();
+                    if (res.ok && resData.success) {
+                        alert("Naturalesa assignada i sincronitzada correctament!");
+                        carregarDades();
+                    } else {
+                        alert(resData.message || "Error al desar la naturalesa.");
+                    }
+                } catch (e) {
+                    console.error("Error:", e);
+                    alert("Error de comunicació amb el servidor.");
+                }
+            });
+        }
+
+        function obrirSelectorJerarquicComu(buttonEl, onSelectCallback) {
+            const oldDropdowns = document.querySelectorAll('.nature-hierarchical-dropdown');
+            oldDropdowns.forEach(d => d.remove());
+
+            if (!window.natureHierarchy || window.natureHierarchy.length === 0) {
+                alert("Les naturaleses no s'han acabat de carregar.");
+                return;
+            }
+
+            const parentList = window.natureHierarchy;
+            const dropdown = document.createElement('div');
+            dropdown.className = 'nature-hierarchical-dropdown fixed bg-white border border-slate-200 rounded-2xl shadow-2xl z-[9999] flex text-[11.5px] text-slate-700 select-none nature-popup-shadow transition-all duration-150 scale-95 opacity-0';
+            dropdown.style.height = '340px';
+
+            const rect = buttonEl.getBoundingClientRect();
+            const fitsBelow = (rect.bottom + 340 < window.innerHeight);
+            if (fitsBelow) {
+                dropdown.style.top = `${rect.bottom + 6}px`;
+            } else {
+                dropdown.style.top = `${rect.top - 344}px`;
+            }
+            dropdown.style.left = `${Math.max(10, Math.min(rect.left, window.innerWidth - 500))}px`;
+
+            dropdown.innerHTML = `
+                <div class="flex h-full w-[490px]">
+                    <!-- Left pane: categories -->
+                    <div class="w-[195px] border-r border-slate-100 overflow-y-auto p-2 bg-slate-50/70 flex flex-col gap-0.5">
+                        <div class="px-2 py-1 text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Categorització</div>
+                        ${parentList.map(p => `
+                            <div class="parent-item px-2.5 py-1.5 rounded-lg hover:bg-indigo-50/70 hover:text-indigo-700 cursor-pointer flex justify-between items-center font-semibold text-slate-700 transition-colors" data-parent-uri="${p.uri}">
+                                <span class="truncate" title="${p.term}">${p.term}</span>
+                                <i class="fa-solid fa-chevron-right text-[9px] opacity-40 ml-1"></i>
+                            </div>
+                        `).join('')}
+                    </div>
+
+                    <!-- Right pane: children options -->
+                    <div class="w-[295px] overflow-y-auto p-2.5 flex flex-col gap-0.5" id="nature-child-pane">
+                        <div class="h-full flex flex-col items-center justify-center text-slate-400 italic text-center p-4">
+                            <i class="fa-solid fa-arrow-left mb-2 text-slate-350 text-base"></i>
+                            <span>Passa el ratolí o clica en una categoria per veure les opcions</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            document.body.appendChild(dropdown);
+
+            setTimeout(() => {
+                dropdown.classList.remove('scale-95', 'opacity-0');
+            }, 10);
+
+            const parentItems = dropdown.querySelectorAll('.parent-item');
+            const childPane = dropdown.querySelector('#nature-child-pane');
+
+            function showChildrenOf(parentUri) {
+                const parentObj = parentList.find(p => p.uri === parentUri);
+                if (!parentObj) return;
+
+                parentItems.forEach(item => {
+                    if (item.getAttribute('data-parent-uri') === parentUri) {
+                        item.classList.add('bg-indigo-50/80', 'text-indigo-700');
+                    } else {
+                        item.classList.remove('bg-indigo-50/80', 'text-indigo-700');
+                    }
+                });
+
+                let parentPrefix = "";
+                const underscoreIdx = parentObj.term.indexOf("_");
+                if (underscoreIdx > 0) {
+                    parentPrefix = parentObj.term.substring(0, underscoreIdx + 1);
+                }
+
+                childPane.innerHTML = `
+                    <div class="px-2 py-1 text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Sub-opcions de naturalesa</div>
+                    <div class="flex flex-col gap-0.5">
+                        ${parentObj.children.map(c => {
+                            let displayTerm = c.term;
+                            if (parentPrefix && displayTerm.startsWith(parentPrefix)) {
+                                displayTerm = displayTerm.substring(parentPrefix.length);
+                            }
+                            return `
+                                <div class="child-item px-2.5 py-1.5 rounded-lg hover:bg-indigo-600 hover:text-white cursor-pointer font-medium text-slate-700 transition-colors" data-uri="${c.uri}">
+                                    ${displayTerm}
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                `;
+
+                childPane.querySelectorAll('.child-item').forEach(item => {
+                    item.addEventListener('click', () => {
+                        const uri = item.getAttribute('data-uri');
+                        const index = (window.availableNatures || []).findIndex(n => n.uri === uri);
+                        if (index === -1) return;
+                        const natureDoc = window.availableNatures[index];
+                        const name = normalitzarText(natureDoc.term || natureDoc, '');
+                        
+                        dropdown.remove();
+                        document.removeEventListener('click', closeHandler);
+                        onSelectCallback(index, natureDoc, name);
+                    });
+                });
+            }
+
+            parentItems.forEach(item => {
+                const parentUri = item.getAttribute('data-parent-uri');
+                item.addEventListener('mouseenter', () => showChildrenOf(parentUri));
+                item.addEventListener('click', () => showChildrenOf(parentUri));
+            });
+
+            function closeHandler(e) {
+                if (!dropdown.contains(e.target) && e.target !== buttonEl && !buttonEl.contains(e.target)) {
+                    dropdown.remove();
+                    document.removeEventListener('click', closeHandler);
+                }
+            }
+            setTimeout(() => {
+                document.addEventListener('click', closeHandler);
+            }, 50);
+        }
+
+        // ==========================================
+        // BATCH UPDATE EXECUTIONS
+        // ==========================================
+
+        async function executarActualitzacioMassiva() {
+            if (!excelTable) return;
+            const selectedRows = getSelectedActiveData();
+            if (selectedRows.length === 0) {
+                alert("Si us plau, selecciona almenys un ajut de la taula.");
+                return;
+            }
+
+            if (!selectedTargetNature) {
+                alert("Si us plau, selecciona la naturalesa de destí abans d'executar l'actualització.");
+                return;
+            }
+
+            const targetName = normalitzarText(selectedTargetNature.term || selectedTargetNature, '');
+            const env = document.getElementById('selectEntorn').value || 'test';
+            const uuids = selectedRows.map(r => r.uuid).filter(Boolean);
+
+            if (!confirm(`Confirmes l'assignació massiva de la naturalesa:\n\n"${targetName}"\n\na ${uuids.length} ajuts seleccionats a l'entorn "${env.toUpperCase()}"?`)) {
+                return;
+            }
+
+            obrirModalProgres();
+            actualitzarBarraProgres(20, `Enviant ${uuids.length} ajuts al servidor...`);
+
+            try {
+                const res = await apiFetchWrapper(`/awards/batch-update-nature-by-uuids?env=${env}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        uuids: uuids,
+                        natureDoc: selectedTargetNature
+                    })
+                });
+
+                actualitzarBarraProgres(80, "Sincronitzant amb MongoDB...");
+                const data = await res.json();
+
+                if (data.success) {
+                    actualitzarBarraProgres(100, "Completat amb èxit!");
+                    mostrarResumResultat(`
+                        <div class="text-emerald-700 font-bold flex items-center gap-1.5 mb-1">
+                            <i class="fa-solid fa-circle-check"></i> Procés massiu finalitzat
+                        </div>
+                        <div>- Sincronitzats correctament: <strong>${data.successCount}</strong></div>
+                        <div>- Errors de sincronització: <strong>${data.failCount}</strong></div>
+                    `);
+                } else {
+                    actualitzarBarraProgres(100, "Finalitzat amb errors");
+                    mostrarResumResultat(`
+                        <div class="text-rose-700 font-bold flex items-center gap-1.5 mb-1">
+                            <i class="fa-solid fa-triangle-exclamation"></i> Error en el procés
+                        </div>
+                        <div>${data.message || "Error desconegut"}</div>
+                    `);
+                }
+            } catch (err) {
+                console.error("Error batch update:", err);
+                actualitzarBarraProgres(100, "Error de connexió");
+                mostrarResumResultat(`<div class="text-rose-700 font-bold">Error de connexió amb el servidor.</div>`);
+            }
+        }
+
+        async function executarAplicacioSuggerencies() {
+            if (!excelTable) return;
+            const selectedRows = getSelectedActiveData();
+            if (selectedRows.length === 0) {
+                alert("Si us plau, selecciona almenys un ajut de la taula.");
+                return;
+            }
+
+            const env = document.getElementById('selectEntorn').value || 'test';
+            const uuids = selectedRows.map(r => r.uuid).filter(Boolean);
+
+            if (!confirm(`Vols aplicar les suggerències automàtiques individuals als ${uuids.length} ajuts seleccionats a l'entorn "${env.toUpperCase()}"?`)) {
+                return;
+            }
+
+            obrirModalProgres();
+            actualitzarBarraProgres(20, `Enviant ${uuids.length} ajuts al servidor...`);
+
+            try {
+                const res = await apiFetchWrapper(`/awards/batch-apply-suggested-by-uuids?env=${env}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(uuids)
+                });
+
+                actualitzarBarraProgres(80, "Sincronitzant amb MongoDB...");
+                const data = await res.json();
+
+                if (data.success) {
+                    actualitzarBarraProgres(100, "Completat amb èxit!");
+                    mostrarResumResultat(`
+                        <div class="text-emerald-700 font-bold flex items-center gap-1.5 mb-1">
+                            <i class="fa-solid fa-circle-check"></i> Suggerències aplicades
+                        </div>
+                        <div>- Sincronitzats correctament: <strong>${data.successCount}</strong></div>
+                        <div>- Sense suggerència associada: <strong>${data.noSuggestionCount || 0}</strong></div>
+                        <div>- Errors de sincronització: <strong>${data.failCount}</strong></div>
+                    `);
+                } else {
+                    actualitzarBarraProgres(100, "Finalitzat amb errors");
+                    mostrarResumResultat(`
+                        <div class="text-rose-700 font-bold flex items-center gap-1.5 mb-1">
+                            <i class="fa-solid fa-triangle-exclamation"></i> Error en el procés
+                        </div>
+                        <div>${data.message || "Error desconegut"}</div>
+                    `);
+                }
+            } catch (err) {
+                console.error("Error batch suggestions:", err);
+                actualitzarBarraProgres(100, "Error de connexió");
+                mostrarResumResultat(`<div class="text-rose-700 font-bold">Error de connexió amb el servidor.</div>`);
+            }
+        }
+
+        async function aplicarSuggerenciaIndividual(uuid, btn) {
+            const row = rawAwardsData.find(r => r.uuid === uuid);
+            if (!row || !row.suggestedNature) return;
+
+            const targetName = row.suggestedNatureText;
+            const env = document.getElementById('selectEntorn').value || 'test';
+
+            if (!confirm(`Vols aplicar la naturalesa suggerida "${targetName}" a aquest ajut?`)) {
+                return;
+            }
+
+            const orig = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin text-[9px]"></i>`;
+
+            try {
+                const res = await apiFetchWrapper(`/awards/${uuid}/nature?env=${env}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(row.suggestedNature)
+                });
+                const resData = await res.json();
+                if (res.ok && resData.success) {
+                    alert("Naturalesa suggerida aplicada correctament!");
+                    carregarDades();
+                } else {
+                    alert(resData.message || "Error al desar la naturalesa.");
+                }
+            } catch (e) {
+                console.error("Error:", e);
+                alert("Error al connectar amb el servidor.");
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = orig;
+            }
+        }
+
+        // ==========================================
+        // PROGRESS MODAL HELPERS
+        // ==========================================
+
+        function obrirModalProgres() {
+            document.getElementById('modal-batch-progress').classList.remove('hidden');
+            document.getElementById('batch-result-summary').classList.add('hidden');
+            document.getElementById('btn-close-progress-modal').classList.remove('hidden');
+            actualitzarBarraProgres(10, "Iniciant procés...");
+        }
+
+        function actualitzarBarraProgres(pct, text) {
+            document.getElementById('batch-progress-bar').style.width = `${pct}%`;
+            document.getElementById('batch-progress-pct').innerText = `${pct}%`;
+            document.getElementById('batch-progress-text').innerText = text;
+        }
+
+        function mostrarResumResultat(html) {
+            const summary = document.getElementById('batch-result-summary');
+            summary.innerHTML = html;
+            summary.classList.remove('hidden');
+            document.getElementById('btn-close-progress-modal').classList.remove('hidden');
+        }
+
+        function tancarModalProgres() {
+            document.getElementById('modal-batch-progress').classList.add('hidden');
+            carregarDades();
+        }
+
+        // ==========================================
+        // EXPORT TO EXCEL
+        // ==========================================
+
+        function exportarExcel() {
+            if (!excelTable) return;
+            const dataToExport = excelTable.getData("active"); // Only current filtered rows
+            if (!dataToExport || dataToExport.length === 0) {
+                alert("No hi ha dades per exportar.");
+                return;
+            }
+
+            const exportList = dataToExport.map(d => ({
+                "UUID": d.uuid,
+                "Pure ID": d.pureId || "",
+                "Codi Referència": d.refCodeText || "",
+                "Títol": d.titleText,
+                "Tipus Ajut": d.awardTypeText,
+                "Cat. Ajut": d.awardParentCode,
+                "Convocatòria": d.fOppTitleText,
+                "Tipus Convocatòria": d.fOppTypeText,
+                "Cat. Convocatòria": d.fOppParentCode,
+                "Coincidència": d.typeMatchText,
+                "Any Concessió": d.awardYearText,
+                "Data Concessió": d.awardDate ? new Date(d.awardDate).toLocaleDateString('ca-ES') : '',
+                "Suggerència Naturalesa": d.suggestedNatureText
+            }));
+
+            const ws = XLSX.utils.json_to_sheet(exportList);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Ajuts Sense Naturalesa");
+            XLSX.writeFile(wb, `Ajuts_Sense_Naturalesa_${new Date().toISOString().slice(0, 10)}.xlsx`);
+        }
+
+        // Initial setup
+        async function init() {
+            await carregarNatures();
+            await carregarDades();
+        }
+        init();
+    </script>
+    <script src="egreta-modal.js"></script>
+</body>
+</html>

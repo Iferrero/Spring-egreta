@@ -1,0 +1,1353 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Conciliació OpenAlex - EGRETA | Portal de Recerca UAB</title>
+    <script src="config.js"></script>
+    <script src="uab-brand.js" defer></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="uab-theme.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .premium-shadow {
+            box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05), 0 2px 8px -1px rgba(0, 0, 0, 0.03);
+        }
+        .card-kpi {
+            transition: all 0.25s ease;
+        }
+        .card-kpi:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.08);
+        }
+        .badge-verdict-green {
+            background-color: #ecfdf5;
+            color: #065f46;
+            border: 1px solid #a7f3d0;
+        }
+        .badge-verdict-yellow {
+            background-color: #fffbeb;
+            color: #92400e;
+            border: 1px solid #fde68a;
+        }
+        .badge-verdict-red {
+            background-color: #fef2f2;
+            color: #991b1b;
+            border: 1px solid #fecaca;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen text-slate-800 font-sans">
+
+    <div class="mx-auto py-8 px-6 w-[95%] max-w-[1600px]">
+        
+        <!-- Header Principal -->
+        <header class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
+            <div>
+                <div class="flex items-center gap-2 mb-2">
+                    <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        <i class="fa-solid fa-atom text-[11px]"></i> Bibliometria & Curation CRIS
+                    </span>
+                    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-[11px] font-bold bg-slate-200 text-slate-700">
+                        OpenAlex vs EGRETA
+                    </span>
+                </div>
+                <h1 class="text-3xl font-black text-slate-900 tracking-tight">Conciliació i Triangulació OpenAlex</h1>
+                <p class="text-slate-500 text-sm mt-1">Detecció d'obres pendents, validació d'afiliació de l'esfera UAB i filtratge automàtic d'homònims</p>
+            </div>
+            <div class="flex items-center gap-3">
+                <button onclick="switchMainTab('methodology')" class="px-4 py-2.5 rounded-xl border border-emerald-200 bg-emerald-50 text-sm font-semibold text-emerald-800 hover:bg-emerald-100 transition-all active:scale-95 flex items-center gap-2 premium-shadow">
+                    <i class="fa-solid fa-book-open text-emerald-600"></i>
+                    <span>Metodologia</span>
+                </button>
+                <a href="index_assesora.html" class="px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 hover:bg-slate-100 transition-all active:scale-95 flex items-center gap-2 premium-shadow">
+                    <i class="fa-solid fa-arrow-left text-slate-500"></i>
+                    <span>Tornar al Panell</span>
+                </a>
+            </div>
+        </header>
+
+        <!-- Selector de Modes (Tabs Principals) -->
+        <nav class="flex border-b border-slate-200 mb-8 gap-4">
+            <button id="tabBtnIndividual" onclick="switchMainTab('individual')" class="py-3 px-6 font-bold text-sm border-b-2 border-emerald-600 text-emerald-700 flex items-center gap-2 transition-colors">
+                <i class="fa-solid fa-user-check"></i> Curació Individual (Investigador)
+            </button>
+            <button id="tabBtnBatch" onclick="switchMainTab('batch')" class="py-3 px-6 font-semibold text-sm border-b-2 border-transparent text-slate-500 hover:text-slate-800 flex items-center gap-2 transition-colors">
+                <i class="fa-solid fa-layer-group"></i> Escaneig Departamental per Lotes
+            </button>
+            <button id="tabBtnMethodology" onclick="switchMainTab('methodology')" class="py-3 px-6 font-semibold text-sm border-b-2 border-transparent text-slate-500 hover:text-slate-800 flex items-center gap-2 transition-colors">
+                <i class="fa-solid fa-book-open"></i> Metodologia i Funcionament
+            </button>
+        </nav>
+
+        <!-- ========================================== -->
+        <!-- SECCIÓ 1: CURACIÓ INDIVIDUAL               -->
+        <!-- ========================================== -->
+        <section id="sectionIndividual" class="block">
+            
+            <!-- Barra de Cerca / Filtre d'Investigador -->
+            <div class="bg-white p-6 rounded-2xl border border-slate-200 premium-shadow mb-8">
+                <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
+                    
+                    <div class="md:col-span-4">
+                        <label class="block text-xs font-bold text-slate-600 uppercase mb-1.5">1. Selecciona Departament</label>
+                        <select id="selectDeptIndividual" onchange="onDeptIndividualChange()" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium">
+                            <option value="">-- Carregant departaments... --</option>
+                        </select>
+                    </div>
+
+                    <div class="md:col-span-5">
+                        <label class="block text-xs font-bold text-slate-600 uppercase mb-1.5">2. Selecciona Investigador(a)</label>
+                        <select id="selectPersonaIndividual" onchange="onPersonaSelectChange()" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium" disabled>
+                            <option value="">-- Primer tria un departament --</option>
+                        </select>
+                    </div>
+
+                    <div class="md:col-span-3 flex flex-col gap-2">
+                        <div class="flex items-center gap-2">
+                            <input type="checkbox" id="checkStrictOrcid" class="rounded text-emerald-600 focus:ring-emerald-500 h-4 w-4">
+                            <label for="checkStrictOrcid" class="text-xs text-slate-600 font-semibold cursor-pointer">Mode Estricte per ORCID</label>
+                        </div>
+                        <button id="btnScanAuthor" onclick="scanCurrentAuthor()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-4 rounded-xl text-sm transition-all shadow-md active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                            <i class="fa-solid fa-arrows-rotate"></i>
+                            <span id="btnScanAuthorText">Escanejar OpenAlex</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Cerca directa per Nom d'Investigador(a) -->
+                <div class="mt-4 pt-4 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center gap-3 text-xs text-slate-500 relative">
+                    <span class="font-bold flex items-center gap-1.5 shrink-0 text-slate-700">
+                        <i class="fa-solid fa-magnifying-glass text-emerald-600"></i> Cerca directa per nom:
+                    </span>
+                    <div class="relative w-full max-w-md">
+                        <input type="text" id="authorSearchInput" autocomplete="off" placeholder="Escriu cognoms o nom de l'investigador(a)..." class="w-full border border-slate-200 bg-slate-50 rounded-xl px-3.5 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium text-slate-800">
+                        <div id="authorSearchDropdown" class="hidden absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-50 max-h-64 overflow-y-auto divide-y divide-slate-100">
+                            <!-- Items d'autocompletat -->
+                        </div>
+                    </div>
+                    <span class="text-[11px] text-slate-400">També accepta ORCID o UUID</span>
+                </div>
+            </div>
+
+            <!-- Capçalera d'Informació de l'Autor Actiu -->
+            <div id="authorProfileCard" class="hidden bg-gradient-to-r from-slate-900 to-slate-800 text-white p-6 rounded-2xl mb-8 shadow-lg">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div class="flex items-center gap-4">
+                        <div class="w-14 h-14 rounded-2xl bg-emerald-500/20 border border-emerald-400/30 flex items-center justify-center text-emerald-400 text-2xl font-bold">
+                            <i class="fa-solid fa-user-graduate"></i>
+                        </div>
+                        <div>
+                            <h2 id="authorFullName" class="text-xl font-bold tracking-tight">Dr. ...</h2>
+                            <p id="authorDetails" class="text-slate-300 text-xs mt-0.5">Departament: ... | UUID: ...</p>
+                            <div class="flex items-center gap-2 mt-2">
+                                <span id="authorOrcidBadge" class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-[11px] font-semibold bg-emerald-900/50 text-emerald-300 border border-emerald-500/30">
+                                    <i class="fa-brands fa-orcid text-[10px]"></i> <span id="authorOrcidText">Sense ORCID</span>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <button onclick="refreshAuthorCandidates()" class="px-4 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 text-xs font-bold text-white transition-all flex items-center gap-2">
+                            <i class="fa-solid fa-rotate text-slate-400"></i> Actualitzar Llista
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- KPIs de Veredicte Semàfor -->
+            <div id="kpiContainer" class="hidden grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                <div onclick="filterByVerdictTab('ALL')" class="card-kpi bg-white p-5 rounded-2xl border border-slate-200 premium-shadow cursor-pointer border-t-4 border-t-slate-500">
+                    <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Total Trobades</span>
+                    <div class="flex items-baseline justify-between mt-2">
+                        <span id="kpiTotal" class="text-3xl font-black text-slate-800">0</span>
+                        <i class="fa-solid fa-book-bookmark text-slate-300 text-xl"></i>
+                    </div>
+                </div>
+                <div onclick="filterByVerdictTab('HIGH_CONFIDENCE_UAB')" class="card-kpi bg-white p-5 rounded-2xl border border-slate-200 premium-shadow cursor-pointer border-t-4 border-t-emerald-500">
+                    <span class="text-xs font-bold text-emerald-700 uppercase tracking-wider">🟢 Certesa Alta UAB</span>
+                    <div class="flex items-baseline justify-between mt-2">
+                        <span id="kpiGreen" class="text-3xl font-black text-emerald-700">0</span>
+                        <span class="text-xs font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">Llestes per importar</span>
+                    </div>
+                </div>
+                <div onclick="filterByVerdictTab('REQUIRES_REVIEW')" class="card-kpi bg-white p-5 rounded-2xl border border-slate-200 premium-shadow cursor-pointer border-t-4 border-t-amber-500">
+                    <span class="text-xs font-bold text-amber-700 uppercase tracking-wider">🟡 Requereix Revisió</span>
+                    <div class="flex items-baseline justify-between mt-2">
+                        <span id="kpiYellow" class="text-3xl font-black text-amber-700">0</span>
+                        <span class="text-xs font-semibold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">Possibles estades</span>
+                    </div>
+                </div>
+                <div onclick="filterByVerdictTab('LIKELY_FALSE_POSITIVE')" class="card-kpi bg-white p-5 rounded-2xl border border-slate-200 premium-shadow cursor-pointer border-t-4 border-t-rose-500">
+                    <span class="text-xs font-bold text-rose-700 uppercase tracking-wider">🔴 Falsos Positius</span>
+                    <div class="flex items-baseline justify-between mt-2">
+                        <span id="kpiRed" class="text-3xl font-black text-rose-700">0</span>
+                        <span class="text-xs font-semibold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full">Homònims externs</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Filtres de Taula i Botons d'Acció Massiva -->
+            <div id="tableControlBar" class="hidden flex flex-col sm:flex-row items-center justify-between gap-4 mb-4">
+                <div class="flex items-center gap-2">
+                    <button onclick="filterByVerdictTab('ALL')" id="filterTabAll" class="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-slate-800 text-white">Totes</button>
+                    <button onclick="filterByVerdictTab('HIGH_CONFIDENCE_UAB')" id="filterTabGreen" class="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-white text-emerald-700 border border-slate-200 hover:bg-emerald-50">🟢 Alta Certesa</button>
+                    <button onclick="filterByVerdictTab('REQUIRES_REVIEW')" id="filterTabYellow" class="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-white text-amber-700 border border-slate-200 hover:bg-amber-50">🟡 Dubtes</button>
+                    <button onclick="filterByVerdictTab('LIKELY_FALSE_POSITIVE')" id="filterTabRed" class="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-white text-rose-700 border border-slate-200 hover:bg-rose-50">🔴 Descartes</button>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button onclick="bulkApproveGreen()" class="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-sm flex items-center gap-1.5">
+                        <i class="fa-solid fa-check-double"></i> Aprovar totes les 🟢
+                    </button>
+                    <button onclick="bulkDismissRed()" class="px-3.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition-all shadow-sm flex items-center gap-1.5">
+                        <i class="fa-solid fa-trash-can"></i> Descartar totes les 🔴
+                    </button>
+                </div>
+            </div>
+
+            <!-- Contenidor de Llistat de Candidats -->
+            <div id="candidatesListContainer" class="space-y-4">
+                <div class="text-center py-16 bg-white rounded-2xl border border-slate-200 text-slate-400">
+                    <i class="fa-solid fa-magnifying-glass text-4xl mb-3 text-slate-300"></i>
+                    <p class="font-medium">Tria un departament i un investigador per carregar o escanejar candidatures d'OpenAlex.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- SECCIÓ 2: ESCANEIG PER LOTES (BATCH)       -->
+        <!-- ========================================== -->
+        <section id="sectionBatch" class="hidden">
+            
+            <div class="bg-white p-6 rounded-2xl border border-slate-200 premium-shadow mb-8">
+                <h2 class="text-base font-bold text-slate-800 mb-2 flex items-center gap-2">
+                    <i class="fa-solid fa-sliders text-emerald-600"></i> Paràmetres del Treball per Lotes
+                </h2>
+                <p class="text-xs text-slate-500 mb-6">El procés s'executarà en segon pla respectant els límits de crides d'OpenAlex i Crossref.</p>
+                
+                <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
+                    <div class="md:col-span-6">
+                        <label class="block text-xs font-bold text-slate-600 uppercase mb-1.5">Departament a Escanejar</label>
+                        <select id="selectDeptBatch" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium">
+                            <option value="">-- Carregant departaments... --</option>
+                        </select>
+                    </div>
+
+                    <div class="md:col-span-3">
+                        <div class="flex items-center gap-2 mb-2">
+                            <input type="checkbox" id="checkBatchStrictOrcid" class="rounded text-emerald-600 focus:ring-emerald-500 h-4 w-4">
+                            <label for="checkBatchStrictOrcid" class="text-xs text-slate-600 font-semibold cursor-pointer">Només autors amb ORCID</label>
+                        </div>
+                    </div>
+
+                    <div class="md:col-span-3">
+                        <button id="btnStartBatch" onclick="startBatchScan()" class="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-2.5 px-4 rounded-xl text-sm transition-all shadow-md active:scale-95 flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-rocket text-emerald-400"></i> Iniciar Treball per Lotes
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Targeta de Monitoratge del Treball Actiu -->
+            <div id="batchProgressCard" class="hidden bg-white p-6 rounded-2xl border border-slate-200 premium-shadow mb-8">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <span id="batchStatusBadge" class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                                Executant...
+                            </span>
+                            <span class="text-xs text-slate-400 font-mono" id="batchJobIdText">Job ID: ...</span>
+                        </div>
+                        <h3 class="text-lg font-bold text-slate-800 mt-1">Progrés de l'escaneig departamental</h3>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button id="btnCancelBatch" onclick="cancelBatchScan()" class="px-3 py-1.5 rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50 text-xs font-bold flex items-center gap-1.5 transition-colors">
+                            <i class="fa-solid fa-stop"></i> Cancel·lar
+                        </button>
+                        <button id="btnExportBatchCsv" onclick="exportBatchCsv()" class="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm">
+                            <i class="fa-solid fa-file-csv"></i> Descarregar CSV
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Barra de progrés -->
+                <div class="w-full bg-slate-100 rounded-full h-4 overflow-hidden mb-4 border border-slate-200">
+                    <div id="batchProgressBar" class="bg-gradient-to-r from-emerald-500 to-teal-600 h-full w-0 transition-all duration-300"></div>
+                </div>
+
+                <!-- Comptadors del Treball -->
+                <div class="grid grid-cols-2 sm:grid-cols-5 gap-3 text-center">
+                    <div class="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                        <div class="text-[11px] font-bold text-slate-500 uppercase">Processats</div>
+                        <div id="batchProcessedCount" class="text-xl font-bold text-slate-800 mt-0.5">0 / 0</div>
+                    </div>
+                    <div class="bg-emerald-50/60 p-3 rounded-xl border border-emerald-100">
+                        <div class="text-[11px] font-bold text-emerald-700 uppercase">🟢 Alta Certesa</div>
+                        <div id="batchGreenCount" class="text-xl font-bold text-emerald-700 mt-0.5">0</div>
+                    </div>
+                    <div class="bg-amber-50/60 p-3 rounded-xl border border-amber-100">
+                        <div class="text-[11px] font-bold text-amber-700 uppercase">🟡 Dubtes</div>
+                        <div id="batchYellowCount" class="text-xl font-bold text-amber-700 mt-0.5">0</div>
+                    </div>
+                    <div class="bg-rose-50/60 p-3 rounded-xl border border-rose-100">
+                        <div class="text-[11px] font-bold text-rose-700 uppercase">🔴 Descartes</div>
+                        <div id="batchRedCount" class="text-xl font-bold text-rose-700 mt-0.5">0</div>
+                    </div>
+                    <div class="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                        <div class="text-[11px] font-bold text-slate-500 uppercase">Incidències</div>
+                        <div id="batchFailedCount" class="text-xl font-bold text-slate-600 mt-0.5">0</div>
+                    </div>
+                </div>
+
+                <!-- Llista d'incidències si n'hi ha -->
+                <div id="batchErrorsContainer" class="hidden mt-4 p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 font-mono">
+                    <div class="font-bold mb-1">Errors puntuals:</div>
+                    <ul id="batchErrorsList" class="list-disc list-inside space-y-0.5 max-h-32 overflow-y-auto"></ul>
+                </div>
+            </div>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- SECCIÓ 3: METODOLOGIA I FUNCIONAMENT       -->
+        <!-- ========================================== -->
+        <section id="sectionMethodology" class="hidden space-y-8">
+            
+            <!-- Banner d'Introducció -->
+            <div class="bg-gradient-to-br from-slate-900 via-slate-800 to-emerald-950 text-white p-8 rounded-3xl premium-shadow border border-slate-700/50">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                    <div class="space-y-3 max-w-3xl">
+                        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+                            <i class="fa-solid fa-brain text-[11px]"></i> Motor d'Intel·ligència de Dades i Filiació
+                        </div>
+                        <h2 class="text-2xl md:text-3xl font-black tracking-tight text-white">Metodologia de Conciliació OpenAlex – EGRETA</h2>
+                        <p class="text-slate-300 text-sm leading-relaxed">
+                            Aquest sistema resol el repte de recuperar la producció científica no catalogada a la UAB sense contaminar la base de dades institucional amb homònims ni publicacions foranes. Mitjançant la triangulació d'identificadors persistents (ORCID, DOI), anàlisi d'afiliació institucional, patrons de coautoria històrica i similitud difusa, el motor avalua cada obra i assigna un veredicte explicable en temps real.
+                        </p>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3 shrink-0">
+                        <div class="bg-white/10 backdrop-blur p-4 rounded-2xl border border-white/10 text-center">
+                            <div class="text-2xl font-black text-emerald-400">&gt; 95%</div>
+                            <div class="text-[11px] font-medium text-slate-300 mt-0.5">Precisió en Verds</div>
+                        </div>
+                        <div class="bg-white/10 backdrop-blur p-4 rounded-2xl border border-white/10 text-center">
+                            <div class="text-2xl font-black text-emerald-400">2-3 s</div>
+                            <div class="text-[11px] font-medium text-slate-300 mt-0.5">Temps per Autor</div>
+                        </div>
+                        <div class="bg-white/10 backdrop-blur p-4 rounded-2xl border border-white/10 text-center">
+                            <div class="text-2xl font-black text-emerald-400">12+</div>
+                            <div class="text-[11px] font-medium text-slate-300 mt-0.5">Centres UAB & CERCA</div>
+                        </div>
+                        <div class="bg-white/10 backdrop-blur p-4 rounded-2xl border border-white/10 text-center">
+                            <div class="text-2xl font-black text-emerald-400">100%</div>
+                            <div class="text-[11px] font-medium text-slate-300 mt-0.5">Explicabilitat</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Flux de Treball en 5 Fases -->
+            <div class="bg-white p-8 rounded-3xl border border-slate-200 premium-shadow space-y-6">
+                <div>
+                    <h3 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+                        <i class="fa-solid fa-diagram-project text-emerald-600"></i>
+                        <span>El Flux de Treball en 5 Fases</span>
+                    </h3>
+                    <p class="text-xs text-slate-500 mt-1">Com es processa un autor des de la cerca fins a la presa de decisions de curació</p>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-5 gap-4 relative">
+                    
+                    <!-- Fase 1 -->
+                    <div class="bg-slate-50 border border-slate-200 rounded-2xl p-5 flex flex-col justify-between hover:border-emerald-300 transition-colors">
+                        <div>
+                            <div class="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 font-bold text-sm flex items-center justify-center mb-3">1</div>
+                            <h4 class="font-bold text-slate-800 text-sm mb-1.5">Perfil EGRETA</h4>
+                            <p class="text-xs text-slate-600 leading-relaxed">
+                                Es recupera l'investigador, el seu ORCID i el seu departament. S'extreu la seva <strong>xarxa històrica de coautors</strong> a la UAB mitjançant les seves publicacions prèvies.
+                            </p>
+                        </div>
+                        <div class="mt-4 pt-3 border-t border-slate-200 text-[11px] text-slate-400 font-mono">
+                            Colecció: Persons + Researchoutputs
+                        </div>
+                    </div>
+
+                    <!-- Fase 2 -->
+                    <div class="bg-slate-50 border border-slate-200 rounded-2xl p-5 flex flex-col justify-between hover:border-emerald-300 transition-colors">
+                        <div>
+                            <div class="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 font-bold text-sm flex items-center justify-center mb-3">2</div>
+                            <h4 class="font-bold text-slate-800 text-sm mb-1.5">OpenAlex & Crossref</h4>
+                            <p class="text-xs text-slate-600 leading-relaxed">
+                                Es consulta OpenAlex per ORCID o cerca difusa. Si la publicació té filiacions incompletes a OpenAlex, es triangula directament amb l'API de <strong>Crossref</strong> per DOI.
+                            </p>
+                        </div>
+                        <div class="mt-4 pt-3 border-t border-slate-200 text-[11px] text-slate-400 font-mono">
+                            Polite pool: bibliometria@uab.cat
+                        </div>
+                    </div>
+
+                    <!-- Fase 3 -->
+                    <div class="bg-slate-50 border border-slate-200 rounded-2xl p-5 flex flex-col justify-between hover:border-emerald-300 transition-colors">
+                        <div>
+                            <div class="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 font-bold text-sm flex items-center justify-center mb-3">3</div>
+                            <h4 class="font-bold text-slate-800 text-sm mb-1.5">Deduplicació</h4>
+                            <p class="text-xs text-slate-600 leading-relaxed">
+                                Neteja de DOI canònic. Comparació de títols amb índex <strong>Jaccard (&gt; 0.85)</strong> sobre tokens alfanumèrics per descartar el que l'investigador ja té a EGRETA.
+                            </p>
+                        </div>
+                        <div class="mt-4 pt-3 border-t border-slate-200 text-[11px] text-slate-400 font-mono">
+                            Filtre anti-duplicats actiu
+                        </div>
+                    </div>
+
+                    <!-- Fase 4 -->
+                    <div class="bg-slate-50 border border-slate-200 rounded-2xl p-5 flex flex-col justify-between hover:border-emerald-300 transition-colors">
+                        <div>
+                            <div class="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 font-bold text-sm flex items-center justify-center mb-3">4</div>
+                            <h4 class="font-bold text-slate-800 text-sm mb-1.5">Motor de Scoring</h4>
+                            <p class="text-xs text-slate-600 leading-relaxed">
+                                Contrastació amb el catàleg d'esfera UAB (hospitals i instituts CERCA/CSIC). Aplicació de pesos (+40 UAB, +25 coautors, +20 ORCID, -50 altres universitats).
+                            </p>
+                        </div>
+                        <div class="mt-4 pt-3 border-t border-slate-200 text-[11px] text-slate-400 font-mono">
+                            Confidence Score [0 - 100]
+                        </div>
+                    </div>
+
+                    <!-- Fase 5 -->
+                    <div class="bg-slate-50 border border-slate-200 rounded-2xl p-5 flex flex-col justify-between hover:border-emerald-300 transition-colors">
+                        <div>
+                            <div class="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 font-bold text-sm flex items-center justify-center mb-3">5</div>
+                            <h4 class="font-bold text-slate-800 text-sm mb-1.5">Curació i Semàfor</h4>
+                            <p class="text-xs text-slate-600 leading-relaxed">
+                                Classificació en 🟢 Validat UAB, 🟡 Revisió Necessària o 🔴 Fals Positiu. Possibilitat d'acceptar en bloc, desar a MongoDB i exportar a informe CSV.
+                            </p>
+                        </div>
+                        <div class="mt-4 pt-3 border-t border-slate-200 text-[11px] text-slate-400 font-mono">
+                            PersonPublicationCandidates
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- Matriu de Puntuació i Pesos (Confidence Score) -->
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                
+                <div class="lg:col-span-7 bg-white p-8 rounded-3xl border border-slate-200 premium-shadow space-y-5">
+                    <div>
+                        <h3 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+                            <i class="fa-solid fa-calculator text-emerald-600"></i>
+                            <span>Matriu de Puntuació i Regles d'Afiliació</span>
+                        </h3>
+                        <p class="text-xs text-slate-500 mt-1">Cadascuna de les raons és totalment auditable i s'inclou com a explicació a cada candidat</p>
+                    </div>
+
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-xs border-collapse">
+                            <thead>
+                                <tr class="border-b border-slate-200 text-slate-400 font-bold uppercase text-[10px]">
+                                    <th class="py-2.5 px-3">Pes</th>
+                                    <th class="py-2.5 px-3">Factor d'Avaluació</th>
+                                    <th class="py-2.5 px-3">Racionalitat Metodològica</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                                <tr>
+                                    <td class="py-3 px-3 font-mono font-bold text-emerald-600 bg-emerald-50/50 rounded-l-lg">+40 pts</td>
+                                    <td class="py-3 px-3 font-semibold text-slate-800">Afiliació UAB / Esfera UAB</td>
+                                    <td class="py-3 px-3 text-slate-600">Es detecta la UAB, un hospital universitari vinculat o un institut CERCA/CSIC a la signatura de l'autor.</td>
+                                </tr>
+                                <tr>
+                                    <td class="py-3 px-3 font-mono font-bold text-emerald-600 bg-emerald-50/50 rounded-l-lg">+25 pts</td>
+                                    <td class="py-3 px-3 font-semibold text-slate-800">Coautoria Coincident</td>
+                                    <td class="py-3 px-3 text-slate-600">Signa l'article amb un o més investigadors que figuren com a coautors històrics a EGRETA.</td>
+                                </tr>
+                                <tr>
+                                    <td class="py-3 px-3 font-mono font-bold text-emerald-600 bg-emerald-50/50 rounded-l-lg">+20 pts</td>
+                                    <td class="py-3 px-3 font-semibold text-slate-800">Coincidència d'ORCID</td>
+                                    <td class="py-3 px-3 text-slate-600">L'obra a OpenAlex té enllaçat de manera explícita el mateix ORCID registrat a la fitxa de l'autor a la UAB.</td>
+                                </tr>
+                                <tr>
+                                    <td class="py-3 px-3 font-mono font-bold text-emerald-600 bg-emerald-50/50 rounded-l-lg">+10 pts</td>
+                                    <td class="py-3 px-3 font-semibold text-slate-800">Afinitat Temàtica</td>
+                                    <td class="py-3 px-3 text-slate-600">Els conceptes i subdisciplines de la publicació coincideixen amb la trajectòria habitual de l'autor.</td>
+                                </tr>
+                                <tr>
+                                    <td class="py-3 px-3 font-mono font-bold text-rose-600 bg-rose-50/50 rounded-l-lg">-50 pts</td>
+                                    <td class="py-3 px-3 font-semibold text-slate-800">Afiliació Forana Exclusiva</td>
+                                    <td class="py-3 px-3 text-slate-600">L'autor signa exclusivament amb una altra universitat o centre de recerca forà, sense cap vinculació UAB.</td>
+                                </tr>
+                                <tr>
+                                    <td class="py-3 px-3 font-mono font-bold text-rose-600 bg-rose-50/50 rounded-l-lg">-20 pts</td>
+                                    <td class="py-3 px-3 font-semibold text-slate-800">Desconnexió Temàtica</td>
+                                    <td class="py-3 px-3 text-slate-600">L'àmbit científic de l'article és completament aliè al camp d'expertesa de l'investigador (fort indici d'homònim).</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Semàfor de Veredictes -->
+                <div class="lg:col-span-5 bg-white p-8 rounded-3xl border border-slate-200 premium-shadow space-y-5">
+                    <div>
+                        <h3 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+                            <i class="fa-solid fa-traffic-light text-emerald-600"></i>
+                            <span>El Semàfor de Veredictes</span>
+                        </h3>
+                        <p class="text-xs text-slate-500 mt-1">Llindars establerts per a la presa de decisions ràpides</p>
+                    </div>
+
+                    <div class="space-y-3.5">
+                        <!-- Verd -->
+                        <div class="p-4 rounded-2xl bg-emerald-50/60 border border-emerald-200 space-y-1.5">
+                            <div class="flex items-center justify-between">
+                                <span class="font-bold text-xs text-emerald-800 flex items-center gap-1.5">
+                                    <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block"></span>
+                                    Validat UAB (Alta Certesa)
+                                </span>
+                                <span class="text-[11px] font-mono font-bold text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded">Score &ge; 80</span>
+                            </div>
+                            <p class="text-xs text-emerald-900 leading-relaxed">
+                                Obra legítima de l'investigador amb filiació institucional o ORCID + coautors coneguts. <strong>Es pot acceptar massivament amb seguretat</strong>.
+                            </p>
+                        </div>
+
+                        <!-- Groc -->
+                        <div class="p-4 rounded-2xl bg-amber-50/60 border border-amber-200 space-y-1.5">
+                            <div class="flex items-center justify-between">
+                                <span class="font-bold text-xs text-amber-800 flex items-center gap-1.5">
+                                    <span class="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block"></span>
+                                    Revisió Necessària
+                                </span>
+                                <span class="text-[11px] font-mono font-bold text-amber-700 bg-amber-100/80 px-2 py-0.5 rounded">40 &le; Score &lt; 80</span>
+                            </div>
+                            <p class="text-xs text-amber-900 leading-relaxed">
+                                Casos dubtosos: estades a l'estranger, obres en hospitals vinculats amb filiació incompleta o articles amb coautors parcials. Es recomana clicar el DOI per verificar el PDF original.
+                            </p>
+                        </div>
+
+                        <!-- Vermell -->
+                        <div class="p-4 rounded-2xl bg-rose-50/60 border border-rose-200 space-y-1.5">
+                            <div class="flex items-center justify-between">
+                                <span class="font-bold text-xs text-rose-800 flex items-center gap-1.5">
+                                    <span class="w-2.5 h-2.5 rounded-full bg-rose-500 inline-block"></span>
+                                    Fals Positiu Probable
+                                </span>
+                                <span class="text-[11px] font-mono font-bold text-rose-700 bg-rose-100/80 px-2 py-0.5 rounded">Score &lt; 40</span>
+                            </div>
+                            <p class="text-xs text-rose-900 leading-relaxed">
+                                Homònims que signen exclusivament amb altres universitats (p. ex. Univ. de València, Univ. de Buenos Aires). Es descarten amb un sol clic.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Catàleg d'Entitats Institucionals UAB Integrat -->
+            <div class="bg-white p-8 rounded-3xl border border-slate-200 premium-shadow space-y-6">
+                <div>
+                    <h3 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+                        <i class="fa-solid fa-building-columns text-emerald-600"></i>
+                        <span>Catàleg Institucional de l'Esfera UAB</span>
+                    </h3>
+                    <p class="text-xs text-slate-500 mt-1">El motor reconeix automàticament tant la seu principal com els hospitals universitaris i els instituts mixts de recerca</p>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    
+                    <!-- UAB Central -->
+                    <div class="border border-slate-200 rounded-2xl p-5 bg-slate-50/50 space-y-3">
+                        <div class="flex items-center gap-2.5 text-emerald-700 font-bold text-sm">
+                            <i class="fa-solid fa-landmark"></i>
+                            <span>Campus Central UAB</span>
+                        </div>
+                        <ul class="text-xs text-slate-600 space-y-1.5">
+                            <li><strong>Nom oficial:</strong> Universitat Autònoma de Barcelona</li>
+                            <li><strong>Identificador ROR:</strong> <code class="bg-slate-200/60 px-1.5 py-0.5 rounded text-[11px]">052gg0110</code></li>
+                            <li><strong>OpenAlex Institution:</strong> <code class="bg-slate-200/60 px-1.5 py-0.5 rounded text-[11px]">I123044942</code></li>
+                            <li><strong>Termes geogràfics:</strong> Bellaterra, 08193, Cerdanyola del Vallès</li>
+                        </ul>
+                    </div>
+
+                    <!-- Hospitals Universitaris -->
+                    <div class="border border-slate-200 rounded-2xl p-5 bg-slate-50/50 space-y-3">
+                        <div class="flex items-center gap-2.5 text-blue-700 font-bold text-sm">
+                            <i class="fa-solid fa-hospital"></i>
+                            <span>Hospitals Universitaris Vinculats</span>
+                        </div>
+                        <ul class="text-xs text-slate-600 space-y-1.5">
+                            <li>Hospital Universitari Vall d'Hebron (HUVH / VHIR)</li>
+                            <li>Hospital Germans Trias i Pujol (Can Ruti / IGTP)</li>
+                            <li>Hospital de la Santa Creu i Sant Pau (IIB Sant Pau)</li>
+                            <li>Corporació Sanitària Parc Taulí de Sabadell (I3PT)</li>
+                        </ul>
+                    </div>
+
+                    <!-- Instituts CERCA / CSIC -->
+                    <div class="border border-slate-200 rounded-2xl p-5 bg-slate-50/50 space-y-3">
+                        <div class="flex items-center gap-2.5 text-purple-700 font-bold text-sm">
+                            <i class="fa-solid fa-microscope"></i>
+                            <span>Instituts CERCA / CSIC Vinculats</span>
+                        </div>
+                        <ul class="text-xs text-slate-600 space-y-1.5">
+                            <li><strong>ICMAB:</strong> Inst. Ciència de Materials de Barcelona</li>
+                            <li><strong>ICN2:</strong> Inst. Català de Nanociència i Nanotecnologia</li>
+                            <li><strong>IFAE:</strong> Inst. de Física d'Altes Energies</li>
+                            <li><strong>CRAG:</strong> Centre de Recerca en Agrigenòmica</li>
+                            <li><strong>CVC:</strong> Centre de Visió per Computador</li>
+                            <li><strong>ICTA:</strong> Inst. de Ciència i Tecnologia Ambientals</li>
+                            <li><strong>IIIA:</strong> Inst. Investigació en Intel·ligència Artificial</li>
+                            <li><strong>IBB:</strong> Inst. de Biotecnologia i Biomedicina</li>
+                        </ul>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- Preguntes Freqüents / Recomanacions -->
+            <div class="bg-white p-8 rounded-3xl border border-slate-200 premium-shadow space-y-6">
+                <div>
+                    <h3 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+                        <i class="fa-solid fa-circle-question text-emerald-600"></i>
+                        <span>Preguntes Freqüents i Bones Pràctiques</span>
+                    </h3>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 text-xs text-slate-600">
+                    <div class="space-y-2 p-4 rounded-2xl bg-slate-50 border border-slate-200">
+                        <h4 class="font-bold text-slate-800 text-sm flex items-center gap-2">
+                            <i class="fa-solid fa-shield-halved text-emerald-600"></i>
+                            Quan s'ha d'activar el "Mode Estricte per ORCID"?
+                        </h4>
+                        <p class="leading-relaxed">
+                            És molt recomanable activar-lo quan l'investigador té cognoms molt comuns (per exemple, <em>García, Martínez, López, Fernández</em>) i ja té el seu ORCID registrat a EGRETA. D'aquesta manera s'evita portar centenars d'obres d'altres investigadors homònims.
+                        </p>
+                    </div>
+
+                    <div class="space-y-2 p-4 rounded-2xl bg-slate-50 border border-slate-200">
+                        <h4 class="font-bold text-slate-800 text-sm flex items-center gap-2">
+                            <i class="fa-solid fa-clock-rotate-left text-emerald-600"></i>
+                            Com es gestionen les publicacions anteriors a la incorporació a la UAB?
+                        </h4>
+                        <p class="leading-relaxed">
+                            Aquestes obres acostumen a aparèixer en <strong class="text-amber-700">groc</strong> o <strong class="text-rose-700">vermell</strong> perquè signen amb una altra universitat. Si l'investigador té dret a computar-les al seu historial personal, l'analista pot marcar individualment l'acció <strong>"Acceptar"</strong> des de la pestanya corresponent.
+                        </p>
+                    </div>
+
+                    <div class="space-y-2 p-4 rounded-2xl bg-slate-50 border border-slate-200">
+                        <h4 class="font-bold text-slate-800 text-sm flex items-center gap-2">
+                            <i class="fa-solid fa-file-csv text-emerald-600"></i>
+                            Com s'exporten les dades per a la comissió o informes?
+                        </h4>
+                        <p class="leading-relaxed">
+                            Pots utilitzar el botó <strong>"Exportar CSV"</strong> en qualsevol moment. El fitxer generat conté el nom de l'investigador, el DOI, el títol, les filiacions coincidents, el veredicte, el score de confiança i l'estat de revisió, totalment sanititzat contra injeccions de fórmula.
+                        </p>
+                    </div>
+
+                    <div class="space-y-2 p-4 rounded-2xl bg-slate-50 border border-slate-200">
+                        <h4 class="font-bold text-slate-800 text-sm flex items-center gap-2">
+                            <i class="fa-solid fa-database text-emerald-600"></i>
+                            Es tornaran a escanejar obres ja revisades?
+                        </h4>
+                        <p class="leading-relaxed">
+                            No. El sistema registra permanentment a MongoDB totes les obres revisades (acceptades, rebutjades o descartades). En futurs escanejos de l'autor o del departament, les obres ja conegudes s'ometen automàticament per no repetir la feina de curació.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+        </section>
+
+    </div>
+
+    <!-- SCRIPT DE CONTROL -->
+    <script>
+        // Gestió d'Estat Local
+        const state = {
+            departments: [],
+            currentDeptUuid: null,
+            currentPersonUuid: null,
+            currentPerson: null,
+            candidates: [],
+            activeVerdictFilter: 'ALL',
+            batchJobId: null,
+            batchPollTimer: null
+        };
+
+        // Funció auxiliar per realitzar crides segures utilitzant config.js / apiFetch
+        async function callApi(path, options = {}) {
+            if (typeof window.apiFetch === 'function') {
+                return window.apiFetch(path, options);
+            }
+            const base = (window.APP_CONFIG && window.APP_CONFIG.apiBaseUrl) || '/api';
+            const cleanPath = path.startsWith('/') ? path : `/${path}`;
+            return fetch(`${base}${cleanPath}`, options);
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadDepartments();
+            initAuthorSearch();
+        });
+
+        // Canvi de Pestanya Principal
+        function switchMainTab(tab) {
+            const secInd = document.getElementById('sectionIndividual');
+            const secBatch = document.getElementById('sectionBatch');
+            const secMeth = document.getElementById('sectionMethodology');
+            const btnInd = document.getElementById('tabBtnIndividual');
+            const btnBatch = document.getElementById('tabBtnBatch');
+            const btnMeth = document.getElementById('tabBtnMethodology');
+
+            const activeClass = "py-3 px-6 font-bold text-sm border-b-2 border-emerald-600 text-emerald-700 flex items-center gap-2 transition-colors";
+            const inactiveClass = "py-3 px-6 font-semibold text-sm border-b-2 border-transparent text-slate-500 hover:text-slate-800 flex items-center gap-2 transition-colors";
+
+            secInd.classList.add('hidden');
+            secBatch.classList.add('hidden');
+            if (secMeth) secMeth.classList.add('hidden');
+
+            btnInd.className = inactiveClass;
+            btnBatch.className = inactiveClass;
+            if (btnMeth) btnMeth.className = inactiveClass;
+
+            if (tab === 'individual') {
+                secInd.classList.remove('hidden');
+                btnInd.className = activeClass;
+            } else if (tab === 'batch') {
+                secBatch.classList.remove('hidden');
+                btnBatch.className = activeClass;
+            } else if (tab === 'methodology') {
+                if (secMeth) secMeth.classList.remove('hidden');
+                if (btnMeth) btnMeth.className = activeClass;
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+        }
+
+        // 1. Carrega de Departaments
+        async function loadDepartments() {
+            const selInd = document.getElementById('selectDeptIndividual');
+            const selBat = document.getElementById('selectDeptBatch');
+            try {
+                const res = await callApi('/persons/departamentos');
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json();
+                state.departments = Array.isArray(data) ? data : [];
+
+                if (state.departments.length === 0) {
+                    if (selInd) selInd.innerHTML = '<option value="">-- No s\'han trobat departaments a la BD --</option>';
+                    if (selBat) selBat.innerHTML = '<option value="">-- No s\'han trobat departaments a la BD --</option>';
+                    return;
+                }
+
+                populateDeptSelect('selectDeptIndividual', state.departments);
+                populateDeptSelect('selectDeptBatch', state.departments);
+            } catch (err) {
+                console.error('Error carregant departaments:', err);
+                if (selInd) selInd.innerHTML = `<option value="">Error carregant departaments (${err.message})</option>`;
+                if (selBat) selBat.innerHTML = `<option value="">Error carregant departaments (${err.message})</option>`;
+            }
+        }
+
+        function populateDeptSelect(elementId, depts) {
+            const select = document.getElementById(elementId);
+            if (!select) return;
+            select.innerHTML = '<option value="">-- Selecciona un departament --</option>';
+            depts.forEach(d => {
+                const opt = document.createElement('option');
+                opt.value = d.uuid;
+                opt.textContent = d.nombre || d.name || d.uuid;
+                select.appendChild(opt);
+            });
+        }
+
+        // 2. Canvi de Departament en Individual
+        async function onDeptIndividualChange() {
+            const deptUuid = document.getElementById('selectDeptIndividual').value;
+            const selectPersona = document.getElementById('selectPersonaIndividual');
+            const btnScan = document.getElementById('btnScanAuthor');
+
+            state.currentDeptUuid = deptUuid;
+            state.currentPersonUuid = null;
+            state.currentPerson = null;
+
+            if (!deptUuid) {
+                selectPersona.innerHTML = '<option value="">-- Primer tria un departament --</option>';
+                selectPersona.disabled = true;
+                btnScan.disabled = true;
+                return;
+            }
+
+            selectPersona.innerHTML = '<option value="">Carregant investigadors...</option>';
+            selectPersona.disabled = true;
+
+            try {
+                const res = await callApi(`/persons/by-dept?deptUuid=${encodeURIComponent(deptUuid)}&filtrePersonal=vigent`);
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const personas = await res.json();
+
+                selectPersona.innerHTML = '<option value="">-- Tria un investigador --</option>';
+                if (!personas || personas.length === 0) {
+                    selectPersona.innerHTML = '<option value="">-- Sense investigadors vigents en aquest departament --</option>';
+                    return;
+                }
+
+                personas.forEach(p => {
+                    const opt = document.createElement('option');
+                    opt.value = p.uuid;
+                    const displayName = p.nombre || p.nom || p.fullName || p.name || p.uuid || 'Sense nom';
+                    const orcidSuffix = p.orcid ? ` (${p.orcid})` : '';
+                    opt.textContent = `${displayName}${orcidSuffix}`;
+                    opt.dataset.orcid = p.orcid || '';
+                    opt.dataset.name = displayName;
+                    selectPersona.appendChild(opt);
+                });
+                selectPersona.disabled = false;
+            } catch (err) {
+                console.error('Error carregant persones del departament:', err);
+                selectPersona.innerHTML = `<option value="">Error carregant personal (${err.message})</option>`;
+            }
+        }
+
+        function onPersonaSelectChange() {
+            const select = document.getElementById('selectPersonaIndividual');
+            const uuid = select.value;
+            const opt = select.selectedOptions[0];
+
+            if (!uuid) {
+                document.getElementById('btnScanAuthor').disabled = true;
+                return;
+            }
+
+            state.currentPersonUuid = uuid;
+            state.currentPerson = {
+                uuid: uuid,
+                name: opt ? opt.dataset.name : uuid,
+                orcid: opt ? opt.dataset.orcid : ''
+            };
+
+            document.getElementById('btnScanAuthor').disabled = false;
+            updateAuthorHeader();
+            loadExistingCandidates(uuid);
+        }
+
+        // Cerca Directa per Nom amb Autocompletat
+        function initAuthorSearch() {
+            const input = document.getElementById('authorSearchInput');
+            const dropdown = document.getElementById('authorSearchDropdown');
+            if (!input || !dropdown) return;
+
+            let debounceTimer = null;
+
+            input.addEventListener('input', (e) => {
+                const query = e.target.value.trim();
+                clearTimeout(debounceTimer);
+                if (query.length < 2) {
+                    dropdown.innerHTML = '';
+                    dropdown.classList.add('hidden');
+                    return;
+                }
+                debounceTimer = setTimeout(() => {
+                    searchAuthorsByName(query);
+                }, 250);
+            });
+
+            input.addEventListener('blur', () => {
+                setTimeout(() => {
+                    dropdown.classList.add('hidden');
+                }, 250);
+            });
+
+            input.addEventListener('focus', () => {
+                if (dropdown.children.length > 0) {
+                    dropdown.classList.remove('hidden');
+                }
+            });
+        }
+
+        async function searchAuthorsByName(query) {
+            const dropdown = document.getElementById('authorSearchDropdown');
+            if (!dropdown) return;
+            try {
+                const res = await callApi(`/persons/search/active?q=${encodeURIComponent(query)}`);
+                if (!res.ok) return;
+                const authors = await res.json();
+                renderAuthorSearchResults(authors);
+            } catch (err) {
+                console.error("Error cercant investigadors per nom:", err);
+            }
+        }
+
+        function renderAuthorSearchResults(authors) {
+            const dropdown = document.getElementById('authorSearchDropdown');
+            if (!dropdown) return;
+            dropdown.innerHTML = '';
+            if (!authors || authors.length === 0) {
+                dropdown.innerHTML = '<div class="px-4 py-3 text-xs text-slate-400 italic">No s\'ha trobat cap investigador amb aquest nom.</div>';
+                dropdown.classList.remove('hidden');
+                return;
+            }
+
+            authors.forEach(a => {
+                const item = document.createElement('div');
+                item.className = 'px-4 py-2.5 hover:bg-emerald-50 cursor-pointer text-xs flex items-center justify-between transition-colors border-b border-slate-50 last:border-0';
+
+                const nameCol = document.createElement('div');
+                nameCol.className = 'flex flex-col';
+                const nameSpan = document.createElement('span');
+                nameSpan.className = 'font-bold text-slate-800';
+                nameSpan.textContent = a.nombre || a.uuid;
+                const uuidSpan = document.createElement('span');
+                uuidSpan.className = 'text-[10px] text-slate-400 font-mono';
+                uuidSpan.textContent = `UUID: ${a.uuid}`;
+                nameCol.appendChild(nameSpan);
+                nameCol.appendChild(uuidSpan);
+
+                const badgeCol = document.createElement('div');
+                if (a.orcid) {
+                    badgeCol.innerHTML = `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 text-emerald-700 border border-emerald-200"><i class="fa-brands fa-orcid"></i> ${escapeHtml(a.orcid)}</span>`;
+                }
+
+                item.appendChild(nameCol);
+                item.appendChild(badgeCol);
+
+                item.addEventListener('mousedown', () => {
+                    selectAuthorDirectly(a);
+                });
+
+                dropdown.appendChild(item);
+            });
+
+            dropdown.classList.remove('hidden');
+        }
+
+        function selectAuthorDirectly(author) {
+            state.currentPersonUuid = author.uuid;
+            state.currentPerson = {
+                uuid: author.uuid,
+                name: author.nombre || author.uuid,
+                orcid: author.orcid || ''
+            };
+
+            const input = document.getElementById('authorSearchInput');
+            if (input) input.value = author.nombre || author.uuid;
+
+            const dropdown = document.getElementById('authorSearchDropdown');
+            if (dropdown) dropdown.classList.add('hidden');
+
+            document.getElementById('btnScanAuthor').disabled = false;
+            updateAuthorHeader();
+            loadExistingCandidates(author.uuid);
+        }
+
+        function updateAuthorHeader() {
+            const card = document.getElementById('authorProfileCard');
+            if (!state.currentPerson) {
+                card.classList.add('hidden');
+                return;
+            }
+            card.classList.remove('hidden');
+            document.getElementById('authorFullName').textContent = state.currentPerson.name || state.currentPerson.uuid;
+            document.getElementById('authorDetails').textContent = `UUID: ${state.currentPerson.uuid}`;
+            document.getElementById('authorOrcidText').textContent = state.currentPerson.orcid || 'Sense ORCID registrat';
+        }
+
+        // 3. Carregar Candidats Existents
+        async function loadExistingCandidates(personUuid) {
+            try {
+                const res = await callApi(`/curation/authors/${encodeURIComponent(personUuid)}/candidates`);
+                if (res.ok) {
+                    const list = await res.json();
+                    state.candidates = list || [];
+                    renderCandidatesView();
+                }
+            } catch (err) {
+                console.error('Error recuperant candidats existents:', err);
+            }
+        }
+
+        function refreshAuthorCandidates() {
+            if (state.currentPersonUuid) {
+                loadExistingCandidates(state.currentPersonUuid);
+            }
+        }
+
+        // 4. Execució de l'Escaneig d'un Autor en Viu
+        async function scanCurrentAuthor() {
+            if (!state.currentPersonUuid) return;
+
+            const btn = document.getElementById('btnScanAuthor');
+            const btnText = document.getElementById('btnScanAuthorText');
+            const strictOrcid = document.getElementById('checkStrictOrcid').checked;
+
+            btn.disabled = true;
+            btnText.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Escanejant OpenAlex...';
+
+            try {
+                const res = await callApi(`/curation/authors/${encodeURIComponent(state.currentPersonUuid)}/scan?strictOrcidOnly=${strictOrcid}`, {
+                    method: 'POST'
+                });
+                
+                if (!res.ok) {
+                    const error = await res.json();
+                    alert(`Incidència en l'escaneig: ${error.message || 'Error del servidor'}`);
+                    return;
+                }
+
+                // Després d'escanejar, recarreguem la llista de candidatures
+                await loadExistingCandidates(state.currentPersonUuid);
+            } catch (err) {
+                console.error(err);
+                alert("Error de comunicació amb l'API de curació.");
+            } finally {
+                btn.disabled = false;
+                btnText.textContent = 'Escanejar OpenAlex';
+            }
+        }
+
+        // 5. Renderització de la Llista de Candidats
+        function renderCandidatesView() {
+            const kpiContainer = document.getElementById('kpiContainer');
+            const tableControlBar = document.getElementById('tableControlBar');
+            const container = document.getElementById('candidatesListContainer');
+
+            kpiContainer.classList.remove('hidden');
+            tableControlBar.classList.remove('hidden');
+
+            // Càlcul de KPIs
+            const total = state.candidates.length;
+            const green = state.candidates.filter(c => c.verdict === 'HIGH_CONFIDENCE_UAB').length;
+            const yellow = state.candidates.filter(c => c.verdict === 'REQUIRES_REVIEW').length;
+            const red = state.candidates.filter(c => c.verdict === 'LIKELY_FALSE_POSITIVE').length;
+
+            document.getElementById('kpiTotal').textContent = total;
+            document.getElementById('kpiGreen').textContent = green;
+            document.getElementById('kpiYellow').textContent = yellow;
+            document.getElementById('kpiRed').textContent = red;
+
+            // Filtrem segons pestanya activa
+            let filtered = state.candidates;
+            if (state.activeVerdictFilter !== 'ALL') {
+                filtered = state.candidates.filter(c => c.verdict === state.activeVerdictFilter);
+            }
+
+            if (filtered.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-12 bg-white rounded-2xl border border-slate-200 text-slate-400">
+                        <i class="fa-regular fa-circle-check text-3xl mb-2 text-emerald-500"></i>
+                        <p class="font-medium text-slate-600">No hi ha cap publicació candidata en aquesta vista.</p>
+                    </div>`;
+                return;
+            }
+
+            container.innerHTML = filtered.map(c => {
+                let badgeClass = 'badge-verdict-yellow';
+                let verdictLabel = '🟡 Requereix Revisió';
+                if (c.verdict === 'HIGH_CONFIDENCE_UAB') {
+                    badgeClass = 'badge-verdict-green';
+                    verdictLabel = '🟢 Certesa Alta UAB';
+                } else if (c.verdict === 'LIKELY_FALSE_POSITIVE') {
+                    badgeClass = 'badge-verdict-red';
+                    verdictLabel = '🔴 Fals Positiu';
+                }
+
+                let statusBadge = '<span class="text-[11px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200">PENDENT</span>';
+                if (c.status === 'APPROVED_IMPORT') {
+                    statusBadge = '<span class="text-[11px] font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 border border-emerald-300">APROVADA PER A EGRETA</span>';
+                } else if (c.status === 'REJECTED_HOMONYM') {
+                    statusBadge = '<span class="text-[11px] font-bold px-2 py-0.5 rounded bg-rose-100 text-rose-700 border border-rose-300">DESCARTADA (HOMÒNIM)</span>';
+                } else if (c.status === 'REJECTED_NOT_UAB') {
+                    statusBadge = '<span class="text-[11px] font-bold px-2 py-0.5 rounded bg-orange-100 text-orange-700 border border-orange-300">DESCARTADA (NO UAB)</span>';
+                }
+
+                const reasonsHtml = (c.reasons || []).map(r => 
+                    `<li class="text-xs text-slate-600 flex items-start gap-1.5"><i class="fa-solid fa-circle-info text-slate-400 text-[10px] mt-1"></i> <span>${escapeHtml(r)}</span></li>`
+                ).join('');
+
+                const matchedAffsHtml = (c.matchedAffiliations || []).map(a =>
+                    `<span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">${escapeHtml(a)}</span>`
+                ).join('');
+
+                return `
+                <div class="bg-white rounded-2xl border border-slate-200 p-5 premium-shadow transition-all hover:border-slate-300">
+                    <div class="flex flex-col md:flex-row md:items-start justify-between gap-4">
+                        <div class="flex-1">
+                            <div class="flex flex-wrap items-center gap-2 mb-2">
+                                <span class="px-2.5 py-0.5 rounded-full text-xs font-bold ${badgeClass}">
+                                    ${verdictLabel} (Puntuació: ${Math.round(c.confidenceScore || 0)})
+                                </span>
+                                ${statusBadge}
+                                <span class="text-xs text-slate-400 font-bold">${c.year || 'S/A'}</span>
+                                <span class="text-xs text-slate-500 font-medium">${escapeHtml(c.venue || 'Revista no indicada')}</span>
+                            </div>
+
+                            <h3 class="text-base font-bold text-slate-900 leading-snug">
+                                ${escapeHtml(c.title || 'Sense títol')}
+                            </h3>
+
+                            <div class="flex items-center gap-3 text-xs text-slate-500 mt-2">
+                                ${c.doi ? `<a href="https://doi.org/${encodeURIComponent(c.doi)}" target="_blank" class="text-indigo-600 hover:underline font-mono flex items-center gap-1"><i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i> ${escapeHtml(c.doi)}</a>` : '<span class="font-mono">Sense DOI</span>'}
+                                ${c.openAlexWorkId ? `<a href="${encodeURI(c.openAlexWorkId)}" target="_blank" class="text-slate-400 hover:text-slate-600">OpenAlex Work</a>` : ''}
+                            </div>
+
+                            <!-- Evidències detectades -->
+                            <div class="mt-3 pt-3 border-t border-slate-100">
+                                ${matchedAffsHtml ? `<div class="flex flex-wrap items-center gap-1.5 mb-2"><span class="text-[11px] font-bold text-slate-500">Firmes UAB:</span> ${matchedAffsHtml}</div>` : ''}
+                                ${c.coauthorSignals ? `<div class="text-xs text-slate-600 mb-2"><span class="font-bold">Coautoria:</span> ${escapeHtml(c.coauthorSignals)}</div>` : ''}
+                                
+                                <ul class="space-y-1 mt-2 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                                    ${reasonsHtml}
+                                </ul>
+                            </div>
+                        </div>
+
+                        <!-- Botons d'Acció de Curació -->
+                        <div class="flex flex-col sm:flex-row md:flex-col gap-2 shrink-0">
+                            <button onclick="updateCandidateStatus('${c.id}', 'APPROVED_IMPORT')" class="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-sm active:scale-95">
+                                <i class="fa-solid fa-check"></i> Aprovar per a EGRETA
+                            </button>
+                            <button onclick="updateCandidateStatus('${c.id}', 'REJECTED_HOMONYM')" class="px-3.5 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold transition-all flex items-center justify-center gap-1.5 active:scale-95">
+                                <i class="fa-solid fa-user-xmark"></i> Descartar (Homònim)
+                            </button>
+                            <button onclick="updateCandidateStatus('${c.id}', 'REJECTED_NOT_UAB')" class="px-3.5 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 text-xs font-bold transition-all flex items-center justify-center gap-1.5 active:scale-95">
+                                <i class="fa-solid fa-building-circle-xmark"></i> Descartar (No UAB)
+                            </button>
+                        </div>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        // Filtre de pestanyes de veredicte
+        function filterByVerdictTab(verdict) {
+            state.activeVerdictFilter = verdict;
+            const tabs = {
+                'ALL': 'filterTabAll',
+                'HIGH_CONFIDENCE_UAB': 'filterTabGreen',
+                'REQUIRES_REVIEW': 'filterTabYellow',
+                'LIKELY_FALSE_POSITIVE': 'filterTabRed'
+            };
+            Object.keys(tabs).forEach(k => {
+                const el = document.getElementById(tabs[k]);
+                if (k === verdict) {
+                    el.className = "px-3.5 py-1.5 rounded-lg text-xs font-bold bg-slate-800 text-white";
+                } else {
+                    el.className = "px-3.5 py-1.5 rounded-lg text-xs font-bold bg-white text-slate-700 border border-slate-200 hover:bg-slate-50";
+                }
+            });
+            renderCandidatesView();
+        }
+
+        // 6. Acció Individual de Canvi d'Estat
+        async function updateCandidateStatus(candidateId, newStatus) {
+            try {
+                const res = await callApi(`/curation/candidates/${encodeURIComponent(candidateId)}/status`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        targetStatus: newStatus,
+                        reviewer: 'analista-bibliometria'
+                    })
+                });
+
+                if (res.ok) {
+                    const updated = await res.json();
+                    const idx = state.candidates.findIndex(c => c.id === candidateId);
+                    if (idx !== -1) {
+                        state.candidates[idx] = updated;
+                        renderCandidatesView();
+                    }
+                } else {
+                    alert("No s'ha pogut actualitzar l'estat.");
+                }
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        // 7. Accions Massives en Individual
+        async function bulkApproveGreen() {
+            const greenIds = state.candidates
+                .filter(c => c.verdict === 'HIGH_CONFIDENCE_UAB' && c.status === 'PENDING')
+                .map(c => c.id);
+
+            if (greenIds.length === 0) {
+                alert("No hi ha cap publicació verda pendent d'aprovar.");
+                return;
+            }
+
+            if (!confirm(`Vols aprovar ${greenIds.length} publicacions d'alta certesa per a la seva importació a EGRETA?`)) return;
+
+            await executeBulkAction(greenIds, 'APPROVED_IMPORT');
+        }
+
+        async function bulkDismissRed() {
+            const redIds = state.candidates
+                .filter(c => c.verdict === 'LIKELY_FALSE_POSITIVE' && c.status === 'PENDING')
+                .map(c => c.id);
+
+            if (redIds.length === 0) {
+                alert("No hi ha cap publicació vermella pendent de descartar.");
+                return;
+            }
+
+            if (!confirm(`Vols descartar permanentment ${redIds.length} falsos positius? No es tornaran a suggerir.`)) return;
+
+            await executeBulkAction(redIds, 'REJECTED_HOMONYM');
+        }
+
+        async function executeBulkAction(ids, targetStatus) {
+            try {
+                const res = await callApi('/curation/candidates/bulk-action', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        candidateIds: ids,
+                        targetStatus: targetStatus,
+                        reviewer: 'analista-bibliometria'
+                    })
+                });
+
+                if (res.ok) {
+                    await loadExistingCandidates(state.currentPersonUuid);
+                } else {
+                    alert("Error processant l'acció massiva.");
+                }
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        // ==========================================
+        // 8. LOGICA PER LOTES (BATCH SCAN)
+        // ==========================================
+        async function startBatchScan() {
+            const deptUuid = document.getElementById('selectDeptBatch').value;
+            const strictOrcid = document.getElementById('checkBatchStrictOrcid').checked;
+
+            if (!deptUuid) {
+                alert("Si us plau, selecciona un departament.");
+                return;
+            }
+
+            const btn = document.getElementById('btnStartBatch');
+            btn.disabled = true;
+
+            try {
+                const res = await callApi('/curation/batch-scan', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        departmentId: deptUuid,
+                        strictOrcidOnly: strictOrcid
+                    })
+                });
+
+                if (!res.ok) {
+                    const err = await res.json();
+                    alert(`Error iniciant el treball: ${err.error || 'Desconegut'}`);
+                    btn.disabled = false;
+                    return;
+                }
+
+                const data = await res.json();
+                state.batchJobId = data.jobId;
+
+                // Mostrem la targeta de monitoratge
+                document.getElementById('batchProgressCard').classList.remove('hidden');
+                document.getElementById('batchJobIdText').textContent = `Job: ${data.jobId}`;
+
+                startBatchPolling(data.jobId);
+            } catch (err) {
+                console.error(err);
+                alert("Error de xarxa en llançar el lot.");
+                btn.disabled = false;
+            }
+        }
+
+        function startBatchPolling(jobId) {
+            if (state.batchPollTimer) clearInterval(state.batchPollTimer);
+
+            state.batchPollTimer = setInterval(async () => {
+                try {
+                    const res = await callApi(`/curation/batch-scan/${encodeURIComponent(jobId)}/progress`);
+                    if (!res.ok) return;
+
+                    const progress = await res.json();
+                    updateBatchProgressUI(progress);
+
+                    if (progress.status === 'COMPLETED' || progress.status === 'FAILED' || progress.status === 'CANCELLED') {
+                        clearInterval(state.batchPollTimer);
+                        document.getElementById('btnStartBatch').disabled = false;
+                    }
+                } catch (e) {
+                    console.error("Error en polling:", e);
+                }
+            }, 1000);
+        }
+
+        function updateBatchProgressUI(dto) {
+            const statusBadge = document.getElementById('batchStatusBadge');
+            statusBadge.textContent = dto.status;
+            if (dto.status === 'RUNNING') {
+                statusBadge.className = "px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200";
+            } else if (dto.status === 'COMPLETED') {
+                statusBadge.className = "px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200";
+            } else if (dto.status === 'CANCELLED') {
+                statusBadge.className = "px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200";
+            } else {
+                statusBadge.className = "px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200";
+            }
+
+            const total = dto.totalAuthors || 0;
+            const proc = dto.processedAuthors || 0;
+            const pct = total > 0 ? Math.round((proc / total) * 100) : 0;
+
+            document.getElementById('batchProgressBar').style.width = `${pct}%`;
+            document.getElementById('batchProcessedCount').textContent = `${proc} / ${total} (${pct}%)`;
+            document.getElementById('batchGreenCount').textContent = dto.greenCandidatesCount || 0;
+            document.getElementById('batchYellowCount').textContent = dto.yellowCandidatesCount || 0;
+            document.getElementById('batchRedCount').textContent = dto.redCandidatesCount || 0;
+            document.getElementById('batchFailedCount').textContent = dto.failedAuthors || 0;
+
+            if (dto.errors && dto.errors.length > 0) {
+                const errBox = document.getElementById('batchErrorsContainer');
+                const errList = document.getElementById('batchErrorsList');
+                errBox.classList.remove('hidden');
+                errList.innerHTML = dto.errors.map(e => `<li>${escapeHtml(e)}</li>`).join('');
+            }
+        }
+
+        async function cancelBatchScan() {
+            if (!state.batchJobId) return;
+            try {
+                await callApi(`/curation/batch-scan/${encodeURIComponent(state.batchJobId)}/cancel`, { method: 'POST' });
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        function exportBatchCsv() {
+            const deptUuid = document.getElementById('selectDeptBatch').value;
+            let path = '/curation/candidates/export';
+            if (deptUuid) {
+                path += `?departmentId=${encodeURIComponent(deptUuid)}`;
+            }
+            const url = typeof window.apiUrl === 'function'
+                ? window.apiUrl(path)
+                : `${(window.APP_CONFIG && window.APP_CONFIG.apiBaseUrl) || '/api'}${path}`;
+            window.location.href = url;
+        }
+
+        // Utilitat de seguretat HTML
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+    </script>
+</body>
+</html>

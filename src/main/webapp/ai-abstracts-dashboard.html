@@ -1,0 +1,1152 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Abstracts IA de ResearchOutputs | Portal de Recerca UAB</title>
+    <script src="config.js"></script>
+    <script src="uab-brand.js" defer></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="uab-theme.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .premium-shadow {
+            box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05), 0 2px 8px -1px rgba(0, 0, 0, 0.03);
+        }
+        .card-kpi {
+            transition: all 0.25s ease;
+        }
+        .card-kpi:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.08);
+        }
+        .pill-btn {
+            transition: all 0.15s ease;
+        }
+        .pill-btn.active {
+            background-color: #6366f1;
+            color: #ffffff;
+            font-weight: 600;
+            box-shadow: 0 2px 6px rgba(99, 102, 241, 0.3);
+        }
+        .lang-badge {
+            font-size: 0.7rem;
+            padding: 0.15rem 0.45rem;
+            border-radius: 0.375rem;
+            font-weight: 700;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+        .lang-ca { background-color: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+        .lang-es { background-color: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+        .lang-en { background-color: #e0e7ff; color: #3730a3; border: 1px solid #c7d2fe; }
+        .lang-foreign { background-color: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; }
+        
+        .modal-enter {
+            animation: fadeInScale 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        @keyframes fadeInScale {
+            from { opacity: 0; transform: scale(0.96); }
+            to { opacity: 1; transform: scale(1); }
+        }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen font-sans text-slate-800">
+
+    <div class="mx-auto py-8 px-6 w-[96%] max-w-[1600px]">
+        
+        <!-- Header -->
+        <header class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
+            <div>
+                <div class="flex items-center gap-3">
+                    <div class="w-11 h-11 rounded-2xl bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-xl shadow-sm">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i>
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <h1 class="text-2xl sm:text-3xl font-black text-slate-900">Abstracts IA de ResearchOutputs</h1>
+                            <span class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-100 text-indigo-800 border border-indigo-200">
+                                <i class="fa-solid fa-robot mr-1"></i>salamandrata-7b
+                            </span>
+                        </div>
+                        <p class="text-slate-500 text-xs sm:text-sm mt-0.5">Auditoria i monitorització de resums multilingües generats per IA i sincronitzats a Pure / Egreta</p>
+                    </div>
+                </div>
+            </div>
+            <div class="flex items-center gap-3 flex-wrap">
+                <button onclick="recarregarDades()" class="px-4 py-2 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-all flex items-center gap-2 premium-shadow">
+                    <i class="fa-solid fa-rotate text-indigo-600" id="refreshIcon"></i>
+                    <span>Actualitzar dades</span>
+                </button>
+                <button onclick="exportarCSV()" class="px-4 py-2 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-all flex items-center gap-2 premium-shadow">
+                    <i class="fa-solid fa-file-csv text-emerald-600"></i>
+                    <span>Exportar CSV</span>
+                </button>
+                <a href="abstracts-dashboard.html" class="px-4 py-2 rounded-xl border border-indigo-200 bg-indigo-50/50 text-xs sm:text-sm font-semibold text-indigo-700 hover:bg-indigo-100 transition-all flex items-center gap-2 premium-shadow">
+                    <i class="fa-solid fa-align-left text-indigo-600"></i>
+                    <span>Panell d'Abstracts General</span>
+                </a>
+                <a href="index.html" class="px-4 py-2 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-all flex items-center gap-2 premium-shadow">
+                    <i class="fa-solid fa-arrow-left"></i>
+                    <span>Tornar</span>
+                </a>
+            </div>
+        </header>
+
+        <!-- KPI Cards Summary -->
+        <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3.5 mb-8">
+            
+            <!-- KPI 1: Total Processats amb IA -->
+            <div class="bg-white border border-slate-200 rounded-2xl p-4 flex flex-col justify-between card-kpi premium-shadow relative overflow-hidden">
+                <div class="absolute top-0 left-0 h-1.5 w-full bg-indigo-500"></div>
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Generats IA</span>
+                    <i class="fa-solid fa-wand-magic-sparkles text-indigo-500 text-base"></i>
+                </div>
+                <div>
+                    <h3 id="kpiTotal" class="text-2xl font-black text-slate-900">...</h3>
+                    <p class="text-slate-400 text-[11px] mt-0.5">Documents processats</p>
+                </div>
+            </div>
+
+            <!-- KPI 2: Sincronitzats Egreta -->
+            <div class="bg-white border border-slate-200 rounded-2xl p-4 flex flex-col justify-between card-kpi premium-shadow relative overflow-hidden">
+                <div class="absolute top-0 left-0 h-1.5 w-full bg-emerald-500"></div>
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Sincronitzats a Egreta</span>
+                    <i class="fa-solid fa-circle-check text-emerald-500 text-base"></i>
+                </div>
+                <div>
+                    <div class="flex items-baseline gap-2">
+                        <h3 id="kpiSynced" class="text-2xl font-black text-emerald-700">...</h3>
+                        <span id="kpiPctSynced" class="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">-%</span>
+                    </div>
+                    <p class="text-slate-400 text-[11px] mt-0.5">Abstracts integrats amb èxit</p>
+                </div>
+            </div>
+
+            <!-- KPI 3: No Sincronitzats / Pendents -->
+            <div class="bg-white border border-slate-200 rounded-2xl p-4 flex flex-col justify-between card-kpi premium-shadow relative overflow-hidden">
+                <div class="absolute top-0 left-0 h-1.5 w-full bg-amber-500"></div>
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">No Sincronitzats</span>
+                    <i class="fa-solid fa-circle-exclamation text-amber-500 text-base"></i>
+                </div>
+                <div>
+                    <h3 id="kpiNotSynced" class="text-2xl font-black text-amber-700">...</h3>
+                    <p class="text-slate-400 text-[11px] mt-0.5">Pendents o incidències</p>
+                </div>
+            </div>
+
+            <!-- KPI 4: Latència Mitjana -->
+            <div class="bg-white border border-slate-200 rounded-2xl p-4 flex flex-col justify-between card-kpi premium-shadow relative overflow-hidden">
+                <div class="absolute top-0 left-0 h-1.5 w-full bg-sky-500"></div>
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Latència Mitjana</span>
+                    <i class="fa-solid fa-stopwatch text-sky-500 text-base"></i>
+                </div>
+                <div>
+                    <h3 id="kpiLatency" class="text-2xl font-black text-sky-700">...</h3>
+                    <p id="kpiLatencySub" class="text-slate-400 text-[11px] mt-0.5">Per publicació</p>
+                </div>
+            </div>
+
+            <!-- KPI 5: Model d'IA -->
+            <div class="bg-white border border-slate-200 rounded-2xl p-4 flex flex-col justify-between card-kpi premium-shadow relative overflow-hidden">
+                <div class="absolute top-0 left-0 h-1.5 w-full bg-purple-500"></div>
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Model d'Infèrencia</span>
+                    <i class="fa-solid fa-microchip text-purple-500 text-base"></i>
+                </div>
+                <div>
+                    <h3 id="kpiModel" class="text-lg font-black text-purple-900 truncate">salamandrata-7b</h3>
+                    <p class="text-slate-400 text-[11px] mt-0.5">BSC-CNS Instruct</p>
+                </div>
+            </div>
+
+            <!-- KPI 6: Cobertura Idiomes -->
+            <div class="bg-white border border-slate-200 rounded-2xl p-4 flex flex-col justify-between card-kpi premium-shadow relative overflow-hidden">
+                <div class="absolute top-0 left-0 h-1.5 w-full bg-teal-500"></div>
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Llengua Font Principal</span>
+                    <i class="fa-solid fa-language text-teal-500 text-base"></i>
+                </div>
+                <div>
+                    <h3 id="kpiTopLang" class="text-xl font-black text-teal-800">en_GB</h3>
+                    <p id="kpiTopLangSub" class="text-slate-400 text-[11px] mt-0.5">Anglès com a base</p>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- Filters Bar -->
+        <section class="bg-white border border-slate-200 rounded-2xl p-5 mb-8 premium-shadow">
+            <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                
+                <!-- Quick Sync Filter Pills -->
+                <div class="flex items-center gap-2 flex-wrap">
+                    <span class="text-xs font-bold text-slate-500 uppercase mr-1">Estat:</span>
+                    <button class="pill-btn active px-3.5 py-1.5 rounded-xl border border-slate-200 text-xs font-medium text-slate-700 hover:bg-slate-100" data-synced="all" onclick="filtrarSync('all')">
+                        Tots
+                    </button>
+                    <button class="pill-btn px-3.5 py-1.5 rounded-xl border border-slate-200 text-xs font-medium text-slate-700 hover:bg-slate-100" data-synced="true" onclick="filtrarSync('true')">
+                        <i class="fa-solid fa-circle-check text-emerald-500 mr-1.5"></i>Sincronitzats
+                    </button>
+                    <button class="pill-btn px-3.5 py-1.5 rounded-xl border border-slate-200 text-xs font-medium text-slate-700 hover:bg-slate-100" data-synced="false" onclick="filtrarSync('false')">
+                        <i class="fa-solid fa-circle-exclamation text-amber-500 mr-1.5"></i>No Sincronitzats
+                    </button>
+                </div>
+
+                <!-- Filters Inputs: Years, YearType, SourceLang, Search -->
+                <div class="flex items-center gap-3 flex-wrap">
+                    
+                    <!-- Year Type (Publication vs Submission) -->
+                    <div class="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5">
+                        <span class="text-xs font-bold text-slate-500">Any:</span>
+                        <select id="selectYearType" onchange="canviFiltres()" class="bg-transparent text-xs font-semibold text-slate-700 outline-none cursor-pointer">
+                            <option value="publicationYear">Publicació</option>
+                            <option value="submissionYear">Ingrés (Submission)</option>
+                        </select>
+                    </div>
+
+                    <!-- Year Range -->
+                    <div class="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs">
+                        <span class="text-slate-400 font-medium">De:</span>
+                        <input type="number" id="inputYearDesde" placeholder="Ex: 2015" onchange="canviFiltres()" class="w-16 bg-transparent outline-none font-semibold text-slate-700 text-xs">
+                        <span class="text-slate-400 font-medium mx-1">A:</span>
+                        <input type="number" id="inputYearHasta" placeholder="Ex: 2026" onchange="canviFiltres()" class="w-16 bg-transparent outline-none font-semibold text-slate-700 text-xs">
+                    </div>
+
+                    <!-- Source Language Dropdown -->
+                    <div class="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5">
+                        <span class="text-xs font-bold text-slate-500">Llengua font:</span>
+                        <select id="selectSourceLang" onchange="canviFiltres()" class="bg-transparent text-xs font-semibold text-slate-700 outline-none cursor-pointer">
+                            <option value="all">Totes les llengües</option>
+                        </select>
+                    </div>
+
+                    <!-- Search Input -->
+                    <div class="relative flex-1 sm:w-64">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                        <input type="text" id="inputSearch" placeholder="Cercar títol, UUID o text..." onkeyup="esdevenimentCerca(event)" class="w-full bg-slate-50 border border-slate-200 rounded-xl pl-8 pr-3 py-1.5 text-xs text-slate-700 outline-none focus:border-indigo-400 focus:bg-white transition-all">
+                    </div>
+
+                    <button onclick="netejarFiltres()" title="Netejar filtres" class="px-2.5 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition-all">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- Charts Section -->
+        <section class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+            
+            <!-- Evolution by Year Chart -->
+            <div class="lg:col-span-2 bg-white border border-slate-200 rounded-2xl p-5 premium-shadow">
+                <div class="flex items-center justify-between mb-4">
+                    <div>
+                        <h2 class="text-base font-bold text-slate-900">Evolució d'Abstracts IA i Sincronització per Any</h2>
+                        <p class="text-slate-400 text-xs" id="chartYearSubtitle">Distribució de publicacions traduïdes amb IA</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600">
+                            <span class="w-3 h-3 rounded bg-emerald-500 inline-block"></span> Sincronitzats
+                        </span>
+                        <span class="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600">
+                            <span class="w-3 h-3 rounded bg-amber-500 inline-block"></span> No Sincronitzats
+                        </span>
+                    </div>
+                </div>
+                <div class="h-64 sm:h-72">
+                    <canvas id="canvasEvolutionYear"></canvas>
+                </div>
+            </div>
+
+            <!-- Source Languages Breakdown Doughnut -->
+            <div class="bg-white border border-slate-200 rounded-2xl p-5 premium-shadow flex flex-col justify-between">
+                <div class="mb-2">
+                    <h2 class="text-base font-bold text-slate-900">Distribució per Llengua Font</h2>
+                    <p class="text-slate-400 text-xs">Idioma original del document abans de la traducció</p>
+                </div>
+                <div class="h-56 flex items-center justify-center my-auto">
+                    <canvas id="canvasLanguages"></canvas>
+                </div>
+                <div id="langStatsSummary" class="grid grid-cols-3 gap-2 pt-3 border-t border-slate-100 text-center text-xs">
+                    <!-- Dynamic stats summary -->
+                </div>
+            </div>
+
+        </section>
+
+        <!-- Data Table Section -->
+        <section class="bg-white border border-slate-200 rounded-2xl p-6 premium-shadow">
+            
+            <!-- Table Header -->
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+                <div>
+                    <h2 class="text-lg font-bold text-slate-900">Llistat de Publicacions amb Resums IA</h2>
+                    <p class="text-slate-400 text-xs" id="tableSubtitle">Carregant registres...</p>
+                </div>
+                
+                <div class="flex items-center gap-3">
+                    <span class="text-xs text-slate-500 font-medium">Files per pàgina:</span>
+                    <select id="selectPageSize" onchange="canviMidaPagina()" class="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1 text-xs font-semibold text-slate-700 outline-none cursor-pointer">
+                        <option value="15">15</option>
+                        <option value="25">25</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Table Container -->
+            <div class="overflow-x-auto rounded-xl border border-slate-100 mb-4">
+                <table class="w-full text-left border-collapse text-xs sm:text-sm">
+                    <thead>
+                        <tr class="bg-slate-50/80 text-slate-500 text-[11px] uppercase tracking-wider font-semibold border-b border-slate-200">
+                            <th class="py-3 px-4">Títol i Publicació</th>
+                            <th class="py-3 px-3 text-center cursor-pointer hover:text-slate-800" onclick="ordenarTaula('year')">
+                                Any <i class="fa-solid fa-sort ml-1 text-slate-300" id="sortYearIcon"></i>
+                            </th>
+                            <th class="py-3 px-3 text-center">Llengua Font</th>
+                            <th class="py-3 px-3 text-center">Llengües IA Generades</th>
+                            <th class="py-3 px-3 text-center cursor-pointer hover:text-slate-800" onclick="ordenarTaula('latency')">
+                                Latència <i class="fa-solid fa-sort ml-1 text-slate-300" id="sortLatencyIcon"></i>
+                            </th>
+                            <th class="py-3 px-3 text-center">Tokens</th>
+                            <th class="py-3 px-3 text-center">Estat Egreta</th>
+                            <th class="py-3 px-4 text-right">Accions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody" class="divide-y divide-slate-100 font-normal text-slate-700">
+                        <tr>
+                            <td colspan="8" class="text-center py-12 text-slate-400">
+                                <i class="fa-solid fa-circle-notch fa-spin text-2xl text-indigo-500 mb-2"></i>
+                                <p>Carregant dades d'abstracts IA...</p>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination Bar -->
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-2">
+                <div class="text-xs text-slate-500" id="paginationInfo">
+                    Mostrant 0 de 0 publicacions
+                </div>
+                <div class="flex items-center gap-1.5" id="paginationControls">
+                    <!-- Generated pagination buttons -->
+                </div>
+            </div>
+
+        </section>
+
+    </div>
+
+    <!-- Detail Modal -->
+    <div id="detailModal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden modal-enter">
+            
+            <!-- Modal Header -->
+            <div class="p-6 border-b border-slate-100 flex items-start justify-between gap-4 bg-slate-50/50">
+                <div class="flex items-start gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-lg shrink-0 mt-0.5">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i>
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <span id="modalSyncBadge" class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                Sincronitzat
+                            </span>
+                            <span id="modalModelBadge" class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+                                salamandrata-7b
+                            </span>
+                            <span id="modalYearBadge" class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+                                Any 2024
+                            </span>
+                        </div>
+                        <h3 id="modalTitle" class="text-lg font-bold text-slate-900 mt-2 leading-snug">Títol de la publicació</h3>
+                        <p class="text-slate-400 text-xs font-mono mt-1 flex items-center gap-2">
+                            <span>UUID: <span id="modalUuid">...</span></span>
+                            <button onclick="copiarUuidModal()" class="text-indigo-600 hover:text-indigo-800" title="Copiar UUID">
+                                <i class="fa-regular fa-copy"></i>
+                            </button>
+                        </p>
+                    </div>
+                </div>
+                <button onclick="tancarModal()" class="w-8 h-8 rounded-lg border border-slate-200 text-slate-400 hover:text-slate-700 hover:bg-slate-100 flex items-center justify-center shrink-0">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <!-- Modal Body (Scrollable) -->
+            <div class="p-6 overflow-y-auto space-y-6 flex-1 text-xs sm:text-sm">
+                
+                <!-- Quick AI & Sync Details -->
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-center">
+                    <div>
+                        <span class="text-[10px] uppercase font-bold text-slate-400 block">Llengua Font</span>
+                        <span id="modalSourceLang" class="font-bold text-slate-800 text-sm">en_GB</span>
+                    </div>
+                    <div>
+                        <span class="text-[10px] uppercase font-bold text-slate-400 block">Latència Total</span>
+                        <span id="modalLatency" class="font-bold text-slate-800 text-sm">1.05s</span>
+                    </div>
+                    <div>
+                        <span class="text-[10px] uppercase font-bold text-slate-400 block">Data Generació</span>
+                        <span id="modalGeneratedAt" class="font-bold text-slate-800 text-xs">2026-09-23</span>
+                    </div>
+                    <div>
+                        <span class="text-[10px] uppercase font-bold text-slate-400 block">Entorn Egreta</span>
+                        <span id="modalSyncEnv" class="font-bold text-emerald-700 text-xs">PROD (HTTP 200)</span>
+                    </div>
+                </div>
+
+                <!-- Sync Message Alert -->
+                <div id="modalSyncMessageAlert" class="p-3 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-800 text-xs flex items-center gap-2.5">
+                    <i class="fa-solid fa-circle-check text-emerald-600"></i>
+                    <span id="modalSyncMessageText">Abstracts sincronitzats correctament a Egreta</span>
+                </div>
+
+                <!-- Generated Translations Breakdown -->
+                <div>
+                    <h4 class="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2">
+                        <i class="fa-solid fa-language text-indigo-600"></i>
+                        <span>Traduccions Generades per la IA</span>
+                    </h4>
+                    <div id="modalTranslationsContainer" class="space-y-4">
+                        <!-- Dynamic translation cards -->
+                    </div>
+                </div>
+
+                <!-- Pure Original Abstracts Cross-reference -->
+                <div id="modalPureOriginalSection" class="pt-4 border-t border-slate-200">
+                    <h4 class="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2">
+                        <i class="fa-solid fa-database text-slate-600"></i>
+                        <span>Abstracts Registrats actualment a Pure</span>
+                    </h4>
+                    <div id="modalPureAbstractsContainer" class="space-y-3">
+                        <!-- Dynamic pure abstracts -->
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="p-4 border-t border-slate-100 flex items-center justify-end gap-3 bg-slate-50/50">
+                <button onclick="tancarModal()" class="px-4 py-2 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-100">
+                    Tancar
+                </button>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Application Javascript Logic -->
+    <script>
+        // State
+        const state = {
+            synced: 'all',
+            yearType: 'publicationYear',
+            desde: null,
+            hasta: null,
+            sourceLang: 'all',
+            genLang: 'all',
+            search: '',
+            page: 0,
+            size: 15,
+            sortField: 'publicationYear',
+            sortDir: 'desc',
+            availableFilters: null,
+            chartEvolution: null,
+            chartLanguages: null,
+            currentModalData: null
+        };
+
+        // Initialize on load
+        document.addEventListener('DOMContentLoaded', async () => {
+            await carregarOpcionsFiltres();
+            await recarregarDades();
+        });
+
+        // Load filter choices (models, source languages, etc.)
+        async function carregarOpcionsFiltres() {
+            try {
+                const res = await fetch('/api/pure/ai-abstracts/filters');
+                if (!res.ok) return;
+                const data = await res.json();
+                state.availableFilters = data;
+
+                const selectSource = document.getElementById('selectSourceLang');
+                selectSource.innerHTML = '<option value="all">Totes les llengües</option>';
+                if (data.sourceLanguages) {
+                    data.sourceLanguages.forEach(l => {
+                        const opt = document.createElement('option');
+                        opt.value = l;
+                        opt.textContent = formatLanguageName(l);
+                        selectSource.appendChild(opt);
+                    });
+                }
+            } catch (err) {
+                console.error("Error carregant filtres:", err);
+            }
+        }
+
+        // Format language codes into friendly names
+        function formatLanguageName(code) {
+            if (!code) return 'Desconegut';
+            switch (code) {
+                case 'ca_ES': return 'Català (ca_ES)';
+                case 'es_ES': return 'Castellà (es_ES)';
+                case 'en_GB': return 'Anglès (en_GB)';
+                case 'foreign_fr': return 'Francès (foreign_fr)';
+                case 'foreign_de': return 'Alemany (foreign_de)';
+                case 'foreign_it': return 'Italià (foreign_it)';
+                case 'foreign_pt': return 'Portuguès (foreign_pt)';
+                case 'foreign_zh-cn': return 'Xinès (foreign_zh-cn)';
+                case 'foreign_ru': return 'Rus (foreign_ru)';
+                default: 
+                    if (code.startsWith('foreign_')) return 'Estranger (' + code.replace('foreign_', '') + ')';
+                    return code;
+            }
+        }
+
+        // Format language badge HTML
+        function getLangBadgeHtml(code) {
+            if (!code) return '<span class="lang-badge lang-foreign">N/A</span>';
+            if (code === 'ca_ES') return '<span class="lang-badge lang-ca"><i class="fa-solid fa-flag text-[10px]"></i> ca_ES</span>';
+            if (code === 'es_ES') return '<span class="lang-badge lang-es"><i class="fa-solid fa-flag text-[10px]"></i> es_ES</span>';
+            if (code === 'en_GB') return '<span class="lang-badge lang-en"><i class="fa-solid fa-globe text-[10px]"></i> en_GB</span>';
+            return `<span class="lang-badge lang-foreign"><i class="fa-solid fa-language text-[10px]"></i> ${code}</span>`;
+        }
+
+        // Main data reload
+        async function recarregarDades() {
+            const icon = document.getElementById('refreshIcon');
+            if (icon) icon.classList.add('fa-spin');
+
+            try {
+                await Promise.all([
+                    carregarKpis(),
+                    carregarGrafics(),
+                    carregarTaula()
+                ]);
+            } catch (err) {
+                console.error("Error recarregant dades:", err);
+            } finally {
+                if (icon) icon.classList.remove('fa-spin');
+            }
+        }
+
+        // Build URL query params for API
+        function buildQueryParams(extraParams = {}) {
+            const params = new URLSearchParams();
+            if (state.yearType) params.append('yearType', state.yearType);
+            if (state.desde) params.append('desde', state.desde);
+            if (state.hasta) params.append('hasta', state.hasta);
+            if (state.sourceLang && state.sourceLang !== 'all') params.append('sourceLang', state.sourceLang);
+            if (state.genLang && state.genLang !== 'all') params.append('genLang', state.genLang);
+            if (state.synced === 'true') params.append('synced', 'true');
+            if (state.synced === 'false') params.append('synced', 'false');
+            if (state.search) params.append('search', state.search.trim());
+
+            for (const [k, v] of Object.entries(extraParams)) {
+                if (v !== undefined && v !== null) params.append(k, v);
+            }
+            return params.toString();
+        }
+
+        // Load KPIs & summary stats
+        async function carregarKpis() {
+            const query = buildQueryParams();
+            const res = await fetch(`/api/pure/ai-abstracts/stats?${query}`);
+            if (!res.ok) return;
+            const data = await res.json();
+
+            document.getElementById('kpiTotal').textContent = (data.total || 0).toLocaleString();
+            document.getElementById('kpiSynced').textContent = (data.synced || 0).toLocaleString();
+            document.getElementById('kpiPctSynced').textContent = `${data.pctSynced || 0}%`;
+            document.getElementById('kpiNotSynced').textContent = (data.notSynced || 0).toLocaleString();
+            
+            const avgSec = ((data.avgLatencyMs || 0) / 1000).toFixed(2);
+            document.getElementById('kpiLatency').textContent = `${avgSec}s`;
+            document.getElementById('kpiLatencySub').textContent = `Mín: ${((data.minLatencyMs||0)/1000).toFixed(1)}s | Màx: ${((data.maxLatencyMs||0)/1000).toFixed(1)}s`;
+
+            if (data.modelBreakdown && data.modelBreakdown.length > 0) {
+                document.getElementById('kpiModel').textContent = data.modelBreakdown[0].model;
+            }
+
+            if (data.sourceLanguageBreakdown && data.sourceLanguageBreakdown.length > 0) {
+                const top = data.sourceLanguageBreakdown[0];
+                document.getElementById('kpiTopLang').textContent = top.language;
+                document.getElementById('kpiTopLangSub').textContent = `${top.pctOfTotal}% dels documents (${(top.count || 0).toLocaleString()})`;
+            }
+
+            // Update Doughnut chart & summary
+            renderChartLanguages(data.sourceLanguageBreakdown || []);
+        }
+
+        // Load Evolution by Year
+        async function carregarGrafics() {
+            const params = new URLSearchParams();
+            if (state.yearType) params.append('yearType', state.yearType);
+            if (state.desde) params.append('desde', state.desde);
+            if (state.hasta) params.append('hasta', state.hasta);
+
+            const res = await fetch(`/api/pure/ai-abstracts/years?${params.toString()}`);
+            if (!res.ok) return;
+            const yearsData = await res.json();
+
+            renderChartEvolution(yearsData);
+        }
+
+        // Render Evolution Bar Chart
+        function renderChartEvolution(yearsData) {
+            const ctx = document.getElementById('canvasEvolutionYear').getContext('2d');
+            const sub = document.getElementById('chartYearSubtitle');
+            sub.textContent = `Distribució segons ${state.yearType === 'submissionYear' ? "any d'ingrés a Pure" : "any de publicació"}`;
+
+            const sorted = [...yearsData].reverse(); // cronològic
+            const labels = sorted.map(d => d.year);
+            const syncedVals = sorted.map(d => d.synced);
+            const notSyncedVals = sorted.map(d => d.notSynced);
+
+            if (state.chartEvolution) {
+                state.chartEvolution.destroy();
+            }
+
+            state.chartEvolution = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Sincronitzats a Egreta',
+                            data: syncedVals,
+                            backgroundColor: '#10b981',
+                            borderRadius: 4,
+                            stack: 'stack0'
+                        },
+                        {
+                            label: 'No Sincronitzats',
+                            data: notSyncedVals,
+                            backgroundColor: '#f59e0b',
+                            borderRadius: 4,
+                            stack: 'stack0'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                footer: (items) => {
+                                    let sum = 0;
+                                    items.forEach(i => sum += i.raw);
+                                    return `Total Any: ${sum.toLocaleString()}`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { display: false },
+                            ticks: { maxRotation: 45, minRotation: 0, font: { size: 10 } }
+                        },
+                        y: {
+                            stacked: true,
+                            beginAtZero: true,
+                            grid: { color: '#f1f5f9' },
+                            ticks: { font: { size: 10 } }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Render Languages Doughnut Chart
+        function renderChartLanguages(langData) {
+            const ctx = document.getElementById('canvasLanguages').getContext('2d');
+            
+            const topLangs = langData.slice(0, 5);
+            const otherCount = langData.slice(5).reduce((acc, curr) => acc + curr.count, 0);
+            
+            const labels = topLangs.map(l => l.language);
+            const values = topLangs.map(l => l.count);
+            if (otherCount > 0) {
+                labels.push('Altres');
+                values.push(otherCount);
+            }
+
+            const colors = ['#6366f1', '#10b981', '#f59e0b', '#ec4899', '#06b6d4', '#94a3b8'];
+
+            if (state.chartLanguages) {
+                state.chartLanguages.destroy();
+            }
+
+            state.chartLanguages = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: values,
+                        backgroundColor: colors.slice(0, labels.length),
+                        borderWidth: 2,
+                        borderColor: '#ffffff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: { boxWidth: 10, font: { size: 10 } }
+                        }
+                    },
+                    cutout: '65%'
+                }
+            });
+
+            // Quick summary
+            const sumContainer = document.getElementById('langStatsSummary');
+            sumContainer.innerHTML = '';
+            topLangs.slice(0, 3).forEach(l => {
+                const el = document.createElement('div');
+                el.innerHTML = `
+                    <span class="text-slate-400 font-medium block">${l.language}</span>
+                    <span class="font-bold text-slate-800">${l.pctOfTotal}%</span>
+                `;
+                sumContainer.appendChild(el);
+            });
+        }
+
+        // Load Paginated Table
+        async function carregarTaula() {
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="8" class="text-center py-10 text-slate-400">
+                        <i class="fa-solid fa-circle-notch fa-spin text-xl text-indigo-500 mb-2"></i>
+                        <p>Carregant dades...</p>
+                    </td>
+                </tr>
+            `;
+
+            const query = buildQueryParams({
+                page: state.page,
+                size: state.size,
+                sortField: state.sortField,
+                sortDir: state.sortDir
+            });
+
+            const res = await fetch(`/api/pure/ai-abstracts/list?${query}`);
+            if (!res.ok) {
+                tbody.innerHTML = `<tr><td colspan="8" class="text-center py-8 text-rose-500">Error en obtenir el llistat</td></tr>`;
+                return;
+            }
+
+            const data = await res.json();
+            renderTableRows(data.items || []);
+            renderPagination(data);
+        }
+
+        // Render Table Rows
+        function renderTableRows(items) {
+            const tbody = document.getElementById('tableBody');
+            if (items.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="8" class="text-center py-12 text-slate-400">
+                            <i class="fa-regular fa-folder-open text-3xl mb-2 block"></i>
+                            No s'ha trobat cap publicació amb els filtres seleccionats.
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            tbody.innerHTML = '';
+            items.forEach(item => {
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-slate-50/80 transition-colors';
+
+                const yearVal = state.yearType === 'submissionYear' ? item.submissionYear : item.publicationYear;
+                const sourceBadge = getLangBadgeHtml(item.sourceLanguage);
+                
+                let genBadges = '';
+                if (Array.isArray(item.generatedLanguages) && item.generatedLanguages.length > 0) {
+                    genBadges = item.generatedLanguages.map(l => getLangBadgeHtml(l)).join(' ');
+                } else {
+                    genBadges = '<span class="text-slate-400 text-xs italic">Cap</span>';
+                }
+
+                const latencySec = item.totalLatencyMs ? ((item.totalLatencyMs) / 1000).toFixed(2) + 's' : '-';
+                const tokensText = item.totalTokens ? `${item.totalTokens.toLocaleString()} tok` : '-';
+
+                let syncBadge = '';
+                if (item.synced) {
+                    syncBadge = `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                        <i class="fa-solid fa-circle-check text-[10px]"></i> Sincronitzat
+                    </span>`;
+                } else {
+                    syncBadge = `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-200">
+                        <i class="fa-solid fa-circle-exclamation text-[10px]"></i> Pendent / Error
+                    </span>`;
+                }
+
+                tr.innerHTML = `
+                    <td class="py-3 px-4 max-w-sm">
+                        <div class="font-semibold text-slate-900 line-clamp-2" title="${escapeHtml(item.title || '')}">${item.title || 'Sense títol'}</div>
+                        <div class="text-[11px] text-slate-400 font-mono mt-0.5">${item.uuid}</div>
+                    </td>
+                    <td class="py-3 px-3 text-center font-bold text-slate-700">
+                        ${yearVal || '<span class="text-slate-400 font-normal">N/A</span>'}
+                    </td>
+                    <td class="py-3 px-3 text-center">
+                        ${sourceBadge}
+                    </td>
+                    <td class="py-3 px-3 text-center">
+                        <div class="flex items-center justify-center gap-1 flex-wrap">
+                            ${genBadges}
+                        </div>
+                    </td>
+                    <td class="py-3 px-3 text-center font-mono font-medium text-slate-600">
+                        ${latencySec}
+                    </td>
+                    <td class="py-3 px-3 text-center font-mono text-slate-500 text-xs">
+                        ${tokensText}
+                    </td>
+                    <td class="py-3 px-3 text-center">
+                        ${syncBadge}
+                    </td>
+                    <td class="py-3 px-4 text-right">
+                        <button onclick="obrirModal('${item.uuid}')" class="px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-indigo-600 hover:bg-indigo-50 hover:border-indigo-300 transition-all inline-flex items-center gap-1.5 shadow-sm">
+                            <i class="fa-regular fa-eye"></i>
+                            <span>Detall</span>
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // Render Pagination Controls
+        function renderPagination(data) {
+            const total = data.total || 0;
+            const page = data.page || 0;
+            const size = data.size || 15;
+            const totalPages = data.totalPages || 0;
+
+            const from = total === 0 ? 0 : page * size + 1;
+            const to = Math.min((page + 1) * size, total);
+            
+            document.getElementById('tableSubtitle').textContent = `Total: ${total.toLocaleString()} publicacions trobades`;
+            document.getElementById('paginationInfo').textContent = `Mostrant ${from.toLocaleString()} - ${to.toLocaleString()} de ${total.toLocaleString()}`;
+
+            const controls = document.getElementById('paginationControls');
+            controls.innerHTML = '';
+
+            if (totalPages <= 1) return;
+
+            // First & Prev
+            controls.appendChild(createPageBtn('<i class="fa-solid fa-angles-left"></i>', 0, page === 0));
+            controls.appendChild(createPageBtn('<i class="fa-solid fa-angle-left"></i>', Math.max(0, page - 1), page === 0));
+
+            // Numbers
+            const startP = Math.max(0, page - 2);
+            const endP = Math.min(totalPages - 1, page + 2);
+            for (let i = startP; i <= endP; i++) {
+                controls.appendChild(createPageBtn((i + 1).toString(), i, false, i === page));
+            }
+
+            // Next & Last
+            controls.appendChild(createPageBtn('<i class="fa-solid fa-angle-right"></i>', Math.min(totalPages - 1, page + 1), page === totalPages - 1));
+            controls.appendChild(createPageBtn('<i class="fa-solid fa-angles-right"></i>', totalPages - 1, page === totalPages - 1));
+        }
+
+        function createPageBtn(html, targetPage, disabled, isActive = false) {
+            const btn = document.createElement('button');
+            btn.innerHTML = html;
+            btn.disabled = disabled;
+            btn.className = `w-8 h-8 rounded-lg text-xs font-semibold flex items-center justify-center transition-all ${
+                isActive 
+                    ? 'bg-indigo-600 text-white shadow' 
+                    : disabled 
+                        ? 'text-slate-300 border border-slate-100 cursor-not-allowed' 
+                        : 'border border-slate-200 text-slate-700 hover:bg-slate-100'
+            }`;
+            if (!disabled && !isActive) {
+                btn.onclick = () => anarAPagina(targetPage);
+            }
+            return btn;
+        }
+
+        function anarAPagina(p) {
+            state.page = p;
+            carregarTaula();
+        }
+
+        function canviMidaPagina() {
+            state.size = parseInt(document.getElementById('selectPageSize').value, 10);
+            state.page = 0;
+            carregarTaula();
+        }
+
+        // Filtering Events
+        function filtrarSync(val) {
+            state.synced = val;
+            state.page = 0;
+            document.querySelectorAll('.pill-btn').forEach(btn => {
+                if (btn.getAttribute('data-synced') === val) {
+                    btn.classList.add('active');
+                } else {
+                    btn.classList.remove('active');
+                }
+            });
+            recarregarDades();
+        }
+
+        function canviFiltres() {
+            state.yearType = document.getElementById('selectYearType').value;
+            const d = document.getElementById('inputYearDesde').value;
+            const h = document.getElementById('inputYearHasta').value;
+            state.desde = d ? parseInt(d, 10) : null;
+            state.hasta = h ? parseInt(h, 10) : null;
+            state.sourceLang = document.getElementById('selectSourceLang').value;
+            state.page = 0;
+            recarregarDades();
+        }
+
+        let debounceTimeout = null;
+        function esdevenimentCerca(e) {
+            clearTimeout(debounceTimeout);
+            debounceTimeout = setTimeout(() => {
+                state.search = document.getElementById('inputSearch').value;
+                state.page = 0;
+                carregarTaula();
+            }, 400);
+        }
+
+        function netejarFiltres() {
+            document.getElementById('inputYearDesde').value = '';
+            document.getElementById('inputYearHasta').value = '';
+            document.getElementById('selectSourceLang').value = 'all';
+            document.getElementById('inputSearch').value = '';
+            state.desde = null;
+            state.hasta = null;
+            state.sourceLang = 'all';
+            state.search = '';
+            state.page = 0;
+            filtrarSync('all');
+        }
+
+        function ordenarTaula(camp) {
+            if (camp === 'year') {
+                if (state.sortField === state.yearType) {
+                    state.sortDir = state.sortDir === 'asc' ? 'desc' : 'asc';
+                } else {
+                    state.sortField = state.yearType;
+                    state.sortDir = 'desc';
+                }
+            } else if (camp === 'latency') {
+                if (state.sortField === 'latency') {
+                    state.sortDir = state.sortDir === 'asc' ? 'desc' : 'asc';
+                } else {
+                    state.sortField = 'latency';
+                    state.sortDir = 'desc';
+                }
+            }
+            carregarTaula();
+        }
+
+        // Detail Modal
+        async function obrirModal(uuid) {
+            const modal = document.getElementById('detailModal');
+            modal.classList.remove('hidden');
+
+            document.getElementById('modalTitle').textContent = 'Carregant detall...';
+            document.getElementById('modalUuid').textContent = uuid;
+            document.getElementById('modalTranslationsContainer').innerHTML = '<div class="text-slate-400 py-6 text-center"><i class="fa-solid fa-circle-notch fa-spin text-xl text-indigo-500 mb-2"></i><p>Carregant comparació d\'abstracts...</p></div>';
+
+            try {
+                const res = await fetch(`/api/pure/ai-abstracts/${uuid}`);
+                if (!res.ok) throw new Error('No trobat');
+                const data = await res.json();
+                state.currentModalData = data;
+
+                document.getElementById('modalTitle').innerHTML = data.title || 'Sense títol';
+                document.getElementById('modalYearBadge').textContent = `Any ${data.publicationYear || 'N/A'}`;
+                document.getElementById('modalModelBadge').textContent = data.model || 'salamandrata-7b';
+
+                const isSynced = data.synced;
+                const syncBadge = document.getElementById('modalSyncBadge');
+                if (isSynced) {
+                    syncBadge.className = 'px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200';
+                    syncBadge.innerHTML = '<i class="fa-solid fa-circle-check text-[10px] mr-1"></i>Sincronitzat a Egreta';
+                } else {
+                    syncBadge.className = 'px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-200';
+                    syncBadge.innerHTML = '<i class="fa-solid fa-circle-exclamation text-[10px] mr-1"></i>Pendent de sincronització';
+                }
+
+                document.getElementById('modalSourceLang').textContent = data.sourceLanguage || 'N/A';
+                document.getElementById('modalLatency').textContent = data.totalLatencyMs ? `${(data.totalLatencyMs / 1000).toFixed(2)}s` : 'N/A';
+                document.getElementById('modalGeneratedAt').textContent = data.generatedAt ? data.generatedAt.substring(0, 10) : 'N/A';
+                document.getElementById('modalSyncEnv').textContent = `${(data.syncEnv || 'prod').toUpperCase()}`;
+
+                const alertBox = document.getElementById('modalSyncMessageAlert');
+                document.getElementById('modalSyncMessageText').textContent = data.syncMessage || 'Abstracts gestionats correctament';
+                if (!isSynced) {
+                    alertBox.className = 'p-3 rounded-xl border border-amber-200 bg-amber-50 text-amber-800 text-xs flex items-center gap-2.5';
+                } else {
+                    alertBox.className = 'p-3 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-800 text-xs flex items-center gap-2.5';
+                }
+
+                // Render Translations
+                const transCont = document.getElementById('modalTranslationsContainer');
+                transCont.innerHTML = '';
+                if (data.translationsDetail && data.translationsDetail.length > 0) {
+                    data.translationsDetail.forEach((td, idx) => {
+                        const card = document.createElement('div');
+                        card.className = 'border border-slate-200 rounded-xl p-4 bg-slate-50/50 space-y-3';
+                        card.innerHTML = `
+                            <div class="flex items-center justify-between flex-wrap gap-2 pb-2 border-b border-slate-200">
+                                <div class="flex items-center gap-2">
+                                    <span class="font-bold text-slate-800 text-xs">${getLangBadgeHtml(td.fromLang)} &rarr; ${getLangBadgeHtml(td.toLang)}</span>
+                                    <span class="text-slate-400 text-xs">|</span>
+                                    <span class="text-xs text-slate-500 font-mono"><i class="fa-solid fa-stopwatch text-slate-400 mr-1"></i>${td.latencyMs ? (td.latencyMs / 1000).toFixed(2) + 's' : '-'}</span>
+                                    <span class="text-xs text-slate-500 font-mono"><i class="fa-solid fa-coins text-slate-400 mr-1"></i>${td.promptTokens || 0} in / ${td.completionTokens || 0} out</span>
+                                </div>
+                                <button onclick="copiarText('${escapeHtml(td.translationPreview || '')}')" class="px-2 py-1 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-600 hover:text-indigo-600 flex items-center gap-1">
+                                    <i class="fa-regular fa-copy"></i> Copiar traducció
+                                </button>
+                            </div>
+                            <div class="space-y-2">
+                                <div>
+                                    <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">Text Font (Original)</span>
+                                    <div class="bg-white p-3 rounded-lg border border-slate-200 text-slate-700 text-xs leading-relaxed max-h-36 overflow-y-auto">
+                                        ${escapeHtml(td.sourcePreview || 'Sense text')}
+                                    </div>
+                                </div>
+                                <div>
+                                    <span class="text-[10px] font-bold uppercase tracking-wider text-indigo-600 block mb-1">Traducció Generada (IA)</span>
+                                    <div class="bg-indigo-50/40 p-3 rounded-lg border border-indigo-100 text-slate-800 text-xs leading-relaxed max-h-40 overflow-y-auto">
+                                        ${escapeHtml(td.translationPreview || 'Sense traducció')}
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                        transCont.appendChild(card);
+                    });
+                } else {
+                    transCont.innerHTML = '<p class="text-slate-400 text-xs italic">No hi ha detall de traduccions per a aquesta publicació.</p>';
+                }
+
+                // Render Pure Original Abstracts
+                const pureCont = document.getElementById('modalPureAbstractsContainer');
+                pureCont.innerHTML = '';
+                if (data.pureOriginal && data.pureOriginal.abstracts && Object.keys(data.pureOriginal.abstracts).length > 0) {
+                    for (const [langKey, txt] of Object.entries(data.pureOriginal.abstracts)) {
+                        const item = document.createElement('div');
+                        item.className = 'border border-slate-200 rounded-xl p-3 bg-white text-xs space-y-1.5';
+                        item.innerHTML = `
+                            <div class="flex items-center justify-between">
+                                <span class="font-bold text-slate-700">${getLangBadgeHtml(langKey)}</span>
+                                <span class="text-[11px] text-slate-400 font-mono">${(txt || '').length} caràcters</span>
+                            </div>
+                            <div class="text-slate-600 leading-relaxed max-h-28 overflow-y-auto bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                                ${txt || '<span class="italic text-slate-400">Buit</span>'}
+                            </div>
+                        `;
+                        pureCont.appendChild(item);
+                    }
+                } else {
+                    pureCont.innerHTML = '<p class="text-slate-400 text-xs italic">No s\'ha trobat el registre corresponent a la col·lecció principal o no disposa d\'abstracts previs.</p>';
+                }
+
+            } catch (err) {
+                console.error("Error modal:", err);
+                document.getElementById('modalTitle').textContent = 'Error en carregar detall';
+            }
+        }
+
+        function tancarModal() {
+            document.getElementById('detailModal').classList.add('hidden');
+        }
+
+        function copiarUuidModal() {
+            if (state.currentModalData && state.currentModalData.uuid) {
+                navigator.clipboard.writeText(state.currentModalData.uuid);
+                alert("UUID copiat al porta-retalls: " + state.currentModalData.uuid);
+            }
+        }
+
+        function copiarText(txt) {
+            navigator.clipboard.writeText(txt);
+            alert("Text copiat al porta-retalls");
+        }
+
+        // Export CSV
+        async function exportarCSV() {
+            const query = buildQueryParams({ size: 1000, page: 0 });
+            try {
+                const res = await fetch(`/api/pure/ai-abstracts/list?${query}`);
+                if (!res.ok) return;
+                const data = await res.json();
+                const items = data.items || [];
+
+                let csv = 'UUID,Titol,AnyPublicacio,AnyIngres,LlenguaFont,LlenguesGenerades,LatenciaMs,Tokens,SincronitzatEgreta,MissatgeSync\n';
+                items.forEach(it => {
+                    const row = [
+                        `"${it.uuid}"`,
+                        `"${(it.title || '').replace(/"/g, '""')}"`,
+                        it.publicationYear || '',
+                        it.submissionYear || '',
+                        it.sourceLanguage || '',
+                        `"${(it.generatedLanguages || []).join(', ')}"`,
+                        it.totalLatencyMs || 0,
+                        it.totalTokens || 0,
+                        it.synced ? 'SÍ' : 'NO',
+                        `"${(it.syncMessage || '').replace(/"/g, '""')}"`
+                    ];
+                    csv += row.join(',') + '\n';
+                });
+
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement("a");
+                const url = URL.createObjectURL(blob);
+                link.setAttribute("href", url);
+                link.setAttribute("download", `abstracts_ia_${new Date().toISOString().substring(0, 10)}.csv`);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            } catch (err) {
+                console.error("Error exportant CSV:", err);
+            }
+        }
+
+        // Utility to escape HTML
+        function escapeHtml(text) {
+            if (!text) return '';
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return text.replace(/[&<>"']/g, m => map[m]);
+        }
+    </script>
+</body>
+</html>

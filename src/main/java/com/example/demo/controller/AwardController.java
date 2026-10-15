@@ -4,6 +4,10 @@ import com.example.demo.model.Award;
 import com.example.demo.repository.AwardRepository;
 import com.example.demo.service.AwardService;
 import com.example.demo.service.ResearchOutputJournalLinkService;
+import com.example.demo.award.port.AwardReportPort;
+import com.example.demo.award.model.AwardCountryReportCriteria;
+import com.example.demo.award.engine.AwardClassificationEngine;
+import com.example.demo.award.engine.AwardFinancialEngine;
 
 import org.bson.Document;
 import org.springframework.data.mongodb.core.MongoTemplate;
@@ -33,31 +37,38 @@ import java.time.format.DateTimeFormatter;
 
 import jakarta.servlet.http.HttpServletResponse;
 
-import org.apache.poi.xwpf.usermodel.*;
-import org.openxmlformats.schemas.wordprocessingml.x2006.main.*;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import java.text.Normalizer;
 
 @RestController
 @RequestMapping("/api/awards")
 @CrossOrigin(origins = "*")
 public class AwardController {
-
-    private final AwardRepository repository;
+private final AwardRepository repository;
     private final AwardService service;
     private final MongoTemplate mongoTemplate;
     private final ResearchOutputJournalLinkService researchOutputService;
+    private final com.example.demo.award.engine.AwardFinancialEngine financialEngine;
+    private final AwardReportPort awardReportPort;
+    private final AwardClassificationEngine classificationEngine;
 
     @Autowired
     public AwardController(AwardRepository repository,
                            AwardService service,
                            MongoTemplate mongoTemplate,
-                           ResearchOutputJournalLinkService researchOutputService) {
+                           ResearchOutputJournalLinkService researchOutputService,
+                           com.example.demo.award.engine.AwardFinancialEngine financialEngine,
+                           AwardReportPort awardReportPort,
+                           AwardClassificationEngine classificationEngine) {
 
         this.repository = repository;
         this.service = service;
         this.mongoTemplate = mongoTemplate;
         this.researchOutputService = researchOutputService;
+        this.financialEngine = financialEngine;
+        this.awardReportPort = awardReportPort;
+        this.classificationEngine = classificationEngine;
     }
 
     /*
@@ -82,7 +93,8 @@ public class AwardController {
             @RequestParam(required = false) String search,
             @RequestParam(required = false) String hasConvocatoria,
             @RequestParam(required = false) String hasNature,
-            @RequestParam(required = false) String fundingType) {
+            @RequestParam(required = false) String fundingType,
+            @RequestParam(required = false) String typeMatch) {
 
         List<Document> basePipeline = new ArrayList<>();
 
@@ -100,26 +112,32 @@ public class AwardController {
 
         if (search != null && !search.isBlank()) {
             String cleanSearch = search.trim();
-            andConditions.add(new Document("$or", Arrays.asList(
-                new Document("title.ca_ES", new Document("$regex", cleanSearch).append("$options", "i")),
-                new Document("title.es_ES", new Document("$regex", cleanSearch).append("$options", "i")),
-                new Document("title.en_GB", new Document("$regex", cleanSearch).append("$options", "i")),
-                new Document("uuid", new Document("$regex", cleanSearch).append("$options", "i")),
-                new Document("pureId", new Document("$regex", cleanSearch).append("$options", "i"))
-            )));
+            List<Document> searchOr = new ArrayList<>();
+            searchOr.add(new Document("title.ca_ES", new Document("$regex", cleanSearch).append("$options", "i")));
+            searchOr.add(new Document("title.es_ES", new Document("$regex", cleanSearch).append("$options", "i")));
+            searchOr.add(new Document("title.en_GB", new Document("$regex", cleanSearch).append("$options", "i")));
+            searchOr.add(new Document("uuid", new Document("$regex", cleanSearch).append("$options", "i")));
+            try {
+                long pureIdNum = Long.parseLong(cleanSearch);
+                searchOr.add(new Document("pureId", pureIdNum));
+            } catch (NumberFormatException ignored) {}
+            searchOr.add(new Document("pureId", new Document("$regex", cleanSearch).append("$options", "i")));
+            searchOr.add(new Document("identifiers.value", new Document("$regex", cleanSearch).append("$options", "i")));
+            searchOr.add(new Document("identifiers.id", new Document("$regex", cleanSearch).append("$options", "i")));
+            andConditions.add(new Document("$or", searchOr));
         }
 
         if (hasNature != null && !hasNature.isBlank() && !"all".equalsIgnoreCase(hasNature)) {
             if ("yes".equalsIgnoreCase(hasNature)) {
-                andConditions.add(new Document("natureTypes", new Document("$exists", true).append("$not", new Document("$size", 0))));
+                andConditions.add(new Document("natureTypes.0", new Document("$exists", true)));
             } else if ("no".equalsIgnoreCase(hasNature)) {
-                andConditions.add(new Document("$or", Arrays.asList(
-                    new Document("natureTypes", new Document("$exists", false)),
-                    new Document("natureTypes", null),
-                    new Document("natureTypes", new Document("$size", 0))
-                )));
+                andConditions.add(new Document("natureTypes.0", new Document("$exists", false)));
             } else {
-                andConditions.add(new Document("natureTypes.term.ca_ES", hasNature));
+                andConditions.add(new Document("$or", Arrays.asList(
+                    new Document("natureTypes.term.ca_ES", hasNature),
+                    new Document("natureTypes.term.text.value", hasNature),
+                    new Document("natureTypes.term", hasNature)
+                )));
             }
         }
 
@@ -160,6 +178,37 @@ public class AwardController {
             ))));
         }
 
+        if (typeMatch != null && !typeMatch.isBlank() && !"all".equalsIgnoreCase(typeMatch)) {
+            basePipeline.add(new Document("$match", new Document("fOpp.uuid", new Document("$ne", null))));
+            
+            basePipeline.add(new Document("$addFields", new Document()
+                .append("awardUri", new Document("$ifNull", Arrays.asList("$type.uri", "")))
+                .append("foppUri", new Document("$ifNull", Arrays.asList("$fOpp.type.uri", "")))));
+
+            basePipeline.add(new Document("$addFields", new Document()
+                .append("awardCat", new Document("$switch", new Document("branches", Arrays.asList(
+                    new Document("case", new Document("$regexMatch", new Document("input", "$awardUri").append("regex", "research_projects|international_award|international_educational|rtc_award"))).append("then", "PRO"),
+                    new Document("case", new Document("$regexMatch", new Document("input", "$awardUri").append("regex", "fellowship|international_fellowships"))).append("then", "BEC"),
+                    new Document("case", new Document("$regexMatch", new Document("input", "$awardUri").append("regex", "mobility"))).append("then", "ESF"),
+                    new Document("case", new Document("$regexMatch", new Document("input", "$awardUri").append("regex", "staff_to_incorporate"))).append("then", "ESA"),
+                    new Document("case", new Document("$regexMatch", new Document("input", "$awardUri").append("regex", "infraestructure"))).append("then", "INF"),
+                    new Document("case", new Document("$regexMatch", new Document("input", "$awardUri").append("regex", "research_group|other_grants|other_international_grants"))).append("then", "GAC"),
+                    new Document("case", new Document("$regexMatch", new Document("input", "$awardUri").append("regex", "avr_award"))).append("then", "AVR"),
+                    new Document("case", new Document("$regexMatch", new Document("input", "$awardUri").append("regex", "fin_award"))).append("then", "FIN")
+                )).append("default", "OTHER")))
+                .append("foppCat", new Document("$let", new Document()
+                    .append("vars", new Document("parts", new Document("$split", Arrays.asList("$foppUri", "/"))))
+                    .append("in", new Document("$toUpper", new Document("$arrayElemAt", Arrays.asList(
+                        "$$parts",
+                        new Document("$subtract", Arrays.asList(new Document("$size", "$$parts"), 2))
+                    ))))))));
+
+            basePipeline.add(new Document("$addFields", new Document("isTypeMatch", new Document("$eq", Arrays.asList("$awardCat", "$foppCat")))));
+
+            boolean targetMatch = "match".equalsIgnoreCase(typeMatch) || "yes".equalsIgnoreCase(typeMatch);
+            basePipeline.add(new Document("$match", new Document("isTypeMatch", targetMatch)));
+        }
+
         // Count total matching records using aggregation count
         List<Document> countPipeline = new ArrayList<>(basePipeline);
         countPipeline.add(new Document("$count", "total"));
@@ -176,8 +225,10 @@ public class AwardController {
         // Fetch paginated results
         List<Document> dataPipeline = new ArrayList<>(basePipeline);
         dataPipeline.add(new Document("$sort", new Document("awardDate", -1).append("uuid", 1)));
-        dataPipeline.add(new Document("$skip", page * size));
-        dataPipeline.add(new Document("$limit", size));
+        if (size > 0) {
+            dataPipeline.add(new Document("$skip", page * size));
+            dataPipeline.add(new Document("$limit", size));
+        }
 
         Document projection = new Document()
             .append("uuid", 1)
@@ -186,6 +237,9 @@ public class AwardController {
             .append("awardDate", 1)
             .append("type", 1)
             .append("natureTypes", 1)
+            .append("identifiers", 1)
+            .append("awardHolders", 1)
+            .append("managingOrganization", 1)
             .append("fOppUuid", "$fOpp.uuid")
             .append("fOppTitle", "$fOpp.title")
             .append("fOppType", "$fOpp.type");
@@ -196,9 +250,69 @@ public class AwardController {
                 .aggregate(dataPipeline)
                 .into(data);
 
-        // Apply suggestions for awards without nature
-        Map<String, Document> suggestionsMap = getSuggestedNatureMap();
-        for (Document award : data) {
+        // Enrich awards with parsed identifiers, IP name, org name, and suggestions
+        enrichAwardDocuments(data);
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("content", data);
+        response.put("totalElements", totalElements);
+        response.put("page", page);
+        response.put("size", size);
+        response.put("totalPages", size > 0 ? (int) Math.ceil((double) totalElements / size) : 1);
+
+        return response;
+    }
+
+    /**
+     * Helper to enrich Award documents with parsed identifiers, IP names, org units, and suggestions.
+     */
+    private void enrichAwardDocuments(List<Document> awards) {
+        Map<String, Document> suggestionsMap = classificationEngine.getSuggestedNatureMap();
+        for (Document award : awards) {
+            // 1. Parsed Identifiers
+            Map<String, Object> idMap = extractParsedIdentifiers(award);
+            award.put("parsedIdentifiers", idMap);
+            award.put("primaryId", idMap.get("primaryId"));
+            award.put("idFenix", idMap.get("id_fenix"));
+            award.put("referenceCode", idMap.get("referenceCode"));
+            award.put("agaurCode", idMap.get("agaurCode"));
+            award.put("agaurCode2", idMap.get("agaurCode2"));
+
+            // 2. IP Name
+            Object holdersObj = award.get("awardHolders");
+            if (holdersObj instanceof List<?> list && !list.isEmpty()) {
+                Object first = list.get(0);
+                if (first instanceof Document hDoc) {
+                    Object nameObj = hDoc.get("name");
+                    if (nameObj instanceof Document nDoc) {
+                        String firstN = nDoc.getString("firstName");
+                        String lastN = nDoc.getString("lastName");
+                        String full = ((firstN != null ? firstN : "") + " " + (lastN != null ? lastN : "")).trim();
+                        if (!full.isBlank()) award.put("ipName", full);
+                    }
+                }
+            }
+
+            // 3. Managing Organization Name
+            Object orgObj = award.get("managingOrganization");
+            if (orgObj instanceof Document oDoc) {
+                Object nameObj = oDoc.get("name");
+                String orgName = classificationEngine.extractCaEsFromType(nameObj);
+                if (orgName == null && nameObj instanceof String s) orgName = s;
+                if (orgName != null && !orgName.isBlank()) award.put("managingOrgName", orgName);
+            }
+
+            // 4. Year extraction
+            Object dateObj = award.get("awardDate");
+            if (dateObj instanceof Date d) {
+                LocalDate ld = d.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
+                award.put("awardYear", ld.getYear());
+            } else if (dateObj instanceof Document dDoc) {
+                Integer yr = dDoc.getInteger("year");
+                if (yr != null) award.put("awardYear", yr);
+            }
+
+            // 5. Suggestions for awards without nature
             Object natureObj = award.get("natureTypes");
             boolean hasAnyNature = false;
             if (natureObj instanceof List<?> list && !list.isEmpty()) {
@@ -206,14 +320,14 @@ public class AwardController {
             }
             if (!hasAnyNature) {
                 Document suggested = null;
-                String fOppType = extractCaEsFromType(award.get("fOppType"));
+                String fOppType = classificationEngine.extractCaEsFromType(award.get("fOppType"));
                 if (fOppType != null) {
                     suggested = suggestionsMap.get(fOppType);
                 }
                 
                 if (suggested == null && award.get("fOppType") instanceof Document fOppTypeDoc) {
                     String callTypeUri = fOppTypeDoc.getString("uri");
-                    suggested = findNatureByUriSimilarity(callTypeUri);
+                    suggested = classificationEngine.findNatureByUriSimilarity(callTypeUri);
                 }
                 
                 if (suggested != null) {
@@ -221,653 +335,114 @@ public class AwardController {
                 }
             }
         }
-
-        Map<String, Object> response = new HashMap<>();
-        response.put("content", data);
-        response.put("totalElements", totalElements);
-        response.put("page", page);
-        response.put("size", size);
-        response.put("totalPages", (int) Math.ceil((double) totalElements / size));
-
-        return response;
     }
 
-    private Map<String, Document> suggestedNatureCache = null;
-
-    private synchronized Map<String, Document> getSuggestedNatureMap() {
-        if (suggestedNatureCache != null) {
-            return suggestedNatureCache;
-        }
-
-        suggestedNatureCache = new HashMap<>();
-        try {
-            List<Document> pipeline = Arrays.asList(
-                new Document("$match", new Document("$or", Arrays.asList(
-                    new Document("type.term.ca_ES", "Conveni extern a la UAB").append("workflow.step", "approved"),
-                    new Document("type.term.ca_ES", new Document("$ne", "Conveni extern a la UAB")).append("workflow.step", "validated")
-                ))),
-                new Document("$match", new Document("categoria", new Document("$regex", "^Ajudes competitives"))),
-                new Document("$lookup", new Document()
-                    .append("from", "Applications")
-                    .append("localField", "applications.uuid")
-                    .append("foreignField", "uuid")
-                    .append("as", "appDocs")),
-                new Document("$unwind", "$appDocs"),
-                new Document("$lookup", new Document()
-                    .append("from", "FundingOpportunities")
-                    .append("localField", "appDocs.fundingOpportunity.uuid")
-                    .append("foreignField", "uuid")
-                    .append("as", "fOpp")),
-                new Document("$unwind", "$fOpp"),
-                new Document("$match", new Document("natureTypes", new Document("$exists", true).append("$not", new Document("$size", 0)))),
-                new Document("$project", new Document()
-                    .append("fOppType", new Document("$ifNull", Arrays.asList(
-                        "$fOpp.type.term.ca_ES",
-                        new Document("$let", new Document()
-                            .append("vars", new Document("caText", new Document("$filter", new Document()
-                                .append("input", new Document("$ifNull", Arrays.asList("$fOpp.type.term.text", Arrays.asList())))
-                                .append("as", "t")
-                                .append("cond", new Document("$eq", Arrays.asList("$$t.locale", "ca_ES"))))))
-                            .append("in", new Document("$cond", Arrays.asList(
-                                new Document("$gt", Arrays.asList(new Document("$size", "$$caText"), 0)),
-                                new Document("$arrayElemAt", Arrays.asList("$$caText.value", 0)),
-                                null
-                            ))))
-                    )))
-                    .append("nature", new Document("$arrayElemAt", Arrays.asList("$natureTypes", 0)))),
-                new Document("$match", new Document("fOppType", new Document("$ne", null)).append("nature", new Document("$ne", null))),
-                new Document("$group", new Document()
-                    .append("_id", new Document("fOppType", "$fOppType").append("natureUri", "$nature.uri"))
-                    .append("count", new Document("$sum", 1))
-                    .append("natureDoc", new Document("$first", "$nature"))),
-                new Document("$sort", new Document("count", -1)),
-                new Document("$group", new Document()
-                    .append("_id", "$_id.fOppType")
-                    .append("suggestedNature", new Document("$first", "$natureDoc")))
-            );
-
-            List<Document> results = new ArrayList<>();
-            mongoTemplate.getCollection("Awards")
-                    .aggregate(pipeline)
-                    .into(results);
-
-            for (Document doc : results) {
-                String fOppType = doc.getString("_id");
-                Document suggested = (Document) doc.get("suggestedNature");
-                if (fOppType != null && suggested != null) {
-                    suggestedNatureCache.put(fOppType, suggested);
-                }
-            }
-        } catch (Exception e) {
-            // Silently catch
-        }
-        return suggestedNatureCache;
-    }
-
-    private String extractCaEsFromType(Object typeObj) {
-        if (!(typeObj instanceof Document typeDoc)) return null;
-        Object termObj = typeDoc.get("term");
-        if (termObj instanceof Document termDoc) {
-            String ca = termDoc.getString("ca_ES");
-            if (ca != null && !ca.isBlank()) return ca;
-            Object textObj = termDoc.get("text");
-            if (textObj instanceof List<?> list) {
-                for (Object o : list) {
-                    if (o instanceof Document td && "ca_ES".equals(td.getString("locale"))) {
-                        return td.getString("value");
+    private static Map<String, Object> extractParsedIdentifiers(Document award) {
+        Map<String, Object> res = new LinkedHashMap<>();
+        Object idListObj = award.get("identifiers");
+        if (idListObj instanceof List<?> list) {
+            for (Object item : list) {
+                if (item instanceof Document idDoc) {
+                    String disc = idDoc.getString("typeDiscriminator");
+                    String val = idDoc.getString("value");
+                    if (val == null) {
+                        Object vObj = idDoc.get("value");
+                        if (vObj != null) val = String.valueOf(vObj);
+                    }
+                    String idStr = idDoc.getString("id");
+                    if (idStr == null) {
+                        Object iObj = idDoc.get("id");
+                        if (iObj != null) idStr = String.valueOf(iObj);
+                    }
+                    
+                    if ("PrimaryId".equalsIgnoreCase(disc)) {
+                        res.put("primaryId", val != null ? val : idStr);
+                    }
+                    
+                    Object typeObj = idDoc.get("type");
+                    String uri = "";
+                    if (typeObj instanceof Document typeDoc) {
+                        uri = typeDoc.getString("uri");
+                    }
+                    if (uri != null) {
+                        String lowerUri = uri.toLowerCase();
+                        if (lowerUri.contains("id_fenix")) {
+                            res.put("id_fenix", idStr != null ? idStr : val);
+                        } else if (lowerUri.contains("reference") || lowerUri.contains("referencia") || lowerUri.contains("ref_code")) {
+                            res.put("referenceCode", idStr != null ? idStr : val);
+                        } else if (lowerUri.contains("agaur_code_2")) {
+                            res.put("agaurCode2", idStr != null ? idStr : val);
+                        } else if (lowerUri.contains("agaur_code")) {
+                            res.put("agaurCode", idStr != null ? idStr : val);
+                        }
+                    }
+                    if (disc != null && disc.toLowerCase().contains("reference") && !res.containsKey("referenceCode")) {
+                        res.put("referenceCode", idStr != null ? idStr : val);
                     }
                 }
             }
-        } else if (termObj instanceof List<?> list) {
-            for (Object o : list) {
-                if (o instanceof Document td && "ca_ES".equals(td.getString("locale"))) {
-                    return td.getString("value");
-                }
-            }
         }
-        return null;
+        return res;
+    }
+
+    /**
+     * Endpoint to fetch all unassigned nature awards (without pagination limit) for instant Excel-like filtering.
+     */
+    @GetMapping("/all-unassigned-nature")
+    public Map<String, Object> getAllUnassignedNatureAwards() {
+        return getDetailedList(0, 0, null, "all", "no", null, "all");
     }
 
     @PostMapping("/{uuid}/nature")
     public Map<String, Object> updateAwardNature(
             @PathVariable String uuid,
-            @RequestParam(defaultValue = "test") String env,
+            @RequestParam(required = false, defaultValue = "test") String env,
             @RequestBody Document natureDoc) {
-        
-        boolean egretaSuccess = syncAwardNatureToEgreta(uuid, natureDoc, env);
-        
-        Map<String, Object> resp = new HashMap<>();
-        if (egretaSuccess) {
-            mongoTemplate.getCollection("Awards")
-                    .updateOne(new Document("uuid", uuid),
-                            new Document("$set", new Document("natureTypes", Arrays.asList(natureDoc))));
-
-            suggestedNatureCache = null; // Clear cache on update
-            allNatures = null;
-            resp.put("success", true);
-        } else {
-            resp.put("success", false);
-            resp.put("message", "Error al sincronitzar amb l'API d'Egreta (" + ("prod".equalsIgnoreCase(env) ? "egreta.uab.cat" : "egretat.uab.cat") + "). Comproveu que el registre existeixi en aquest entorn.");
-        }
-        return resp;
+        return classificationEngine.updateAwardNature(uuid, env, natureDoc);
     }
 
     @PostMapping("/batch-update-nature")
     public Map<String, Object> batchUpdateNature(
-            @RequestParam String fundingType,
-            @RequestParam(defaultValue = "test") String env,
+            @RequestParam(required = false) String fundingType,
+            @RequestParam(required = false, defaultValue = "test") String env,
             @RequestBody Document natureDoc) {
-
-        List<Document> basePipeline = new ArrayList<>();
-        
-        Document matchQuery = new Document();
-        List<Document> andConditions = new ArrayList<>();
-        andConditions.add(new Document("$or", Arrays.asList(
-            new Document("type.term.ca_ES", "Conveni extern a la UAB").append("workflow.step", "approved"),
-            new Document("type.term.ca_ES", new Document("$ne", "Conveni extern a la UAB")).append("workflow.step", "validated")
-        )));
-        andConditions.add(new Document("categoria", new Document("$regex", "^Ajudes competitives")));
-        andConditions.add(new Document("$or", Arrays.asList(
-            new Document("natureTypes", new Document("$exists", false)),
-            new Document("natureTypes", null),
-            new Document("natureTypes", new Document("$size", 0))
-        )));
-        matchQuery.put("$and", andConditions);
-        basePipeline.add(new Document("$match", matchQuery));
-
-        basePipeline.add(new Document("$lookup", new Document()
-            .append("from", "Applications")
-            .append("localField", "applications.uuid")
-            .append("foreignField", "uuid")
-            .append("as", "appDocs")));
-        basePipeline.add(new Document("$unwind", new Document("path", "$appDocs").append("preserveNullAndEmptyArrays", true)));
-
-        basePipeline.add(new Document("$lookup", new Document()
-            .append("from", "FundingOpportunities")
-            .append("localField", "appDocs.fundingOpportunity.uuid")
-            .append("foreignField", "uuid")
-            .append("as", "fOpp")));
-        basePipeline.add(new Document("$unwind", new Document("path", "$fOpp").append("preserveNullAndEmptyArrays", true)));
-
-        basePipeline.add(new Document("$project", new Document("uuid", 1).append("fOppType", "$fOpp.type")));
-
-        List<Document> data = new ArrayList<>();
-        try {
-            mongoTemplate.getCollection("Awards").aggregate(basePipeline).into(data);
-        } catch (Exception e) {
-            // Silently catch
-        }
-
-        List<String> uuidsToUpdate = new ArrayList<>();
-        for (Document d : data) {
-            String fType = extractCaEsFromType(d.get("fOppType"));
-            if (fType == null || fType.isBlank()) {
-                fType = "Sense convocatòria / Conveni direct";
-            }
-            if (fType.equals(fundingType)) {
-                String uuid = d.getString("uuid");
-                if (uuid != null) {
-                    uuidsToUpdate.add(uuid);
-                }
-            }
-        }
-
-        int successCount = 0;
-        int failCount = 0;
-        List<String> failedUuids = new ArrayList<>();
-
-        for (String uuid : uuidsToUpdate) {
-            boolean egretaSuccess = syncAwardNatureToEgreta(uuid, natureDoc, env);
-            if (egretaSuccess) {
-                mongoTemplate.getCollection("Awards")
-                        .updateOne(new Document("uuid", uuid),
-                                new Document("$set", new Document("natureTypes", Arrays.asList(natureDoc))));
-                successCount++;
-            } else {
-                failCount++;
-                failedUuids.add(uuid);
-            }
-        }
-
-        if (successCount > 0) {
-            suggestedNatureCache = null;
-            allNatures = null;
-        }
-
-        Map<String, Object> resp = new HashMap<>();
-        resp.put("success", true);
-        resp.put("successCount", successCount);
-        resp.put("failCount", failCount);
-        resp.put("failedUuids", failedUuids);
-        return resp;
+        return classificationEngine.batchUpdateNature(fundingType, env, natureDoc);
     }
 
-    private boolean syncAwardNatureToEgreta(String uuid, Document natureDoc, String env) {
-        try {
-            org.springframework.web.client.RestTemplate restTemplate = new org.springframework.web.client.RestTemplate();
-            org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
-            headers.set("Content-Type", "application/json;charset=utf-8");
-            headers.set("api-key", "9971c3cc-b3e0-48e3-9ff9-e990c795e92f");
-            headers.set("Accept", "application/json");
+    @PostMapping("/batch-update-nature-by-uuids")
+    public Map<String, Object> batchUpdateNatureByUuids(
+            @RequestParam(required = false, defaultValue = "test") String env,
+            @RequestBody Map<String, Object> payload) {
+        return classificationEngine.batchUpdateNatureByUuids(env, payload);
+    }
 
-            String baseUrl = "prod".equalsIgnoreCase(env) ? "https://egreta.uab.cat/ws/api/" : "https://egretat.uab.cat/ws/api/";
-            String url = baseUrl + "awards/" + uuid;
-
-            // 1. GET current award document
-            org.springframework.http.ResponseEntity<Map> getResp = restTemplate.exchange(
-                    url, org.springframework.http.HttpMethod.GET, new org.springframework.http.HttpEntity<>(headers), Map.class);
-            
-            if (!getResp.getStatusCode().is2xxSuccessful() || getResp.getBody() == null) {
-                System.err.println("GET failed for Egreta award UUID: " + uuid + ", Status: " + getResp.getStatusCode());
-                return false;
-            }
-            
-            @SuppressWarnings("unchecked")
-            Map<String, Object> data = new java.util.LinkedHashMap<>(getResp.getBody());
-            
-            // 2. Modify natureTypes
-            List<Object> natureList = new ArrayList<>();
-            natureList.add(natureDoc);
-            data.put("natureTypes", natureList);
-            
-            // 3. PUT updated award document back
-            org.springframework.http.HttpEntity<Map<String, Object>> putEntity = new org.springframework.http.HttpEntity<>(data, headers);
-            org.springframework.http.ResponseEntity<Map> putResp = restTemplate.exchange(
-                    url, org.springframework.http.HttpMethod.PUT, putEntity, Map.class);
-            
-            return putResp.getStatusCode().is2xxSuccessful();
-        } catch (Exception e) {
-            System.err.println("Error syncing award nature to Egreta: " + e.getMessage());
-            return false;
-        }
+    @PostMapping("/batch-apply-suggested-by-uuids")
+    public Map<String, Object> batchApplySuggestedByUuids(
+            @RequestParam(required = false, defaultValue = "test") String env,
+            @RequestBody List<String> uuids) {
+        return classificationEngine.batchApplySuggestedByUuids(env, uuids);
     }
 
     @GetMapping("/proposed-relations")
     public List<Map<String, Object>> getProposedRelations() {
-        Map<String, Document> suggestionsMap = getSuggestedNatureMap();
-        
-        List<Document> basePipeline = new ArrayList<>();
-        Document matchQuery = new Document();
-        List<Document> andConditions = new ArrayList<>();
-        andConditions.add(new Document("$or", Arrays.asList(
-            new Document("type.term.ca_ES", "Conveni extern a la UAB").append("workflow.step", "approved"),
-            new Document("type.term.ca_ES", new Document("$ne", "Conveni extern a la UAB")).append("workflow.step", "validated")
-        )));
-        andConditions.add(new Document("categoria", new Document("$regex", "^Ajudes competitives")));
-        andConditions.add(new Document("$or", Arrays.asList(
-            new Document("natureTypes", new Document("$exists", false)),
-            new Document("natureTypes", null),
-            new Document("natureTypes", new Document("$size", 0))
-        )));
-        matchQuery.put("$and", andConditions);
-        basePipeline.add(new Document("$match", matchQuery));
-
-        basePipeline.add(new Document("$lookup", new Document()
-            .append("from", "Applications")
-            .append("localField", "applications.uuid")
-            .append("foreignField", "uuid")
-            .append("as", "appDocs")));
-        basePipeline.add(new Document("$unwind", new Document("path", "$appDocs").append("preserveNullAndEmptyArrays", true)));
-
-        basePipeline.add(new Document("$lookup", new Document()
-            .append("from", "FundingOpportunities")
-            .append("localField", "appDocs.fundingOpportunity.uuid")
-            .append("foreignField", "uuid")
-            .append("as", "fOpp")));
-        basePipeline.add(new Document("$unwind", new Document("path", "$fOpp").append("preserveNullAndEmptyArrays", true)));
-
-        basePipeline.add(new Document("$project", new Document("fOppType", "$fOpp.type")));
-
-        List<Document> data = new ArrayList<>();
-        try {
-            mongoTemplate.getCollection("Awards").aggregate(basePipeline).into(data);
-        } catch (Exception e) {
-            // Silently catch
-        }
-
-        Map<String, Integer> pendingCounts = new HashMap<>();
-        for (Document d : data) {
-            String fundingType = extractCaEsFromType(d.get("fOppType"));
-            if (fundingType == null || fundingType.isBlank()) {
-                continue;
-            }
-            pendingCounts.put(fundingType, pendingCounts.getOrDefault(fundingType, 0) + 1);
-        }
-
-        List<Map<String, Object>> result = new ArrayList<>();
-        Set<String> allFundingTypes = new HashSet<>();
-        allFundingTypes.addAll(suggestionsMap.keySet());
-        
-        for (Document d : data) {
-            String fundingType = extractCaEsFromType(d.get("fOppType"));
-            if (fundingType != null && !fundingType.isBlank()) {
-                allFundingTypes.add(fundingType);
-            }
-        }
-
-        for (String fType : allFundingTypes) {
-            Document suggested = suggestionsMap.get(fType);
-            if (suggested == null) {
-                for (Document d : data) {
-                    String dFType = extractCaEsFromType(d.get("fOppType"));
-                    if (fType.equals(dFType) && d.get("fOppType") instanceof Document fOppTypeDoc) {
-                        String callTypeUri = fOppTypeDoc.getString("uri");
-                        suggested = findNatureByUriSimilarity(callTypeUri);
-                        if (suggested != null) break;
-                    }
-                }
-            }
-
-            if (suggested != null) {
-                Map<String, Object> row = new HashMap<>();
-                row.put("fundingType", fType);
-                row.put("nature", suggested);
-                row.put("pendingCount", pendingCounts.getOrDefault(fType, 0));
-                result.add(row);
-            }
-        }
-
-        result.sort((a, b) -> {
-            int pA = (int) a.get("pendingCount");
-            int pB = (int) b.get("pendingCount");
-            if (pA != pB) {
-                return Integer.compare(pB, pA);
-            }
-            return ((String) a.get("fundingType")).compareTo((String) b.get("fundingType"));
-        });
-
-        return result;
+        return classificationEngine.getProposedRelations();
     }
 
     @PostMapping("/batch-update-all-proposals")
-    public Map<String, Object> batchUpdateAllProposals(@RequestParam(defaultValue = "test") String env) {
-        Map<String, Document> suggestionsMap = getSuggestedNatureMap();
-        
-        List<Document> basePipeline = new ArrayList<>();
-        Document matchQuery = new Document();
-        List<Document> andConditions = new ArrayList<>();
-        andConditions.add(new Document("$or", Arrays.asList(
-            new Document("type.term.ca_ES", "Conveni extern a la UAB").append("workflow.step", "approved"),
-            new Document("type.term.ca_ES", new Document("$ne", "Conveni extern a la UAB")).append("workflow.step", "validated")
-        )));
-        andConditions.add(new Document("categoria", new Document("$regex", "^Ajudes competitives")));
-        andConditions.add(new Document("$or", Arrays.asList(
-            new Document("natureTypes", new Document("$exists", false)),
-            new Document("natureTypes", null),
-            new Document("natureTypes", new Document("$size", 0))
-        )));
-        matchQuery.put("$and", andConditions);
-        basePipeline.add(new Document("$match", matchQuery));
-
-        basePipeline.add(new Document("$lookup", new Document()
-            .append("from", "Applications")
-            .append("localField", "applications.uuid")
-            .append("foreignField", "uuid")
-            .append("as", "appDocs")));
-        basePipeline.add(new Document("$unwind", new Document("path", "$appDocs").append("preserveNullAndEmptyArrays", true)));
-
-        basePipeline.add(new Document("$lookup", new Document()
-            .append("from", "FundingOpportunities")
-            .append("localField", "appDocs.fundingOpportunity.uuid")
-            .append("foreignField", "uuid")
-            .append("as", "fOpp")));
-        basePipeline.add(new Document("$unwind", new Document("path", "$fOpp").append("preserveNullAndEmptyArrays", true)));
-
-        basePipeline.add(new Document("$project", new Document("uuid", 1).append("fOppType", "$fOpp.type")));
-
-        List<Document> data = new ArrayList<>();
-        try {
-            mongoTemplate.getCollection("Awards").aggregate(basePipeline).into(data);
-        } catch (Exception e) {
-            // Silently catch
-        }
-
-        int successCount = 0;
-        int failCount = 0;
-        List<String> failedUuids = new ArrayList<>();
-
-        for (Document d : data) {
-            String fundingType = extractCaEsFromType(d.get("fOppType"));
-            if (fundingType == null || fundingType.isBlank()) {
-                continue;
-            }
-            
-            Document natureDoc = suggestionsMap.get(fundingType);
-            if (natureDoc == null && d.get("fOppType") instanceof Document fOppTypeDoc) {
-                String callTypeUri = fOppTypeDoc.getString("uri");
-                natureDoc = findNatureByUriSimilarity(callTypeUri);
-            }
-            
-            if (natureDoc != null) {
-                String uuid = d.getString("uuid");
-                if (uuid != null) {
-                    boolean egretaSuccess = syncAwardNatureToEgreta(uuid, natureDoc, env);
-                    if (egretaSuccess) {
-                        mongoTemplate.getCollection("Awards")
-                                .updateOne(new Document("uuid", uuid),
-                                        new Document("$set", new Document("natureTypes", Arrays.asList(natureDoc))));
-                        successCount++;
-                    } else {
-                        failCount++;
-                        failedUuids.add(uuid);
-                    }
-                }
-            }
-        }
-
-        if (successCount > 0) {
-            suggestedNatureCache = null;
-            allNatures = null;
-        }
-
-        Map<String, Object> resp = new HashMap<>();
-        resp.put("success", true);
-        resp.put("successCount", successCount);
-        resp.put("failCount", failCount);
-        resp.put("failedUuids", failedUuids);
-        return resp;
+    public Map<String, Object> batchUpdateAllProposals(
+            @RequestParam(defaultValue = "test") String env) {
+        return classificationEngine.batchUpdateAllProposals(env);
     }
 
     @GetMapping("/natures")
     public List<Document> getAvailableNatures() {
-        try {
-            Document scheme = mongoTemplate.getCollection("Classificationschemes")
-                    .find(new Document("baseUri", "/dk/atira/pure/upm/nature"))
-                    .first();
-            if (scheme != null) {
-                List<Document> contained = (List<Document>) scheme.get("containedClassifications");
-                if (contained != null) {
-                    return contained;
-                }
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        return getAllNatures(); // Fallback
+        return classificationEngine.getAvailableNatures();
     }
 
     @GetMapping("/nature-hierarchy")
     public List<Map<String, Object>> getNatureHierarchy() {
-        List<Map<String, Object>> hierarchy = new ArrayList<>();
-        try {
-            Document scheme = mongoTemplate.getCollection("Classificationschemes")
-                    .find(new Document("baseUri", "/dk/atira/pure/upm/nature"))
-                    .first();
-            
-            if (scheme != null) {
-                List<Document> contained = (List<Document>) scheme.get("containedClassifications");
-                if (contained != null) {
-                    // Create a map of URI -> Document for quick lookup
-                    Map<String, Document> uriToDoc = new HashMap<>();
-                    for (Document c : contained) {
-                        String uri = c.getString("uri");
-                        if (uri != null) {
-                            uriToDoc.put(uri, c);
-                        }
-                    }
-
-                    // Build children mapping: parentUri -> list of child documents
-                    Map<String, List<Document>> parentToChildren = new HashMap<>();
-                    Set<String> allChildUris = new HashSet<>();
-
-                    for (Document c : contained) {
-                        String uri = c.getString("uri");
-                        List<Document> relations = (List<Document>) c.get("classificationRelations");
-                        if (relations != null) {
-                            for (Document r : relations) {
-                                Document relType = (Document) r.get("relationType");
-                                String relTypeUri = relType != null ? relType.getString("uri") : "";
-                                if (relTypeUri != null && relTypeUri.contains("/hierarchies/child")) {
-                                    Document relatedTo = (Document) r.get("relatedTo");
-                                    String childUri = relatedTo != null ? relatedTo.getString("uri") : null;
-                                    if (childUri != null && uriToDoc.containsKey(childUri)) {
-                                        allChildUris.add(childUri);
-                                        parentToChildren.computeIfAbsent(uri, k -> new ArrayList<>()).add(uriToDoc.get(childUri));
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // Build parent nodes (nodes that have children)
-                    for (Map.Entry<String, List<Document>> entry : parentToChildren.entrySet()) {
-                        String parentUri = entry.getKey();
-                        Document parentDoc = uriToDoc.get(parentUri);
-                        if (parentDoc != null) {
-                            Map<String, Object> parentNode = new HashMap<>();
-                            parentNode.put("uri", parentUri);
-                            parentNode.put("term", getCaEsTerm(parentDoc));
-                            
-                            List<Map<String, Object>> childNodes = new ArrayList<>();
-                            for (Document childDoc : entry.getValue()) {
-                                Map<String, Object> childNode = new HashMap<>();
-                                childNode.put("uri", childDoc.getString("uri"));
-                                childNode.put("term", getCaEsTerm(childDoc));
-                                childNodes.add(childNode);
-                            }
-                            
-                            // Sort children alphabetically
-                            childNodes.sort((a, b) -> ((String) a.get("term")).compareToIgnoreCase((String) b.get("term")));
-                            
-                            parentNode.put("children", childNodes);
-                            hierarchy.add(parentNode);
-                        }
-                    }
-
-                    // Sort parent nodes alphabetically
-                    hierarchy.sort((a, b) -> ((String) a.get("term")).compareToIgnoreCase((String) b.get("term")));
-
-                    // Build flat nodes (nodes that have no children and are not children of any parent)
-                    List<Map<String, Object>> flatNodes = new ArrayList<>();
-                    for (Document c : contained) {
-                        String uri = c.getString("uri");
-                        if (!parentToChildren.containsKey(uri) && !allChildUris.contains(uri)) {
-                            // Only include enabled classifications
-                            Boolean disabled = c.getBoolean("disabled");
-                            if (disabled == null || !disabled) {
-                                Map<String, Object> flatNode = new HashMap<>();
-                                flatNode.put("uri", uri);
-                                flatNode.put("term", getCaEsTerm(c));
-                                flatNodes.add(flatNode);
-                            }
-                        }
-                    }
-
-                    // Sort flat nodes alphabetically
-                    flatNodes.sort((a, b) -> ((String) a.get("term")).compareToIgnoreCase((String) b.get("term")));
-
-                    if (!flatNodes.isEmpty()) {
-                        Map<String, Object> flatGroup = new HashMap<>();
-                        flatGroup.put("uri", "flat_group");
-                        flatGroup.put("term", "Altres Natures");
-                        flatGroup.put("children", flatNodes);
-                        hierarchy.add(flatGroup);
-                    }
-                }
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        return hierarchy;
+        return classificationEngine.getNatureHierarchy();
     }
-
-    private String getCaEsTerm(Document doc) {
-        if (doc == null) return "Sense títol";
-        Document termDoc = (Document) doc.get("term");
-        if (termDoc != null) {
-            List<Document> textList = (List<Document>) termDoc.get("text");
-            if (textList != null) {
-                for (Document td : textList) {
-                    if ("ca_ES".equals(td.getString("locale"))) {
-                        return td.getString("value");
-                    }
-                }
-            }
-        }
-        Object termObj = doc.get("term");
-        if (termObj instanceof String s) return s;
-        return doc.getString("uri");
-    }
-
-    private List<Document> allNatures = null;
-
-    private synchronized List<Document> getAllNatures() {
-        if (allNatures != null) {
-            return allNatures;
-        }
-        allNatures = new ArrayList<>();
-        try {
-            allNatures = mongoTemplate.getCollection("Awards")
-                    .distinct("natureTypes", new Document(), Document.class)
-                    .into(new ArrayList<>());
-        } catch (Exception e) {
-            // Silently catch
-        }
-        return allNatures;
-    }
-
-    private Document findNatureByUriSimilarity(String callTypeUri) {
-        if (callTypeUri == null || callTypeUri.isBlank()) return null;
-        
-        String suffix = "";
-        int idx = callTypeUri.indexOf("externalfundingopportunity/");
-        if (idx >= 0) {
-            suffix = callTypeUri.substring(idx + "externalfundingopportunity/".length());
-        } else {
-            idx = callTypeUri.indexOf("fundingopportunitytypes/");
-            if (idx >= 0) {
-                suffix = callTypeUri.substring(idx + "fundingopportunitytypes/".length());
-            }
-        }
-        
-        if (suffix.isEmpty()) return null;
-        suffix = suffix.replaceAll("^/+", "").replaceAll("/+$", "").toLowerCase();
-        
-        String normSuffixSlash = suffix;
-        String normSuffixUnder = suffix.replace("/", "_").replace("-", "_");
-        
-        List<Document> natures = getAllNatures();
-        for (Document nat : natures) {
-            String nUri = nat.getString("uri");
-            if (nUri == null) continue;
-            
-            String nSuffix = "";
-            int nIdx = nUri.indexOf("nature/");
-            if (nIdx >= 0) {
-                nSuffix = nUri.substring(nIdx + "nature/".length());
-            } else {
-                nSuffix = nUri.substring(nUri.lastIndexOf("/") + 1);
-            }
-            nSuffix = nSuffix.replaceAll("^/+", "").replaceAll("/+$", "").toLowerCase();
-            String nSuffixNorm = nSuffix.replace("/", "_").replace("-", "_");
-            
-            if (nSuffixNorm.equals(normSuffixUnder) || nSuffixNorm.equals(normSuffixSlash)) {
-                return nat;
-            }
-        }
-        return null;
-    }
-
 
     /*
     ===============================
@@ -887,22 +462,22 @@ public class AwardController {
 
     @GetMapping("/stats/tipus-per-categoria")
     public List<Document> getTipusPerCategoria() {
-        return service.getTipusPerCategoria();
+        return financialEngine.getTipusPerCategoria();
     }
 
     @GetMapping("/stats/awards-by-amount")
     public List<Document> getAwardsByAmount() {
-        return service.getAwardsByAmount();
+        return financialEngine.getAwardsByAmount();
     }
 
     @GetMapping("/stats/import-per-tipus-anio")
     public List<Document> getImportPerTipusAnio() {
-        return service.getImportPerTipusAnio();
+        return financialEngine.getImportPerTipusAnio();
     }
 
     @GetMapping("/stats/total")
     public Map<String, Object> getTotalStats() {
-        return service.getTotalStats();
+        return financialEngine.getTotalStats();
     }
 
     /*
@@ -918,7 +493,7 @@ public class AwardController {
             @RequestParam(defaultValue = "awardDate") String modoAnio,
             @RequestParam(required = false) String collaboratorUuid) {
 
-        return service.getPowerTable(desde, hasta, modoAnio, collaboratorUuid);
+        return financialEngine.getPowerTable(com.example.demo.award.model.PowerTableQueryCriteria.of(desde, hasta, modoAnio, collaboratorUuid));
     }
 
     @GetMapping("/stats/map-convenis")
@@ -927,7 +502,7 @@ public class AwardController {
             @RequestParam(required = false) Integer hasta,
             @RequestParam(required = false) String collaboratorUuid) {
 
-        return service.getMapConvenis(desde, hasta, collaboratorUuid);
+        return financialEngine.getMapConvenis(desde, hasta, collaboratorUuid);
     }
 
     @GetMapping("/stats/xarxes-plataformes")
@@ -936,7 +511,7 @@ public class AwardController {
             @RequestParam(required = false) Integer hasta,
             @RequestParam(required = false) String collaboratorUuid) {
 
-        return service.getXarxesPlataformesCount(desde, hasta, collaboratorUuid);
+        return financialEngine.getXarxesPlataformesCount(desde, hasta, collaboratorUuid);
     }
 
 
@@ -946,7 +521,7 @@ public class AwardController {
             @RequestParam(required = false) Integer desde,
             @RequestParam(required = false) Integer hasta) {
 
-        return service.getAwardsLlistaInstitut(collaboratorUuid, desde, hasta);
+        return financialEngine.getAwardsLlistaInstitut(collaboratorUuid, desde, hasta);
     }
 
     @GetMapping("/stats/ips-institut")
@@ -954,7 +529,7 @@ public class AwardController {
             @RequestParam String collaboratorUuid,
             @RequestParam(required = false) Integer desde,
             @RequestParam(required = false) Integer hasta) {
-        return service.getIpsInstitut(collaboratorUuid, desde, hasta);
+        return financialEngine.getIpsInstitut(collaboratorUuid, desde, hasta);
     }
 
     @GetMapping("/stats/powertable/category-debug")
@@ -1091,7 +666,7 @@ public class AwardController {
             @RequestParam(required = false)
             List<String> tipus) {
 
-        return service.getProyectosPorAnio(
+        return financialEngine.getProyectosPorAnio(
                 desde,
                 hasta,
                 collaboratorUuid,
@@ -1111,194 +686,12 @@ public class AwardController {
 
     @GetMapping("/stats/concessions-by-program")
     public List<Document> getConcessionsByProgram() {
-        List<Document> pipeline = List.of(
-            new Document("$match", new Document("$or", List.of(
-                new Document("type.term.ca_ES", "Conveni extern a la UAB")
-                    .append("workflow.step", "approved"),
-                new Document("type.term.ca_ES", new Document("$ne", "Conveni extern a la UAB"))
-                    .append("workflow.step", "validated")
-            ))),
-            new Document("$lookup", new Document()
-                .append("from", "Applications")
-                .append("localField", "applications.uuid")
-                .append("foreignField", "uuid")
-                .append("as", "appDocs")),
-            new Document("$unwind", "$appDocs"),
-            new Document("$lookup", new Document()
-                .append("from", "FundingOpportunities")
-                .append("localField", "appDocs.fundingOpportunity.uuid")
-                .append("foreignField", "uuid")
-                .append("as", "fOpp")),
-            new Document("$unwind", "$fOpp"),
-            new Document("$project", new Document()
-                .append("awardDate", 1)
-                .append("uuid", 1)
-                .append("collaborators", 1)
-                .append("fOppType", "$fOpp.type.term")
-                .append("keywordGroups", "$fOpp.keywordGroups")),
-            new Document("$unwind", "$keywordGroups"),
-            new Document("$match", new Document("keywordGroups.logicalName", "/uab/fundingopportunities/programes")),
-            new Document("$unwind", "$keywordGroups.keywordContainers"),
-            new Document("$project", new Document()
-                .append("uuid", 1)
-                .append("awardDate", 1)
-                .append("fOppType", 1)
-                .append("collaborators", 1)
-                .append("program", "$keywordGroups.keywordContainers.structuredKeyword.term")),
-            new Document("$addFields", new Document("esLider", new Document("$let", new Document()
-                .append("vars", new Document("internalLeads", new Document("$filter", new Document()
-                    .append("input", new Document("$ifNull", Arrays.asList("$collaborators", Collections.emptyList())))
-                    .append("as", "c")
-                    .append("cond", new Document("$and", Arrays.asList(
-                        new Document("$eq", Arrays.asList("$$c.leadCollaborator", true)),
-                        new Document("$eq", Arrays.asList("$$c.typeDiscriminator", "InternalCollaboratorAssociation"))
-                    ))))).append("hasCollaborators", new Document("$gt", Arrays.asList(
-                    new Document("$size", new Document("$ifNull", Arrays.asList("$collaborators", Collections.emptyList()))),
-                    0
-                ))))
-                .append("in", new Document("$cond", Arrays.asList(
-                    "$$hasCollaborators",
-                    new Document("$gt", Arrays.asList(new Document("$size", "$$internalLeads"), 0)),
-                    true
-                )))
-            ))),
-            new Document("$addFields", new Document("anyo", new Document("$cond", Arrays.asList(
-                new Document("$ifNull", Arrays.asList("$awardDate", false)),
-                new Document("$year", "$awardDate"),
-                null
-            )))),
-            new Document("$match", new Document("anyo", new Document("$ne", null))),
-            new Document("$group", new Document()
-                .append("_id", new Document("anyo", "$anyo")
-                    .append("program", "$program")
-                    .append("fOppType", "$fOppType"))
-                .append("count", new Document("$sum", 1))
-                .append("liderCount", new Document("$sum", new Document("$cond", Arrays.asList("$esLider", 1, 0))))),
-            new Document("$project", new Document()
-                .append("_id", 0)
-                .append("anyo", "$_id.anyo")
-                .append("program", "$_id.program")
-                .append("fOppType", "$_id.fOppType")
-                .append("count", "$count")
-                .append("liderCount", "$liderCount")),
-            new Document("$sort", new Document("anyo", -1).append("count", -1))
-        );
-
-        List<Document> results = new ArrayList<>();
-        mongoTemplate.getCollection("Awards")
-            .aggregate(pipeline)
-            .into(results);
-        return results;
+        return financialEngine.getConcessionsByProgram();
     }
 
     @GetMapping("/stats/concessions-awards")
     public List<Document> getConcessionsAwards() {
-        List<Document> pipeline = List.of(
-            new Document("$match", new Document("$or", List.of(
-                new Document("type.term.ca_ES", "Conveni extern a la UAB")
-                    .append("workflow.step", "approved"),
-                new Document("type.term.ca_ES", new Document("$ne", "Conveni extern a la UAB"))
-                    .append("workflow.step", "validated")
-            ))),
-            new Document("$lookup", new Document()
-                .append("from", "Applications")
-                .append("localField", "applications.uuid")
-                .append("foreignField", "uuid")
-                .append("as", "appDocs")),
-            new Document("$unwind", "$appDocs"),
-            new Document("$lookup", new Document()
-                .append("from", "FundingOpportunities")
-                .append("localField", "appDocs.fundingOpportunity.uuid")
-                .append("foreignField", "uuid")
-                .append("as", "fOpp")),
-            new Document("$unwind", "$fOpp"),
-            new Document("$project", new Document()
-                .append("awardDate", 1)
-                .append("uuid", 1)
-                .append("pureId", 1)
-                .append("title", 1)
-                .append("collaborators", 1)
-                .append("fundings", 1)
-                .append("fOppType", "$fOpp.type.term")
-                .append("keywordGroups", "$fOpp.keywordGroups")),
-            new Document("$unwind", "$keywordGroups"),
-            new Document("$match", new Document("keywordGroups.logicalName", "/uab/fundingopportunities/programes")),
-            new Document("$unwind", "$keywordGroups.keywordContainers"),
-            new Document("$project", new Document()
-                .append("uuid", 1)
-                .append("pureId", 1)
-                .append("title", 1)
-                .append("awardDate", 1)
-                .append("fOppType", 1)
-                .append("collaborators", 1)
-                .append("fundings", 1)
-                .append("program", "$keywordGroups.keywordContainers.structuredKeyword.term")),
-            new Document("$addFields", new Document("esLider", new Document("$let", new Document()
-                .append("vars", new Document("internalLeads", new Document("$filter", new Document()
-                    .append("input", new Document("$ifNull", Arrays.asList("$collaborators", Collections.emptyList())))
-                    .append("as", "c")
-                    .append("cond", new Document("$and", Arrays.asList(
-                        new Document("$eq", Arrays.asList("$$c.leadCollaborator", true)),
-                        new Document("$eq", Arrays.asList("$$c.typeDiscriminator", "InternalCollaboratorAssociation"))
-                    ))))).append("hasCollaborators", new Document("$gt", Arrays.asList(
-                    new Document("$size", new Document("$ifNull", Arrays.asList("$collaborators", Collections.emptyList()))),
-                    0
-                ))))
-                .append("in", new Document("$cond", Arrays.asList(
-                    "$$hasCollaborators",
-                    new Document("$gt", Arrays.asList(new Document("$size", "$$internalLeads"), 0)),
-                    true
-                )))
-            ))),
-            new Document("$addFields", new Document("anyo", new Document("$cond", Arrays.asList(
-                new Document("$ifNull", Arrays.asList("$awardDate", false)),
-                new Document("$year", "$awardDate"),
-                null
-            )))),
-            new Document("$match", new Document("anyo", new Document("$ne", null))),
-            new Document("$project", new Document()
-                .append("uuid", 1)
-                .append("pureId", 1)
-                .append("title", 1)
-                .append("anyo", 1)
-                .append("fOppType", 1)
-                .append("program", 1)
-                .append("esLider", 1)
-                .append("fundings", 1)),
-            new Document("$sort", new Document("anyo", -1).append("title.es_ES", 1))
-        );
-
-        List<Document> rawResults = new ArrayList<>();
-        mongoTemplate.getCollection("Awards")
-            .aggregate(pipeline)
-            .into(rawResults);
-
-        List<Document> processed = new ArrayList<>();
-        for (Document doc : rawResults) {
-            double totalImport = 0.0;
-            List<Document> fundings = castList(doc.get("fundings"));
-            if (fundings != null && !fundings.isEmpty()) {
-                for (Document f : fundings) {
-                    List<Document> cols = castList(f.get("fundingCollaborators"));
-                    if (cols != null) {
-                        for (Document col : cols) {
-                            Document part = (Document) col.get("institutionalPart");
-                            if (part != null) {
-                                Object val = part.get("value");
-                                if (val instanceof Number n) {
-                                    totalImport += n.doubleValue();
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            doc.remove("fundings");
-            doc.append("importe", totalImport);
-            processed.add(doc);
-        }
-
-        return processed;
+        return financialEngine.getConcessionsAwards();
     }
 
     /*
@@ -1638,970 +1031,19 @@ public class AwardController {
             HttpServletResponse response) throws Exception {
 
         String code = countryCode.trim().toUpperCase();
-        String effectiveEnd = (endDate == null || endDate.isBlank())
-                ? LocalDate.now().toString() : endDate;
-
-        Date startDateD = Date.from(LocalDate.parse(startDate).atStartOfDay(ZoneId.of("UTC")).toInstant());
-        Date endDateD   = Date.from(LocalDate.parse(effectiveEnd).atStartOfDay(ZoneId.of("UTC")).toInstant());
-
-        // --- Resolve funder UUIDs for this country ---
-        Set<String> funderUuids = new HashSet<>();
-        Map<String, String> funderNamesMap = new HashMap<>();
-        mongoTemplate.getCollection("ExternalOrganizations")
-                .find(new Document("address.country.uri",
-                        new Document("$regex", "/" + code.toLowerCase() + "$").append("$options", "i")))
-                .projection(new Document("uuid", 1).append("name", 1).append("address.country", 1))
-                .forEach(org -> {
-                    String uuid = org.getString("uuid");
-                    if (uuid == null) return;
-                    funderUuids.add(uuid);
-                    Document nd = (Document) org.get("name");
-                    String name = nd == null ? "" :
-                            nd.containsKey("ca_ES") ? nd.getString("ca_ES") :
-                            nd.containsKey("es_ES") ? nd.getString("es_ES") :
-                            nd.containsKey("en_GB") ? nd.getString("en_GB") : "";
-                    funderNamesMap.put(uuid, name);
-                    // resolve display name for country
-                });
-
-        // Resolve country display name from first matching org
-        String[] countryNameHolder = {code};
-        mongoTemplate.getCollection("ExternalOrganizations")
-                .find(new Document("address.country.uri",
-                        new Document("$regex", "/" + code.toLowerCase() + "$").append("$options", "i")))
-                .limit(1)
-                .forEach(org -> {
-                    Document addr = (Document) org.get("address");
-                    if (addr == null) return;
-                    Document country = (Document) addr.get("country");
-                    if (country == null) return;
-                    Document term = (Document) country.get("term");
-                    if (term == null) return;
-                    String n = term.containsKey("ca_ES") ? term.getString("ca_ES") :
-                               term.containsKey("es_ES") ? term.getString("es_ES") :
-                               term.containsKey("en_GB") ? term.getString("en_GB") : code;
-                    if (n != null) countryNameHolder[0] = n;
-                });
-        String countryName = countryNameHolder[0];
-
-        // --- Resolve person UUIDs for this country ---
-        Set<String> personUuids = new HashSet<>();
-        mongoTemplate.getCollection("Persons")
-                .find(new Document("$or", List.of(
-                        new Document("nationality.uri", new Document("$regex", "/" + code.toLowerCase() + "$").append("$options", "i")),
-                        new Document("nationalityType.uri", new Document("$regex", "/" + code.toLowerCase() + "$").append("$options", "i")),
-                        new Document("nationalityTypes.uri", new Document("$regex", "/" + code.toLowerCase() + "$").append("$options", "i"))
-                )))
-                .projection(new Document("uuid", 1))
-                .forEach(p -> { String u = p.getString("uuid"); if (u != null) personUuids.add(u); });
-
-        // Build $or conditions
-        List<Document> countryOr = new ArrayList<>();
-        if (!funderUuids.isEmpty())
-            countryOr.add(new Document("fundings.funder.uuid", new Document("$in", new ArrayList<>(funderUuids))));
-        if (!personUuids.isEmpty())
-            countryOr.add(new Document("awardHolders.person.uuid", new Document("$in", new ArrayList<>(personUuids))));
-
-        // --- Load template ---
-        InputStream tplIs = getClass().getClassLoader().getResourceAsStream("informe_pais.docx");
-        try (XWPFDocument doc = new XWPFDocument(tplIs); OutputStream out = response.getOutputStream()) {
-
-            // Clear template body
-            CTBody b = doc.getDocument().getBody();
-            for (int i = b.sizeOfPArray() - 1; i >= 0; i--) b.removeP(i);
-            for (int i = b.sizeOfTblArray() - 1; i >= 0; i--) b.removeTbl(i);
-
-            // Fill header bookmark "pais" with country name
-            for (XWPFHeader hdr : doc.getHeaderList()) {
-                List<XWPFParagraph> hdrParas = new ArrayList<>();
-                hdrParas.addAll(hdr.getParagraphs());
-                for (XWPFTable hdrTbl : hdr.getTables()) {
-                    for (XWPFTableRow hdrRow : hdrTbl.getRows()) {
-                        for (XWPFTableCell hdrCell : hdrRow.getTableCells()) {
-                            hdrParas.addAll(hdrCell.getParagraphs());
-                        }
-                    }
-                }
-                for (XWPFParagraph hp : hdrParas) {
-                    for (org.openxmlformats.schemas.wordprocessingml.x2006.main.CTBookmark bm : hp.getCTP().getBookmarkStartList()) {
-                        if ("pais".equals(bm.getName())) {
-                            XWPFRun hr = hp.createRun();
-                            hr.setBold(true);
-                            hr.setColor("FFFFFF");
-                            hr.setFontFamily("Calibri");
-                            hr.setFontSize(11);
-                            hr.setText(countryName);
-                            org.w3c.dom.Node next = bm.getDomNode().getNextSibling();
-                            while (next != null && !next.getNodeName().contains("bookmarkEnd")) {
-                                org.w3c.dom.Node toRemove = next;
-                                next = next.getNextSibling();
-                                hp.getCTP().getDomNode().removeChild(toRemove);
-                            }
-                            hp.getCTP().getDomNode().insertBefore(hr.getCTR().getDomNode(), bm.getDomNode());
-                        }
-                    }
-                }
-            }
-
-            // Intro
-            XWPFParagraph pDate = doc.createParagraph();
-            pDate.setAlignment(ParagraphAlignment.BOTH);
-            XWPFRun rDate = pDate.createRun();
-            rDate.setFontFamily("Calibri"); rDate.setFontSize(9);
-            rDate.setText("Data d'extracció: " + LocalDate.now().format(DateTimeFormatter.ofPattern("dd/MM/yyyy")));
-
-            XWPFParagraph pPeriod = doc.createParagraph();
-            pPeriod.setAlignment(ParagraphAlignment.BOTH);
-            XWPFRun rPeriod = pPeriod.createRun();
-            rPeriod.setFontFamily("Calibri"); rPeriod.setFontSize(9);
-            rPeriod.setText("Període: " + startDate + " — " + effectiveEnd);
-
-            XWPFParagraph pCountry = doc.createParagraph();
-            pCountry.setAlignment(ParagraphAlignment.BOTH);
-            XWPFRun rCountry = pCountry.createRun();
-            rCountry.setFontFamily("Calibri"); rCountry.setFontSize(9);
-            rCountry.setBold(true);
-            rCountry.setText("País: " + countryName + " (" + code + ")");
-
-            doc.createParagraph();
-            boolean[] actRealizWritten = {false};
-
-            // ---- Section: Projectes (Ajudes competitives) ----
-            if (projectes && !countryOr.isEmpty()) {
-                Document projFilter = new Document("workflow.step", "validated")
-                        .append("categoria", new Document("$regex", "^Ajudes competitives"))
-                        .append("actualPeriod.startDate", new Document("$lte", endDateD))
-                        .append("$and", Arrays.asList(
-                                new Document("$or", countryOr),
-                                new Document("$or", Arrays.asList(
-                                        new Document("actualPeriod.endDate", null),
-                                        new Document("actualPeriod.endDate", new Document("$gte", startDateD))
-                                ))
-                        ));
-
-                List<Document> projRaw = mongoTemplate.getCollection("Awards")
-                        .find(projFilter)
-                        .sort(new Document("actualPeriod.startDate", -1))
-                        .into(new ArrayList<>());
-
-                // Batch-fetch funder names
-                Set<String> pfUuids = new HashSet<>();
-                for (Document aw : projRaw) {
-                    List<Document> awf = castList(aw.get("fundings"));
-                    if (awf != null) for (Document f : awf) { Document fd = (Document) f.get("funder"); if (fd != null && fd.getString("uuid") != null) pfUuids.add(fd.getString("uuid")); }
-                }
-                if (!pfUuids.isEmpty()) {
-                    mongoTemplate.getCollection("ExternalOrganizations")
-                            .find(new Document("uuid", new Document("$in", new ArrayList<>(pfUuids))))
-                            .projection(new Document("uuid", 1).append("name", 1))
-                            .forEach(org -> {
-                                Document nd = (Document) org.get("name");
-                                String n = nd == null ? "" : nd.containsKey("ca_ES") ? nd.getString("ca_ES") : nd.containsKey("es_ES") ? nd.getString("es_ES") : nd.containsKey("en_GB") ? nd.getString("en_GB") : "";
-                                funderNamesMap.put(org.getString("uuid"), n);
-                            });
-                }
-
-                if (!actRealizWritten[0]) {
-                    doc.createParagraph();
-                    XWPFParagraph grp = doc.createParagraph();
-                    grp.setStyle("Ttol1"); grp.createRun().setText("Activitats realitzades");
-                    doc.createParagraph();
-                    actRealizWritten[0] = true;
-                }
-                doc.createParagraph();
-                XWPFParagraph secTitle = doc.createParagraph();
-                secTitle.setStyle("Ttol2");
-                secTitle.createRun().setText("Projectes de recerca");
-                doc.createParagraph();
-
-                int idx = 1;
-                for (Document aw : projRaw) {
-                    writeAwardBlock(doc, aw, idx++, funderNamesMap);
-                }
-                XWPFParagraph secFoot = doc.createParagraph();
-                XWPFRun fr = secFoot.createRun();
-                fr.setFontFamily("Calibri"); fr.setFontSize(9); fr.setItalic(true);
-                fr.setText("Total projectes: " + projRaw.size());
-                doc.createParagraph();
-            }
-
-            // ---- Section: Convenis ----
-            if (convenis && !countryOr.isEmpty()) {
-                Document convFilter = new Document("workflow.step", "validated")
-                        .append("type.term.ca_ES", "Concessió conveni")
-                        .append("actualPeriod.startDate", new Document("$lte", endDateD))
-                        .append("$and", Arrays.asList(
-                                new Document("$or", countryOr),
-                                new Document("$or", Arrays.asList(
-                                        new Document("actualPeriod.endDate", null),
-                                        new Document("actualPeriod.endDate", new Document("$gte", startDateD))
-                                ))
-                        ));
-
-                List<Document> convRaw = mongoTemplate.getCollection("Awards")
-                        .find(convFilter)
-                        .sort(new Document("actualPeriod.startDate", -1))
-                        .into(new ArrayList<>());
-
-                Set<String> cfUuids = new HashSet<>();
-                for (Document cv : convRaw) {
-                    List<Document> cvf = castList(cv.get("fundings"));
-                    if (cvf != null) for (Document f : cvf) { Document fd = (Document) f.get("funder"); if (fd != null && fd.getString("uuid") != null) cfUuids.add(fd.getString("uuid")); }
-                }
-                if (!cfUuids.isEmpty()) {
-                    mongoTemplate.getCollection("ExternalOrganizations")
-                            .find(new Document("uuid", new Document("$in", new ArrayList<>(cfUuids))))
-                            .projection(new Document("uuid", 1).append("name", 1))
-                            .forEach(org -> {
-                                Document nd = (Document) org.get("name");
-                                String n = nd == null ? "" : nd.containsKey("ca_ES") ? nd.getString("ca_ES") : nd.containsKey("es_ES") ? nd.getString("es_ES") : nd.containsKey("en_GB") ? nd.getString("en_GB") : "";
-                                funderNamesMap.put(org.getString("uuid"), n);
-                            });
-                }
-
-                if (!actRealizWritten[0]) {
-                    doc.createParagraph();
-                    XWPFParagraph grp = doc.createParagraph();
-                    grp.setStyle("Ttol1"); grp.createRun().setText("Activitats realitzades");
-                    doc.createParagraph();
-                    actRealizWritten[0] = true;
-                }
-                doc.createParagraph();
-                XWPFParagraph secTitle = doc.createParagraph();
-                secTitle.setStyle("Ttol2");
-                secTitle.createRun().setText("Convenis");
-                doc.createParagraph();
-
-                int idx = 1;
-                for (Document cv : convRaw) {
-                    writeAwardBlock(doc, cv, idx++, funderNamesMap);
-                }
-                XWPFParagraph secFoot = doc.createParagraph();
-                XWPFRun fr = secFoot.createRun();
-                fr.setFontFamily("Calibri"); fr.setFontSize(9); fr.setItalic(true);
-                fr.setText("Total convenis: " + convRaw.size());
-            }
-
-            // ---- Section: Beques ----
-            if (beques && !countryOr.isEmpty()) {
-                Document becaFilter = new Document("workflow.step", "validated")
-                        .append("type.term.ca_ES", "Beques")
-                        .append("actualPeriod.startDate", new Document("$lte", endDateD))
-                        .append("$and", Arrays.asList(
-                                new Document("$or", countryOr),
-                                new Document("$or", Arrays.asList(
-                                        new Document("actualPeriod.endDate", null),
-                                        new Document("actualPeriod.endDate", new Document("$gte", startDateD))
-                                ))
-                        ));
-
-                List<Document> becaRaw = mongoTemplate.getCollection("Awards")
-                        .find(becaFilter)
-                        .sort(new Document("actualPeriod.startDate", -1))
-                        .into(new ArrayList<>());
-
-                Set<String> bfUuids = new HashSet<>();
-                for (Document bw : becaRaw) {
-                    List<Document> bwf = castList(bw.get("fundings"));
-                    if (bwf != null) for (Document f : bwf) { Document fd = (Document) f.get("funder"); if (fd != null && fd.getString("uuid") != null) bfUuids.add(fd.getString("uuid")); }
-                }
-                if (!bfUuids.isEmpty()) {
-                    mongoTemplate.getCollection("ExternalOrganizations")
-                            .find(new Document("uuid", new Document("$in", new ArrayList<>(bfUuids))))
-                            .projection(new Document("uuid", 1).append("name", 1))
-                            .forEach(org -> {
-                                Document nd = (Document) org.get("name");
-                                String n = nd == null ? "" : nd.containsKey("ca_ES") ? nd.getString("ca_ES") : nd.containsKey("es_ES") ? nd.getString("es_ES") : nd.containsKey("en_GB") ? nd.getString("en_GB") : "";
-                                funderNamesMap.put(org.getString("uuid"), n);
-                            });
-                }
-
-                if (!actRealizWritten[0]) {
-                    doc.createParagraph();
-                    XWPFParagraph grp = doc.createParagraph();
-                    grp.setStyle("Ttol1"); grp.createRun().setText("Activitats realitzades");
-                    doc.createParagraph();
-                    actRealizWritten[0] = true;
-                }
-                doc.createParagraph();
-                XWPFParagraph secTitle = doc.createParagraph();
-                secTitle.setStyle("Ttol2");
-                secTitle.createRun().setText("Beques");
-                doc.createParagraph();
-
-                int idx = 1;
-                for (Document bw : becaRaw) {
-                    writeAwardBlock(doc, bw, idx++, funderNamesMap);
-                }
-                XWPFParagraph secFoot = doc.createParagraph();
-                XWPFRun fr2 = secFoot.createRun();
-                fr2.setFontFamily("Calibri"); fr2.setFontSize(9); fr2.setItalic(true);
-                fr2.setText("Total beques: " + becaRaw.size());
-            }
-
-            // ---- Section: Xarxes ----
-            if (xarxes && !countryOr.isEmpty()) {
-                Document xarxesFilter = new Document("workflow.step", "validated")
-                        .append("type.term.ca_ES", "Grups i Xarxes de Recerca")
-                        .append("actualPeriod.startDate", new Document("$lte", endDateD))
-                        .append("$and", Arrays.asList(
-                                new Document("$or", countryOr),
-                                new Document("$or", Arrays.asList(
-                                        new Document("actualPeriod.endDate", null),
-                                        new Document("actualPeriod.endDate", new Document("$gte", startDateD))
-                                ))
-                        ));
-
-                List<Document> xarxesRaw = mongoTemplate.getCollection("Awards")
-                        .find(xarxesFilter)
-                        .sort(new Document("actualPeriod.startDate", -1))
-                        .into(new ArrayList<>());
-
-                Set<String> xfUuids = new HashSet<>();
-                for (Document xw : xarxesRaw) {
-                    List<Document> xwf = castList(xw.get("fundings"));
-                    if (xwf != null) for (Document f : xwf) { Document fd = (Document) f.get("funder"); if (fd != null && fd.getString("uuid") != null) xfUuids.add(fd.getString("uuid")); }
-                }
-                if (!xfUuids.isEmpty()) {
-                    mongoTemplate.getCollection("ExternalOrganizations")
-                            .find(new Document("uuid", new Document("$in", new ArrayList<>(xfUuids))))
-                            .projection(new Document("uuid", 1).append("name", 1))
-                            .forEach(org -> {
-                                Document nd = (Document) org.get("name");
-                                String n = nd == null ? "" : nd.containsKey("ca_ES") ? nd.getString("ca_ES") : nd.containsKey("es_ES") ? nd.getString("es_ES") : nd.containsKey("en_GB") ? nd.getString("en_GB") : "";
-                                funderNamesMap.put(org.getString("uuid"), n);
-                            });
-                }
-
-                if (!actRealizWritten[0]) {
-                    doc.createParagraph();
-                    XWPFParagraph grp = doc.createParagraph();
-                    grp.setStyle("Ttol1"); grp.createRun().setText("Activitats realitzades");
-                    doc.createParagraph();
-                    actRealizWritten[0] = true;
-                }
-                doc.createParagraph();
-                XWPFParagraph secTitle = doc.createParagraph();
-                secTitle.setStyle("Ttol2");
-                secTitle.createRun().setText("Grups i Xarxes de Recerca");
-                doc.createParagraph();
-
-                int idx = 1;
-                for (Document xw : xarxesRaw) {
-                    writeAwardBlock(doc, xw, idx++, funderNamesMap);
-                }
-                XWPFParagraph secFoot = doc.createParagraph();
-                XWPFRun fr3 = secFoot.createRun();
-                fr3.setFontFamily("Calibri"); fr3.setFontSize(9); fr3.setItalic(true);
-                fr3.setText("Total xarxes: " + xarxesRaw.size());
-            }
-
-            // ---- Section: Tesis doctorals ----
-            if (tesis) {
-                int startYear = LocalDate.parse(startDate).getYear();
-                int endYear   = LocalDate.parse(effectiveEnd).getYear();
-
-                List<Document> thesisOr = new ArrayList<>();
-                if (!funderUuids.isEmpty()) {
-                    thesisOr.add(new Document("awardingInstitutions.externalOrganizationRef.uuid",
-                            new Document("$in", new ArrayList<>(funderUuids))));
-                    // direct relation thesis → external orgs (equiv. relationExternalorganisationsStudentthesises)
-                    thesisOr.add(new Document("supervisorOrganizations.uuid",
-                            new Document("$in", new ArrayList<>(funderUuids))));
-                    // supervisor affiliated with an org from that country
-                    thesisOr.add(new Document("supervisors.organizations.uuid",
-                            new Document("$in", new ArrayList<>(funderUuids))));
-                }
-                if (!personUuids.isEmpty()) {
-                    thesisOr.add(new Document("supervisors.person.uuid",
-                            new Document("$in", new ArrayList<>(personUuids))));
-                }
-
-                Document thesisTypeFilter = new Document("$or", Arrays.asList(
-                        new Document("type.term.es_ES", new Document("$regex", "tesis doctoral").append("$options", "i")),
-                        new Document("type.term.ca_ES", new Document("$regex", "tesi doctoral").append("$options", "i")),
-                        new Document("type.term.en_GB", new Document("$regex", "doctoral thesis|phd thesis").append("$options", "i"))
-                ));
-                List<Document> andClauses = new ArrayList<>();
-                andClauses.add(thesisTypeFilter);
-                if (!thesisOr.isEmpty())
-                    andClauses.add(new Document("$or", thesisOr));
-                Document thesisFilter = new Document("workflow.step", "approved")
-                        .append("awardDate.year", new Document("$gte", startYear).append("$lte", endYear))
-                        .append("$and", andClauses);
-
-                List<Document> thesesRaw = mongoTemplate.getCollection("StudentTheses")
-                        .find(thesisFilter)
-                        .sort(new Document("awardDate.year", -1).append("awardDate.month", -1).append("awardDate.day", -1))
-                        .into(new ArrayList<>());
-
-                // Batch-fetch managing organization names
-                Map<String, String> orgNamesMap = new HashMap<>();
-                Set<String> managingUuids = new HashSet<>();
-                for (Document th : thesesRaw) {
-                    Document mo = (Document) th.get("managingOrganization");
-                    if (mo != null && mo.getString("uuid") != null) managingUuids.add(mo.getString("uuid"));
-                }
-                if (!managingUuids.isEmpty()) {
-                    mongoTemplate.getCollection("Organizations")
-                            .find(new Document("uuid", new Document("$in", new ArrayList<>(managingUuids))))
-                            .projection(new Document("uuid", 1).append("name", 1))
-                            .forEach(org -> {
-                                Document nd = (Document) org.get("name");
-                                String n = nd == null ? "" :
-                                        nd.containsKey("ca_ES") ? nd.getString("ca_ES") :
-                                        nd.containsKey("es_ES") ? nd.getString("es_ES") :
-                                        nd.containsKey("en_GB") ? nd.getString("en_GB") : "";
-                                orgNamesMap.put(org.getString("uuid"), n);
-                            });
-                }
-
-                // Group by year (already sorted desc)
-                LinkedHashMap<Integer, List<Document>> thByYear = new LinkedHashMap<>();
-                for (Document th : thesesRaw) {
-                    Document ad = (Document) th.get("awardDate");
-                    int yr = (ad != null && ad.get("year") != null) ? ((Number) ad.get("year")).intValue() : 0;
-                    thByYear.computeIfAbsent(yr, k -> new ArrayList<>()).add(th);
-                }
-
-                if (!actRealizWritten[0]) {
-                    doc.createParagraph();
-                    XWPFParagraph grp = doc.createParagraph();
-                    grp.setStyle("Ttol1"); grp.createRun().setText("Activitats realitzades");
-                    doc.createParagraph();
-                    actRealizWritten[0] = true;
-                }
-                doc.createParagraph();
-                XWPFParagraph tSecTitle = doc.createParagraph();
-                tSecTitle.setStyle("Ttol2");
-                tSecTitle.createRun().setText("Tesis doctorals");
-                doc.createParagraph();
-
-                int tIdx = 1;
-                for (Map.Entry<Integer, List<Document>> yearEntry : thByYear.entrySet()) {
-                    // Year heading
-                    XWPFParagraph yearPara = doc.createParagraph();
-                    yearPara.setAlignment(ParagraphAlignment.BOTH);
-                    XWPFRun yearRun = yearPara.createRun();
-                    yearRun.setBold(true); yearRun.setFontFamily("Calibri"); yearRun.setFontSize(9);
-                    yearRun.setText(yearEntry.getKey() > 0 ? String.valueOf(yearEntry.getKey()) : "(any desconegut)");
-
-                    for (Document th : yearEntry.getValue()) {
-                        Document thTitleDoc = (Document) th.get("title");
-                        String thTitle = thTitleDoc != null ? thTitleDoc.getString("value") : "";
-                        if (thTitle == null || thTitle.isBlank()) thTitle = "(sense títol)";
-
-                        // Author: first contributor
-                        String autor = "";
-                        List<Document> thContribs = castList(th.get("contributors"));
-                        if (thContribs != null) {
-                            autor = thContribs.stream()
-                                    .map(c -> { Document n = (Document) c.get("name"); if (n == null) return ""; String ln = n.getString("lastName"); String fn = n.getString("firstName"); return (ln != null ? ln : "") + (fn != null && !fn.isEmpty() ? ", " + fn : ""); })
-                                    .filter(s -> !s.isBlank()).findFirst().orElse("");
-                        }
-
-                        // Date DD-MM-YYYY
-                        String dataLectura = "";
-                        Document thAwardDate = (Document) th.get("awardDate");
-                        if (thAwardDate != null) {
-                            int dy = thAwardDate.get("day") != null ? ((Number) thAwardDate.get("day")).intValue() : 1;
-                            int mo = thAwardDate.get("month") != null ? ((Number) thAwardDate.get("month")).intValue() : 1;
-                            int yr2 = thAwardDate.get("year") != null ? ((Number) thAwardDate.get("year")).intValue() : 0;
-                            if (yr2 > 0) dataLectura = String.format("%02d-%02d-%04d", dy, mo, yr2);
-                        }
-
-                        // Supervisors joined with " & "
-                        List<String> directors = new ArrayList<>();
-                        List<Document> thSupervisors = castList(th.get("supervisors"));
-                        if (thSupervisors != null) {
-                            for (Document sv : thSupervisors) {
-                                Document n = (Document) sv.get("name");
-                                if (n == null) continue;
-                                String ln = n.getString("lastName"); String fn = n.getString("firstName");
-                                String full = (ln != null ? ln : "") + (fn != null && !fn.isEmpty() ? ", " + fn : "");
-                                if (!full.isBlank()) directors.add(full);
-                            }
-                        }
-
-                        // Managing organization name
-                        String centre = "";
-                        Document mo = (Document) th.get("managingOrganization");
-                        if (mo != null && mo.getString("uuid") != null) {
-                            centre = orgNamesMap.getOrDefault(mo.getString("uuid"), "");
-                        }
-
-                        XWPFParagraph tTitlePara = doc.createParagraph();
-                        tTitlePara.setAlignment(ParagraphAlignment.BOTH);
-                        XWPFRun tTitleRun = tTitlePara.createRun();
-                        tTitleRun.setBold(true); tTitleRun.setFontFamily("Calibri"); tTitleRun.setFontSize(9);
-                        tTitleRun.setText(tIdx + ".- " + thTitle);
-
-                        wordLabelValue(doc, "Autor", autor);
-                        wordLabelValue(doc, "Data de lectura", dataLectura);
-                        wordLabelValue(doc, "Supervisors", String.join(" & ", directors));
-                        if (!centre.isBlank()) wordLabelValue(doc, "Centre de lectura", centre);
-                        doc.createParagraph();
-                        tIdx++;
-                    }
-                }
-
-                XWPFParagraph tSecFoot = doc.createParagraph();
-                XWPFRun fr4 = tSecFoot.createRun();
-                fr4.setFontFamily("Calibri"); fr4.setFontSize(9); fr4.setItalic(true);
-                fr4.setText("Total tesis doctorals: " + thesesRaw.size());
-            }
-
-            boolean[] prodCientWritten = {false};
-
-            // ---- Section: Articles ----
-            if (articles && !personUuids.isEmpty()) {
-                int startYear = LocalDate.parse(startDate).getYear();
-                int endYear   = LocalDate.parse(effectiveEnd).getYear();
-
-                Document artFilter = new Document("workflow.step", "approved")
-                        .append("$or", Arrays.asList(
-                                new Document("publicationDate.year",
-                                        new Document("$gte", startYear).append("$lte", endYear)),
-                                new Document("$and", Arrays.asList(
-                                        new Document("publicationDate.year", new Document("$exists", false)),
-                                        new Document("submissionYear",
-                                                new Document("$gte", startYear).append("$lte", endYear))
-                                ))
-                        ))
-                        .append("$or", Arrays.asList(
-                                new Document("contributors.person.uuid",
-                                        new Document("$in", new ArrayList<>(personUuids))),
-                                new Document("contributors.externalPerson.uuid",
-                                        new Document("$in", new ArrayList<>(personUuids)))
-                        ));
-
-                // Build filter correctly: year AND (contributor IN personUuids)
-                Document yearFilter = new Document("$or", Arrays.asList(
-                        new Document("publicationDate.year",
-                                new Document("$gte", startYear).append("$lte", endYear)),
-                        new Document("$and", Arrays.asList(
-                                new Document("publicationDate.year", new Document("$exists", false)),
-                                new Document("submissionYear",
-                                        new Document("$gte", startYear).append("$lte", endYear))
-                        ))
-                ));
-                Document contribFilter = new Document("$or", Arrays.asList(
-                        new Document("contributors.person.uuid",
-                                new Document("$in", new ArrayList<>(personUuids))),
-                        new Document("contributors.externalPerson.uuid",
-                                new Document("$in", new ArrayList<>(personUuids)))
-                ));
-
-                Document articleFilter = new Document("workflow.step", "approved")
-                        .append("$and", Arrays.asList(yearFilter, contribFilter));
-
-                List<Document> articlesRaw = mongoTemplate.getCollection("Researchoutputs")
-                        .find(articleFilter)
-                        .into(new ArrayList<>());
-
-                // Sort by year desc, month desc, day desc
-                articlesRaw.sort((artX, artY) -> {
-                    Document pdX = artX.get("publicationDate") instanceof Document ? (Document) artX.get("publicationDate") : new Document();
-                    Document pdY = artY.get("publicationDate") instanceof Document ? (Document) artY.get("publicationDate") : new Document();
-                    int yX = pdX.containsKey("year") ? pdX.getInteger("year", 0) : artX.getInteger("submissionYear", 0);
-                    int yY = pdY.containsKey("year") ? pdY.getInteger("year", 0) : artY.getInteger("submissionYear", 0);
-                    if (yY != yX) return Integer.compare(yY, yX);
-                    int mX = pdX.getInteger("month", 0);
-                    int mY = pdY.getInteger("month", 0);
-                    if (mY != mX) return Integer.compare(mY, mX);
-                    return Integer.compare(pdY.getInteger("day", 0), pdX.getInteger("day", 0));
-                });
-
-                // Group by year preserving sort order (year desc)
-                LinkedHashMap<Integer, List<Document>> artByYear = new LinkedHashMap<>();
-                for (Document pub : articlesRaw) {
-                    Document pd = pub.get("publicationDate") instanceof Document ? (Document) pub.get("publicationDate") : new Document();
-                    int yr = pd.containsKey("year") ? pd.getInteger("year", 0) : pub.getInteger("submissionYear", 0);
-                    artByYear.computeIfAbsent(yr, k -> new ArrayList<>()).add(pub);
-                }
-
-                if (!prodCientWritten[0]) {
-                    doc.createParagraph();
-                    XWPFParagraph artGrpTitle = doc.createParagraph();
-                    artGrpTitle.setStyle("Ttol1");
-                    artGrpTitle.createRun().setText("Producció científica");
-                    doc.createParagraph();
-                    prodCientWritten[0] = true;
-                }
-                doc.createParagraph();
-                XWPFParagraph artSecTitle = doc.createParagraph();
-                artSecTitle.setStyle("Ttol2");
-                artSecTitle.createRun().setText("Articles");
-                doc.createParagraph();
-
-                for (Map.Entry<Integer, List<Document>> artEntry : artByYear.entrySet()) {
-                    // Year heading
-                    XWPFParagraph yearPara = doc.createParagraph();
-                    yearPara.setAlignment(ParagraphAlignment.BOTH);
-                    XWPFRun yearRun = yearPara.createRun();
-                    yearRun.setBold(true); yearRun.setFontFamily("Calibri"); yearRun.setFontSize(9);
-                    yearRun.setText(artEntry.getKey() > 0 ? String.valueOf(artEntry.getKey()) : "(any desconegut)");
-
-                    for (Document pub : artEntry.getValue()) {
-                        String apa = researchOutputService.formatApaForDocument(pub);
-                        XWPFParagraph artPara = doc.createParagraph();
-                        artPara.setAlignment(ParagraphAlignment.BOTH);
-                        XWPFRun artRun = artPara.createRun();
-                        artRun.setFontFamily("Calibri"); artRun.setFontSize(9);
-                        artRun.setText(apa != null ? apa : "(sense dades)");
-                        doc.createParagraph();
-                    }
-                    doc.createParagraph();
-                }
-
-                XWPFParagraph artSecFoot = doc.createParagraph();
-                XWPFRun fr5 = artSecFoot.createRun();
-                fr5.setFontFamily("Calibri"); fr5.setFontSize(9); fr5.setItalic(true);
-                fr5.setText("Total articles: " + articlesRaw.size());
-            }
-
-            // ---- Section: Llibres ----
-            if (llibres && !personUuids.isEmpty()) {
-                int llStartYear = LocalDate.parse(startDate).getYear();
-                int llEndYear   = LocalDate.parse(effectiveEnd).getYear();
-
-                Document llYearFilter = new Document("$or", Arrays.asList(
-                        new Document("publicationDate.year",
-                                new Document("$gte", llStartYear).append("$lte", llEndYear)),
-                        new Document("$and", Arrays.asList(
-                                new Document("publicationDate.year", new Document("$exists", false)),
-                                new Document("submissionYear",
-                                        new Document("$gte", llStartYear).append("$lte", llEndYear))
-                        ))
-                ));
-                Document llContribFilter = new Document("$or", Arrays.asList(
-                        new Document("contributors.person.uuid",
-                                new Document("$in", new ArrayList<>(personUuids))),
-                        new Document("contributors.externalPerson.uuid",
-                                new Document("$in", new ArrayList<>(personUuids)))
-                ));
-                Document llTypeFilter = new Document("$or", Arrays.asList(
-                        new Document("type.uri", new Document("$regex", "researchoutputtypes/book/").append("$options", "i")),
-                        new Document("type.term.en_GB", new Document("$regex", "^authored book$|^edited book$|^book$|^monograph$").append("$options", "i")),
-                        new Document("type.term.ca_ES", new Document("$regex", "^llibre").append("$options", "i")),
-                        new Document("type.term.es_ES", new Document("$regex", "^libro").append("$options", "i"))
-                ));
-
-                Document llibresFilter = new Document("workflow.step", "approved")
-                        .append("$and", Arrays.asList(llYearFilter, llContribFilter, llTypeFilter));
-
-                List<Document> llibresRaw = mongoTemplate.getCollection("Researchoutputs")
-                        .find(llibresFilter)
-                        .into(new ArrayList<>());
-
-                llibresRaw.sort((docA, docB) -> {
-                    Document pdA = docA.get("publicationDate") instanceof Document ? (Document) docA.get("publicationDate") : new Document();
-                    Document pdB = docB.get("publicationDate") instanceof Document ? (Document) docB.get("publicationDate") : new Document();
-                    int yA = pdA.containsKey("year") ? pdA.getInteger("year", 0) : docA.getInteger("submissionYear", 0);
-                    int yB = pdB.containsKey("year") ? pdB.getInteger("year", 0) : docB.getInteger("submissionYear", 0);
-                    if (yB != yA) return Integer.compare(yB, yA);
-                    int mA = pdA.getInteger("month", 0); int mB = pdB.getInteger("month", 0);
-                    if (mB != mA) return Integer.compare(mB, mA);
-                    return Integer.compare(pdB.getInteger("day", 0), pdA.getInteger("day", 0));
-                });
-
-                LinkedHashMap<Integer, List<Document>> llibresByYear = new LinkedHashMap<>();
-                for (Document pub : llibresRaw) {
-                    Document pd = pub.get("publicationDate") instanceof Document ? (Document) pub.get("publicationDate") : new Document();
-                    int yr = pd.containsKey("year") ? pd.getInteger("year", 0) : pub.getInteger("submissionYear", 0);
-                    llibresByYear.computeIfAbsent(yr, k -> new ArrayList<>()).add(pub);
-                }
-
-                if (!prodCientWritten[0]) {
-                    doc.createParagraph();
-                    XWPFParagraph grpTitleLL = doc.createParagraph();
-                    grpTitleLL.setStyle("Ttol1"); grpTitleLL.createRun().setText("Producció científica");
-                    doc.createParagraph();
-                    prodCientWritten[0] = true;
-                }
-                doc.createParagraph();
-                XWPFParagraph llSecTitle = doc.createParagraph();
-                llSecTitle.setStyle("Ttol2");
-                llSecTitle.createRun().setText("Llibres");
-                doc.createParagraph();
-
-                for (Map.Entry<Integer, List<Document>> llEntry : llibresByYear.entrySet()) {
-                    XWPFParagraph llYearPara = doc.createParagraph();
-                    llYearPara.setAlignment(ParagraphAlignment.BOTH);
-                    XWPFRun llYearRun = llYearPara.createRun();
-                    llYearRun.setBold(true); llYearRun.setFontFamily("Calibri"); llYearRun.setFontSize(9);
-                    llYearRun.setText(llEntry.getKey() > 0 ? String.valueOf(llEntry.getKey()) : "(any desconegut)");
-
-                    for (Document pub : llEntry.getValue()) {
-                        String apa = researchOutputService.formatApaForDocument(pub);
-                        XWPFParagraph llPara = doc.createParagraph();
-                        llPara.setAlignment(ParagraphAlignment.BOTH);
-                        XWPFRun llRun = llPara.createRun();
-                        llRun.setFontFamily("Calibri"); llRun.setFontSize(9);
-                        llRun.setText(apa != null ? apa : "(sense dades)");
-                        doc.createParagraph();
-                    }
-                    doc.createParagraph();
-                }
-
-                XWPFParagraph llSecFoot = doc.createParagraph();
-                XWPFRun frLL = llSecFoot.createRun();
-                frLL.setFontFamily("Calibri"); frLL.setFontSize(9); frLL.setItalic(true);
-                frLL.setText("Total llibres: " + llibresRaw.size());
-            }
-
-            // ---- Section: Capítols de llibre ----
-            if (capitols && !personUuids.isEmpty()) {
-                int capStartYear = LocalDate.parse(startDate).getYear();
-                int capEndYear   = LocalDate.parse(effectiveEnd).getYear();
-
-                Document capYearFilter = new Document("$or", Arrays.asList(
-                        new Document("publicationDate.year",
-                                new Document("$gte", capStartYear).append("$lte", capEndYear)),
-                        new Document("$and", Arrays.asList(
-                                new Document("publicationDate.year", new Document("$exists", false)),
-                                new Document("submissionYear",
-                                        new Document("$gte", capStartYear).append("$lte", capEndYear))
-                        ))
-                ));
-                Document capContribFilter = new Document("$or", Arrays.asList(
-                        new Document("contributors.person.uuid",
-                                new Document("$in", new ArrayList<>(personUuids))),
-                        new Document("contributors.externalPerson.uuid",
-                                new Document("$in", new ArrayList<>(personUuids)))
-                ));
-                Document capTypeFilter = new Document("$or", Arrays.asList(
-                        new Document("type.uri", new Document("$regex", "contributiontobookanthology").append("$options", "i")),
-                        new Document("type.term.en_GB", new Document("$regex", "chapter|contribution to book").append("$options", "i")),
-                        new Document("type.term.ca_ES", new Document("$regex", "cap.tol.*llibre|contribuci.*llibre").append("$options", "i")),
-                        new Document("type.term.es_ES", new Document("$regex", "cap.tulo.*libro|contribuci.*libro").append("$options", "i"))
-                ));
-
-                Document capitolsFilter = new Document("workflow.step", "approved")
-                        .append("$and", Arrays.asList(capYearFilter, capContribFilter, capTypeFilter));
-
-                List<Document> capitolsRaw = mongoTemplate.getCollection("Researchoutputs")
-                        .find(capitolsFilter)
-                        .into(new ArrayList<>());
-
-                capitolsRaw.sort((docA, docB) -> {
-                    Document pdA = docA.get("publicationDate") instanceof Document ? (Document) docA.get("publicationDate") : new Document();
-                    Document pdB = docB.get("publicationDate") instanceof Document ? (Document) docB.get("publicationDate") : new Document();
-                    int yA = pdA.containsKey("year") ? pdA.getInteger("year", 0) : docA.getInteger("submissionYear", 0);
-                    int yB = pdB.containsKey("year") ? pdB.getInteger("year", 0) : docB.getInteger("submissionYear", 0);
-                    if (yB != yA) return Integer.compare(yB, yA);
-                    int mA = pdA.getInteger("month", 0); int mB = pdB.getInteger("month", 0);
-                    if (mB != mA) return Integer.compare(mB, mA);
-                    return Integer.compare(pdB.getInteger("day", 0), pdA.getInteger("day", 0));
-                });
-
-                LinkedHashMap<Integer, List<Document>> capitolsByYear = new LinkedHashMap<>();
-                for (Document pub : capitolsRaw) {
-                    Document pd = pub.get("publicationDate") instanceof Document ? (Document) pub.get("publicationDate") : new Document();
-                    int yr = pd.containsKey("year") ? pd.getInteger("year", 0) : pub.getInteger("submissionYear", 0);
-                    capitolsByYear.computeIfAbsent(yr, k -> new ArrayList<>()).add(pub);
-                }
-
-                if (!prodCientWritten[0]) {
-                    doc.createParagraph();
-                    XWPFParagraph grpTitleCap = doc.createParagraph();
-                    grpTitleCap.setStyle("Ttol1"); grpTitleCap.createRun().setText("Producció científica");
-                    doc.createParagraph();
-                    prodCientWritten[0] = true;
-                }
-                doc.createParagraph();
-                XWPFParagraph capSecTitle = doc.createParagraph();
-                capSecTitle.setStyle("Ttol2");
-                capSecTitle.createRun().setText("Capítols de llibre");
-                doc.createParagraph();
-
-                for (Map.Entry<Integer, List<Document>> capEntry : capitolsByYear.entrySet()) {
-                    XWPFParagraph capYearPara = doc.createParagraph();
-                    capYearPara.setAlignment(ParagraphAlignment.BOTH);
-                    XWPFRun capYearRun = capYearPara.createRun();
-                    capYearRun.setBold(true); capYearRun.setFontFamily("Calibri"); capYearRun.setFontSize(9);
-                    capYearRun.setText(capEntry.getKey() > 0 ? String.valueOf(capEntry.getKey()) : "(any desconegut)");
-
-                    for (Document pub : capEntry.getValue()) {
-                        String apa = researchOutputService.formatApaForDocument(pub);
-                        XWPFParagraph capPara = doc.createParagraph();
-                        capPara.setAlignment(ParagraphAlignment.BOTH);
-                        XWPFRun capRun = capPara.createRun();
-                        capRun.setFontFamily("Calibri"); capRun.setFontSize(9);
-                        capRun.setText(apa != null ? apa : "(sense dades)");
-                        doc.createParagraph();
-                    }
-                    doc.createParagraph();
-                }
-
-                XWPFParagraph capSecFoot = doc.createParagraph();
-                XWPFRun frCap = capSecFoot.createRun();
-                frCap.setFontFamily("Calibri"); frCap.setFontSize(9); frCap.setItalic(true);
-                frCap.setText("Total capítols de llibre: " + capitolsRaw.size());
-            }
-
-            response.setContentType("application/vnd.openxmlformats-officedocument.wordprocessingml.document");
-            String filename = "informe-pais-" + code + ".docx";
-            response.setHeader("Content-Disposition", "attachment; filename=\"" + filename + "\"");
-            doc.write(out);
-        }
+        response.setContentType("application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+        response.setHeader("Content-Disposition", "attachment; filename=\"informe-pais-" + code + ".docx\"");
+
+        AwardCountryReportCriteria criteria = new AwardCountryReportCriteria(
+                countryCode, startDate, endDate, projectes, convenis, beques, xarxes, tesis, articles, llibres, capitols
+        );
+        awardReportPort.generateCountryWordReport(criteria, response.getOutputStream());
     }
-
-    private void writeAwardBlock(XWPFDocument doc, Document aw, int idx, Map<String, String> funderNamesMap) {
-        String awTitle = nestedStr(aw, "title", "ca_ES");
-        if (awTitle.isEmpty()) awTitle = nestedStr(aw, "title", "es_ES");
-        if (awTitle.isEmpty()) awTitle = nestedStr(aw, "title", "en_GB");
-
-        List<String> ipOnlyList = new ArrayList<>();
-        List<String> coipList = new ArrayList<>();
-        List<String> equip = new ArrayList<>();
-        List<Document> holders = castList(aw.get("awardHolders"));
-        if (holders != null) {
-            for (Document h : holders) {
-                Document hn = (Document) h.get("name");
-                Document rd = (Document) h.get("role");
-                String fn = hn != null ? hn.getString("firstName") : "";
-                String ln = hn != null ? hn.getString("lastName") : "";
-                String full = (ln != null ? ln : "") + (fn != null && !fn.isEmpty() ? ", " + fn : "");
-                boolean isIp = false;
-                boolean isPureIp = false;
-                if (rd != null) {
-                    Document td = (Document) rd.get("term");
-                    if (td != null) {
-                        String roleCa = td.getString("ca_ES") != null ? td.getString("ca_ES") : "";
-                        String roleEn = td.getString("en_GB") != null ? td.getString("en_GB") : "";
-                        isIp = roleCa.contains("Principal") || roleEn.contains("Principal");
-                        isPureIp = isIp && !roleCa.toLowerCase().startsWith("co");
-                    }
-                }
-                if (isIp && !full.isBlank()) {
-                    if (isPureIp) ipOnlyList.add(full); else coipList.add(full);
-                } else if (!full.isBlank()) {
-                    equip.add(full);
-                }
-            }
-        }
-        List<String> ipAllList = new ArrayList<>(ipOnlyList);
-        ipAllList.addAll(coipList);
-        String ip = String.join(" & ", ipAllList);
-
-        String funderName = "";
-        double totalImport = 0.0;
-        List<Document> fundings = castList(aw.get("fundings"));
-        if (fundings != null && !fundings.isEmpty()) {
-            Document fd = (Document) fundings.get(0).get("funder");
-            if (fd != null) funderName = funderNamesMap.getOrDefault(fd.getString("uuid"), "");
-            for (Document f : fundings) {
-                List<Document> cols = castList(f.get("fundingCollaborators"));
-                if (cols != null) for (Document col : cols) {
-                    Document part = (Document) col.get("institutionalPart");
-                    if (part != null) { Object val = part.get("value"); if (val instanceof Number n) totalImport += n.doubleValue(); }
-                }
-            }
-        }
-
-        Document period = (Document) aw.get("actualPeriod");
-        String awStart = period != null ? wordFormatDate(period.get("startDate")) : "";
-        String awEnd   = period != null ? wordFormatDate(period.get("endDate")) : "";
-
-        String codiOficial = "";
-        List<Document> identifiers = castList(aw.get("identifiers"));
-        if (identifiers != null) {
-            codiOficial = identifiers.stream()
-                    .filter(id -> { Document t = (Document) id.get("type"); return t != null && "/dk/atira/pure/upm/classifiedsource/referencecode".equals(t.getString("uri")); })
-                    .map(id -> id.getString("id") != null ? id.getString("id") : id.getString("value"))
-                    .filter(v -> v != null && !v.isBlank())
-                    .findFirst().orElse("");
-        }
-
-        XWPFParagraph titlePara = doc.createParagraph();
-        titlePara.setAlignment(ParagraphAlignment.BOTH);
-        XWPFRun tr = titlePara.createRun();
-        tr.setBold(true); tr.setFontFamily("Calibri"); tr.setFontSize(9);
-        tr.setText(idx + ".- " + awTitle);
-
-        wordLabelValue(doc, "Investigador principal", ip);
-        wordLabelValue(doc, "Equip investigador", String.join("; ", equip));
-        wordLabelValue(doc, "Entitat finançadora", funderName);
-        if (totalImport > 0) wordLabelValue(doc, "Import", String.format(Locale.GERMAN, "%,.2f €", totalImport));
-        wordLabelValue(doc, "Data d'inici/fi", awStart + " → " + awEnd);
-        if (!codiOficial.isBlank()) wordLabelValue(doc, "Codi oficial", codiOficial);
-        doc.createParagraph();
-    }
-
-    private void wordLabelValue(XWPFDocument doc, String label, String value) {
-        if (value == null || value.isBlank()) return;
-        XWPFParagraph p = doc.createParagraph();
-        p.setAlignment(ParagraphAlignment.BOTH);
-        XWPFRun lbl = p.createRun();
-        lbl.setItalic(true); lbl.setFontFamily("Calibri"); lbl.setFontSize(9);
-        lbl.setText(label + ": ");
-        XWPFRun val = p.createRun();
-        val.setFontFamily("Calibri"); val.setFontSize(9);
-        val.setText(value);
-    }
-
-    private String wordFormatDate(Object raw) {
-        if (raw == null) return "";
-        if (raw instanceof Date d) {
-            LocalDate ld = d.toInstant().atZone(ZoneId.of("UTC")).toLocalDate();
-            return String.format("%02d-%02d-%04d", ld.getDayOfMonth(), ld.getMonthValue(), ld.getYear());
-        }
-        String s = raw.toString();
-        if (s.isBlank()) return "";
-        try {
-            String datePart = s.contains("T") ? s.substring(0, s.indexOf('T')) : s.trim();
-            String[] parts = datePart.split("-");
-            if (parts.length == 3) return parts[2] + "-" + parts[1] + "-" + parts[0];
-        } catch (Exception ignored) {}
-        return s;
-    }
-
-    private String nestedStr(Document doc, String... keys) {
-        Object cur = doc;
-        for (String k : keys) {
-            if (!(cur instanceof Document d)) return "";
-            cur = d.get(k);
-            if (cur == null) return "";
-        }
-        return cur.toString();
-    }
-
-    @SuppressWarnings("unchecked")
-    private <T> List<T> castList(Object o) {
-        return o instanceof List ? (List<T>) o : null;
-    }
-
-    // ---- helpers ----
 
     private String countryCodeFromUri(String uri) {
         if (uri == null) return null;
-        String cleaned = uri.endsWith("/") ? uri.substring(0, uri.length() - 1) : uri;
-        int idx = cleaned.lastIndexOf('/');
-        if (idx < 0) return null;
-        String seg = cleaned.substring(idx + 1);
-        return seg.length() == 2 ? seg.toUpperCase() : null;
-    }
-
-    private String extractPersonCountryCode(Document p) {
-        String code = countryCodeFromUri(getDocPath(p, "nationality", "uri"));
-        if (code != null) return code;
-        code = countryCodeFromUri(getDocPath(p, "nationalityType", "uri"));
-        if (code != null) return code;
-        Object nt = p.get("nationalityTypes");
-        if (nt instanceof List<?> list && !list.isEmpty() && list.get(0) instanceof Document d) {
-            code = countryCodeFromUri(d.getString("uri"));
-        }
-        return code;
-    }
-
-    private String getDocPath(Document doc, String... keys) {
-        Object cur = doc;
-        for (String key : keys) {
-            if (!(cur instanceof Document d)) return null;
-            cur = d.get(key);
-        }
-        return cur instanceof String s ? s : null;
+        int idx = uri.lastIndexOf('/');
+        return (idx >= 0 && idx < uri.length() - 1) ? uri.substring(idx + 1).toUpperCase() : null;
     }
 
     @GetMapping("/stats/scholarships")
@@ -3434,527 +1876,28 @@ public class AwardController {
 
     @GetMapping("/stats/fellowship-call-types")
     public List<String> getFellowshipCallTypes() {
-        List<String> appUuids = mongoTemplate.getCollection("Awards")
-                .distinct("applications.uuid", new Document("type.term.ca_ES", new Document("$in", Arrays.asList("Beques", "Beques Internacionals")))
-                        .append("workflow.step", "validated"), String.class)
-                .into(new ArrayList<>());
-
-        if (appUuids.isEmpty()) {
-            return List.of();
-        }
-
-        List<String> fundingOppUuids = mongoTemplate.getCollection("Applications")
-                .distinct("fundingOpportunity.uuid", new Document("uuid", new Document("$in", appUuids)), String.class)
-                .into(new ArrayList<>());
-
-        if (fundingOppUuids.isEmpty()) {
-            return List.of();
-        }
-
-        List<Document> fOpps = mongoTemplate.getCollection("FundingOpportunities")
-                .find(new Document("uuid", new Document("$in", fundingOppUuids)))
-                .projection(new Document("type", 1))
-                .into(new ArrayList<>());
-
-        Set<String> callTypes = new java.util.TreeSet<>();
-        for (Document doc : fOpps) {
-            Object typeObj = doc.get("type");
-            if (typeObj instanceof Document tDoc) {
-                Object termObj = tDoc.get("term");
-                if (termObj instanceof Document termDoc) {
-                    String caVal = termDoc.getString("ca_ES");
-                    if (caVal != null && !caVal.isBlank()) {
-                        callTypes.add(caVal);
-                        continue;
-                    }
-                    Object textObj = termDoc.get("text");
-                    if (textObj instanceof List<?> list) {
-                        for (Object o : list) {
-                            if (o instanceof Document td && "ca_ES".equals(td.getString("locale"))) {
-                                String val = td.getString("value");
-                                if (val != null && !val.isBlank()) {
-                                    callTypes.add(val);
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                } else if (termObj instanceof List<?> list) {
-                    for (Object o : list) {
-                        if (o instanceof Document td && "ca_ES".equals(td.getString("locale"))) {
-                            String val = td.getString("value");
-                            if (val != null && !val.isBlank()) {
-                                callTypes.add(val);
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        return new ArrayList<>(callTypes);
+        return financialEngine.getFellowshipCallTypes();
     }
 
     @GetMapping("/stats/international-call-types")
     public List<String> getInternationalCallTypes() {
-        List<String> appUuids = mongoTemplate.getCollection("Awards")
-                .distinct("applications.uuid", new Document("type.term.ca_ES", "Projectes d'investigació Internacionals")
-                        .append("workflow.step", "validated"), String.class)
-                .into(new ArrayList<>());
-
-        if (appUuids.isEmpty()) {
-            return List.of();
-        }
-
-        List<String> fundingOppUuids = mongoTemplate.getCollection("Applications")
-                .distinct("fundingOpportunity.uuid", new Document("uuid", new Document("$in", appUuids)), String.class)
-                .into(new ArrayList<>());
-
-        if (fundingOppUuids.isEmpty()) {
-            return List.of();
-        }
-
-        List<Document> fOpps = mongoTemplate.getCollection("FundingOpportunities")
-                .find(new Document("uuid", new Document("$in", fundingOppUuids)))
-                .projection(new Document("type", 1))
-                .into(new ArrayList<>());
-
-        Set<String> callTypes = new java.util.TreeSet<>();
-        for (Document doc : fOpps) {
-            Object typeObj = doc.get("type");
-            if (typeObj instanceof Document tDoc) {
-                Object termObj = tDoc.get("term");
-                if (termObj instanceof Document termDoc) {
-                    String caVal = termDoc.getString("ca_ES");
-                    if (caVal != null && !caVal.isBlank()) {
-                        callTypes.add(caVal);
-                        continue;
-                    }
-                    Object textObj = termDoc.get("text");
-                    if (textObj instanceof List<?> list) {
-                        for (Object o : list) {
-                            if (o instanceof Document td && "ca_ES".equals(td.getString("locale"))) {
-                                String val = td.getString("value");
-                                if (val != null && !val.isBlank()) {
-                                    callTypes.add(val);
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                } else if (termObj instanceof List<?> list) {
-                    for (Object o : list) {
-                        if (o instanceof Document td && "ca_ES".equals(td.getString("locale"))) {
-                            String val = td.getString("value");
-                            if (val != null && !val.isBlank()) {
-                                callTypes.add(val);
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        return new ArrayList<>(callTypes);
+        return financialEngine.getInternationalCallTypes();
     }
 
     @GetMapping("/stats/incorporacio-call-types")
     public List<String> getIncorporacioCallTypes() {
-        List<String> appUuids = mongoTemplate.getCollection("Awards")
-                .distinct("applications.uuid", new Document("type.term.ca_ES", "Incorporació de Personal")
-                        .append("workflow.step", "validated"), String.class)
-                .into(new ArrayList<>());
-
-        if (appUuids.isEmpty()) {
-            return List.of();
-        }
-
-        List<String> fundingOppUuids = mongoTemplate.getCollection("Applications")
-                .distinct("fundingOpportunity.uuid", new Document("uuid", new Document("$in", appUuids)), String.class)
-                .into(new ArrayList<>());
-
-        if (fundingOppUuids.isEmpty()) {
-            return List.of();
-        }
-
-        List<Document> fOpps = mongoTemplate.getCollection("FundingOpportunities")
-                .find(new Document("uuid", new Document("$in", fundingOppUuids)))
-                .projection(new Document("type", 1))
-                .into(new ArrayList<>());
-
-        Set<String> callTypes = new java.util.TreeSet<>();
-        for (Document doc : fOpps) {
-            Object typeObj = doc.get("type");
-            if (typeObj instanceof Document tDoc) {
-                Object termObj = tDoc.get("term");
-                if (termObj instanceof Document termDoc) {
-                    String caVal = termDoc.getString("ca_ES");
-                    if (caVal != null && !caVal.isBlank()) {
-                        callTypes.add(caVal);
-                        continue;
-                    }
-                    Object textObj = termDoc.get("text");
-                    if (textObj instanceof List<?> list) {
-                        for (Object o : list) {
-                            if (o instanceof Document td && "ca_ES".equals(td.getString("locale"))) {
-                                String val = td.getString("value");
-                                if (val != null && !val.isBlank()) {
-                                    callTypes.add(val);
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                } else if (termObj instanceof List<?> list) {
-                    for (Object o : list) {
-                        if (o instanceof Document td && "ca_ES".equals(td.getString("locale"))) {
-                            String val = td.getString("value");
-                            if (val != null && !val.isBlank()) {
-                                callTypes.add(val);
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        return new ArrayList<>(callTypes);
+        return financialEngine.getIncorporacioCallTypes();
     }
 
     @GetMapping("/stats/research-project-programs")
     public List<String> getResearchProjectPrograms() {
-        // Step 1: get application UUIDs from Projectes i Ajuts a la Recerca awards
-        List<String> appUuids = mongoTemplate.getCollection("Awards")
-                .distinct("applications.uuid",
-                        new Document("type.term.ca_ES", "Projectes i Ajuts a la Recerca")
-                                .append("workflow.step", "validated"),
-                        String.class)
-                .into(new ArrayList<>());
-
-        if (appUuids.isEmpty()) return List.of();
-
-        // Step 2: get FundingOpportunity UUIDs from Applications
-        List<String> foppUuids = mongoTemplate.getCollection("Applications")
-                .distinct("fundingOpportunity.uuid",
-                        new Document("uuid", new Document("$in", appUuids)),
-                        String.class)
-                .into(new ArrayList<>());
-
-        if (foppUuids.isEmpty()) return List.of();
-
-        // Step 3: get programme names from FundingOpportunities keywordGroups
-        List<Document> fOpps = mongoTemplate.getCollection("FundingOpportunities")
-                .find(new Document("uuid", new Document("$in", foppUuids)))
-                .projection(new Document("keywordGroups", 1))
-                .into(new ArrayList<>());
-
-        Set<String> programs = new java.util.TreeSet<>();
-        for (Document fopp : fOpps) {
-            Object kgObj = fopp.get("keywordGroups");
-            if (!(kgObj instanceof List<?> kgList)) continue;
-            for (Object kgItem : kgList) {
-                if (!(kgItem instanceof Document kg)) continue;
-                if (!"/uab/fundingopportunities/programes".equals(kg.getString("logicalName"))) continue;
-                Object kcObj = kg.get("keywordContainers");
-                if (!(kcObj instanceof List<?> kcList) || kcList.isEmpty()) continue;
-                for (Object kcItem : kcList) {
-                    if (!(kcItem instanceof Document kc)) continue;
-                    Object skObj = kc.get("structuredKeyword");
-                    if (!(skObj instanceof Document sk)) continue;
-                    Object termObj = sk.get("term");
-                    if (!(termObj instanceof Document termDoc)) continue;
-                    Object textObj = termDoc.get("text");
-                    if (textObj instanceof List<?> textList) {
-                        for (Object tItem : textList) {
-                            if (tItem instanceof Document td && "ca_ES".equals(td.getString("locale"))) {
-                                String val = td.getString("value");
-                                if (val != null && !val.isBlank()) {
-                                    programs.add(val);
-                                }
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        return new ArrayList<>(programs);
+        return financialEngine.getResearchProjectPrograms();
     }
 
     @GetMapping("/stats/nature-funding-relation")
     public List<Map<String, Object>> getNatureFundingRelation() {
-        List<Document> basePipeline = new ArrayList<>();
-
-        // Match valid competitive awards
-        Document matchQuery = new Document();
-        List<Document> andConditions = new ArrayList<>();
-        andConditions.add(new Document("$or", Arrays.asList(
-            new Document("type.term.ca_ES", "Conveni extern a la UAB").append("workflow.step", "approved"),
-            new Document("type.term.ca_ES", new Document("$ne", "Conveni extern a la UAB")).append("workflow.step", "validated")
-        )));
-        andConditions.add(new Document("categoria", new Document("$regex", "^Ajudes competitives")));
-        matchQuery.put("$and", andConditions);
-        basePipeline.add(new Document("$match", matchQuery));
-
-        // Lookup applications
-        basePipeline.add(new Document("$lookup", new Document()
-            .append("from", "Applications")
-            .append("localField", "applications.uuid")
-            .append("foreignField", "uuid")
-            .append("as", "appDocs")));
-        basePipeline.add(new Document("$unwind", new Document("path", "$appDocs").append("preserveNullAndEmptyArrays", true)));
-
-        // Lookup FundingOpportunities
-        basePipeline.add(new Document("$lookup", new Document()
-            .append("from", "FundingOpportunities")
-            .append("localField", "appDocs.fundingOpportunity.uuid")
-            .append("foreignField", "uuid")
-            .append("as", "fOpp")));
-        basePipeline.add(new Document("$unwind", new Document("path", "$fOpp").append("preserveNullAndEmptyArrays", true)));
-
-        // Project
-        Document projection = new Document()
-            .append("natureTypes", 1)
-            .append("fOppType", "$fOpp.type");
-        basePipeline.add(new Document("$project", projection));
-
-        List<Document> data = new ArrayList<>();
-        try {
-            mongoTemplate.getCollection("Awards")
-                    .aggregate(basePipeline)
-                    .into(data);
-        } catch (Exception e) {
-            // Silently catch
-        }
-
-        Map<String, Map<String, int[]>> counts = new HashMap<>();
-        Map<String, Document> suggestionsMap = getSuggestedNatureMap();
-
-        for (Document d : data) {
-            String fundingType = extractCaEsFromType(d.get("fOppType"));
-            if (fundingType == null || fundingType.isBlank()) {
-                continue;
-            }
-
-            List<?> natureList = (List<?>) d.get("natureTypes");
-            boolean isConfirmed = (natureList != null && !natureList.isEmpty());
-
-            if (isConfirmed) {
-                for (Object natObj : natureList) {
-                    String natureType = extractCaEsFromType(natObj);
-                    if (natureType == null || natureType.isBlank()) {
-                        continue;
-                    }
-                    counts.computeIfAbsent(fundingType, k -> new HashMap<>())
-                          .computeIfAbsent(natureType, k -> new int[2])[0]++;
-                }
-            } else {
-                Document suggested = null;
-                suggested = suggestionsMap.get(fundingType);
-                if (suggested == null && d.get("fOppType") instanceof Document fOppTypeDoc) {
-                    String callTypeUri = fOppTypeDoc.getString("uri");
-                    suggested = findNatureByUriSimilarity(callTypeUri);
-                }
-
-                if (suggested != null) {
-                    String natureType = extractCaEsFromType(suggested);
-                    if (natureType != null && !natureType.isBlank()) {
-                        counts.computeIfAbsent(fundingType, k -> new HashMap<>())
-                              .computeIfAbsent(natureType, k -> new int[2])[1]++;
-                    }
-                }
-            }
-        }
-
-        List<Map<String, Object>> result = new ArrayList<>();
-        for (Map.Entry<String, Map<String, int[]>> entry : counts.entrySet()) {
-            String fundingType = entry.getKey();
-            for (Map.Entry<String, int[]> subEntry : entry.getValue().entrySet()) {
-                String natureType = subEntry.getKey();
-                int[] val = subEntry.getValue();
-
-                Map<String, Object> row = new HashMap<>();
-                row.put("fundingType", fundingType);
-                row.put("natureType", natureType);
-                row.put("confirmed", val[0]);
-                row.put("suggested", val[1]);
-                result.add(row);
-            }
-        }
-        return result;
+        return classificationEngine.getNatureFundingRelation();
     }
-
-    private boolean isStrictBeneficiaryRole(String uri, String ca, String es) {
-        List<String> uris = Arrays.asList(
-            "/dk/atira/pure/award/roles/award/ben",
-            "/dk/atira/pure/award/roles/award/bec"
-        );
-        List<String> terms = Arrays.asList(
-            "beneficiari/a", "becari/a",
-            "beneficiario/a", "becario/a"
-        );
-        if (uri != null && uris.contains(uri.toLowerCase())) return true;
-        if (ca != null && terms.contains(ca.toLowerCase())) return true;
-        if (es != null && terms.contains(es.toLowerCase())) return true;
-        return false;
-    }
-
-    private boolean isCandidateRole(String uri, String ca, String es) {
-        if (uri != null && uri.toLowerCase().contains("/can")) return true;
-        if (ca != null && ca.toLowerCase().contains("candidat")) return true;
-        if (es != null && es.toLowerCase().contains("candidat")) return true;
-        return false;
-    }
-
-    private boolean isBeneficiaryRole(String uri, String ca, String es) {
-        List<String> uris = Arrays.asList(
-            "/dk/atira/pure/award/roles/award/ben",
-            "/dk/atira/pure/award/roles/award/bec",
-            "/dk/atira/pure/award/roles/award/can"
-        );
-        List<String> terms = Arrays.asList(
-            "beneficiari/a", "becari/a", "candidat/a",
-            "beneficiario/a", "becario/a", "candidato/a"
-        );
-        if (uri != null && uris.contains(uri)) return true;
-        if (ca != null && terms.contains(ca.toLowerCase())) return true;
-        if (es != null && terms.contains(es.toLowerCase())) return true;
-        return false;
-    }
-
-    private boolean isInvestigatorRole(String uri, String ca, String es) {
-        List<String> uris = Arrays.asList(
-            "/dk/atira/pure/award/roles/award/pi",
-            "/dk/atira/pure/award/roles/award/copi",
-            "/dk/atira/pure/award/roles/award/pi2",
-            "/dk/atira/pure/award/roles/award/inv"
-        );
-        List<String> terms = Arrays.asList(
-            "investigador/a principal", "co-investigador/a principal", "investigador/a",
-            "co-investigador/a principal (extern uab)", "investigador/a principal (externo uab)"
-        );
-        if (uri != null && uris.contains(uri)) return true;
-        if (ca != null && terms.contains(ca.toLowerCase())) return true;
-        if (es != null && terms.contains(es.toLowerCase())) return true;
-        return false;
-    }
-
-    private String extractGender(Document doc) {
-        String[] genderPaths = {
-            "gender.term",
-            "gender.term.ca_ES",
-            "gender.term.es_ES",
-            "gender.term.en_GB",
-            "gender.ca_ES",
-            "gender.es_ES",
-            "gender.en_GB",
-            "gender",
-            "sex",
-            "sex.term.ca_ES",
-            "sex.term.es_ES",
-            "sex.term.en_GB"
-        };
-
-        for (String path : genderPaths) {
-            Object value = getByPath(doc, path);
-            String text = extractTextValue(value);
-            if (text != null && !text.isBlank()) {
-                return text;
-            }
-        }
-
-        return "";
-    }
-
-    private String extractTextValue(Object value) {
-        if (value == null) {
-            return null;
-        }
-
-        if (value instanceof String str) {
-            return str;
-        }
-
-        if (value instanceof Document doc) {
-            return extractTextValueFromMap(doc);
-        }
-
-        if (value instanceof Map<?, ?> map) {
-            return extractTextValueFromMap(map);
-        }
-
-        if (value instanceof List<?> list) {
-            for (Object item : list) {
-                String nested = extractTextValue(item);
-                if (nested != null && !nested.isBlank()) {
-                    return nested;
-                }
-            }
-        }
-
-        return null;
-    }
-
-    private String extractTextValueFromMap(Map<?, ?> map) {
-        String[] keys = {"ca_ES", "es_ES", "en_GB", "value", "text", "term", "label", "name"};
-        for (String key : keys) {
-            String nested = extractTextValue(map.get(key));
-            if (nested != null && !nested.isBlank()) {
-                return nested;
-            }
-        }
-
-        Object locale = map.get("locale");
-        Object value = map.get("value");
-        if (locale instanceof String && value instanceof String str && !str.isBlank()) {
-            return str;
-        }
-
-        return null;
-    }
-
-    private boolean isMale(String value) {
-        String normalized = normalize(value);
-        return normalized.contains("male")
-            || normalized.contains("hombre")
-            || normalized.contains("masculi")
-            || normalized.contains("home")
-            || normalized.equals("m");
-    }
-
-    private boolean isFemale(String value) {
-        String normalized = normalize(value);
-        return normalized.contains("female")
-            || normalized.contains("mujer")
-            || normalized.contains("femeni")
-            || normalized.contains("dona")
-            || normalized.equals("f");
-    }
-
-    private String classifyGender(String value) {
-        if (isMale(value)) {
-            return "male";
-        }
-        if (isFemale(value)) {
-            return "female";
-        }
-        return "other";
-    }
-
-    private String normalize(String value) {
-        if (value == null) {
-            return "";
-        }
-        return Normalizer.normalize(value, Normalizer.Form.NFD)
-            .replaceAll("\\p{M}", "")
-            .toLowerCase();
-    }
-
-    /*
-    ===============================
-    COST CODE → CONVOCATÒRIES
-    ===============================
-    */
 
     /**
      * Returns a list of { tipologia, costCode, awardCount, convocatories[] } grouped by the
@@ -3963,643 +1906,27 @@ public class AwardController {
      */
     @GetMapping("/stats/cost-center-convocatorias")
     public List<Map<String, Object>> getCostCenterConvocatorias() {
-
-        // Pipeline:
-        // 1. Match valid awards
-        // 2. Unwind budgets → get costCode (first 2 chars = tipologia)
-        // 3. Lookup Applications → FundingOpportunities
-        // 4. Group by (tipologia, costCode, fOppUuid/fOppTitle/fOppType)
-        // 5. Sort
-
-        List<Document> pipeline = new ArrayList<>();
-
-        // Step 1: Match valid awards
-        pipeline.add(new Document("$match", new Document("$or", Arrays.asList(
-            new Document("type.term.ca_ES", "Conveni extern a la UAB").append("workflow.step", "approved"),
-            new Document("type.term.ca_ES", new Document("$ne", "Conveni extern a la UAB")).append("workflow.step", "validated")
-        ))));
-
-        // Step 2: Unwind budgets (keep awards without budgets too)
-        pipeline.add(new Document("$unwind",
-            new Document("path", "$budgets").append("preserveNullAndEmptyArrays", false)));
-
-        // Step 3: Only keep docs where budgets.costCode exists and is non-empty
-        pipeline.add(new Document("$match", new Document("budgets.costCode",
-            new Document("$exists", true).append("$ne", null).append("$ne", ""))));
-
-        // Step 4: Project relevant fields + compute tipologia
-        pipeline.add(new Document("$addFields", new Document()
-            .append("costCode", "$budgets.costCode")
-            .append("tipologia", new Document("$toUpper",
-                new Document("$substrCP", Arrays.asList("$budgets.costCode", 0, 2))))));
-
-        // Step 5: Lookup Applications
-        pipeline.add(new Document("$lookup", new Document()
-            .append("from", "Applications")
-            .append("localField", "applications.uuid")
-            .append("foreignField", "uuid")
-            .append("as", "appDocs")));
-
-        pipeline.add(new Document("$unwind",
-            new Document("path", "$appDocs").append("preserveNullAndEmptyArrays", true)));
-
-        // Step 6: Lookup FundingOpportunities
-        pipeline.add(new Document("$lookup", new Document()
-            .append("from", "FundingOpportunities")
-            .append("localField", "appDocs.fundingOpportunity.uuid")
-            .append("foreignField", "uuid")
-            .append("as", "fOpp")));
-
-        pipeline.add(new Document("$unwind",
-            new Document("path", "$fOpp").append("preserveNullAndEmptyArrays", true)));
-
-        // Step 7: Group by (tipologia, costCode, fOpp identity)
-        pipeline.add(new Document("$group", new Document()
-            .append("_id", new Document()
-                .append("tipologia", "$tipologia")
-                .append("costCode", "$costCode")
-                .append("fOppUuid", "$fOpp.uuid")
-                .append("fOppTitle", "$fOpp.title")
-                .append("fOppType", "$fOpp.type"))
-            .append("awardCount", new Document("$sum", 1))));
-
-        // Step 8: Group by tipologia + costCode to nest the convocatories
-        pipeline.add(new Document("$group", new Document()
-            .append("_id", new Document()
-                .append("tipologia", "$_id.tipologia")
-                .append("costCode", "$_id.costCode"))
-            .append("totalAwards", new Document("$sum", "$awardCount"))
-            .append("convocatories", new Document("$push", new Document()
-                .append("fOppUuid", "$_id.fOppUuid")
-                .append("fOppTitle", "$_id.fOppTitle")
-                .append("fOppType", "$_id.fOppType")
-                .append("count", "$awardCount")))));
-
-        // Step 9: Group by tipologia (could have multiple costCodes per tipologia)
-        pipeline.add(new Document("$group", new Document()
-            .append("_id", "$_id.tipologia")
-            .append("tipologia", new Document("$first", "$_id.tipologia"))
-            .append("totalAwards", new Document("$sum", "$totalAwards"))
-            .append("costCodes", new Document("$addToSet", "$_id.costCode"))
-            .append("convocatoriesRaw", new Document("$push", "$convocatories"))));
-
-        // Step 10: Sort by tipologia
-        pipeline.add(new Document("$sort", new Document("tipologia", 1)));
-
-        List<Document> rawResults = new ArrayList<>();
-        try {
-            mongoTemplate.getCollection("Awards")
-                .aggregate(pipeline)
-                .allowDiskUse(true)
-                .into(rawResults);
-        } catch (Exception e) {
-            return Collections.emptyList();
-        }
-
-        // Post-process: flatten convocatories arrays and deduplicate/merge by fOppUuid
-        List<Map<String, Object>> result = new ArrayList<>();
-        for (Document doc : rawResults) {
-            String tipologia = doc.getString("tipologia");
-            if (tipologia == null || tipologia.isBlank()) continue;
-
-            int totalAwards = ((Number) doc.getOrDefault("totalAwards", 0)).intValue();
-            List<?> costCodesList = (List<?>) doc.get("costCodes");
-            List<String> sortedCostCodes = new ArrayList<>();
-            if (costCodesList != null) {
-                for (Object cc : costCodesList) {
-                    if (cc instanceof String s) sortedCostCodes.add(s);
-                }
-                java.util.Collections.sort(sortedCostCodes);
-            }
-
-            // Flatten and merge convocatories
-            Map<String, Map<String, Object>> convMap = new LinkedHashMap<>();
-            List<?> rawConvOuter = (List<?>) doc.get("convocatoriesRaw");
-            if (rawConvOuter != null) {
-                for (Object outerItem : rawConvOuter) {
-                    if (!(outerItem instanceof List<?> innerList)) continue;
-                    for (Object innerItem : innerList) {
-                        if (!(innerItem instanceof Document convDoc)) continue;
-                        String fOppUuid = convDoc.getString("fOppUuid");
-                        String key = (fOppUuid != null && !fOppUuid.isBlank()) ? fOppUuid : "__no_conv__";
-                        int cnt = ((Number) convDoc.getOrDefault("count", 0)).intValue();
-
-                        if (!convMap.containsKey(key)) {
-                            Map<String, Object> entry = new LinkedHashMap<>();
-                            entry.put("fOppUuid", fOppUuid);
-                            entry.put("fOppTitle", convDoc.get("fOppTitle"));
-                            entry.put("fOppType", convDoc.get("fOppType"));
-                            entry.put("count", cnt);
-                            convMap.put(key, entry);
-                        } else {
-                            Map<String, Object> entry = convMap.get(key);
-                            entry.put("count", ((Number) entry.get("count")).intValue() + cnt);
-                        }
-                    }
-                }
-            }
-
-            // Sort: entries with fOppUuid first, then by count desc
-            List<Map<String, Object>> convList = new ArrayList<>(convMap.values());
-            convList.sort((a, b) -> {
-                boolean aHasConv = a.get("fOppUuid") != null;
-                boolean bHasConv = b.get("fOppUuid") != null;
-                if (aHasConv != bHasConv) return aHasConv ? -1 : 1;
-                int ca = ((Number) a.getOrDefault("count", 0)).intValue();
-                int cb = ((Number) b.getOrDefault("count", 0)).intValue();
-                return Integer.compare(cb, ca);
-            });
-
-            Map<String, Object> row = new LinkedHashMap<>();
-            row.put("tipologia", tipologia);
-            row.put("totalAwards", totalAwards);
-            row.put("costCodes", sortedCostCodes);
-            row.put("convocatories", convList);
-            result.add(row);
-        }
-
-        return result;
+        return financialEngine.getCostCenterConvocatorias();
     }
 
     @GetMapping("/stats/pk-awards")
     public List<Document> getPkAwardsStats() {
-        List<Document> pipeline = new ArrayList<>();
-
-        Document matchStage = new Document("$match", new Document("$or", Arrays.asList(
-            new Document("type.term.ca_ES", "Conveni extern a la UAB").append("workflow.step", "approved"),
-            new Document("type.term.ca_ES", new Document("$ne", "Conveni extern a la UAB")).append("workflow.step", "validated")
-        )).append("budgets.costCode", new Document("$regex", "^PK").append("$options", "i")));
-        pipeline.add(matchStage);
-
-        pipeline.add(new Document("$graphLookup", new Document()
-            .append("from", "Organizations")
-            .append("startWith", "$managingOrganization.uuid")
-            .append("connectFromField", "parents.uuid")
-            .append("connectToField", "uuid")
-            .append("as", "orgAncestors")
-        ));
-
-        pipeline.add(new Document("$addFields", new Document()
-            .append("orgScope", new Document("$cond", Arrays.asList(
-                new Document("$or", Arrays.asList(
-                    new Document("$eq", Arrays.asList("$managingOrganization.uuid", "53d7b18a-caf7-4ded-840e-942ff50adc82")),
-                    new Document("$in", Arrays.asList("53d7b18a-caf7-4ded-840e-942ff50adc82", "$orgAncestors.uuid"))
-                )),
-                "Esfera",
-                "UAB"
-            )))
-            .append("awardDateReal", new Document("$convert", new Document()
-                .append("input", "$awardDate")
-                .append("to", "date")
-                .append("onError", null)
-                .append("onNull", null)
-            ))
-            .append("isDeclined", new Document("$cond", Arrays.asList(
-                new Document("$eq", Arrays.asList("$status.typeDiscriminator", "DeclinedAwardStatus")),
-                true,
-                false
-            )))
-            .append("pkBudgets", new Document("$filter", new Document()
-                .append("input", new Document("$ifNull", Arrays.asList("$budgets", Collections.emptyList())))
-                .append("as", "b")
-                .append("cond", new Document("$regexMatch", new Document()
-                    .append("input", new Document("$ifNull", Arrays.asList("$$b.costCode", "")))
-                    .append("regex", "^PK")
-                    .append("options", "i")
-                ))
-            ))
-        ));
-
-        pipeline.add(new Document("$addFields", new Document()
-            .append("anyo", new Document("$cond", Arrays.asList(
-                new Document("$ne", Arrays.asList("$awardDateReal", null)),
-                new Document("$year", "$awardDateReal"),
-                null
-            )))
-            .append("costCode", new Document("$arrayElemAt", Arrays.asList("$pkBudgets.costCode", 0)))
-        ));
-
-        pipeline.add(new Document("$match", new Document("anyo", new Document("$ne", null))));
-
-        pipeline.add(new Document("$unwind", "$fundings"));
-        pipeline.add(new Document("$unwind", "$fundings.fundingCollaborators"));
-        pipeline.add(new Document("$match", new Document("fundings.fundingCollaborators.collaborator.uuid", "84443078-1a60-462d-9d0a-b04312afd9eb")));
-
-        pipeline.add(new Document("$addFields", new Document("importe_partida", new Document("$convert", new Document()
-            .append("input", "$fundings.fundingCollaborators.institutionalPart.value")
-            .append("to", "double")
-            .append("onError", 0.0)
-            .append("onNull", 0.0)
-        ))));
-
-        pipeline.add(new Document("$group", new Document()
-            .append("_id", new Document()
-                .append("uuid", "$uuid")
-                .append("title", "$title.value")
-                .append("costCode", "$costCode")
-                .append("anyo", "$anyo")
-                .append("isDeclined", "$isDeclined")
-                .append("orgScope", "$orgScope")
-            )
-            .append("totalImport", new Document("$sum", "$importe_partida"))
-        ));
-
-        pipeline.add(new Document("$project", new Document()
-            .append("_id", 0)
-            .append("uuid", "$_id.uuid")
-            .append("title", "$_id.title")
-            .append("costCode", "$_id.costCode")
-            .append("anyo", "$_id.anyo")
-            .append("isDeclined", "$_id.isDeclined")
-            .append("orgScope", "$_id.orgScope")
-            .append("totalImport", 1)
-        ));
-
-        pipeline.add(new Document("$sort", new Document("costCode", 1).append("anyo", 1)));
-
-        List<Document> results = new ArrayList<>();
-        try {
-            mongoTemplate.getCollection("Awards")
-                .aggregate(pipeline)
-                .allowDiskUse(true)
-                .into(results);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        return results;
+        return financialEngine.getPkAwardsStats();
     }
 
     @GetMapping("/stats/ea-awards")
     public List<Document> getEaAwardsStats() {
-        List<Document> pipeline = new ArrayList<>();
-
-        Document matchStage = new Document("$match", new Document("$or", Arrays.asList(
-            new Document("type.term.ca_ES", "Conveni extern a la UAB").append("workflow.step", "approved"),
-            new Document("type.term.ca_ES", new Document("$ne", "Conveni extern a la UAB")).append("workflow.step", "validated")
-        )).append("budgets.costCode", new Document("$regex", "^EA").append("$options", "i")));
-        pipeline.add(matchStage);
-
-        pipeline.add(new Document("$graphLookup", new Document()
-            .append("from", "Organizations")
-            .append("startWith", "$managingOrganization.uuid")
-            .append("connectFromField", "parents.uuid")
-            .append("connectToField", "uuid")
-            .append("as", "orgAncestors")
-        ));
-
-        pipeline.add(new Document("$addFields", new Document()
-            .append("orgScope", new Document("$cond", Arrays.asList(
-                new Document("$or", Arrays.asList(
-                    new Document("$eq", Arrays.asList("$managingOrganization.uuid", "53d7b18a-caf7-4ded-840e-942ff50adc82")),
-                    new Document("$in", Arrays.asList("53d7b18a-caf7-4ded-840e-942ff50adc82", "$orgAncestors.uuid"))
-                )),
-                "Esfera",
-                "UAB"
-            )))
-            .append("awardDateReal", new Document("$convert", new Document()
-                .append("input", "$awardDate")
-                .append("to", "date")
-                .append("onError", null)
-                .append("onNull", null)
-            ))
-            .append("isDeclined", new Document("$cond", Arrays.asList(
-                new Document("$eq", Arrays.asList("$status.typeDiscriminator", "DeclinedAwardStatus")),
-                true,
-                false
-            )))
-            .append("eaBudgets", new Document("$filter", new Document()
-                .append("input", new Document("$ifNull", Arrays.asList("$budgets", Collections.emptyList())))
-                .append("as", "b")
-                .append("cond", new Document("$regexMatch", new Document()
-                    .append("input", new Document("$ifNull", Arrays.asList("$$b.costCode", "")))
-                    .append("regex", "^EA")
-                    .append("options", "i")
-                ))
-            ))
-        ));
-
-        pipeline.add(new Document("$addFields", new Document()
-            .append("anyo", new Document("$cond", Arrays.asList(
-                new Document("$ne", Arrays.asList("$awardDateReal", null)),
-                new Document("$year", "$awardDateReal"),
-                null
-            )))
-            .append("costCode", new Document("$arrayElemAt", Arrays.asList("$eaBudgets.costCode", 0)))
-        ));
-
-        pipeline.add(new Document("$match", new Document("anyo", new Document("$ne", null))));
-
-        pipeline.add(new Document("$unwind", "$fundings"));
-        pipeline.add(new Document("$unwind", "$fundings.fundingCollaborators"));
-        pipeline.add(new Document("$match", new Document("fundings.fundingCollaborators.collaborator.uuid", "84443078-1a60-462d-9d0a-b04312afd9eb")));
-
-        pipeline.add(new Document("$addFields", new Document("importe_partida", new Document("$convert", new Document()
-            .append("input", "$fundings.fundingCollaborators.institutionalPart.value")
-            .append("to", "double")
-            .append("onError", 0.0)
-            .append("onNull", 0.0)
-        ))));
-
-        pipeline.add(new Document("$group", new Document()
-            .append("_id", new Document()
-                .append("uuid", "$uuid")
-                .append("title", "$title.value")
-                .append("costCode", "$costCode")
-                .append("anyo", "$anyo")
-                .append("isDeclined", "$isDeclined")
-                .append("orgScope", "$orgScope")
-            )
-            .append("totalImport", new Document("$sum", "$importe_partida"))
-        ));
-
-        pipeline.add(new Document("$project", new Document()
-            .append("_id", 0)
-            .append("uuid", "$_id.uuid")
-            .append("title", "$_id.title")
-            .append("costCode", "$_id.costCode")
-            .append("anyo", "$_id.anyo")
-            .append("isDeclined", "$_id.isDeclined")
-            .append("orgScope", "$_id.orgScope")
-            .append("totalImport", 1)
-        ));
-
-        pipeline.add(new Document("$sort", new Document("costCode", 1).append("anyo", 1)));
-
-        List<Document> results = new ArrayList<>();
-        try {
-            mongoTemplate.getCollection("Awards")
-                .aggregate(pipeline)
-                .allowDiskUse(true)
-                .into(results);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        return results;
+        return financialEngine.getEaAwardsStats();
     }
 
     @GetMapping("/stats/po-awards")
     public List<Document> getPoAwardsStats() {
-        List<Document> pipeline = new ArrayList<>();
-
-        Document matchStage = new Document("$match", new Document("$or", Arrays.asList(
-            new Document("type.term.ca_ES", "Conveni extern a la UAB").append("workflow.step", "approved"),
-            new Document("type.term.ca_ES", new Document("$ne", "Conveni extern a la UAB")).append("workflow.step", "validated")
-        )).append("budgets.costCode", new Document("$regex", "^PO").append("$options", "i")));
-        pipeline.add(matchStage);
-
-        pipeline.add(new Document("$graphLookup", new Document()
-            .append("from", "Organizations")
-            .append("startWith", "$managingOrganization.uuid")
-            .append("connectFromField", "parents.uuid")
-            .append("connectToField", "uuid")
-            .append("as", "orgAncestors")
-        ));
-
-        pipeline.add(new Document("$addFields", new Document()
-            .append("orgScope", new Document("$cond", Arrays.asList(
-                new Document("$or", Arrays.asList(
-                    new Document("$eq", Arrays.asList("$managingOrganization.uuid", "53d7b18a-caf7-4ded-840e-942ff50adc82")),
-                    new Document("$in", Arrays.asList("53d7b18a-caf7-4ded-840e-942ff50adc82", "$orgAncestors.uuid"))
-                )),
-                "Esfera",
-                "UAB"
-            )))
-            .append("awardDateReal", new Document("$convert", new Document()
-                .append("input", "$awardDate")
-                .append("to", "date")
-                .append("onError", null)
-                .append("onNull", null)
-            ))
-            .append("isDeclined", new Document("$cond", Arrays.asList(
-                new Document("$eq", Arrays.asList("$status.typeDiscriminator", "DeclinedAwardStatus")),
-                true,
-                false
-            )))
-            .append("poBudgets", new Document("$filter", new Document()
-                .append("input", new Document("$ifNull", Arrays.asList("$budgets", Collections.emptyList())))
-                .append("as", "b")
-                .append("cond", new Document("$regexMatch", new Document()
-                    .append("input", new Document("$ifNull", Arrays.asList("$$b.costCode", "")))
-                    .append("regex", "^PO")
-                    .append("options", "i")
-                ))
-            ))
-        ));
-
-        pipeline.add(new Document("$addFields", new Document()
-            .append("anyo", new Document("$cond", Arrays.asList(
-                new Document("$ne", Arrays.asList("$awardDateReal", null)),
-                new Document("$year", "$awardDateReal"),
-                null
-            )))
-            .append("costCode", new Document("$arrayElemAt", Arrays.asList("$poBudgets.costCode", 0)))
-        ));
-
-        pipeline.add(new Document("$match", new Document("anyo", new Document("$ne", null))));
-
-        pipeline.add(new Document("$unwind", "$fundings"));
-        pipeline.add(new Document("$unwind", "$fundings.fundingCollaborators"));
-        pipeline.add(new Document("$match", new Document("fundings.fundingCollaborators.collaborator.uuid", "84443078-1a60-462d-9d0a-b04312afd9eb")));
-
-        pipeline.add(new Document("$addFields", new Document("importe_partida", new Document("$convert", new Document()
-            .append("input", "$fundings.fundingCollaborators.institutionalPart.value")
-            .append("to", "double")
-            .append("onError", 0.0)
-            .append("onNull", 0.0)
-        ))));
-
-        pipeline.add(new Document("$group", new Document()
-            .append("_id", new Document()
-                .append("uuid", "$uuid")
-                .append("title", "$title.value")
-                .append("costCode", "$costCode")
-                .append("anyo", "$anyo")
-                .append("isDeclined", "$isDeclined")
-                .append("orgScope", "$orgScope")
-            )
-            .append("totalImport", new Document("$sum", "$importe_partida"))
-        ));
-
-        pipeline.add(new Document("$project", new Document()
-            .append("_id", 0)
-            .append("uuid", "$_id.uuid")
-            .append("title", "$_id.title")
-            .append("costCode", "$_id.costCode")
-            .append("anyo", "$_id.anyo")
-            .append("isDeclined", "$_id.isDeclined")
-            .append("orgScope", "$_id.orgScope")
-            .append("totalImport", 1)
-        ));
-
-        pipeline.add(new Document("$sort", new Document("costCode", 1).append("anyo", 1)));
-
-        List<Document> results = new ArrayList<>();
-        try {
-            mongoTemplate.getCollection("Awards")
-                .aggregate(pipeline)
-                .allowDiskUse(true)
-                .into(results);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        return results;
+        return financialEngine.getPoAwardsStats();
     }
 
     @GetMapping("/stats/prefixed-awards")
     public List<Document> getPrefixedAwardsStats() {
-        List<Document> pipeline = new ArrayList<>();
-
-        Document matchStage = new Document("$match", new Document("$or", Arrays.asList(
-            new Document("type.term.ca_ES", "Conveni extern a la UAB").append("workflow.step", new Document("$in", Arrays.asList("approved", "validated"))),
-            new Document("type.term.ca_ES", new Document("$ne", "Conveni extern a la UAB")).append("workflow.step", "validated")
-        )).append("budgets.costCode", new Document("$regex", "^(PK|EA|PO|PH|PI|DR|BJ|AG|AB|IM|IB|YA|PV|PZ|BA|BF|BB|NF|ND|NM|MH|NN|MI|NB)").append("$options", "i")));
-        pipeline.add(matchStage);
-
-        pipeline.add(new Document("$graphLookup", new Document()
-            .append("from", "Organizations")
-            .append("startWith", "$managingOrganization.uuid")
-            .append("connectFromField", "parents.uuid")
-            .append("connectToField", "uuid")
-            .append("as", "orgAncestors")
-        ));
-
-        Document isResignedExpr = new Document("$reduce", new Document()
-            .append("input", new Document("$ifNull", Arrays.asList("$keywordGroups", Collections.emptyList())))
-            .append("initialValue", false)
-            .append("in", new Document("$or", Arrays.asList(
-                "$$value",
-                new Document("$reduce", new Document()
-                    .append("input", new Document("$ifNull", Arrays.asList("$$this.keywordContainers", Collections.emptyList())))
-                    .append("initialValue", false)
-                    .append("in", new Document("$or", Arrays.asList(
-                        "$$value",
-                        new Document("$eq", Arrays.asList("$$this.structuredKeyword.uri", "/uab/awards/estat_ajut/resigned"))
-                    )))
-                )
-            )))
-        );
-
-        pipeline.add(new Document("$addFields", new Document()
-            .append("orgScope", new Document("$cond", Arrays.asList(
-                new Document("$or", Arrays.asList(
-                    new Document("$eq", Arrays.asList("$managingOrganization.uuid", "53d7b18a-caf7-4ded-840e-942ff50adc82")),
-                    new Document("$in", Arrays.asList("53d7b18a-caf7-4ded-840e-942ff50adc82", "$orgAncestors.uuid"))
-                )),
-                "Esfera",
-                "UAB"
-            )))
-            .append("awardDateReal", new Document("$convert", new Document()
-                .append("input", "$awardDate")
-                .append("to", "date")
-                .append("onError", null)
-                .append("onNull", null)
-            ))
-            .append("isResigned", isResignedExpr)
-            .append("prefixedBudgets", new Document("$filter", new Document()
-                .append("input", new Document("$ifNull", Arrays.asList("$budgets", Collections.emptyList())))
-                .append("as", "b")
-                .append("cond", new Document("$regexMatch", new Document()
-                    .append("input", new Document("$ifNull", Arrays.asList("$$b.costCode", "")))
-                    .append("regex", "^(PK|EA|PO|PH|PI|DR|BJ|AG|AB|IM|IB|YA|PV|PZ|BA|BF|BB|NF|ND|NM|MH|NN|MI|NB)")
-                    .append("options", "i")
-                ))
-            ))
-        ));
-
-        pipeline.add(new Document("$addFields", new Document()
-            .append("isDeclined", new Document("$cond", Arrays.asList(
-                new Document("$or", Arrays.asList(
-                    new Document("$eq", Arrays.asList("$status.typeDiscriminator", "DeclinedAwardStatus")),
-                    new Document("$eq", Arrays.asList("$isResigned", true))
-                )),
-                true,
-                false
-            )))
-        ));
-
-        pipeline.add(new Document("$addFields", new Document()
-            .append("anyo", new Document("$cond", Arrays.asList(
-                new Document("$ne", Arrays.asList("$awardDateReal", null)),
-                new Document("$year", "$awardDateReal"),
-                null
-            )))
-            .append("costCode", new Document("$arrayElemAt", Arrays.asList("$prefixedBudgets.costCode", 0)))
-        ));
-
-        pipeline.add(new Document("$match", new Document("anyo", new Document("$ne", null))));
-
-        // Lookup Applications
-        pipeline.add(new Document("$lookup", new Document()
-            .append("from", "Applications")
-            .append("localField", "applications.uuid")
-            .append("foreignField", "uuid")
-            .append("as", "appDocs")));
-
-        pipeline.add(new Document("$unwind",
-            new Document("path", "$appDocs").append("preserveNullAndEmptyArrays", true)));
-
-        // Lookup FundingOpportunities
-        pipeline.add(new Document("$lookup", new Document()
-            .append("from", "FundingOpportunities")
-            .append("localField", "appDocs.fundingOpportunity.uuid")
-            .append("foreignField", "uuid")
-            .append("as", "fOpp")));
-
-        pipeline.add(new Document("$unwind",
-            new Document("path", "$fOpp").append("preserveNullAndEmptyArrays", true)));
-
-        pipeline.add(new Document("$unwind", "$fundings"));
-        pipeline.add(new Document("$unwind", "$fundings.fundingCollaborators"));
-        pipeline.add(new Document("$match", new Document("fundings.fundingCollaborators.collaborator.uuid", "84443078-1a60-462d-9d0a-b04312afd9eb")));
-
-        pipeline.add(new Document("$addFields", new Document("importe_partida", new Document("$convert", new Document()
-            .append("input", "$fundings.fundingCollaborators.institutionalPart.value")
-            .append("to", "double")
-            .append("onError", 0.0)
-            .append("onNull", 0.0)
-        ))));
-
-        pipeline.add(new Document("$group", new Document()
-            .append("_id", new Document()
-                .append("uuid", "$uuid")
-                .append("title", "$title.value")
-                .append("costCode", "$costCode")
-                .append("anyo", "$anyo")
-                .append("isDeclined", "$isDeclined")
-                .append("orgScope", "$orgScope")
-                .append("fOppUuid", "$fOpp.uuid")
-                .append("fOppTitle", "$fOpp.title")
-                .append("fOppType", "$fOpp.type")
-            )
-            .append("totalImport", new Document("$sum", "$importe_partida"))
-        ));
-
-        pipeline.add(new Document("$project", new Document()
-            .append("_id", 0)
-            .append("uuid", "$_id.uuid")
-            .append("title", "$_id.title")
-            .append("costCode", "$_id.costCode")
-            .append("anyo", "$_id.anyo")
-            .append("isDeclined", "$_id.isDeclined")
-            .append("orgScope", "$_id.orgScope")
-            .append("totalImport", 1)
-            .append("fOppUuid", "$_id.fOppUuid")
-            .append("fOppTitle", "$_id.fOppTitle")
-            .append("fOppType", "$_id.fOppType")
-        ));
-
-        pipeline.add(new Document("$sort", new Document("costCode", 1).append("anyo", 1)));
-
-        List<Document> results = new ArrayList<>();
-        try {
-            mongoTemplate.getCollection("Awards")
-                .aggregate(pipeline)
-                .allowDiskUse(true)
-                .into(results);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        return results;
+        return financialEngine.getAllPrefixedAwardsStats();
     }
 
     @GetMapping("/stats/resigned-awards")
@@ -4616,276 +1943,22 @@ public class AwardController {
             @RequestParam(defaultValue = "desc") String sortOrder,
             @RequestParam(defaultValue = "false") boolean exportAll) {
 
-        Document matchQuery = new Document();
-        List<Document> andConditions = new ArrayList<>();
+        com.example.demo.award.model.ResignedAwardsQueryCriteria criteria =
+                com.example.demo.award.model.ResignedAwardsQueryCriteria.builder()
+                        .page(page)
+                        .size(size)
+                        .search(search)
+                        .categoria(categoria)
+                        .tipus(tipus)
+                        .reasonFilter(reasonFilter)
+                        .statusType(statusType)
+                        .year(year)
+                        .sortBy(sortBy)
+                        .sortOrder(sortOrder)
+                        .exportAll(exportAll)
+                        .build();
 
-        // 1. Must have a non-empty status.reason
-        andConditions.add(new Document("status.reason", new Document("$exists", true).append("$ne", null).append("$ne", "")));
-
-        // 2. Status type filtering (Terminated / Curtailed / Declined)
-        if (statusType != null && !statusType.isBlank() && !"all".equalsIgnoreCase(statusType)) {
-            if ("terminated".equalsIgnoreCase(statusType) || "terminated_curtailed".equalsIgnoreCase(statusType)) {
-                andConditions.add(new Document("status.typeDiscriminator", new Document("$in", Arrays.asList("TerminatedAwardStatus", "CurtailedAwardStatus"))));
-            } else if ("declined".equalsIgnoreCase(statusType)) {
-                andConditions.add(new Document("status.typeDiscriminator", "DeclinedAwardStatus"));
-            } else {
-                andConditions.add(new Document("status.typeDiscriminator", statusType.trim()));
-            }
-        } else {
-            andConditions.add(new Document("status.typeDiscriminator", new Document("$in", Arrays.asList("DeclinedAwardStatus", "CurtailedAwardStatus", "TerminatedAwardStatus"))));
-        }
-
-        // 3. Reason filter if specific renuncia requested
-        if (reasonFilter != null && !reasonFilter.isBlank() && !"all".equalsIgnoreCase(reasonFilter)) {
-            if ("renuncia".equalsIgnoreCase(reasonFilter)) {
-                andConditions.add(new Document("status.reason", new Document("$regex", "renunc|renuncia|resign|declin|personals|laborals|incompatib|tesi|baja|desist|revoc").append("$options", "i")));
-            }
-        }
-
-        // 4. Text search
-        if (search != null && !search.isBlank()) {
-            String s = search.trim();
-            andConditions.add(new Document("$or", Arrays.asList(
-                new Document("title.ca_ES", new Document("$regex", s).append("$options", "i")),
-                new Document("title.es_ES", new Document("$regex", s).append("$options", "i")),
-                new Document("title.en_GB", new Document("$regex", s).append("$options", "i")),
-                new Document("status.reason", new Document("$regex", s).append("$options", "i")),
-                new Document("uuid", new Document("$regex", s).append("$options", "i")),
-                new Document("pureId", new Document("$regex", s).append("$options", "i")),
-                new Document("awardHolders.name.firstName", new Document("$regex", s).append("$options", "i")),
-                new Document("awardHolders.name.lastName", new Document("$regex", s).append("$options", "i"))
-            )));
-        }
-
-        // 5. Categoria filter
-        if (categoria != null && !categoria.isBlank() && !"all".equalsIgnoreCase(categoria)) {
-            andConditions.add(new Document("categoria", categoria.trim()));
-        }
-
-        // 6. Tipus filter
-        if (tipus != null && !tipus.isBlank() && !"all".equalsIgnoreCase(tipus)) {
-            andConditions.add(new Document("$or", Arrays.asList(
-                new Document("type.term.ca_ES", tipus.trim()),
-                new Document("type.term.es_ES", tipus.trim())
-            )));
-        }
-
-        // 7. Year filter
-        if (year != null && !year.isBlank() && !"all".equalsIgnoreCase(year)) {
-            andConditions.add(new Document("$or", Arrays.asList(
-                new Document("awardDate", new Document("$regex", year.trim())),
-                new Document("status.date", new Document("$regex", year.trim()))
-            )));
-        }
-
-        if (!andConditions.isEmpty()) {
-            matchQuery.put("$and", andConditions);
-        }
-
-        // Fetch matching documents
-        List<Document> rawDocs = mongoTemplate.getCollection("Awards")
-                .find(matchQuery)
-                .into(new ArrayList<>());
-
-        // Process records
-        List<Map<String, Object>> processedList = new ArrayList<>();
-        double totalAmountAll = 0.0;
-
-        Map<String, Integer> categoryCounts = new HashMap<>();
-        Map<String, Integer> typeCounts = new HashMap<>();
-        Map<String, Integer> statusTypeCounts = new HashMap<>();
-        Map<String, Integer> topReasonsMap = new HashMap<>();
-
-        for (Document doc : rawDocs) {
-            Map<String, Object> map = new HashMap<>();
-            map.put("uuid", doc.getString("uuid"));
-            map.put("pureId", doc.get("pureId"));
-
-            // Title
-            Document titleDoc = (Document) doc.get("title");
-            String title = "";
-            if (titleDoc != null) {
-                title = titleDoc.getString("ca_ES");
-                if (title == null || title.isBlank()) title = titleDoc.getString("es_ES");
-                if (title == null || title.isBlank()) title = titleDoc.getString("en_GB");
-            }
-            map.put("title", title != null ? title : "");
-
-            // Status & Reason
-            Document statusDoc = (Document) doc.get("status");
-            String docStatusType = "";
-            String statusDate = "";
-            String reason = "";
-            if (statusDoc != null) {
-                docStatusType = statusDoc.getString("typeDiscriminator");
-                statusDate = statusDoc.getString("date");
-                reason = statusDoc.getString("reason");
-            }
-            map.put("statusType", docStatusType != null ? docStatusType : "");
-            map.put("statusDate", statusDate != null ? statusDate : "");
-            map.put("reason", reason != null ? reason : "");
-
-            if (docStatusType != null && !docStatusType.isBlank()) {
-                statusTypeCounts.put(docStatusType, statusTypeCounts.getOrDefault(docStatusType, 0) + 1);
-            }
-
-            if (reason != null && !reason.isBlank()) {
-                String cleanReason = reason.trim();
-                topReasonsMap.put(cleanReason, topReasonsMap.getOrDefault(cleanReason, 0) + 1);
-            }
-
-            // Type & Category
-            Document typeDoc = (Document) doc.get("type");
-            String typeTerm = "";
-            if (typeDoc != null) {
-                Document termDoc = (Document) typeDoc.get("term");
-                if (termDoc != null) {
-                    typeTerm = termDoc.getString("ca_ES");
-                    if (typeTerm == null || typeTerm.isBlank()) typeTerm = termDoc.getString("es_ES");
-                }
-            }
-            typeTerm = typeTerm != null ? typeTerm : "Altres";
-            map.put("type", typeTerm);
-            typeCounts.put(typeTerm, typeCounts.getOrDefault(typeTerm, 0) + 1);
-
-            String cat = doc.getString("categoria");
-            cat = cat != null ? cat : "Sense categoria";
-            map.put("categoria", cat);
-            categoryCounts.put(cat, categoryCounts.getOrDefault(cat, 0) + 1);
-
-            // Award Date
-            Object awardDateObj = doc.get("awardDate");
-            String awardDateStr = awardDateObj != null ? awardDateObj.toString() : "";
-            map.put("awardDate", awardDateStr);
-
-            // Amount & Funders
-            double amount = 0.0;
-            String funderName = "";
-            List<?> fundings = (List<?>) doc.get("fundings");
-            if (fundings != null && !fundings.isEmpty()) {
-                for (Object fObj : fundings) {
-                    if (fObj instanceof Document fDoc) {
-                        Document amtDoc = (Document) fDoc.get("awardedAmount");
-                        if (amtDoc != null) {
-                            Object val = amtDoc.get("value");
-                            if (val instanceof Number n) {
-                                amount += n.doubleValue();
-                            } else if (val instanceof String strVal) {
-                                try { amount += Double.parseDouble(strVal); } catch (Exception ignored) {}
-                            }
-                        }
-                        if (funderName.isBlank()) {
-                            Document funderDoc = (Document) fDoc.get("funder");
-                            if (funderDoc != null) {
-                                funderName = funderDoc.getString("systemName");
-                            }
-                        }
-                    }
-                }
-            }
-            map.put("amount", amount);
-            totalAmountAll += amount;
-            map.put("funder", funderName);
-
-            // Holders (IPs / Beneficiaries)
-            List<Map<String, String>> holders = new ArrayList<>();
-            List<?> holdersList = (List<?>) doc.get("awardHolders");
-            if (holdersList != null) {
-                for (Object hObj : holdersList) {
-                    if (hObj instanceof Document hDoc) {
-                        Document nameDoc = (Document) hDoc.get("name");
-                        Document roleDoc = (Document) hDoc.get("role");
-                        String personName = "";
-                        if (nameDoc != null) {
-                            String first = nameDoc.getString("firstName");
-                            String last = nameDoc.getString("lastName");
-                            personName = ((first != null ? first : "") + " " + (last != null ? last : "")).trim();
-                        }
-                        String roleName = "";
-                        if (roleDoc != null) {
-                            Document rTerm = (Document) roleDoc.get("term");
-                            if (rTerm != null) {
-                                roleName = rTerm.getString("ca_ES");
-                                if (roleName == null) roleName = rTerm.getString("es_ES");
-                            }
-                        }
-                        if (!personName.isBlank()) {
-                            Map<String, String> hMap = new HashMap<>();
-                            hMap.put("name", personName);
-                            hMap.put("role", roleName != null ? roleName : "");
-                            holders.add(hMap);
-                        }
-                    }
-                }
-            }
-            map.put("holders", holders);
-
-            processedList.add(map);
-        }
-
-        // Sorting
-        final boolean isAsc = "asc".equalsIgnoreCase(sortOrder);
-        processedList.sort((a, b) -> {
-            int cmp = 0;
-            if ("amount".equalsIgnoreCase(sortBy)) {
-                Double aVal = (Double) a.getOrDefault("amount", 0.0);
-                Double bVal = (Double) b.getOrDefault("amount", 0.0);
-                cmp = Double.compare(aVal, bVal);
-            } else if ("title".equalsIgnoreCase(sortBy)) {
-                String aVal = (String) a.getOrDefault("title", "");
-                String bVal = (String) b.getOrDefault("title", "");
-                cmp = aVal.compareToIgnoreCase(bVal);
-            } else if ("reason".equalsIgnoreCase(sortBy)) {
-                String aVal = (String) a.getOrDefault("reason", "");
-                String bVal = (String) b.getOrDefault("reason", "");
-                cmp = aVal.compareToIgnoreCase(bVal);
-            } else {
-                // Default: statusDate / awardDate
-                String aVal = (String) a.getOrDefault("statusDate", "");
-                if (aVal.isBlank()) aVal = (String) a.getOrDefault("awardDate", "");
-                String bVal = (String) b.getOrDefault("statusDate", "");
-                if (bVal.isBlank()) bVal = (String) b.getOrDefault("awardDate", "");
-                cmp = aVal.compareToIgnoreCase(bVal);
-            }
-            return isAsc ? cmp : -cmp;
-        });
-
-        int totalElements = processedList.size();
-        List<Map<String, Object>> pagedContent;
-
-        if (exportAll) {
-            pagedContent = processedList;
-        } else {
-            int fromIndex = Math.min(page * size, totalElements);
-            int toIndex = Math.min(fromIndex + size, totalElements);
-            pagedContent = processedList.subList(fromIndex, toIndex);
-        }
-
-        // Prepare Top Reasons List (sorted by frequency)
-        List<Map<String, Object>> topReasonsList = topReasonsMap.entrySet().stream()
-                .sorted((e1, e2) -> Integer.compare(e2.getValue(), e1.getValue()))
-                .limit(20)
-                .map(e -> Map.<String, Object>of("reason", e.getKey(), "count", e.getValue()))
-                .toList();
-
-        Map<String, Object> response = new HashMap<>();
-        response.put("content", pagedContent);
-        response.put("page", page);
-        response.put("size", size);
-        response.put("totalElements", totalElements);
-        response.put("totalPages", size > 0 ? (int) Math.ceil((double) totalElements / size) : 1);
-
-        Map<String, Object> summary = new HashMap<>();
-        summary.put("totalCount", totalElements);
-        summary.put("totalAmount", totalAmountAll);
-        summary.put("categoryCounts", categoryCounts);
-        summary.put("typeCounts", typeCounts);
-        summary.put("statusTypeCounts", statusTypeCounts);
-        summary.put("topReasons", topReasonsList);
-
-        response.put("summary", summary);
-
-        return response;
+        return financialEngine.getResignedAwards(criteria);
     }
 
     @GetMapping("/stats/reason-comparison")
@@ -5169,6 +2242,173 @@ public class AwardController {
 
         return response;
     }
+
+    private boolean isStrictBeneficiaryRole(String uri, String ca, String es) {
+        List<String> uris = Arrays.asList(
+            "/dk/atira/pure/award/roles/award/ben",
+            "/dk/atira/pure/award/roles/award/bec"
+        );
+        List<String> terms = Arrays.asList(
+            "beneficiari/a", "becari/a",
+            "beneficiario/a", "becario/a"
+        );
+        if (uri != null && uris.contains(uri.toLowerCase())) return true;
+        if (ca != null && terms.contains(ca.toLowerCase())) return true;
+        if (es != null && terms.contains(es.toLowerCase())) return true;
+        return false;
+    }
+
+    private boolean isCandidateRole(String uri, String ca, String es) {
+        if (uri != null && uri.toLowerCase().contains("/can")) return true;
+        if (ca != null && ca.toLowerCase().contains("candidat")) return true;
+        if (es != null && es.toLowerCase().contains("candidat")) return true;
+        return false;
+    }
+
+    private boolean isBeneficiaryRole(String uri, String ca, String es) {
+        List<String> uris = Arrays.asList(
+            "/dk/atira/pure/award/roles/award/ben",
+            "/dk/atira/pure/award/roles/award/bec",
+            "/dk/atira/pure/award/roles/award/can"
+        );
+        List<String> terms = Arrays.asList(
+            "beneficiari/a", "becari/a", "candidat/a",
+            "beneficiario/a", "becario/a", "candidato/a"
+        );
+        if (uri != null && uris.contains(uri)) return true;
+        if (ca != null && terms.contains(ca.toLowerCase())) return true;
+        if (es != null && terms.contains(es.toLowerCase())) return true;
+        return false;
+    }
+
+    private boolean isInvestigatorRole(String uri, String ca, String es) {
+        List<String> uris = Arrays.asList(
+            "/dk/atira/pure/award/roles/award/pi",
+            "/dk/atira/pure/award/roles/award/copi",
+            "/dk/atira/pure/award/roles/award/pi2",
+            "/dk/atira/pure/award/roles/award/inv"
+        );
+        List<String> terms = Arrays.asList(
+            "investigador/a principal", "co-investigador/a principal", "investigador/a",
+            "co-investigador/a principal (extern uab)", "investigador/a principal (externo uab)"
+        );
+        if (uri != null && uris.contains(uri)) return true;
+        if (ca != null && terms.contains(ca.toLowerCase())) return true;
+        if (es != null && terms.contains(es.toLowerCase())) return true;
+        return false;
+    }
+
+    private String extractGender(Document doc) {
+        String[] genderPaths = {
+            "gender.term",
+            "gender.term.ca_ES",
+            "gender.term.es_ES",
+            "gender.term.en_GB",
+            "gender.ca_ES",
+            "gender.es_ES",
+            "gender.en_GB",
+            "gender",
+            "sex",
+            "sex.term.ca_ES",
+            "sex.term.es_ES",
+            "sex.term.en_GB"
+        };
+
+        for (String path : genderPaths) {
+            Object value = getByPath(doc, path);
+            String text = extractTextValue(value);
+            if (text != null && !text.isBlank()) {
+                return text;
+            }
+        }
+
+        return "";
+    }
+
+    private String extractTextValue(Object value) {
+        if (value == null) {
+            return null;
+        }
+
+        if (value instanceof String str) {
+            return str;
+        }
+
+        if (value instanceof Document doc) {
+            return extractTextValueFromMap(doc);
+        }
+
+        if (value instanceof Map<?, ?> map) {
+            return extractTextValueFromMap(map);
+        }
+
+        if (value instanceof List<?> list) {
+            for (Object item : list) {
+                String nested = extractTextValue(item);
+                if (nested != null && !nested.isBlank()) {
+                    return nested;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private String extractTextValueFromMap(Map<?, ?> map) {
+        String[] keys = {"ca_ES", "es_ES", "en_GB", "value", "text", "term", "label", "name"};
+        for (String key : keys) {
+            String nested = extractTextValue(map.get(key));
+            if (nested != null && !nested.isBlank()) {
+                return nested;
+            }
+        }
+
+        Object locale = map.get("locale");
+        Object value = map.get("value");
+        if (locale instanceof String && value instanceof String str && !str.isBlank()) {
+            return str;
+        }
+
+        return null;
+    }
+
+    private boolean isMale(String value) {
+        String normalized = normalize(value);
+        return normalized.contains("male")
+            || normalized.contains("hombre")
+            || normalized.contains("masculi")
+            || normalized.contains("home")
+            || normalized.equals("m");
+    }
+
+    private boolean isFemale(String value) {
+        String normalized = normalize(value);
+        return normalized.contains("female")
+            || normalized.contains("mujer")
+            || normalized.contains("femeni")
+            || normalized.contains("dona")
+            || normalized.equals("f");
+    }
+
+    private String classifyGender(String value) {
+        if (isMale(value)) {
+            return "male";
+        }
+        if (isFemale(value)) {
+            return "female";
+        }
+        return "other";
+    }
+
+    private String normalize(String value) {
+        if (value == null) {
+            return "";
+        }
+        return Normalizer.normalize(value, Normalizer.Form.NFD)
+            .replaceAll("\\p{M}", "")
+            .toLowerCase();
+    }
+
 
     private Object getByPath(Object root, String path) {
         if (root == null || path == null || path.isBlank()) {
