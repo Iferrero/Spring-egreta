@@ -1,11 +1,14 @@
 package com.example.demo.controller;
 
 import org.apache.poi.ss.usermodel.*;
+import org.bson.Document;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.Resource;
+import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.http.*;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.client.HttpClientErrorException;
@@ -15,6 +18,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.InputStream;
 import java.text.Normalizer;
 import java.util.*;
+import java.util.regex.Pattern;
 
 /**
  * Controller per a la càrrega massiva d'equipaments des d'Excel cap a l'API REST d'Egreta/Pure.
@@ -28,6 +32,9 @@ public class EquipmentLoaderController {
 
     @Value("${app.api.key}")
     private String apiKey;
+
+    @Autowired(required = false)
+    private MongoTemplate mongoTemplate;
 
     private static final String URL_TEST = "https://egretat.uab.cat/ws/api/";
     private static final String URL_PROD = "https://egreta.uab.cat/ws/api/";
@@ -105,6 +112,31 @@ public class EquipmentLoaderController {
     }
 
     /**
+     * Llegeix el fitxer d'actius fixos d'equipament científic per defecte.
+     */
+    @GetMapping("/load-actius-default")
+    public ResponseEntity<?> loadActiusDefault() {
+        try {
+            Resource resource = new ClassPathResource("actius-equipaments-cientifics.xlsx");
+            if (!resource.exists()) {
+                java.io.File file = new java.io.File("src/main/resources/actius-equipaments-cientifics.xlsx");
+                if (file.exists()) {
+                    try (InputStream is = new java.io.FileInputStream(file)) {
+                        return ResponseEntity.ok(parseExcelStream(is, "actius-equipaments-cientifics.xlsx"));
+                    }
+                }
+                return ResponseEntity.status(404).body(Map.of("error", "No s'ha trobat el fitxer d'actius fixos al servidor."));
+            }
+            try (InputStream is = resource.getInputStream()) {
+                return ResponseEntity.ok(parseExcelStream(is, resource.getFilename()));
+            }
+        } catch (Exception e) {
+            logger.error("Error carregant excel d'actius per defecte: {}", e.getMessage(), e);
+            return ResponseEntity.status(500).body(Map.of("error", "Error en carregar l'arxiu d'actius fixos: " + e.getMessage()));
+        }
+    }
+
+    /**
      * Rep un fitxer Excel pujat des del frontend.
      */
     @PostMapping(value = "/parse-excel", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -174,18 +206,81 @@ public class EquipmentLoaderController {
             int colPrestacio   = 10;
             int colFinancament = 11;
 
+            // Columnes específiques per a format Actius Fixos
+            boolean isActiusFixos = false;
+            int colAssetNum        = -1;
+            int colAssetClass      = -1;
+            int colLocation        = -1;
+            int colLocationDesc    = -1;
+            int colCostCenter      = -1;
+            int colCostCenterDesc  = -1;
+            int colProject         = -1;
+            int colProjectDesc     = -1;
+            int colCapYear         = -1;
+            int colResponsible     = -1;
+            int colCurrentVal      = -1;
+            int colAccumAmort      = -1;
+            int colNetVal          = -1;
+            int colNiu             = -1;
+            int colOrgName         = -1;
+            int colOrgUuid         = -1;
+
             if (headerRow != null) {
                 int lastCell = headerRow.getLastCellNum();
                 for (int c = 0; c < lastCell; c++) {
                     String h = normalizeHeader(getCellString(headerRow, c, formatter));
-                    if (h.contains("title") || h.contains("titol") || h.contains("titulo")) {
+                    if (h.contains("actiu fix") || h.contains("denominacio") || h.contains("uuid organitzacio") || h.contains("classe d'actiu")) {
+                        isActiusFixos = true;
+                    }
+
+                    if (h.contains("classe") && h.contains("actiu")) {
+                        colAssetClass = c;
+                    } else if (h.contains("numero") && (h.contains("actiu") || h.contains("fix"))) {
+                        colAssetNum = c;
+                    } else if (h.contains("denominacio")) {
+                        if (isLanguageMatch(h, "ca")) colTitleCat = c;
+                        else if (isLanguageMatch(h, "es")) colTitleCas = c;
+                        else if (isLanguageMatch(h, "en")) colTitleAng = c;
+                    } else if (h.contains("title") || h.contains("titol") || h.contains("titulo")) {
                         if (isLanguageMatch(h, "ca")) colTitleCat = c;
                         else if (isLanguageMatch(h, "es")) colTitleCas = c;
                         else if (isLanguageMatch(h, "en")) colTitleAng = c;
                     } else if (h.contains("descrip") || h.contains("description")) {
-                        if (isLanguageMatch(h, "ca")) colDescCat = c;
-                        else if (isLanguageMatch(h, "es")) colDescCas = c;
-                        else if (isLanguageMatch(h, "en")) colDescAng = c;
+                        if (h.contains("emplacament")) {
+                            colLocationDesc = c;
+                        } else if (h.contains("centre de cost") || h.contains("cost")) {
+                            colCostCenterDesc = c;
+                        } else if (h.contains("projecte") || h.contains("proyecto") || h.contains("project")) {
+                            colProjectDesc = c;
+                        } else if (h.contains("classe")) {
+                            colAssetClass = c;
+                        } else {
+                            if (isLanguageMatch(h, "ca")) colDescCat = c;
+                            else if (isLanguageMatch(h, "es")) colDescCas = c;
+                            else if (isLanguageMatch(h, "en")) colDescAng = c;
+                        }
+                    } else if (h.contains("emplacament") || h.contains("emplazamiento") || h.contains("ubicacio")) {
+                        colLocation = c;
+                    } else if (h.contains("centre de cost") || h.contains("centro de coste")) {
+                        colCostCenter = c;
+                    } else if (h.contains("projecte") || h.contains("proyecto") || h.contains("project")) {
+                        colProject = c;
+                    } else if (h.contains("capitalitzaci") || h.contains("any") || h.contains("ano") || h.contains("year")) {
+                        colCapYear = c;
+                    } else if (h.contains("responsable")) {
+                        colResponsible = c;
+                    } else if (h.contains("valor net")) {
+                        colNetVal = c;
+                    } else if (h.contains("amortitzaci")) {
+                        colAccumAmort = c;
+                    } else if (h.contains("valor actual") || h.contains("valor")) {
+                        colCurrentVal = c;
+                    } else if (h.contains("niu")) {
+                        colNiu = c;
+                    } else if (h.contains("uuid organitzaci") || h.contains("uuid")) {
+                        colOrgUuid = c;
+                    } else if (h.contains("nom oficial") || (h.contains("organitzaci") && !h.contains("uuid"))) {
+                        colOrgName = c;
                     } else if (h.contains("servei") || h.contains("servicio") || h.contains("service")) {
                         colServei = c;
                     } else if (h.contains("mail") || h.contains("correu") || h.contains("email")) {
@@ -202,8 +297,8 @@ public class EquipmentLoaderController {
                 }
             }
 
-            logger.info("Column mapping for '{}': titleCat={}, descCat={}, descCas={}, descAng={}, colFinancament={}",
-                    fileName, colTitleCat, colDescCat, colDescCas, colDescAng, colFinancament);
+            logger.info("Column mapping for '{}' (isActiusFixos={}): titleCat={}, descCat={}, descCas={}, descAng={}, orgUuid={}",
+                    fileName, isActiusFixos, colTitleCat, colDescCat, colDescCas, colDescAng, colOrgUuid);
 
             for (int r = 1; r <= totalRows; r++) {
                 Row row = sheet.getRow(r);
@@ -218,46 +313,134 @@ public class EquipmentLoaderController {
                     continue;
                 }
 
-                String serveiRaw      = getCellString(row, colServei, formatter);
-                String emailRaw       = getCellString(row, colEmail, formatter);
-                String modelRaw       = getCellString(row, colModel, formatter);
-                String descCatRaw     = getCellString(row, colDescCat, formatter);
-                String descCasRaw     = getCellString(row, colDescCas, formatter);
-                String descAngRaw     = getCellString(row, colDescAng, formatter);
-                String fotoRaw        = getCellString(row, colPhoto, formatter);
-                String tipusPresRaw   = getCellString(row, colPrestacio, formatter);
-                String financamentRaw = getCellString(row, colFinancament, formatter);
-
-                // Normalitzacions
-                String email = cleanEmail(emailRaw);
-                String model = modelRaw.trim();
-                String tipusPrestacioUri = mapLoanTypeToUri(tipusPresRaw);
-                ServiceOrgMapping orgMapping = resolveOrganization(serveiRaw);
+                String serveiRaw      = colServei >= 0 ? getCellString(row, colServei, formatter) : "";
+                String emailRaw       = colEmail >= 0 ? getCellString(row, colEmail, formatter) : "";
+                String modelRaw       = colModel >= 0 ? getCellString(row, colModel, formatter) : "";
+                String descCatRaw     = colDescCat >= 0 ? getCellString(row, colDescCat, formatter) : "";
+                String descCasRaw     = colDescCas >= 0 ? getCellString(row, colDescCas, formatter) : "";
+                String descAngRaw     = colDescAng >= 0 ? getCellString(row, colDescAng, formatter) : "";
+                String fotoRaw        = colPhoto >= 0 ? getCellString(row, colPhoto, formatter) : "";
+                String tipusPresRaw   = colPrestacio >= 0 ? getCellString(row, colPrestacio, formatter) : "";
+                String financamentRaw = colFinancament >= 0 ? getCellString(row, colFinancament, formatter) : "";
 
                 Map<String, Object> item = new LinkedHashMap<>();
                 item.put("rowIndex", r + 1); // 1-based per visualització usuari
                 item.put("titleCat", titleCat.trim());
                 item.put("titleCas", titleCas.trim());
                 item.put("titleAng", titleAng.trim());
-                item.put("serviceRaw", serveiRaw.trim());
-                item.put("orgAcronym", orgMapping != null ? orgMapping.acronym() : extractAcronym(serveiRaw));
-                item.put("orgName", orgMapping != null ? orgMapping.fullName() : serveiRaw.trim());
-                item.put("orgUuid", orgMapping != null ? orgMapping.uuid() : "");
-                item.put("orgMatched", orgMapping != null);
-                item.put("email", email);
-                item.put("model", model);
-
-                // Descripcions principals agafades fidelment dels camps de descripció
                 item.put("descCat", descCatRaw.trim());
                 item.put("descCas", descCasRaw.trim());
                 item.put("descAng", descAngRaw.trim());
 
-                // Camp de finançament/adquisició que s'afegeix com a nova descripció només en català
-                item.put("financament", financamentRaw.trim());
+                if (isActiusFixos) {
+                    String assetNumber = colAssetNum >= 0 ? getCellString(row, colAssetNum, formatter).trim() : "";
+                    String assetClass = colAssetClass >= 0 ? getCellString(row, colAssetClass, formatter).trim() : "";
+                    String location = colLocation >= 0 ? getCellString(row, colLocation, formatter).trim() : "";
+                    String locationDesc = colLocationDesc >= 0 ? getCellString(row, colLocationDesc, formatter).trim() : "";
+                    String costCenter = colCostCenter >= 0 ? getCellString(row, colCostCenter, formatter).trim() : "";
+                    String costCenterDesc = colCostCenterDesc >= 0 ? getCellString(row, colCostCenterDesc, formatter).trim() : "";
+                    String project = colProject >= 0 ? getCellString(row, colProject, formatter).trim() : "";
+                    String projectDesc = colProjectDesc >= 0 ? getCellString(row, colProjectDesc, formatter).trim() : "";
+                    String capYear = colCapYear >= 0 ? getCellString(row, colCapYear, formatter).trim() : "";
+                    String responsible = colResponsible >= 0 ? getCellString(row, colResponsible, formatter).trim() : "";
+                    String currentVal = colCurrentVal >= 0 ? getCellString(row, colCurrentVal, formatter).trim() : "";
+                    String accumAmort = colAccumAmort >= 0 ? getCellString(row, colAccumAmort, formatter).trim() : "";
+                    String netVal = colNetVal >= 0 ? getCellString(row, colNetVal, formatter).trim() : "";
+                    String niu = colNiu >= 0 ? getCellString(row, colNiu, formatter).trim() : "";
+                    String orgName = colOrgName >= 0 ? getCellString(row, colOrgName, formatter).trim() : "";
+                    String orgUuid = colOrgUuid >= 0 ? getCellString(row, colOrgUuid, formatter).trim() : "";
 
-                item.put("photo", fotoRaw.trim());
-                item.put("tipusPrestacioRaw", tipusPresRaw.trim());
-                item.put("tipusPrestacioUri", tipusPrestacioUri);
+                    item.put("assetNumber", assetNumber);
+                    item.put("assetClass", assetClass);
+                    item.put("location", location);
+                    item.put("locationDesc", locationDesc);
+                    item.put("costCenter", costCenter);
+                    item.put("costCenterDesc", costCenterDesc);
+                    item.put("project", project);
+                    item.put("projectDesc", projectDesc);
+                    item.put("capYear", capYear);
+                    item.put("responsible", responsible);
+                    item.put("currentValue", currentVal);
+                    item.put("accumAmort", accumAmort);
+                    item.put("netValue", netVal);
+                    item.put("niu", niu);
+                    item.put("orgName", !orgName.isEmpty() ? orgName : (!costCenterDesc.isEmpty() ? costCenterDesc : "UAB"));
+                    item.put("orgAcronym", !orgName.isEmpty() ? orgName : costCenter);
+                    item.put("orgUuid", orgUuid);
+                    item.put("orgMatched", !orgUuid.isBlank());
+                    item.put("serviceRaw", !orgName.isEmpty() ? orgName : costCenterDesc);
+                    item.put("model", assetNumber.isEmpty() ? (assetClass.isEmpty() ? "Equipament" : assetClass) : assetNumber);
+                    item.put("tipusPrestacioRaw", "Sense servei");
+                    item.put("tipusPrestacioUri", "/dk/atira/pure/equipment/loantypes/sense_servei");
+
+                    String personUuid = "";
+                    String personEmail = "";
+                    if (mongoTemplate != null) {
+                        try {
+                            Document p = null;
+                            if (!niu.isBlank()) {
+                                p = mongoTemplate.getCollection("Persons").find(new Document("identifiers.value", niu)).first();
+                                if (p == null) {
+                                    p = mongoTemplate.getCollection("Persons").find(new Document("identifiers.id", niu)).first();
+                                }
+                            }
+                            if (p == null && !responsible.isBlank()) {
+                                String[] parts = responsible.split(",");
+                                if (parts.length >= 2) {
+                                    p = mongoTemplate.getCollection("Persons").find(new Document("name.lastName",
+                                        Pattern.compile("^" + Pattern.quote(parts[0].trim()), Pattern.CASE_INSENSITIVE))).first();
+                                }
+                            }
+                            if (p != null) {
+                                personUuid = p.getString("uuid");
+                                List<Document> assocs = (List<Document>) p.get("staffOrganizationAssociations");
+                                if (assocs != null) {
+                                    for (Document assoc : assocs) {
+                                        List<Document> emails = (List<Document>) assoc.get("emails");
+                                        if (emails != null) {
+                                            for (Document em : emails) {
+                                                String val = em.getString("value");
+                                                if (val != null && val.contains("@")) {
+                                                    personEmail = val.trim().toLowerCase();
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                        if (!personEmail.isEmpty()) break;
+                                    }
+                                }
+                            }
+                        } catch (Exception e) {
+                            logger.warn("No s'ha pogut resoldre persona per NIU {}: {}", niu, e.getMessage());
+                        }
+                    }
+                    item.put("personUuid", personUuid != null ? personUuid : "");
+                    item.put("email", !personEmail.isEmpty() ? personEmail : cleanEmail(emailRaw));
+
+                    if (!project.isBlank() && !project.equals("#")) {
+                        item.put("financament", "Projecte " + project + (!projectDesc.isBlank() && !projectDesc.equals("#") ? ": " + projectDesc : ""));
+                    } else {
+                        item.put("financament", "");
+                    }
+                } else {
+                    // Normalitzacions SCT clàssic
+                    String email = cleanEmail(emailRaw);
+                    String model = modelRaw.trim();
+                    String tipusPrestacioUri = mapLoanTypeToUri(tipusPresRaw);
+                    ServiceOrgMapping orgMapping = resolveOrganization(serveiRaw);
+
+                    item.put("serviceRaw", serveiRaw.trim());
+                    item.put("orgAcronym", orgMapping != null ? orgMapping.acronym() : extractAcronym(serveiRaw));
+                    item.put("orgName", orgMapping != null ? orgMapping.fullName() : serveiRaw.trim());
+                    item.put("orgUuid", orgMapping != null ? orgMapping.uuid() : "");
+                    item.put("orgMatched", orgMapping != null);
+                    item.put("email", email);
+                    item.put("model", model);
+                    item.put("financament", financamentRaw.trim());
+                    item.put("photo", fotoRaw.trim());
+                    item.put("tipusPrestacioRaw", tipusPresRaw.trim());
+                    item.put("tipusPrestacioUri", tipusPrestacioUri);
+                }
 
                 // Generar payload Egreta per defecte
                 Map<String, Object> egretaPayload = buildEgretaPayload(item, "approved", "/dk/atira/pure/equipment/equipmenttypes/equipment/equipment");
@@ -487,6 +670,67 @@ public class EquipmentLoaderController {
         String fullCas = buildDescriptionWithFunding(dCas, "Financiación", funding.cas());
         String fullAng = buildDescriptionWithFunding(dAng, "Funding", funding.eng());
 
+        // Per a actius fixos, afegir bloc de metadades a les descripcions si existeixen
+        String assetNum = (String) row.getOrDefault("assetNumber", "");
+        String loc = (String) row.getOrDefault("location", "");
+        String locDesc = (String) row.getOrDefault("locationDesc", "");
+        String capYr = (String) row.getOrDefault("capYear", "");
+        String resp = (String) row.getOrDefault("responsible", "");
+        String niu = (String) row.getOrDefault("niu", "");
+        String proj = (String) row.getOrDefault("project", "");
+        String projDesc = (String) row.getOrDefault("projectDesc", "");
+
+        if (!assetNum.isBlank() || !loc.isBlank() || !capYr.isBlank() || !resp.isBlank()) {
+            StringBuilder metaCat = new StringBuilder();
+            StringBuilder metaCas = new StringBuilder();
+            StringBuilder metaAng = new StringBuilder();
+
+            metaCat.append("<b>Dades de l'actiu científic:</b><br/>");
+            metaCas.append("<b>Datos del activo científico:</b><br/>");
+            metaAng.append("<b>Scientific asset details:</b><br/>");
+
+            if (!assetNum.isBlank()) {
+                metaCat.append("• <b>Núm. actiu fix:</b> ").append(assetNum).append("<br/>");
+                metaCas.append("• <b>Núm. activo fijo:</b> ").append(assetNum).append("<br/>");
+                metaAng.append("• <b>Fixed asset no.:</b> ").append(assetNum).append("<br/>");
+            }
+            if (!loc.isBlank()) {
+                metaCat.append("• <b>Emplaçament:</b> ").append(loc).append(!locDesc.isBlank() ? " (" + locDesc + ")" : "").append("<br/>");
+                metaCas.append("• <b>Emplazamiento:</b> ").append(loc).append(!locDesc.isBlank() ? " (" + locDesc + ")" : "").append("<br/>");
+                metaAng.append("• <b>Location:</b> ").append(loc).append(!locDesc.isBlank() ? " (" + locDesc + ")" : "").append("<br/>");
+            }
+            if (!capYr.isBlank()) {
+                metaCat.append("• <b>Any capitalització:</b> ").append(capYr).append("<br/>");
+                metaCas.append("• <b>Año capitalización:</b> ").append(capYr).append("<br/>");
+                metaAng.append("• <b>Capitalization year:</b> ").append(capYr).append("<br/>");
+            }
+            if (!resp.isBlank()) {
+                metaCat.append("• <b>Responsable:</b> ").append(resp).append(!niu.isBlank() ? " (NIU: " + niu + ")" : "").append("<br/>");
+                metaCas.append("• <b>Responsable:</b> ").append(resp).append(!niu.isBlank() ? " (NIU: " + niu + ")" : "").append("<br/>");
+                metaAng.append("• <b>Responsible person:</b> ").append(resp).append(!niu.isBlank() ? " (NIU: " + niu + ")" : "").append("<br/>");
+            }
+            if (!proj.isBlank() && !proj.equals("#")) {
+                metaCat.append("• <b>Projecte:</b> ").append(proj).append(!projDesc.isBlank() && !projDesc.equals("#") ? " (" + projDesc + ")" : "").append("<br/>");
+                metaCas.append("• <b>Proyecto:</b> ").append(proj).append(!projDesc.isBlank() && !projDesc.equals("#") ? " (" + projDesc + ")" : "").append("<br/>");
+                metaAng.append("• <b>Project:</b> ").append(proj).append(!projDesc.isBlank() && !projDesc.equals("#") ? " (" + projDesc + ")" : "").append("<br/>");
+            }
+
+            if (!fullCat.isBlank()) fullCat += "<br/><br/>" + metaCat;
+            else fullCat = metaCat.toString();
+
+            if (!fullCas.isBlank()) fullCas += "<br/><br/>" + metaCas;
+            else fullCas = metaCas.toString();
+
+            if (!fullAng.isBlank()) fullAng += "<br/><br/>" + metaAng;
+            else fullAng = metaAng.toString();
+        }
+
+        // Contact persons
+        String personUuid = (String) row.getOrDefault("personUuid", "");
+        if (!personUuid.isBlank()) {
+            payload.put("contactPersons", List.of(Map.of("systemName", "Person", "uuid", personUuid)));
+        }
+
         if (!fullCat.isBlank() || !fullCas.isBlank() || !fullAng.isBlank()) {
             Map<String, String> descVal = new LinkedHashMap<>();
             if (!fullCat.isBlank()) descVal.put("ca_ES", fullCat);
@@ -499,13 +743,25 @@ public class EquipmentLoaderController {
             ));
         }
 
+        // Descripció de l'origen del finançament (Source of funding description)
+        if (projDesc != null && !projDesc.isBlank() && !projDesc.equals("#")) {
+            descriptions.add(Map.of(
+                "value", Map.of(
+                    "ca_ES", projDesc,
+                    "es_ES", projDesc,
+                    "en_GB", projDesc
+                ),
+                "type", Map.of("uri", "/dk/atira/pure/equipment/descriptions/source_of_funding_description")
+            ));
+        }
+
         if (!descriptions.isEmpty()) {
             payload.put("descriptions", descriptions);
         }
 
-        // 9. Marca i model a 'details'
+        // 9. Marca i model a 'details' (només si és un model real i no el número d'actiu)
         String model = (String) row.getOrDefault("model", "");
-        if (!model.isBlank()) {
+        if (!model.isBlank() && !model.equals(assetNum)) {
             payload.put("details", List.of(
                 Map.of(
                     "name", Map.of(

@@ -1,0 +1,1287 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Càrrega Dinàmica d'Actius d'Equipament Científic | Egreta</title>
+    <meta name="description" content="Eina per a la càrrega dinàmica massiva d'actius fixos d'equipament cientificotècnic a Egreta/Pure API.">
+    <script src="config.js"></script>
+    <script src="uab-brand.js" defer></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <link rel="stylesheet" href="uab-theme.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .uab-card {
+            background: #ffffff;
+            border: 1px solid var(--uab-columna, #e2e8f0);
+            border-radius: 1rem;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+            transition: all 0.2s ease;
+        }
+        .uab-card:hover {
+            box-shadow: 0 6px 18px rgba(0,0,0,0.06);
+        }
+        .btn-uab-primary {
+            background-color: var(--uab-campus, #007c64);
+            color: #ffffff;
+            font-weight: 600;
+            border-radius: 0.5rem;
+            padding: 0.6rem 1.25rem;
+            transition: all 0.15s;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .btn-uab-primary:hover:not(:disabled) {
+            background-color: #006350;
+            transform: translateY(-1px);
+        }
+        .btn-uab-secondary {
+            background-color: #f1f5f9;
+            color: #334155;
+            font-weight: 600;
+            border: 1px solid #cbd5e1;
+            border-radius: 0.5rem;
+            padding: 0.6rem 1.25rem;
+            transition: all 0.15s;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .btn-uab-secondary:hover:not(:disabled) {
+            background-color: #e2e8f0;
+            color: #1e293b;
+        }
+        .dropzone {
+            border: 2px dashed #cbd5e1;
+            border-radius: 1rem;
+            background-color: #f8fafc;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .dropzone:hover, .dropzone.dragover {
+            border-color: var(--uab-campus, #007c64);
+            background-color: #f0fdf4;
+        }
+        .table-container {
+            max-height: 65vh;
+            overflow-y: auto;
+        }
+        thead th {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        .badge-subtle {
+            font-size: 11px;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 9999px;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen text-slate-800">
+
+    <!-- Header / Navbar -->
+    <div class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
+        <div class="w-[96%] max-w-[96%] mx-auto px-2 sm:px-4 py-3.5 flex flex-wrap items-center justify-between gap-4">
+            <div class="flex items-center gap-3">
+                <a href="index.html" class="text-slate-400 hover:text-slate-600 transition-colors p-1.5 rounded-lg hover:bg-slate-100" title="Tornar al menú principal">
+                    <i class="fa-solid fa-arrow-left text-lg"></i>
+                </a>
+                <div>
+                    <div class="flex items-center gap-2">
+                        <span class="w-8 h-8 rounded-lg bg-teal-100 text-teal-700 flex items-center justify-center font-bold text-sm">
+                            <i class="fa-solid fa-boxes-stacked"></i>
+                        </span>
+                        <h1 class="text-lg font-bold text-slate-900 leading-tight">Càrrega Dinàmica d'Actius Fixos d'Equipament Científic</h1>
+                        <span class="badge-subtle bg-teal-100 text-teal-800 border border-teal-300">
+                            <i class="fa-solid fa-bolt mr-0.5"></i> Càrrega Dinàmica
+                        </span>
+                    </div>
+                    <p class="text-xs text-slate-500 mt-0.5">Gestió, assignació automàtica per UUID i alta massiva a Egreta / Pure API</p>
+                </div>
+            </div>
+
+            <!-- Controls d'entorn i enllaç a l'altre loader -->
+            <div class="flex items-center gap-3">
+                <a href="carrega-equipaments.html" class="text-xs text-slate-500 hover:text-emerald-700 font-semibold px-2.5 py-1 rounded-lg hover:bg-slate-100 transition-all flex items-center gap-1.5">
+                    <i class="fa-solid fa-microscope"></i> Anar a Càrrega SCT
+                </a>
+                <div class="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-semibold">
+                    <span class="px-2.5 py-1 text-slate-500">Entorn:</span>
+                    <button id="btn-env-test" class="px-3 py-1 rounded-lg bg-amber-400 text-amber-950 font-bold shadow-sm transition-all" onclick="setEnvironment('test')">
+                        <i class="fa-solid fa-flask mr-1"></i> TEST
+                    </button>
+                    <button id="btn-env-prod" class="px-3 py-1 rounded-lg text-slate-600 hover:text-slate-900 transition-all" onclick="setEnvironment('prod')">
+                        <i class="fa-solid fa-server mr-1"></i> PROD
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Container -->
+    <main class="w-[96%] max-w-[96%] mx-auto py-6 space-y-6">
+
+        <!-- Banner de KPIs / Resum d'actius dinàmics -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div class="uab-card p-4 flex items-center gap-4">
+                <div class="w-12 h-12 rounded-xl bg-teal-50 text-teal-700 flex items-center justify-center text-xl shrink-0">
+                    <i class="fa-solid fa-microscope"></i>
+                </div>
+                <div>
+                    <div class="text-2xl font-bold text-slate-900" id="kpi-total-items">49</div>
+                    <div class="text-xs font-semibold text-slate-500">Actius Fixos Carregats</div>
+                </div>
+            </div>
+
+            <div class="uab-card p-4 flex items-center gap-4">
+                <div class="w-12 h-12 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center text-xl shrink-0">
+                    <i class="fa-solid fa-building-columns"></i>
+                </div>
+                <div>
+                    <div class="text-2xl font-bold text-slate-900" id="kpi-total-orgs">12</div>
+                    <div class="text-xs font-semibold text-slate-500">Departaments / Serveis</div>
+                </div>
+            </div>
+
+            <div class="uab-card p-4 flex items-center gap-4">
+                <div class="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center text-xl shrink-0">
+                    <i class="fa-solid fa-coins"></i>
+                </div>
+                <div>
+                    <div class="text-xl font-bold text-slate-900" id="kpi-total-value">8.428.169 €</div>
+                    <div class="text-xs font-semibold text-slate-500">Valor Actual d'Inventari</div>
+                </div>
+            </div>
+
+            <div class="uab-card p-4 flex items-center gap-4">
+                <div class="w-12 h-12 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center text-xl shrink-0">
+                    <i class="fa-solid fa-folder-tree"></i>
+                </div>
+                <div>
+                    <div class="text-2xl font-bold text-slate-900" id="kpi-with-projects">13</div>
+                    <div class="text-xs font-semibold text-slate-500">Amb Projecte de Recerca</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 1. Zona de Selecció / Càrrega Dinàmica de Fitxer -->
+        <section class="uab-card p-6">
+            <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+                <div>
+                    <h2 class="text-base font-bold text-slate-900 flex items-center gap-2">
+                        <i class="fa-solid fa-file-excel text-teal-600"></i>
+                        1. Fitxer d'Actius Fixos (Càrrega Dinàmica)
+                    </h2>
+                    <p class="text-xs text-slate-500 mt-0.5">La pàgina es carrega dinàmicament amb l'inventari predeterminat. Pots arrossegar qualsevol altre fitxer Excel o CSV per actualitzar les dades.</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button class="btn-uab-secondary text-xs" onclick="resetDefaultData()">
+                        <i class="fa-solid fa-arrow-rotate-left"></i> Restablir Dades Inicials
+                    </button>
+                    <button class="btn-uab-secondary text-xs" onclick="exportDataToCsv()">
+                        <i class="fa-solid fa-download"></i> Exportar CSV
+                    </button>
+                </div>
+            </div>
+
+            <div class="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+                <!-- Drag & drop box -->
+                <div class="md:col-span-2 dropzone p-5 flex flex-col items-center justify-center text-center relative" id="drop-area" onclick="document.getElementById('file-input').click()">
+                    <input type="file" id="file-input" accept=".xlsx,.xls,.csv" class="hidden" onchange="handleFileSelect(event)">
+                    <div class="w-12 h-12 rounded-full bg-teal-50 text-teal-600 flex items-center justify-center text-xl mb-2">
+                        <i class="fa-solid fa-cloud-arrow-up"></i>
+                    </div>
+                    <p class="text-sm font-semibold text-slate-700">Arrossega un nou fitxer Excel o CSV aquí o <span class="text-teal-600 underline">navega</span></p>
+                    <p class="text-xs text-slate-400 mt-1">Accepta columnes d'actius fixos, denominacions CA/ES/EN, descripcions, emplaçament, responsable i UUID d'organització</p>
+                    <div id="file-loading-indicator" class="hidden absolute inset-0 bg-white/90 backdrop-blur-sm rounded-xl flex items-center justify-center gap-2 text-teal-700 font-semibold text-sm">
+                        <i class="fa-solid fa-circle-notch fa-spin text-lg"></i> Processant fitxer dinàmicament...
+                    </div>
+                </div>
+
+                <!-- Info resum del fitxer carregat -->
+                <div class="bg-slate-50 rounded-xl p-4 border border-slate-200 flex flex-col justify-between">
+                    <div>
+                        <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Estat de la càrrega</span>
+                        <div id="active-file-name" class="font-bold text-sm text-slate-800 mt-1 truncate">Inventari d'Actius Científics (Carregat)</div>
+                        <div id="file-meta-info" class="text-xs text-slate-500 mt-2 space-y-1">
+                            <div><i class="fa-solid fa-hashtag mr-1 text-slate-400"></i> <span id="meta-total-rows" class="font-semibold text-slate-700">49</span> actius fixos preparats</div>
+                            <div><i class="fa-solid fa-building mr-1 text-slate-400"></i> <span id="meta-total-orgs" class="font-semibold text-slate-700">12</span> organitzacions reconegudes</div>
+                            <div><i class="fa-solid fa-id-card-clip mr-1 text-slate-400"></i> <span id="meta-matched-orgs" class="font-semibold text-emerald-700">46 amb UUID Egreta directe</span></div>
+                        </div>
+                    </div>
+                    <div class="mt-3 pt-3 border-t border-slate-200 flex items-center justify-between text-xs">
+                        <span id="load-status-badge" class="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold flex items-center gap-1">
+                            <i class="fa-solid fa-check"></i> Actiu i llest
+                        </span>
+                        <span class="text-[11px] text-slate-400 font-mono">Format Dinàmic</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 2. Opcions Globals de Càrrega a Egreta -->
+        <section id="config-section" class="uab-card p-5">
+            <div class="flex flex-wrap items-center justify-between gap-4">
+                <div class="flex items-center gap-2">
+                    <i class="fa-solid fa-sliders text-teal-700"></i>
+                    <h2 class="text-sm font-bold text-slate-900">2. Opcions d'Alta a Egreta / Pure</h2>
+                </div>
+                <div class="flex flex-wrap items-center gap-4 text-xs">
+                    <div class="flex items-center gap-1.5">
+                        <label for="cfg-workflow" class="font-semibold text-slate-600">Estat Workflow:</label>
+                        <select id="cfg-workflow" class="border border-slate-300 rounded-lg px-2.5 py-1 bg-white font-medium text-slate-800 focus:border-teal-500 outline-none">
+                            <option value="approved" selected>Aprovada (Approved) - Recomanat</option>
+                            <option value="forApproval">Per a aprovació (For approval)</option>
+                            <option value="entryInProgress">Entrada en curs (Entry in progress)</option>
+                        </select>
+                    </div>
+
+                    <div class="flex items-center gap-1.5">
+                        <label for="cfg-type" class="font-semibold text-slate-600">Tipus d'Equipament:</label>
+                        <select id="cfg-type" class="border border-slate-300 rounded-lg px-2.5 py-1 bg-white font-medium text-slate-800 focus:border-teal-500 outline-none">
+                            <option value="/dk/atira/pure/equipment/equipmenttypes/equipment/equipment" selected>Equipament (Equipment)</option>
+                            <option value="/dk/atira/pure/equipment/equipmenttypes/equipment/facility">Instal·lació (Facility)</option>
+                            <option value="/dk/atira/pure/equipment/equipmenttypes/equipment/component">Component (Component)</option>
+                        </select>
+                    </div>
+
+                    <div class="flex items-center gap-1.5">
+                        <label class="flex items-center gap-1 cursor-pointer font-semibold text-slate-700">
+                            <input type="checkbox" id="cfg-include-meta" class="rounded text-teal-600 focus:ring-0" checked>
+                            Enriquir descripcions amb dades de l'actiu (emplaçament, responsable, projecte)
+                        </label>
+                    </div>
+
+                    <div class="flex items-center gap-1.5">
+                        <span class="font-semibold text-slate-600">Visibilitat:</span>
+                        <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold">PÚBLIC (FREE)</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 3. Taula de Dades i Accions de Càrrega -->
+        <section id="data-section" class="uab-card p-6">
+            <!-- Barra d'eines i filtres -->
+            <div class="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-100">
+                <div class="flex flex-wrap items-center gap-3">
+                    <div class="relative">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-400 text-xs"></i>
+                        <input type="text" id="search-box" placeholder="Cercar per actiu, títol, sala, PI, NIU..." class="border border-slate-300 rounded-lg pl-8 pr-3 py-1.5 text-xs w-64 focus:border-teal-500 outline-none" oninput="renderTable()">
+                    </div>
+
+                    <select id="org-filter" class="border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs bg-white text-slate-800 font-medium focus:border-teal-500 outline-none" onchange="renderTable()">
+                        <option value="ALL">Totes les Organitzacions</option>
+                    </select>
+
+                    <select id="project-filter" class="border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs bg-white text-slate-800 font-medium focus:border-teal-500 outline-none" onchange="renderTable()">
+                        <option value="ALL">Tots els Projectes</option>
+                        <option value="WITH_PROJECT">Amb projecte finançat</option>
+                        <option value="NO_PROJECT">Sense projecte específic</option>
+                    </select>
+
+                    <select id="year-filter" class="border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs bg-white text-slate-800 font-medium focus:border-teal-500 outline-none" onchange="renderTable()">
+                        <option value="ALL">Tots els Anys</option>
+                    </select>
+
+                    <select id="status-filter" class="border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs bg-white text-slate-800 font-medium focus:border-teal-500 outline-none" onchange="renderTable()">
+                        <option value="ALL">Tots els Estats</option>
+                        <option value="READY">Pendents</option>
+                        <option value="CREATED">Creats amb èxit</option>
+                        <option value="ERROR">Amb error</option>
+                        <option value="DRY_RUN">Simulats (Dry Run)</option>
+                    </select>
+                </div>
+
+                <!-- Botons d'acció principals -->
+                <div class="flex items-center gap-2">
+                    <button id="btn-dry-run" class="btn-uab-secondary text-xs" onclick="executeBatch(true)">
+                        <i class="fa-solid fa-vial"></i> Simular Càrrega (Dry Run)
+                    </button>
+                    <button id="btn-execute" class="btn-uab-primary text-xs" onclick="executeBatch(false)">
+                        <i class="fa-solid fa-cloud-arrow-up"></i>
+                        <span id="btn-execute-text">Carregar a Egreta (<span class="current-env-label">TEST</span>)</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Progrés d'execució -->
+            <div id="progress-bar-container" class="mt-4 p-4 rounded-xl bg-slate-50 border border-slate-200 hidden">
+                <div class="flex items-center justify-between text-xs font-semibold text-slate-700 mb-1.5">
+                    <span id="progress-status-text"><i class="fa-solid fa-spinner fa-spin text-teal-600 mr-1.5"></i> Processant actius científics...</span>
+                    <span id="progress-counts">0 / 0</span>
+                </div>
+                <div class="w-full bg-slate-200 rounded-full h-2.5 overflow-hidden">
+                    <div id="progress-bar" class="bg-teal-600 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <!-- Resum de comptadors -->
+            <div class="mt-4 flex flex-wrap items-center justify-between text-xs text-slate-600">
+                <div class="flex items-center gap-4">
+                    <span>Mostrant <b id="count-visible">0</b> de <b id="count-total">0</b> actius</span>
+                    <span class="text-slate-300">|</span>
+                    <label class="flex items-center gap-1.5 cursor-pointer font-semibold text-slate-700">
+                        <input type="checkbox" id="check-all" class="rounded text-teal-600 focus:ring-0" checked onchange="toggleSelectAll(this.checked)">
+                        Seleccionar tots els visibles
+                    </label>
+                </div>
+                <div class="flex items-center gap-3">
+                    <span class="badge-subtle bg-emerald-100 text-emerald-800 font-bold" id="badge-created-count">0 Creats</span>
+                    <span class="badge-subtle bg-rose-100 text-rose-800 font-bold" id="badge-error-count">0 Errors</span>
+                    <span class="badge-subtle bg-indigo-100 text-indigo-800 font-bold" id="badge-dryrun-count">0 Simulats</span>
+                    <span class="badge-subtle bg-slate-100 text-slate-700 font-bold" id="badge-pending-count">0 Pendents</span>
+                </div>
+            </div>
+
+            <!-- Taula d'Actius Fixos -->
+            <div class="mt-3 table-container border border-slate-200 rounded-xl">
+                <table class="min-w-full divide-y divide-slate-200 text-xs text-left">
+                    <thead class="bg-slate-100 text-slate-700 font-bold uppercase tracking-wider">
+                        <tr>
+                            <th class="py-3 px-3 w-10 text-center">
+                                <span class="sr-only">Seleccionar</span>
+                            </th>
+                            <th class="py-3 px-2 w-10 text-center">#</th>
+                            <th class="py-3 px-3 w-28">Núm. Actiu Fix</th>
+                            <th class="py-3 px-3">Denominació & Descripció</th>
+                            <th class="py-3 px-3">Organització / Dept.</th>
+                            <th class="py-3 px-3">Emplaçament</th>
+                            <th class="py-3 px-3">Projecte & Responsable</th>
+                            <th class="py-3 px-3 text-right">Valor Actual</th>
+                            <th class="py-3 px-3 text-center">Estat</th>
+                            <th class="py-3 px-3 text-right">Accions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="equipments-table-body" class="bg-white divide-y divide-slate-100 font-normal">
+                        <!-- Generat dinàmicament per Javascript -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Modal per visualitzar JSON del payload -->
+    <div id="json-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-2xl w-full max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+            <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+                <div>
+                    <h3 class="font-bold text-slate-900 text-sm flex items-center gap-2">
+                        <i class="fa-solid fa-code text-teal-600"></i>
+                        Payload Egreta (JSON)
+                    </h3>
+                    <p id="modal-item-title" class="text-xs text-slate-500 truncate mt-0.5 font-mono"></p>
+                </div>
+                <button onclick="closeJsonModal()" class="text-slate-400 hover:text-slate-600 text-base">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="p-6 overflow-y-auto font-mono text-xs bg-slate-900 text-teal-300">
+                <pre id="modal-json-content"></pre>
+            </div>
+            <div class="px-6 py-3 border-t border-slate-100 flex items-center justify-between gap-2 bg-slate-50">
+                <button class="btn-uab-secondary text-xs" onclick="copyJsonToClipboard()">
+                    <i class="fa-solid fa-copy mr-1"></i> Copiar JSON
+                </button>
+                <button class="btn-uab-secondary text-xs" onclick="closeJsonModal()">Tancar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirmació PROD Modal -->
+    <div id="prod-warning-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <div class="w-12 h-12 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center text-2xl mx-auto">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+            </div>
+            <div class="text-center">
+                <h3 class="font-bold text-slate-900 text-base">Atenció: Canvi a PRODUCCIÓ</h3>
+                <p class="text-xs text-slate-500 mt-2 leading-relaxed">
+                    Esteu a punt de canviar l'entorn de destí a <b>PRODUCCIÓ (egreta.uab.cat)</b>. 
+                    Les altes que s'executin seran visibles immediatament al portal de recerca oficial de la UAB.
+                </p>
+            </div>
+            <div class="flex items-center justify-center gap-3 pt-2">
+                <button class="btn-uab-secondary text-xs" onclick="cancelProdSwitch()">Cancel·lar</button>
+                <button class="px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs" onclick="confirmProdSwitch()">
+                    Entès, canviar a Producció
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dades de l'Excel proporcionat pel client (Carregades dinàmicament) -->
+    <script src="actius-data.js"></script>
+
+    <!-- Scripts de la pàgina -->
+    <script>
+        let currentEnvironment = 'test';
+        let equipmentsData = [];
+        let isProcessing = false;
+
+        // Inicialització automàtica / dinàmica
+        document.addEventListener('DOMContentLoaded', () => {
+            updateEnvUI();
+            setupDropzone();
+            initDynamicData();
+        });
+
+        function setEnvironment(env) {
+            if (env === 'prod' && currentEnvironment !== 'prod') {
+                document.getElementById('prod-warning-modal').classList.remove('hidden');
+                return;
+            }
+            currentEnvironment = env;
+            updateEnvUI();
+        }
+
+        function confirmProdSwitch() {
+            currentEnvironment = 'prod';
+            document.getElementById('prod-warning-modal').classList.add('hidden');
+            updateEnvUI();
+        }
+
+        function cancelProdSwitch() {
+            document.getElementById('prod-warning-modal').classList.add('hidden');
+        }
+
+        function updateEnvUI() {
+            const btnTest = document.getElementById('btn-env-test');
+            const btnProd = document.getElementById('btn-env-prod');
+            const labels = document.querySelectorAll('.current-env-label');
+
+            if (currentEnvironment === 'test') {
+                btnTest.className = 'px-3 py-1 rounded-lg bg-amber-400 text-amber-950 font-bold shadow-sm transition-all';
+                btnProd.className = 'px-3 py-1 rounded-lg text-slate-600 hover:text-slate-900 transition-all';
+                labels.forEach(l => l.textContent = 'TEST');
+            } else {
+                btnProd.className = 'px-3 py-1 rounded-lg bg-rose-600 text-white font-bold shadow-sm transition-all';
+                btnTest.className = 'px-3 py-1 rounded-lg text-slate-600 hover:text-slate-900 transition-all';
+                labels.forEach(l => l.textContent = 'PRODUCCIÓ');
+            }
+        }
+
+        function setupDropzone() {
+            const dropArea = document.getElementById('drop-area');
+            ['dragenter', 'dragover'].forEach(eventName => {
+                dropArea.addEventListener(eventName, (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    dropArea.classList.add('dragover');
+                }, false);
+            });
+            ['dragleave', 'drop'].forEach(eventName => {
+                dropArea.addEventListener(eventName, (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    dropArea.classList.remove('dragover');
+                }, false);
+            });
+            dropArea.addEventListener('drop', (e) => {
+                const dt = e.dataTransfer;
+                const files = dt.files;
+                if (files.length > 0) {
+                    processIncomingFile(files[0]);
+                }
+            }, false);
+        }
+
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (file) {
+                processIncomingFile(file);
+            }
+        }
+
+        /**
+         * Processament dinàmic de qualsevol fitxer Excel o CSV amb SheetJS al client
+         */
+        async function processIncomingFile(file) {
+            showLoading(true);
+            try {
+                const data = await file.arrayBuffer();
+                const workbook = XLSX.read(data, { type: 'array' });
+                const firstSheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[firstSheetName];
+                const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
+
+                if (!rows || rows.length < 2) {
+                    throw new Error('El fitxer no conté files de dades vàlides.');
+                }
+
+                const parsed = parseClientRows(rows, file.name);
+                loadDataset(parsed, file.name);
+            } catch (err) {
+                console.warn('Error en parseig client-side, intentant backend...', err);
+                // Fallback al backend
+                await uploadToBackend(file);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        async function uploadToBackend(file) {
+            const formData = new FormData();
+            formData.append('file', file);
+            try {
+                const response = await fetch(window.apiUrl('equipment-loader/parse-excel'), {
+                    method: 'POST',
+                    body: formData
+                });
+                if (!response.ok) throw new Error('Error al backend en processar Excel');
+                const data = await response.json();
+                loadDataset(data.equipments || [], file.name);
+            } catch (e) {
+                alert('Error al carregar el fitxer: ' + e.message);
+            }
+        }
+
+        function normalizeHeader(str) {
+            if (!str) return '';
+            return String(str)
+                .toLowerCase()
+                .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+                .trim();
+        }
+
+        function isLang(header, lang) {
+            const h = header.toLowerCase();
+            if (lang === 'ca') return (h.includes('(ca)') || h.includes('cat')) && !h.includes('cas');
+            if (lang === 'es') return h.includes('(es)') || h.includes('cas') || h.includes('esp');
+            if (lang === 'en') return (h.includes('(en)') || h.includes('eng') || h.includes('ang')) && !h.includes('cas');
+            return false;
+        }
+
+        function parseClientRows(rows, fileName) {
+            const headerRow = rows[0].map(h => normalizeHeader(h));
+            
+            let colClass = -1, colNum = -1, colTitleCa = -1, colTitleEs = -1, colTitleEn = -1;
+            let colLoc = -1, colLocDesc = -1, colCost = -1, colCostDesc = -1, colProj = -1, colProjDesc = -1;
+            let colYear = -1, colResp = -1, colVal = -1, colAmort = -1, colNet = -1, colNiu = -1;
+            let colOrgName = -1, colOrgUuid = -1, colDescCa = -1, colDescEs = -1, colDescEn = -1;
+
+            headerRow.forEach((h, idx) => {
+                if (h.includes('classe')) colClass = idx;
+                else if (h.includes('numero') || (h.includes('actiu') && h.includes('fix') && !h.includes('denominacio'))) colNum = idx;
+                else if (h.includes('denominacio') || h.includes('titol') || h.includes('title')) {
+                    if (isLang(h, 'ca')) colTitleCa = idx;
+                    else if (isLang(h, 'es')) colTitleEs = idx;
+                    else if (isLang(h, 'en')) colTitleEn = idx;
+                }
+                else if (h.includes('descripcio emplacament')) colLocDesc = idx;
+                else if (h.includes('emplacament')) colLoc = idx;
+                else if (h.includes('descripcio centre de cost')) colCostDesc = idx;
+                else if (h.includes('centre de cost')) colCost = idx;
+                else if (h.includes('descripcio projecte')) colProjDesc = idx;
+                else if (h.includes('projecte') || h.includes('proyecto')) colProj = idx;
+                else if (h.includes('capitalitzaci') || h.includes('any')) colYear = idx;
+                else if (h.includes('responsable')) colResp = idx;
+                else if (h.includes('valor net')) colNet = idx;
+                else if (h.includes('amortitzaci')) colAmort = idx;
+                else if (h.includes('valor actual') || h.includes('valor')) colVal = idx;
+                else if (h.includes('niu')) colNiu = idx;
+                else if (h.includes('uuid')) colOrgUuid = idx;
+                else if (h.includes('nom oficial') || (h.includes('organitzaci') && !h.includes('uuid'))) colOrgName = idx;
+                else if (h.includes('descrip') || h.includes('description')) {
+                    if (isLang(h, 'ca')) colDescCa = idx;
+                    else if (isLang(h, 'es')) colDescEs = idx;
+                    else if (isLang(h, 'en')) colDescEn = idx;
+                }
+            });
+
+            const parsed = [];
+            for (let i = 1; i < rows.length; i++) {
+                const r = rows[i];
+                if (!r || r.length === 0) continue;
+
+                const tCa = colTitleCa >= 0 ? String(r[colTitleCa] || '').trim() : '';
+                const tEs = colTitleEs >= 0 ? String(r[colTitleEs] || '').trim() : '';
+                const tEn = colTitleEn >= 0 ? String(r[colTitleEn] || '').trim() : '';
+                if (!tCa && !tEs && !tEn) continue;
+
+                const assetNumber = colNum >= 0 ? String(r[colNum] || '').trim() : '';
+                const assetClass = colClass >= 0 ? String(r[colClass] || '').trim() : 'Equipament científic';
+                const location = colLoc >= 0 ? String(r[colLoc] || '').trim() : '';
+                const locationDesc = colLocDesc >= 0 ? String(r[colLocDesc] || '').trim() : '';
+                const costCenter = colCost >= 0 ? String(r[colCost] || '').trim() : '';
+                const costCenterDesc = colCostDesc >= 0 ? String(r[colCostDesc] || '').trim() : '';
+                const project = colProj >= 0 ? String(r[colProj] || '').trim() : '';
+                const projectDesc = colProjDesc >= 0 ? String(r[colProjDesc] || '').trim() : '';
+                const capYear = colYear >= 0 ? String(r[colYear] || '').trim() : '';
+                const responsible = colResp >= 0 ? String(r[colResp] || '').trim() : '';
+                const currentValue = colVal >= 0 ? String(r[colVal] || '').trim() : '0';
+                const accumAmort = colAmort >= 0 ? String(r[colAmort] || '').trim() : '0';
+                const netValue = colNet >= 0 ? String(r[colNet] || '').trim() : '0';
+                const niu = colNiu >= 0 ? String(r[colNiu] || '').trim() : '';
+                const orgName = colOrgName >= 0 ? String(r[colOrgName] || '').trim() : '';
+                const orgUuid = colOrgUuid >= 0 ? String(r[colOrgUuid] || '').trim() : '';
+                const descCat = colDescCa >= 0 ? String(r[colDescCa] || '').trim() : '';
+                const descCas = colDescEs >= 0 ? String(r[colDescEs] || '').trim() : '';
+                const descAng = colDescEn >= 0 ? String(r[colDescEn] || '').trim() : '';
+
+                    let personUuid = '';
+                    let email = '';
+                    if (typeof ACTIUS_DATA !== 'undefined' && Array.isArray(ACTIUS_DATA)) {
+                        const match = ACTIUS_DATA.find(x => (niu && x.niu === niu) || (assetNumber && x.assetNumber === assetNumber));
+                        if (match) {
+                            personUuid = match.personUuid || '';
+                            email = match.email || '';
+                        }
+                    }
+
+                    parsed.push({
+                        rowIndex: i + 1,
+                        assetNumber,
+                        assetClass,
+                        titleCat: tCa,
+                        titleCas: tEs,
+                        titleAng: tEn,
+                        location,
+                        locationDesc,
+                        costCenter,
+                        costCenterDesc,
+                        project,
+                        projectDesc,
+                        capYear,
+                        responsible,
+                        currentValue,
+                        accumAmort,
+                        netValue,
+                        niu,
+                        personUuid,
+                        email,
+                        orgName: orgName || costCenterDesc || 'Universitat Autònoma de Barcelona',
+                        orgAcronym: orgName || costCenter,
+                        orgUuid,
+                        orgMatched: Boolean(orgUuid),
+                        descCat,
+                        descCas,
+                        descAng,
+                        financament: (project && project !== '#') ? `Projecte ${project}${projectDesc && projectDesc !== '#' ? ': ' + projectDesc : ''}` : '',
+                        tipusPrestacioRaw: 'Sense servei',
+                        tipusPrestacioUri: '/dk/atira/pure/equipment/loantypes/sense_servei'
+                    });
+            }
+
+            return parsed;
+        }
+
+        /**
+         * Inicialització dinàmica al carregar la pàgina
+         */
+        async function initDynamicData() {
+            showLoading(true);
+            try {
+                // Si tenim el fitxer de dades precarregat dinàmicament a la variable global ACTIUS_DATA
+                if (typeof ACTIUS_DATA !== 'undefined' && Array.isArray(ACTIUS_DATA) && ACTIUS_DATA.length > 0) {
+                    loadDataset(ACTIUS_DATA, "Inventari d'Actius Fixos (Carregat Dinàmicament)");
+                    return;
+                }
+
+                // Si no, demanem al backend el fitxer predeterminat
+                const resp = await window.apiFetch('equipment-loader/load-actius-default');
+                if (resp.ok) {
+                    const data = await resp.json();
+                    loadDataset(data.equipments || [], "Inventari d'Actius Fixos UAB");
+                    return;
+                }
+            } catch (err) {
+                console.warn('Backend load-actius-default no disponible, utilitzant dades de reserva:', err);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        function resetDefaultData() {
+            if (typeof ACTIUS_DATA !== 'undefined' && Array.isArray(ACTIUS_DATA)) {
+                loadDataset(ACTIUS_DATA, "Inventari d'Actius Fixos (Carregat Dinàmicament)");
+            } else {
+                initDynamicData();
+            }
+        }
+
+        function loadDataset(items, fileName) {
+            document.getElementById('active-file-name').textContent = fileName;
+            
+            equipmentsData = items.map((item, idx) => ({
+                ...item,
+                selected: true,
+                status: 'READY',
+                statusMessage: 'A punt per carregar',
+                idx: idx
+            }));
+
+            // Actualització de KPIs
+            let totalVal = 0;
+            let withProj = 0;
+            const orgs = new Set();
+            const years = new Set();
+            let matchedUuidCount = 0;
+
+            equipmentsData.forEach(eq => {
+                const val = parseFloat(String(eq.currentValue || '0').replace(/[^0-9.-]/g, '')) || 0;
+                totalVal += val;
+                if (eq.project && eq.project !== '#') withProj++;
+                if (eq.orgName) orgs.add(eq.orgName);
+                if (eq.capYear) years.add(eq.capYear);
+                if (eq.orgUuid) matchedUuidCount++;
+            });
+
+            document.getElementById('kpi-total-items').textContent = equipmentsData.length;
+            document.getElementById('kpi-total-orgs').textContent = orgs.size;
+            document.getElementById('kpi-total-value').textContent = formatCurrency(totalVal);
+            document.getElementById('kpi-with-projects').textContent = withProj;
+
+            document.getElementById('meta-total-rows').textContent = equipmentsData.length;
+            document.getElementById('meta-total-orgs').textContent = orgs.size;
+            document.getElementById('meta-matched-orgs').textContent = `${matchedUuidCount} amb UUID Egreta directe`;
+
+            // Filtres desplegables
+            const orgFilter = document.getElementById('org-filter');
+            orgFilter.innerHTML = '<option value="ALL">Totes les Organitzacions</option>';
+            Array.from(orgs).sort().forEach(o => {
+                const opt = document.createElement('option');
+                opt.value = o;
+                opt.textContent = o;
+                orgFilter.appendChild(opt);
+            });
+
+            const yearFilter = document.getElementById('year-filter');
+            yearFilter.innerHTML = '<option value="ALL">Tots els Anys</option>';
+            Array.from(years).sort().reverse().forEach(y => {
+                const opt = document.createElement('option');
+                opt.value = y;
+                opt.textContent = y;
+                yearFilter.appendChild(opt);
+            });
+
+            renderTable();
+        }
+
+        function formatCurrency(val) {
+            if (isNaN(val)) return '0,00 €';
+            return new Intl.NumberFormat('ca-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(val);
+        }
+
+        // ==========================================
+        // CONSTRUCCIÓ DINÀMICA DEL PAYLOAD EGRETA
+        // ==========================================
+
+        function buildItemPayload(item, workflowStep, equipmentTypeUri, includeMeta = true) {
+            const payload = {
+                title: {},
+                type: { uri: equipmentTypeUri || "/dk/atira/pure/equipment/equipmenttypes/equipment/equipment" },
+                loanType: { uri: item.tipusPrestacioUri || "/dk/atira/pure/equipment/loantypes/sense_servei" },
+                visibility: { key: "FREE" },
+                workflow: { step: workflowStep || "approved" }
+            };
+
+            if (item.titleCat) payload.title.ca_ES = item.titleCat;
+            if (item.titleCas) payload.title.es_ES = item.titleCas;
+            if (item.titleAng) payload.title.en_GB = item.titleAng;
+            if (Object.keys(payload.title).length === 0) payload.title.ca_ES = item.model || 'Equipament científic';
+
+            if (item.orgUuid) {
+                payload.managingOrganization = { systemName: "Organization", uuid: item.orgUuid };
+                payload.organizations = [{ systemName: "Organization", uuid: item.orgUuid }];
+            }
+
+            // Contact persons (investigador responsable resolt a Egreta)
+            if (item.personUuid) {
+                payload.contactPersons = [{
+                    systemName: "Person",
+                    uuid: item.personUuid
+                }];
+            }
+
+            // Email de contacte
+            if (item.email) {
+                payload.emails = [{
+                    value: item.email,
+                    type: {
+                        uri: "/dk/atira/pure/equipment/equipmentemailtype/email"
+                    }
+                }];
+            }
+
+            // Descripcions
+            let dCat = item.descCat || '';
+            let dCas = item.descCas || '';
+            let dAng = item.descAng || '';
+
+            if (includeMeta) {
+                const metaCat = [];
+                const metaCas = [];
+                const metaAng = [];
+
+                if (item.assetNumber) {
+                    metaCat.push(`• <b>Núm. actiu fix:</b> ${escapeHtml(item.assetNumber)}`);
+                    metaCas.push(`• <b>Núm. activo fijo:</b> ${escapeHtml(item.assetNumber)}`);
+                    metaAng.push(`• <b>Fixed asset no.:</b> ${escapeHtml(item.assetNumber)}`);
+                }
+                if (item.location) {
+                    const locInfo = item.location + (item.locationDesc ? ` (${item.locationDesc})` : '');
+                    metaCat.push(`• <b>Emplaçament:</b> ${escapeHtml(locInfo)}`);
+                    metaCas.push(`• <b>Emplazamiento:</b> ${escapeHtml(locInfo)}`);
+                    metaAng.push(`• <b>Location:</b> ${escapeHtml(locInfo)}`);
+                }
+                if (item.capYear) {
+                    metaCat.push(`• <b>Any capitalització:</b> ${escapeHtml(item.capYear)}`);
+                    metaCas.push(`• <b>Año capitalización:</b> ${escapeHtml(item.capYear)}`);
+                    metaAng.push(`• <b>Capitalization year:</b> ${escapeHtml(item.capYear)}`);
+                }
+                if (item.responsible) {
+                    const respInfo = item.responsible + (item.niu ? ` (NIU: ${item.niu})` : '');
+                    metaCat.push(`• <b>Responsable:</b> ${escapeHtml(respInfo)}`);
+                    metaCas.push(`• <b>Responsable:</b> ${escapeHtml(respInfo)}`);
+                    metaAng.push(`• <b>Responsible person:</b> ${escapeHtml(respInfo)}`);
+                }
+                if (item.project && item.project !== '#') {
+                    const projInfo = item.project + (item.projectDesc && item.projectDesc !== '#' ? `: ${item.projectDesc}` : '');
+                    metaCat.push(`• <b>Projecte:</b> ${escapeHtml(projInfo)}`);
+                    metaCas.push(`• <b>Proyecto:</b> ${escapeHtml(projInfo)}`);
+                    metaAng.push(`• <b>Project:</b> ${escapeHtml(projInfo)}`);
+                }
+
+                if (metaCat.length > 0) {
+                    const blockCat = `<br/><br/><b>Dades de l'actiu científic:</b><br/>` + metaCat.join('<br/>');
+                    const blockCas = `<br/><br/><b>Datos del activo científico:</b><br/>` + metaCas.join('<br/>');
+                    const blockAng = `<br/><br/><b>Scientific asset details:</b><br/>` + metaAng.join('<br/>');
+
+                    dCat = (dCat ? dCat + blockCat : metaCat.join('<br/>'));
+                    dCas = (dCas ? dCas + blockCas : metaCas.join('<br/>'));
+                    dAng = (dAng ? dAng + blockAng : metaAng.join('<br/>'));
+                }
+            }
+
+            payload.descriptions = [];
+
+            if (dCat || dCas || dAng) {
+                const descVal = {};
+                if (dCat) descVal.ca_ES = dCat;
+                if (dCas) descVal.es_ES = dCas;
+                if (dAng) descVal.en_GB = dAng;
+                payload.descriptions.push({
+                    value: descVal,
+                    type: { uri: "/dk/atira/pure/equipment/descriptions/equipmentdescription" }
+                });
+            }
+
+            // Descripció de l'origen del finançament (Source of funding description)
+            if (item.projectDesc && item.projectDesc !== '#') {
+                payload.descriptions.push({
+                    value: {
+                        ca_ES: item.projectDesc,
+                        es_ES: item.projectDesc,
+                        en_GB: item.projectDesc
+                    },
+                    type: { uri: "/dk/atira/pure/equipment/descriptions/source_of_funding_description" }
+                });
+            }
+
+            // Details (només si és un model real)
+            if (item.model && item.model !== item.assetNumber) {
+                payload.details = [{
+                    name: {
+                        ca_ES: item.model,
+                        es_ES: item.model,
+                        en_GB: item.model
+                    }
+                }];
+            }
+
+            return payload;
+        }
+
+        async function prepareFinalPayload(item) {
+            const workflowStep = document.getElementById('cfg-workflow').value;
+            const equipmentTypeUri = document.getElementById('cfg-type').value;
+            const includeMeta = document.getElementById('cfg-include-meta').checked;
+
+            return buildItemPayload(item, workflowStep, equipmentTypeUri, includeMeta);
+        }
+
+        // ==========================================
+        // RENDERITZACIÓ DE LA TAULA DINÀMICA
+        // ==========================================
+
+        function renderTable() {
+            const tbody = document.getElementById('equipments-table-body');
+            const search = document.getElementById('search-box').value.toLowerCase().trim();
+            const orgFilter = document.getElementById('org-filter').value;
+            const projFilter = document.getElementById('project-filter').value;
+            const yearFilter = document.getElementById('year-filter').value;
+            const statusFilter = document.getElementById('status-filter').value;
+
+            tbody.innerHTML = '';
+
+            let visibleCount = 0;
+            let createdCount = 0;
+            let errorCount = 0;
+            let dryRunCount = 0;
+            let pendingCount = 0;
+
+            equipmentsData.forEach(item => {
+                if (item.status === 'CREATED') createdCount++;
+                else if (item.status === 'ERROR') errorCount++;
+                else if (item.status === 'DRY_RUN') dryRunCount++;
+                else pendingCount++;
+
+                // Filtres
+                const matchesSearch = !search ||
+                    (item.titleCat && item.titleCat.toLowerCase().includes(search)) ||
+                    (item.titleCas && item.titleCas.toLowerCase().includes(search)) ||
+                    (item.titleAng && item.titleAng.toLowerCase().includes(search)) ||
+                    (item.assetNumber && item.assetNumber.toLowerCase().includes(search)) ||
+                    (item.location && item.location.toLowerCase().includes(search)) ||
+                    (item.locationDesc && item.locationDesc.toLowerCase().includes(search)) ||
+                    (item.responsible && item.responsible.toLowerCase().includes(search)) ||
+                    (item.niu && item.niu.toLowerCase().includes(search)) ||
+                    (item.project && item.project.toLowerCase().includes(search)) ||
+                    (item.orgName && item.orgName.toLowerCase().includes(search));
+
+                const matchesOrg = orgFilter === 'ALL' || item.orgName === orgFilter;
+                const matchesYear = yearFilter === 'ALL' || item.capYear === yearFilter;
+                
+                let matchesProj = true;
+                if (projFilter === 'WITH_PROJECT') matchesProj = Boolean(item.project && item.project !== '#');
+                else if (projFilter === 'NO_PROJECT') matchesProj = !item.project || item.project === '#';
+
+                const matchesStatus = statusFilter === 'ALL' || item.status === statusFilter;
+
+                if (!matchesSearch || !matchesOrg || !matchesYear || !matchesProj || !matchesStatus) return;
+
+                visibleCount++;
+
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-slate-50 transition-colors ' + (item.selected ? '' : 'opacity-60 bg-slate-50/50');
+
+                // Estat Badge
+                let statusBadge = `<span class="badge-subtle bg-slate-100 text-slate-600">Pendent</span>`;
+                if (item.status === 'PROCESSING') {
+                    statusBadge = `<span class="badge-subtle bg-amber-100 text-amber-800"><i class="fa-solid fa-spinner fa-spin text-xs"></i> Processant</span>`;
+                } else if (item.status === 'CREATED') {
+                    statusBadge = `<span class="badge-subtle bg-emerald-100 text-emerald-800" title="UUID: ${item.uuid || ''}"><i class="fa-solid fa-check text-xs"></i> Creat</span>`;
+                } else if (item.status === 'ERROR') {
+                    statusBadge = `<span class="badge-subtle bg-rose-100 text-rose-800" title="${item.errorMessage || ''}"><i class="fa-solid fa-xmark text-xs"></i> Error</span>`;
+                } else if (item.status === 'DRY_RUN') {
+                    statusBadge = `<span class="badge-subtle bg-indigo-100 text-indigo-800"><i class="fa-solid fa-vial text-xs"></i> Simulat</span>`;
+                }
+
+                // Org Badge
+                const orgHtml = item.orgUuid ? `
+                    <div class="font-semibold text-slate-800 text-[11px]">${escapeHtml(item.orgName)}</div>
+                    <div class="flex items-center gap-1 mt-0.5">
+                        <span class="badge-subtle bg-emerald-50 text-emerald-700 border border-emerald-200 text-[9px] font-mono">
+                            <i class="fa-solid fa-circle-check text-[8px]"></i> ${item.orgUuid.substring(0, 8)}...
+                        </span>
+                        <button class="text-slate-400 hover:text-slate-600 p-0.5" title="Copiar UUID" onclick="copyText('${item.orgUuid}')">
+                            <i class="fa-solid fa-copy text-[10px]"></i>
+                        </button>
+                    </div>
+                ` : `
+                    <div class="font-semibold text-slate-800 text-[11px]">${escapeHtml(item.orgName || 'Sense organització')}</div>
+                    <span class="badge-subtle bg-amber-50 text-amber-700 border border-amber-200 text-[9px]">
+                        <i class="fa-solid fa-triangle-exclamation text-[8px]"></i> Sense UUID
+                    </span>
+                `;
+
+                // Titles & Descriptions
+                const titlesHtml = `
+                    <div class="font-bold text-slate-900 leading-snug">${escapeHtml(item.titleCat || 'Sense denominació')}</div>
+                    ${item.titleCas && item.titleCas !== item.titleCat ? `<div class="text-[10px] text-slate-500 font-normal mt-0.5"><span class="font-bold text-slate-400">ES:</span> ${escapeHtml(item.titleCas)}</div>` : ''}
+                    ${item.titleAng && item.titleAng !== item.titleCat ? `<div class="text-[10px] text-slate-400 font-normal"><span class="font-bold text-slate-400">EN:</span> ${escapeHtml(item.titleAng)}</div>` : ''}
+                    ${item.descCat ? `
+                        <div class="mt-1 text-[11px] text-slate-600 bg-slate-50 p-1.5 rounded border border-slate-200 line-clamp-2 max-w-sm" title="${escapeHtml(item.descCat)}">
+                            ${escapeHtml(item.descCat)}
+                        </div>
+                    ` : ''}
+                `;
+
+                // Project & Responsible
+                const projHtml = `
+                    <div class="font-semibold text-slate-800 flex items-center gap-1">
+                        ${escapeHtml(item.responsible || '-')}
+                        ${item.personUuid ? `<span class="text-[9px] text-emerald-600 bg-emerald-50 px-1 rounded border border-emerald-200" title="Contact Person Pure UUID: ${item.personUuid}"><i class="fa-solid fa-user-check"></i></span>` : ''}
+                    </div>
+                    ${item.niu ? `<div class="text-[10px] text-slate-400 font-mono">NIU: ${escapeHtml(item.niu)}</div>` : ''}
+                    ${item.email ? `<div class="text-[10px] text-slate-500 font-mono truncate max-w-[170px]" title="${escapeHtml(item.email)}">${escapeHtml(item.email)}</div>` : ''}
+                    ${item.project && item.project !== '#' ? `
+                        <div class="mt-1 text-[10px] text-teal-800 bg-teal-50/80 px-1.5 py-0.5 rounded border border-teal-200 font-semibold line-clamp-1 max-w-[200px]" title="${escapeHtml(item.project + ' - ' + item.projectDesc)}">
+                            <i class="fa-solid fa-folder-closed mr-1"></i>${escapeHtml(item.project)}
+                        </div>
+                    ` : ''}
+                `;
+
+                // Location
+                const locHtml = `
+                    <div class="font-mono font-bold text-slate-800">${escapeHtml(item.location || '-')}</div>
+                    <div class="text-[10px] text-slate-500 truncate max-w-[150px]" title="${escapeHtml(item.locationDesc)}">${escapeHtml(item.locationDesc || '')}</div>
+                    ${item.capYear ? `<div class="text-[9px] text-slate-400 font-mono mt-0.5">Cap: ${escapeHtml(item.capYear)}</div>` : ''}
+                `;
+
+                // Value
+                const valNum = parseFloat(String(item.currentValue || '0').replace(/[^0-9.-]/g, '')) || 0;
+                const valHtml = `
+                    <div class="font-mono font-bold text-slate-800">${formatCurrency(valNum)}</div>
+                    ${item.netValue ? `<div class="text-[9px] text-slate-400 font-mono">Net: ${formatCurrency(parseFloat(item.netValue) || 0)}</div>` : ''}
+                `;
+
+                tr.innerHTML = `
+                    <td class="py-3 px-3 text-center">
+                        <input type="checkbox" ${item.selected ? 'checked' : ''} class="rounded text-teal-600 focus:ring-0 cursor-pointer" onchange="toggleItemSelect(${item.idx}, this.checked)">
+                    </td>
+                    <td class="py-3 px-2 text-center font-mono text-slate-400">${item.rowIndex}</td>
+                    <td class="py-3 px-3">
+                        <span class="font-mono font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-800 text-xs inline-flex items-center gap-1">
+                            ${escapeHtml(item.assetNumber || '-')}
+                            <button class="text-slate-400 hover:text-slate-600" title="Copiar número d'actiu" onclick="copyText('${item.assetNumber}')">
+                                <i class="fa-solid fa-copy text-[10px]"></i>
+                            </button>
+                        </span>
+                        <div class="text-[9px] text-slate-400 mt-0.5 truncate max-w-[110px]" title="${escapeHtml(item.assetClass)}">${escapeHtml(item.assetClass || '')}</div>
+                    </td>
+                    <td class="py-3 px-3">${titlesHtml}</td>
+                    <td class="py-3 px-3">${orgHtml}</td>
+                    <td class="py-3 px-3">${locHtml}</td>
+                    <td class="py-3 px-3">${projHtml}</td>
+                    <td class="py-3 px-3 text-right">${valHtml}</td>
+                    <td class="py-3 px-3 text-center">${statusBadge}</td>
+                    <td class="py-3 px-3 text-right">
+                        <div class="flex items-center justify-end gap-1.5">
+                            <button class="p-1 text-slate-400 hover:text-teal-700 rounded hover:bg-slate-100" title="Veure JSON" onclick="viewItemJson(${item.idx})">
+                                <i class="fa-solid fa-code"></i>
+                            </button>
+                            <button class="p-1 text-slate-400 hover:text-blue-700 rounded hover:bg-slate-100" title="Executar individual" onclick="executeSingle(${item.idx})">
+                                <i class="fa-solid fa-play"></i>
+                            </button>
+                        </div>
+                    </td>
+                `;
+
+                tbody.appendChild(tr);
+            });
+
+            document.getElementById('count-visible').textContent = visibleCount;
+            document.getElementById('count-total').textContent = equipmentsData.length;
+            document.getElementById('badge-created-count').textContent = createdCount + ' Creats';
+            document.getElementById('badge-error-count').textContent = errorCount + ' Errors';
+            document.getElementById('badge-dryrun-count').textContent = dryRunCount + ' Simulats';
+            document.getElementById('badge-pending-count').textContent = pendingCount + ' Pendents';
+        }
+
+        function toggleSelectAll(checked) {
+            equipmentsData.forEach(item => item.selected = checked);
+            renderTable();
+        }
+
+        function toggleItemSelect(idx, checked) {
+            if (equipmentsData[idx]) {
+                equipmentsData[idx].selected = checked;
+                renderTable();
+            }
+        }
+
+        async function viewItemJson(idx) {
+            const item = equipmentsData[idx];
+            if (!item) return;
+
+            const payload = await prepareFinalPayload(item);
+            const displayPayload = JSON.parse(JSON.stringify(payload));
+
+            document.getElementById('modal-item-title').textContent = `Actiu ${item.assetNumber} - ${item.titleCat || item.model}`;
+            document.getElementById('modal-json-content').textContent = JSON.stringify(displayPayload, null, 2);
+            document.getElementById('json-modal').classList.remove('hidden');
+        }
+
+        function closeJsonModal() {
+            document.getElementById('json-modal').classList.add('hidden');
+        }
+
+        function copyJsonToClipboard() {
+            const content = document.getElementById('modal-json-content').textContent;
+            navigator.clipboard.writeText(content).then(() => {
+                alert('JSON copiat al porta-retalls!');
+            });
+        }
+
+        function copyText(txt) {
+            if (!txt) return;
+            navigator.clipboard.writeText(txt).then(() => {
+                // Notificació discreta
+                const toast = document.createElement('div');
+                toast.className = 'fixed bottom-4 right-4 bg-slate-900 text-white px-3 py-1.5 rounded-lg text-xs z-50 shadow-lg';
+                toast.textContent = `Copiat: ${txt}`;
+                document.body.appendChild(toast);
+                setTimeout(() => toast.remove(), 1500);
+            });
+        }
+
+        // ==========================================
+        // EXECUCIÓ INDIVIDUAL I EN LOT (DRY RUN / REAL)
+        // ==========================================
+
+        async function executeSingle(idx) {
+            const item = equipmentsData[idx];
+            if (!item) return;
+
+            item.status = 'PROCESSING';
+            renderTable();
+
+            try {
+                const payload = await prepareFinalPayload(item);
+
+                const resp = await fetch(window.apiUrl('equipment-loader/create-single'), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        entorn: currentEnvironment,
+                        dryRun: false,
+                        payload: payload
+                    })
+                });
+
+                const data = await resp.json();
+                if (resp.ok && (data.status === 'CREATED' || data.status === 'UPDATED')) {
+                    item.status = 'CREATED';
+                    item.uuid = data.uuid;
+                    item.pureId = data.pureId;
+                    item.statusMessage = 'Creat/Actualitzat correctament';
+                } else {
+                    item.status = 'ERROR';
+                    item.errorMessage = data.error || data.message || 'Error desconegut';
+                }
+            } catch (err) {
+                item.status = 'ERROR';
+                item.errorMessage = err.message;
+            }
+
+            renderTable();
+        }
+
+        async function executeBatch(dryRun = false) {
+            const selectedItems = equipmentsData.filter(i => i.selected);
+            if (selectedItems.length === 0) {
+                alert('No hi ha cap actiu seleccionat per processar.');
+                return;
+            }
+
+            if (!dryRun && currentEnvironment === 'prod') {
+                if (!confirm(`ATENCIÓ: Esteu a punt de carregar ${selectedItems.length} actius a PRODUCCIÓ. Voleu continuar?`)) {
+                    return;
+                }
+            }
+
+            isProcessing = true;
+            const progressContainer = document.getElementById('progress-bar-container');
+            const progressBar = document.getElementById('progress-bar');
+            const progressText = document.getElementById('progress-status-text');
+            const progressCounts = document.getElementById('progress-counts');
+
+            progressContainer.classList.remove('hidden');
+            progressBar.style.width = '0%';
+            progressText.innerHTML = `<i class="fa-solid fa-spinner fa-spin text-teal-600 mr-1.5"></i> ${dryRun ? 'Simulant càrrega...' : 'Carregant a Egreta (' + currentEnvironment.toUpperCase() + ')...'}`;
+
+            let completed = 0;
+            const total = selectedItems.length;
+
+            for (const item of selectedItems) {
+                item.status = 'PROCESSING';
+                renderTable();
+
+                try {
+                    const payload = await prepareFinalPayload(item);
+
+                    const resp = await fetch(window.apiUrl('equipment-loader/create-single'), {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            entorn: currentEnvironment,
+                            dryRun: dryRun,
+                            payload: payload
+                        })
+                    });
+
+                    const resData = await resp.json();
+                    if (resp.ok && (resData.status === 'CREATED' || resData.status === 'DRY_RUN' || resData.status === 'UPDATED')) {
+                        item.status = resData.status;
+                        item.uuid = resData.uuid;
+                        item.pureId = resData.pureId;
+                        item.statusMessage = resData.message;
+                    } else {
+                        item.status = 'ERROR';
+                        item.errorMessage = resData.error || resData.message || 'Error en resposta';
+                    }
+                } catch (err) {
+                    item.status = 'ERROR';
+                    item.errorMessage = err.message;
+                }
+
+                completed++;
+                const pct = Math.round((completed / total) * 100);
+                progressBar.style.width = pct + '%';
+                progressCounts.textContent = `${completed} / ${total} (${pct}%)`;
+                renderTable();
+
+                await new Promise(r => setTimeout(r, 60));
+            }
+
+            isProcessing = false;
+            progressText.innerHTML = `<i class="fa-solid fa-circle-check text-teal-600 mr-1.5"></i> Procés finalitzat (${completed} processats)`;
+        }
+
+        function exportDataToCsv() {
+            if (!equipmentsData || equipmentsData.length === 0) return;
+            const headers = [
+                "Descripció classe d'actiu", "Número actiu fix", "Denominació actiu fix(CA)", "Denominació actiu fix(ES)",
+                "Denominació actiu fix(EN)", "Emplaçament", "Descripció emplaçament", "Centre de cost", "Descripció centre de cost",
+                "Projecte", "Descripció Projecte", "Any capitalització", "Responsable projecte / CC", "Valor actual",
+                "Amortització acumulada", "Valor net comptable actual", "NIU", "Nom oficial organització", "UUID organització",
+                "Descripció de l'equip(CA)", "Descripción del equipo (ES)", "Equipment description (EN)"
+            ];
+
+            const csvRows = [headers.join(',')];
+            equipmentsData.forEach(it => {
+                const row = [
+                    it.assetClass || '', it.assetNumber || '', it.titleCat || '', it.titleCas || '', it.titleAng || '',
+                    it.location || '', it.locationDesc || '', it.costCenter || '', it.costCenterDesc || '', it.project || '',
+                    it.projectDesc || '', it.capYear || '', it.responsible || '', it.currentValue || '', it.accumAmort || '',
+                    it.netValue || '', it.niu || '', it.orgName || '', it.orgUuid || '', it.descCat || '', it.descCas || '', it.descAng || ''
+                ].map(val => `"${String(val).replace(/"/g, '""')}"`);
+                csvRows.push(row.join(','));
+            });
+
+            const blob = new Blob(["\uFEFF" + csvRows.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `actius-equipament-cientific-${new Date().toISOString().slice(0, 10)}.csv`;
+            a.click();
+        }
+
+        function showLoading(show) {
+            const el = document.getElementById('file-loading-indicator');
+            if (show) el.classList.remove('hidden');
+            else el.classList.add('hidden');
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+    </script>
+</body>
+</html>
