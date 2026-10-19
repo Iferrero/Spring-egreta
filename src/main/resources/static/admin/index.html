@@ -1,148 +1,327 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="ca">
 <head>
     <meta charset="UTF-8">
-    <title>Administración Egreta</title>
+    <title>Administració Egreta</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link href="https://fonts.googleapis.com/css?family=Roboto:400,700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
+        :root {
+            --primary: #00664f;
+            --primary-hover: #004d3c;
+            --bg: #f8fafc;
+            --card-bg: #ffffff;
+            --border: #e2e8f0;
+            --text-main: #0f172a;
+            --text-muted: #64748b;
+            --success: #15803d;
+            --danger: #b91c1c;
+            --neutral: #64748b;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
         body {
-            font-family: 'Roboto', Arial, sans-serif;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
             margin: 0;
-            background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%);
+            background-color: var(--bg);
+            color: var(--text-main);
             min-height: 100vh;
         }
+
         body.loading .container {
             display: none;
         }
+
         .startup-loading {
             min-height: 100vh;
             display: none;
             align-items: center;
             justify-content: center;
-            color: #1976d2;
-            font-size: 1.1em;
+            color: var(--primary);
+            font-size: 1.15rem;
             font-weight: 600;
             letter-spacing: 0.3px;
+            gap: 12px;
         }
+
         body.loading .startup-loading {
             display: flex;
         }
+
+        .spinner {
+            border: 3px solid #cbd5e1;
+            border-top: 3px solid var(--primary);
+            border-radius: 50%;
+            width: 26px;
+            height: 26px;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
         .container {
-            background: #fff;
-            padding: 2.5em 2em 2em 2em;
-            border-radius: 0;
-            box-shadow: 0 6px 32px #bdbdbd44;
-            width: 100%;
-            max-width: none;
-            margin: 0;
-            min-height: 100vh;
-            box-sizing: border-box;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2.5rem 1.5rem 4rem 1.5rem;
+        }
+
+        .header {
+            margin-bottom: 2rem;
             display: flex;
-            flex-direction: column;
-            align-items: center;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: flex-end;
+            gap: 1rem;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 1.5rem;
         }
+
         h1 {
-            font-size: 2em;
-            margin-bottom: 0.5em;
+            font-size: 1.85rem;
             font-weight: 700;
-            color: #1976d2;
-            letter-spacing: 1px;
+            color: #0f172a;
+            margin: 0 0 0.4rem 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
         }
+
+        h1 i {
+            color: var(--primary);
+        }
+
         .subtitle {
-            color: #555;
-            font-size: 1.1em;
-            margin-bottom: 1.5em;
+            color: var(--text-muted);
+            font-size: 0.95rem;
+            margin: 0;
         }
+
+        .summary-stats {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .summary-badge {
+            background: #fff;
+            border: 1px solid var(--border);
+            padding: 0.45rem 0.85rem;
+            border-radius: 8px;
+            font-size: 0.82rem;
+            font-weight: 500;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+        }
+
+        .summary-badge strong {
+            color: var(--text-main);
+            font-weight: 700;
+        }
+
+        .summary-badge.ok strong { color: var(--success); }
+        .summary-badge.warn strong { color: var(--danger); }
+
+        .category-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 1.4rem 1.5rem 1.6rem 1.5rem;
+            margin-bottom: 1.75rem;
+            box-shadow: 0 2px 6px rgba(15, 23, 42, 0.04);
+        }
+
+        .category-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1.2rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 1px solid #f1f5f9;
+        }
+
+        .category-title-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .category-icon-wrapper {
+            width: 34px;
+            height: 34px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+        }
+
+        .cat-people { background: #e0f2fe; color: #0284c7; }
+        .cat-output { background: #dcfce7; color: #16a34a; }
+        .cat-funding { background: #fef3c7; color: #d97706; }
+        .cat-activities { background: #f3e8ff; color: #9333ea; }
+        .cat-classification { background: #e0e7ff; color: #4f46e5; }
+
+        .category-title {
+            font-size: 1.15rem;
+            font-weight: 700;
+            margin: 0;
+            color: #1e293b;
+        }
+
+        .category-pill {
+            font-size: 0.75rem;
+            font-weight: 600;
+            background: #f1f5f9;
+            color: #475569;
+            padding: 0.25rem 0.65rem;
+            border-radius: 20px;
+        }
+
         .sync-grid {
             display: grid;
-            grid-template-columns: repeat(4, minmax(180px, 1fr));
-            gap: 0.7em 1em;
-            width: 100%;
-            margin-bottom: 1.5em;
+            grid-template-columns: repeat(auto-fill, minmax(215px, 1fr));
+            gap: 0.85rem;
         }
+
         .sync-btn {
-            padding: 0.7em 0.5em;
-            font-size: 1em;
-            border: none;
-            border-radius: 6px;
-            font-weight: 500;
-            background: #1976d2;
-            color: #fff;
+            position: relative;
+            padding: 0.85rem 0.75rem;
+            border: 1px solid transparent;
+            border-radius: 10px;
+            font-family: inherit;
             cursor: pointer;
-            box-shadow: 0 2px 8px #1976d233;
-            transition: background 0.2s, transform 0.1s;
             outline: none;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            line-height: 1.2;
+            text-align: center;
+            transition: all 0.18s ease;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+            min-height: 64px;
+            background: #64748b;
+            color: #ffffff;
         }
+
+        .sync-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            filter: brightness(1.08);
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.14);
+        }
+
+        .sync-btn:active:not(:disabled) {
+            transform: translateY(0);
+        }
+
+        .sync-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+
+        .sync-btn-title {
+            font-size: 0.95rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .new-tag {
+            font-size: 0.65rem;
+            font-weight: 700;
+            background: #ffffff;
+            color: #0f172a;
+            padding: 1px 5px;
+            border-radius: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+
         .sync-btn-meta {
-            margin-top: 0.2em;
-            font-size: 0.78em;
+            margin-top: 0.35rem;
+            font-size: 0.76rem;
             font-weight: 400;
             opacity: 0.95;
+            white-space: nowrap;
         }
-        .sync-btn:disabled {
-            background: #bdbdbd;
-            color: #eee;
-            cursor: not-allowed;
-            transform: none;
+
+        /* Sticky notification & progress bar */
+        .status-container {
+            position: sticky;
+            bottom: 1.5rem;
+            z-index: 50;
+            background: #ffffff;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1rem 1.4rem;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+            margin-top: 2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.6rem;
         }
-        .sync-btn:hover:not(:disabled) {
-            background: #1565c0;
-            transform: translateY(-2px) scale(1.03);
-        }
+
         .status {
-            margin-top: 0.5em;
-            font-size: 1.1em;
-            min-height: 1.5em;
+            font-size: 0.95rem;
+            font-weight: 500;
+            color: var(--text-main);
             text-align: center;
+            min-height: 1.3rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
         }
+
         .status.error {
-            color: #d32f2f;
-            font-weight: bold;
+            color: var(--danger);
+            font-weight: 600;
         }
+
         .status.ok {
-            color: #388e3c;
-            font-weight: bold;
+            color: var(--success);
+            font-weight: 600;
         }
+
         .progress-outer {
-            margin-top: 1.5em;
             width: 100%;
-            background: #e3e3e3;
+            background: #e2e8f0;
             border-radius: 8px;
             overflow: hidden;
-            height: 28px;
-            box-shadow: 0 2px 8px #1976d211;
+            height: 22px;
             display: none;
         }
+
         .progress-inner {
             height: 100%;
             width: 0;
-            background: linear-gradient(90deg, #1976d2 60%, #64b5f6 100%);
+            background: linear-gradient(90deg, #0284c7 0%, #38bdf8 100%);
             color: #fff;
             text-align: center;
-            line-height: 28px;
-            font-size: 1.05em;
-            font-weight: 500;
-            transition: width 0.3s, background 0.3s;
+            line-height: 22px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            transition: width 0.3s ease, background 0.3s ease;
         }
-        @media (max-width: 1024px) {
-            .sync-grid {
-                grid-template-columns: repeat(3, minmax(170px, 1fr));
-            }
-        }
-        @media (max-width: 800px) {
-            .sync-grid {
-                grid-template-columns: repeat(2, minmax(150px, 1fr));
-            }
-        }
-        @media (max-width: 600px) {
+
+        @media (max-width: 640px) {
             .container {
-                padding: 1em 0.2em 1.5em 0.2em;
+                padding: 1.25rem 0.85rem 3rem 0.85rem;
+            }
+            .header {
+                flex-direction: column;
+                align-items: flex-start;
             }
             .sync-grid {
                 grid-template-columns: 1fr;
@@ -151,120 +330,253 @@
     </style>
 </head>
 <body class="loading">
-<div id="startupLoading" class="startup-loading">Carregant dades...</div>
+
+<div id="startupLoading" class="startup-loading">
+    <div class="spinner"></div>
+    <span>Carregant dades de sincronització...</span>
+</div>
+
 <div class="container">
-    <h1>Administració Mongo Egreta</h1>
-    <div class="subtitle">Sincronitza i monitoritza l'estat de cada col·lecció</div>
-    <div class="sync-grid">
-        <button id="syncBtn" class="sync-btn">Activities</button>
-        <button id="syncOrgBtn" class="sync-btn" style="background:#388e3c;">Organizations</button>
-        <button id="syncAppBtn" class="sync-btn" style="background:#f57c00;">Applications</button>
-        <button id="syncAwardsBtn" class="sync-btn" style="background:#7b1fa2;">Awards</button>
-        <button id="syncAuthorcollaborationsBtn" class="sync-btn" style="background:#0097a7;">AuthorCollaborations</button>
-        <button id="syncClassificationschemesBtn" class="sync-btn" style="background:#c2185b;">Classificationschemes</button>
-        <button id="syncConceptsBtn" class="sync-btn" style="background:#7e57c2;">Concepts</button>
-        <button id="syncCoursesBtn" class="sync-btn" style="background:#0288d1;">Courses</button>
-        <button id="syncDatasetsBtn" class="sync-btn" style="background:#43a047;">Datasets</button>
-        <button id="syncEquipmentsBtn" class="sync-btn" style="background:#fbc02d; color:#333;">Equipments</button>
-        <button id="syncEventsBtn" class="sync-btn" style="background:#8d6e63;">Events</button>
-        <button id="syncExternalorganizationsBtn" class="sync-btn" style="background:#6d4c41;">ExternalOrganizations</button>
-        <button id="syncExternalpersonsBtn" class="sync-btn" style="background:#00bcd4; color:#222;">ExternalPersons</button>
-        <button id="syncFingerprintsBtn" class="sync-btn" style="background:#ff7043;">Fingerprints</button>
-        <button id="syncFundingOpportunitiesBtn" class="sync-btn" style="background:#1976d2;">FundingOpportunities</button>
-        <button id="syncJournalsBtn" class="sync-btn" style="background:#512da8;">Journals</button>
-        <button id="syncPersonsBtn" class="sync-btn" style="background:#689f38;">Persons</button>
-        <button id="syncPressmediaBtn" class="sync-btn" style="background:#d84315;">Pressmedia</button>
-        <button id="syncPrizesBtn" class="sync-btn" style="background:#ad1457;">Prizes</button>
-        <button id="syncProjectsBtn" class="sync-btn" style="background:#388e3c;">Projects</button>
-        <button id="syncPublishersBtn" class="sync-btn" style="background:#0288d1;">Publishers</button>
-        <button id="syncResearchoutputsBtn" class="sync-btn" style="background:#fbc02d; color:#333;">Researchoutputs</button>
-        <button id="syncStudentthesesBtn" class="sync-btn" style="background:#7b1fa2;">StudentTheses</button>
-        <button id="syncUsersBtn" class="sync-btn" style="background:#00897b;">Users</button>
+    <div class="header">
+        <div>
+            <h1><i class="fa-solid fa-database"></i> Administració Mongo Egreta</h1>
+            <p class="subtitle">Sincronitza i monitoritza l'estat de les col·leccions d'Egreta (29 col·leccions actives)</p>
+        </div>
+        <div class="summary-stats">
+            <div class="summary-badge">
+                <i class="fa-solid fa-layer-group"></i> Total: <strong id="totalCount">29</strong>
+            </div>
+            <div class="summary-badge ok">
+                <i class="fa-solid fa-circle-check"></i> Sincronitzades: <strong id="okCount">-</strong>
+            </div>
+            <div class="summary-badge warn">
+                <i class="fa-solid fa-circle-exclamation"></i> Discrepàncies: <strong id="diffCount">-</strong>
+            </div>
+        </div>
     </div>
-    <div class="status" id="status"></div>
-    <div class="progress-outer" id="progressBar">
-        <div class="progress-inner" id="progressFill"></div>
+
+    <!-- Categoria 1: Personal i Organitzacions -->
+    <div class="category-card">
+        <div class="category-header">
+            <div class="category-title-group">
+                <div class="category-icon-wrapper cat-people">
+                    <i class="fa-solid fa-users"></i>
+                </div>
+                <h2 class="category-title">Personal i Organitzacions</h2>
+            </div>
+            <span class="category-pill">7 col·leccions</span>
+        </div>
+        <div class="sync-grid">
+            <button class="sync-btn" data-collection="Persons" data-endpoint="/egreta/sync/persons">
+                <span class="sync-btn-title">Persons</span>
+            </button>
+            <button class="sync-btn" data-collection="Organizations" data-endpoint="/egreta/sync/organizations">
+                <span class="sync-btn-title">Organizations</span>
+            </button>
+            <button class="sync-btn" data-collection="ExternalPersons" data-endpoint="/egreta/sync/externalpersons">
+                <span class="sync-btn-title">ExternalPersons</span>
+            </button>
+            <button class="sync-btn" data-collection="ExternalOrganizations" data-endpoint="/egreta/sync/externalorganizations">
+                <span class="sync-btn-title">ExternalOrganizations</span>
+            </button>
+            <button class="sync-btn" data-collection="Users" data-endpoint="/egreta/sync/users">
+                <span class="sync-btn-title">Users</span>
+            </button>
+            <button class="sync-btn" data-collection="PersonExpertises" data-endpoint="/egreta/sync/personexpertises" data-isnew="true">
+                <span class="sync-btn-title">PersonExpertises <span class="new-tag">Nou</span></span>
+            </button>
+            <button class="sync-btn" data-collection="AuthorCollaborations" data-endpoint="/egreta/sync/authorcollaborations">
+                <span class="sync-btn-title">AuthorCollaborations</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Categoria 2: Producció Científica i Contingut -->
+    <div class="category-card">
+        <div class="category-header">
+            <div class="category-title-group">
+                <div class="category-icon-wrapper cat-output">
+                    <i class="fa-solid fa-book-open"></i>
+                </div>
+                <h2 class="category-title">Producció Científica i Contingut</h2>
+            </div>
+            <span class="category-pill">6 col·leccions</span>
+        </div>
+        <div class="sync-grid">
+            <button class="sync-btn" data-collection="Researchoutputs" data-endpoint="/egreta/sync/researchoutputs">
+                <span class="sync-btn-title">Researchoutputs</span>
+            </button>
+            <button class="sync-btn" data-collection="Datasets" data-endpoint="/egreta/sync/datasets">
+                <span class="sync-btn-title">Datasets</span>
+            </button>
+            <button class="sync-btn" data-collection="StudentTheses" data-endpoint="/egreta/sync/studenttheses">
+                <span class="sync-btn-title">StudentTheses</span>
+            </button>
+            <button class="sync-btn" data-collection="Journals" data-endpoint="/egreta/sync/journals">
+                <span class="sync-btn-title">Journals</span>
+            </button>
+            <button class="sync-btn" data-collection="Publishers" data-endpoint="/egreta/sync/publishers">
+                <span class="sync-btn-title">Publishers</span>
+            </button>
+            <button class="sync-btn" data-collection="Impacts" data-endpoint="/egreta/sync/impacts" data-isnew="true">
+                <span class="sync-btn-title">Impacts <span class="new-tag">Nou</span></span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Categoria 3: Finançament i Projectes -->
+    <div class="category-card">
+        <div class="category-header">
+            <div class="category-title-group">
+                <div class="category-icon-wrapper cat-funding">
+                    <i class="fa-solid fa-hand-holding-dollar"></i>
+                </div>
+                <h2 class="category-title">Finançament i Projectes</h2>
+            </div>
+            <span class="category-pill">5 col·leccions</span>
+        </div>
+        <div class="sync-grid">
+            <button class="sync-btn" data-collection="Projects" data-endpoint="/egreta/sync/projects">
+                <span class="sync-btn-title">Projects</span>
+            </button>
+            <button class="sync-btn" data-collection="Awards" data-endpoint="/egreta/sync/awards">
+                <span class="sync-btn-title">Awards</span>
+            </button>
+            <button class="sync-btn" data-collection="Applications" data-endpoint="/egreta/sync/applications">
+                <span class="sync-btn-title">Applications</span>
+            </button>
+            <button class="sync-btn" data-collection="FundingOpportunities" data-endpoint="/egreta/sync/FundingOpportunities">
+                <span class="sync-btn-title">FundingOpportunities</span>
+            </button>
+            <button class="sync-btn" data-collection="Milestones" data-endpoint="/egreta/sync/milestones" data-isnew="true">
+                <span class="sync-btn-title">Milestones <span class="new-tag">Nou</span></span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Categoria 4: Activitats i Reconeixements -->
+    <div class="category-card">
+        <div class="category-header">
+            <div class="category-title-group">
+                <div class="category-icon-wrapper cat-activities">
+                    <i class="fa-solid fa-award"></i>
+                </div>
+                <h2 class="category-title">Activitats i Reconeixements</h2>
+            </div>
+            <span class="category-pill">5 col·leccions</span>
+        </div>
+        <div class="sync-grid">
+            <button class="sync-btn" data-collection="Activities" data-endpoint="/egreta/sync/activities">
+                <span class="sync-btn-title">Activities</span>
+            </button>
+            <button class="sync-btn" data-collection="Events" data-endpoint="/egreta/sync/events">
+                <span class="sync-btn-title">Events</span>
+            </button>
+            <button class="sync-btn" data-collection="Prizes" data-endpoint="/egreta/sync/prizes">
+                <span class="sync-btn-title">Prizes</span>
+            </button>
+            <button class="sync-btn" data-collection="Pressmedia" data-endpoint="/egreta/sync/pressmedia">
+                <span class="sync-btn-title">Pressmedia</span>
+            </button>
+            <button class="sync-btn" data-collection="EthicalReviews" data-endpoint="/egreta/sync/ethicalreviews" data-isnew="true">
+                <span class="sync-btn-title">EthicalReviews <span class="new-tag">Nou</span></span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Categoria 5: Classificacions i Coneixement -->
+    <div class="category-card">
+        <div class="category-header">
+            <div class="category-title-group">
+                <div class="category-icon-wrapper cat-classification">
+                    <i class="fa-solid fa-sitemap"></i>
+                </div>
+                <h2 class="category-title">Classificacions i Coneixement</h2>
+            </div>
+            <span class="category-pill">6 col·leccions</span>
+        </div>
+        <div class="sync-grid">
+            <button class="sync-btn" data-collection="Equipments" data-endpoint="/egreta/sync/equipments">
+                <span class="sync-btn-title">Equipments</span>
+            </button>
+            <button class="sync-btn" data-collection="Concepts" data-endpoint="/egreta/sync/concepts">
+                <span class="sync-btn-title">Concepts</span>
+            </button>
+            <button class="sync-btn" data-collection="Classificationschemes" data-endpoint="/egreta/sync/classificationschemes">
+                <span class="sync-btn-title">Classificationschemes</span>
+            </button>
+            <button class="sync-btn" data-collection="Fingerprints" data-endpoint="/egreta/sync/fingerprints">
+                <span class="sync-btn-title">Fingerprints</span>
+            </button>
+            <button class="sync-btn" data-collection="Thesauri" data-endpoint="/egreta/sync/thesauri" data-isnew="true">
+                <span class="sync-btn-title">Thesauri <span class="new-tag">Nou</span></span>
+            </button>
+            <button class="sync-btn" data-collection="Courses" data-endpoint="/egreta/sync/courses">
+                <span class="sync-btn-title">Courses</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Barra d'estat i progrés flotant/inferior -->
+    <div class="status-container">
+        <div class="status" id="status">
+            <span>Prem sobre una col·lecció per sincronitzar-la</span>
+        </div>
+        <div class="progress-outer" id="progressBar">
+            <div class="progress-inner" id="progressFill"></div>
+        </div>
     </div>
 </div>
+
 <script>
-    const btn          = document.getElementById('syncBtn');
-    const btnOrg       = document.getElementById('syncOrgBtn');
-    const btnApp       = document.getElementById('syncAppBtn');
-    const btnAwards    = document.getElementById('syncAwardsBtn');
-    const btnAuthorcollaborations = document.getElementById('syncAuthorcollaborationsBtn');
-    const btnClassificationschemes = document.getElementById('syncClassificationschemesBtn');
-    const btnConcepts = document.getElementById('syncConceptsBtn');
-    const btnCourses = document.getElementById('syncCoursesBtn');
-    const btnDatasets = document.getElementById('syncDatasetsBtn');
-    const btnEquipments = document.getElementById('syncEquipmentsBtn');
-    const btnEvents = document.getElementById('syncEventsBtn');
-    const btnExternalorganizations = document.getElementById('syncExternalorganizationsBtn');
-    const btnExternalpersons = document.getElementById('syncExternalpersonsBtn');
-    const btnFingerprints = document.getElementById('syncFingerprintsBtn');
-    const btnFundingOpportunities = document.getElementById('syncFundingOpportunitiesBtn');
-    const btnJournals = document.getElementById('syncJournalsBtn');
-    const btnPersons = document.getElementById('syncPersonsBtn');
-    const btnPressmedia = document.getElementById('syncPressmediaBtn');
-    const btnPrizes = document.getElementById('syncPrizesBtn');
-    const btnProjects = document.getElementById('syncProjectsBtn');
-    const btnPublishers = document.getElementById('syncPublishersBtn');
-    const btnResearchoutputs = document.getElementById('syncResearchoutputsBtn');
-    const btnStudenttheses = document.getElementById('syncStudentthesesBtn');
-    const btnUsers = document.getElementById('syncUsersBtn');
-    const status       = document.getElementById('status');
-    const progressBar  = document.getElementById('progressBar');
+    const statusEl = document.getElementById('status');
+    const progressBar = document.getElementById('progressBar');
     const progressFill = document.getElementById('progressFill');
+    const okCountEl = document.getElementById('okCount');
+    const diffCountEl = document.getElementById('diffCount');
 
-    const buttonStatsMap = [
-        { button: btn, collection: 'Activities' },
-        { button: btnOrg, collection: 'Organizations' },
-        { button: btnApp, collection: 'Applications' },
-        { button: btnAwards, collection: 'Awards' },
-        { button: btnAuthorcollaborations, collection: 'AuthorCollaborations' },
-        { button: btnClassificationschemes, collection: 'Classificationschemes' },
-        { button: btnConcepts, collection: 'Concepts' },
-        { button: btnCourses, collection: 'Courses' },
-        { button: btnDatasets, collection: 'Datasets' },
-        { button: btnEquipments, collection: 'Equipments' },
-        { button: btnEvents, collection: 'Events' },
-        { button: btnExternalorganizations, collection: 'ExternalOrganizations' },
-        { button: btnExternalpersons, collection: 'ExternalPersons' },
-        { button: btnFingerprints, collection: 'Fingerprints' },
-        { button: btnFundingOpportunities, collection: 'FundingOpportunities' },
-        { button: btnJournals, collection: 'Journals' },
-        { button: btnPersons, collection: 'Persons' },
-        { button: btnPressmedia, collection: 'Pressmedia' },
-        { button: btnPrizes, collection: 'Prizes' },
-        { button: btnProjects, collection: 'Projects' },
-        { button: btnPublishers, collection: 'Publishers' },
-        { button: btnResearchoutputs, collection: 'Researchoutputs' },
-        { button: btnStudenttheses, collection: 'StudentTheses' },
-        { button: btnUsers, collection: 'Users' }
-    ];
+    const syncButtons = Array.from(document.querySelectorAll('button[data-collection]'));
 
-    function renderButtonStats(button, mongoCount, collectionCount) {
-        if (!button.dataset.baseLabel) {
-            button.dataset.baseLabel = button.textContent.trim();
-        }
+    const buttonStatsMap = syncButtons.map(button => {
+        const collection = button.dataset.collection;
+        const endpoint = button.dataset.endpoint || `/egreta/sync/${collection.toLowerCase()}`;
+        const titleSpan = button.querySelector('.sync-btn-title');
+        const baseTitle = titleSpan ? titleSpan.innerHTML : collection;
+        return { button, collection, endpoint, baseTitle };
+    });
+
+    function setStatus(text, type) {
+        statusEl.innerHTML = text;
+        statusEl.className = 'status' + (type ? ' ' + type : '');
+    }
+
+    function renderButtonStats(entry, mongoCount, collectionCount) {
+        const { button, baseTitle } = entry;
         const mongo = Number.isFinite(mongoCount) ? mongoCount : null;
         const collection = Number.isFinite(collectionCount) ? collectionCount : null;
         const hasValidCounts = mongo !== null && collection !== null;
         const matches = hasValidCounts && mongo === collection;
 
         if (!hasValidCounts) {
-            button.style.background = '#9e9e9e';
+            button.style.background = '#64748b'; // neutral slate
             button.style.color = '#ffffff';
         } else if (matches) {
-            button.style.background = '#2e7d32';
+            button.style.background = '#15803d'; // green-700
             button.style.color = '#ffffff';
         } else {
-            button.style.background = '#c62828';
+            button.style.background = '#b91c1c'; // red-700
             button.style.color = '#ffffff';
         }
 
-        const mongoLabel = mongo === null ? '-' : mongo;
-        const collectionLabel = collection === null ? '-' : collection;
-        button.innerHTML = `${button.dataset.baseLabel}<span class="sync-btn-meta">Mongo: ${mongoLabel} / Egreta: ${collectionLabel}</span>`;
+        const mongoLabel = mongo === null ? '-' : mongo.toLocaleString();
+        const collectionLabel = collection === null ? '-' : collection.toLocaleString();
+
+        button.innerHTML = `
+            <span class="sync-btn-title">${baseTitle}</span>
+            <span class="sync-btn-meta">Mongo: ${mongoLabel} / Egreta: ${collectionLabel}</span>
+        `;
+
+        return { hasValidCounts, matches };
     }
 
     async function loadCollectionStats() {
@@ -274,13 +586,23 @@
                 return false;
             }
             const stats = await res.json();
-            buttonStatsMap.forEach(({ button, collection }) => {
-                const values = stats?.[collection] || {};
-                renderButtonStats(button, values.mongo, values.collection);
+            let okCount = 0;
+            let diffCount = 0;
+
+            buttonStatsMap.forEach(entry => {
+                const values = stats?.[entry.collection] || {};
+                const res = renderButtonStats(entry, values.mongo, values.collection);
+                if (res.hasValidCounts) {
+                    if (res.matches) okCount++;
+                    else diffCount++;
+                }
             });
+
+            if (okCountEl) okCountEl.textContent = okCount;
+            if (diffCountEl) diffCountEl.textContent = diffCount;
+
             return true;
         } catch (e) {
-            // Silent fail: los botones siguen operativos aunque no carguen estadísticas.
             return false;
         }
     }
@@ -296,466 +618,19 @@
         return false;
     }
 
-    async function bootstrapPage() {
-        let statsLoaded = false;
-        while (!statsLoaded) {
-            statsLoaded = await loadCollectionStats();
-            if (!statsLoaded) {
-                await new Promise(resolve => setTimeout(resolve, 1000));
-            }
-        }
-        document.body.classList.remove('loading');
-    }
-
-    bootstrapPage();
-    btn.onclick = async () => {
-        btn.disabled = true;
-        setStatus('Sincronitzant Activities...');
-        try {
-            const res = await fetch('/egreta/sync/activities', { method: 'POST' });
-            if (res.ok) {
-                setStatus('Sincronització de Activities iniciada correctament.');
-                pollProgress('Activities', () => { btn.disabled = false; });
-            } else {
-                setStatus('Error a l\'iniciar la Sincronització de Activities.', 'error');
-                btn.disabled = false;
-            }
-        } catch (e) {
-            setStatus('Error de red.', 'error');
-            btn.disabled = false;
-        }
-    };
-
-    btnOrg.onclick = async () => {
-        btnOrg.disabled = true;
-        setStatus('Sincronitzant Organizations...');
-        try {
-            const res = await fetch('/egreta/sync/organizations', { method: 'POST' });
-            if (res.ok) {
-                setStatus('Sincronització de Organizations iniciada correctament.');
-                pollProgress('Organizations', () => { btnOrg.disabled = false; });
-            } else {
-                setStatus('Error a l\'iniciar la Sincronització de Organizations.', 'error');
-                btnOrg.disabled = false;
-            }
-        } catch (e) {
-            setStatus('Error de red.', 'error');
-            btnOrg.disabled = false;
-        }
-    };
-
-    btnApp.onclick = async () => {
-        btnApp.disabled = true;
-        setStatus('Sincronitzant Applications...');
-        try {
-            const res = await fetch('/egreta/sync/applications', { method: 'POST' });
-            if (res.ok) {
-                setStatus('Sincronització de Applications iniciada correctament.');
-                pollProgress('Applications', () => { btnApp.disabled = false; });
-            } else {
-                setStatus('Error a l\'iniciar la Sincronització de Applications.', 'error');
-                btnApp.disabled = false;
-            }
-        } catch (e) {
-            setStatus('Error de red.', 'error');
-            btnApp.disabled = false;
-        }
-    };
-        btnAuthorcollaborations.onclick = async () => {
-            btnAuthorcollaborations.disabled = true;
-            setStatus('Sincronitzant Authorcollaborations...');
-            try {
-                const res = await fetch('/egreta/sync/authorcollaborations', { method: 'POST' });
-                if (res.ok) {
-                    setStatus('Sincronització de Authorcollaborations iniciada correctament.');
-                    pollProgress('Authorcollaborations', () => { btnAuthorcollaborations.disabled = false; });
-                } else {
-                    setStatus('Error a l\'iniciar la Sincronització de Authorcollaborations.', 'error');
-                    btnAuthorcollaborations.disabled = false;
-                }
-            } catch (e) {
-                setStatus('Error de red.', 'error');
-                btnAuthorcollaborations.disabled = false;
-            }
-        };
-
-        btnClassificationschemes.onclick = async () => {
-            btnClassificationschemes.disabled = true;
-            setStatus('Sincronitzant Classificationschemes...');
-            try {
-                const res = await fetch('/egreta/sync/classificationschemes', { method: 'POST' });
-                if (res.ok) {
-                    setStatus('Sincronització de Classificationschemes iniciada correctament.');
-                    pollProgress('Classificationschemes', () => { btnClassificationschemes.disabled = false; });
-                } else {
-                    setStatus('Error a l\'iniciar la Sincronització de Classificationschemes.', 'error');
-                    btnClassificationschemes.disabled = false;
-                }
-            } catch (e) {
-                setStatus('Error de red.', 'error');
-                btnClassificationschemes.disabled = false;
-            }
-        };
-
-        btnConcepts.onclick = async () => {
-            btnConcepts.disabled = true;
-            setStatus('Sincronitzant Concepts...');
-            try {
-                const res = await fetch('/egreta/sync/concepts', { method: 'POST' });
-                if (res.ok) {
-                    setStatus('Sincronització de Concepts iniciada correctament.');
-                    pollProgress('Concepts', () => { btnConcepts.disabled = false; });
-                } else {
-                    setStatus('Error a l\'iniciar la Sincronització de Concepts.', 'error');
-                    btnConcepts.disabled = false;
-                }
-            } catch (e) {
-                setStatus('Error de red.', 'error');
-                btnConcepts.disabled = false;
-            }
-        };
-
-        btnCourses.onclick = async () => {
-            btnCourses.disabled = true;
-            setStatus('Sincronitzant Courses...');
-            try {
-                const res = await fetch('/egreta/sync/courses', { method: 'POST' });
-                if (res.ok) {
-                    setStatus('Sincronització de Courses iniciada correctament.');
-                    pollProgress('Courses', () => { btnCourses.disabled = false; });
-                } else {
-                    setStatus('Error a l\'iniciar la Sincronització de Courses.', 'error');
-                    btnCourses.disabled = false;
-                }
-            } catch (e) {
-                setStatus('Error de red.', 'error');
-                btnCourses.disabled = false;
-            }
-        };
-
-        btnDatasets.onclick = async () => {
-            btnDatasets.disabled = true;
-            setStatus('Sincronitzant Datasets...');
-            try {
-                const res = await fetch('/egreta/sync/datasets', { method: 'POST' });
-                if (res.ok) {
-                    setStatus('Sincronització de Datasets iniciada correctament.');
-                    pollProgress('Datasets', () => { btnDatasets.disabled = false; });
-                } else {
-                    setStatus('Error a l\'iniciar la Sincronització de Datasets.', 'error');
-                    btnDatasets.disabled = false;
-                }
-            } catch (e) {
-                setStatus('Error de red.', 'error');
-                btnDatasets.disabled = false;
-            }
-        };
-
-        btnEquipments.onclick = async () => {
-            btnEquipments.disabled = true;
-            setStatus('Sincronitzant Equipments...');
-            try {
-                const res = await fetch('/egreta/sync/equipments', { method: 'POST' });
-                if (res.ok) {
-                    setStatus('Sincronització de Equipments iniciada correctament.');
-                    pollProgress('Equipments', () => { btnEquipments.disabled = false; });
-                } else {
-                    setStatus('Error a l\'iniciar la Sincronització de Equipments.', 'error');
-                    btnEquipments.disabled = false;
-                }
-            } catch (e) {
-                setStatus('Error de red.', 'error');
-                btnEquipments.disabled = false;
-            }
-        };
-
-        btnEvents.onclick = async () => {
-            btnEvents.disabled = true;
-            setStatus('Sincronitzant Events...');
-            try {
-                const res = await fetch('/egreta/sync/events', { method: 'POST' });
-                if (res.ok) {
-                    setStatus('Sincronització de Events iniciada correctament.');
-                    pollProgress('Events', () => { btnEvents.disabled = false; });
-                } else {
-                    setStatus('Error a l\'iniciar la Sincronització de Events.', 'error');
-                    btnEvents.disabled = false;
-                }
-            } catch (e) {
-                setStatus('Error de red.', 'error');
-                btnEvents.disabled = false;
-            }
-        };
-
-        btnExternalorganizations.onclick = async () => {
-            btnExternalorganizations.disabled = true;
-            setStatus('Sincronitzant Externalorganizations...');
-            try {
-                const res = await fetch('/egreta/sync/externalorganizations', { method: 'POST' });
-                if (res.ok) {
-                    setStatus('Sincronització de Externalorganizations iniciada correctament.');
-                    pollProgress('ExternalOrganizations', () => { btnExternalorganizations.disabled = false; });
-                } else {
-                    setStatus('Error a l\'iniciar la Sincronització de Externalorganizations.', 'error');
-                    btnExternalorganizations.disabled = false;
-                }
-            } catch (e) {
-                setStatus('Error de red.', 'error');
-                btnExternalorganizations.disabled = false;
-            }
-        };
-
-        btnExternalpersons.onclick = async () => {
-            btnExternalpersons.disabled = true;
-            setStatus('Sincronitzant Externalpersons...');
-            try {
-                const res = await fetch('/egreta/sync/externalpersons', { method: 'POST' });
-                if (res.ok) {
-                    setStatus('Sincronització de Externalpersons iniciada correctament.');
-                    pollProgress('ExternalPersons', () => { btnExternalpersons.disabled = false; });
-                } else {
-                    setStatus('Error a l\'iniciar la Sincronització de Externalpersons.', 'error');
-                    btnExternalpersons.disabled = false;
-                }
-            } catch (e) {
-                setStatus('Error de red.', 'error');
-                btnExternalpersons.disabled = false;
-            }
-        };
-
-        btnFingerprints.onclick = async () => {
-            btnFingerprints.disabled = true;
-            setStatus('Sincronitzant Fingerprints...');
-            try {
-                const res = await fetch('/egreta/sync/fingerprints', { method: 'POST' });
-                if (res.ok) {
-                    setStatus('Sincronització de Fingerprints iniciada correctament.');
-                    pollProgress('Fingerprints', () => { btnFingerprints.disabled = false; });
-                } else {
-                    setStatus('Error a l\'iniciar la Sincronització de Fingerprints.', 'error');
-                    btnFingerprints.disabled = false;
-                }
-            } catch (e) {
-                setStatus('Error de red.', 'error');
-                btnFingerprints.disabled = false;
-            }
-        };
-
-        btnFundingOpportunities.onclick = async () => {
-            btnFundingOpportunities.disabled = true;
-            setStatus('Sincronitzant FundingOpportunities...');
-            try {
-                const res = await fetch('/egreta/sync/FundingOpportunities', { method: 'POST' });
-                if (res.ok) {
-                    setStatus('Sincronització de FundingOpportunities iniciada correctament.');
-                    pollProgress('FundingOpportunities', () => { btnFundingOpportunities.disabled = false; });
-                } else {
-                    setStatus('Error a l\'iniciar la Sincronització de FundingOpportunities.', 'error');
-                    btnFundingOpportunities.disabled = false;
-                }
-            } catch (e) {
-                setStatus('Error de red.', 'error');
-                btnFundingOpportunities.disabled = false;
-            }
-        };
-
-        btnJournals.onclick = async () => {
-            btnJournals.disabled = true;
-            setStatus('Sincronitzant Journals...');
-            try {
-                const res = await fetch('/egreta/sync/journals', { method: 'POST' });
-                if (res.ok) {
-                    setStatus('Sincronització de Journals iniciada correctament.');
-                    pollProgress('Journals', () => { btnJournals.disabled = false; });
-                } else {
-                    setStatus('Error a l\'iniciar la Sincronització de Journals.', 'error');
-                    btnJournals.disabled = false;
-                }
-            } catch (e) {
-                setStatus('Error de red.', 'error');
-                btnJournals.disabled = false;
-            }
-        };
-
-        btnPersons.onclick = async () => {
-            btnPersons.disabled = true;
-            setStatus('Sincronitzant Persons...');
-            try {
-                const res = await fetch('/egreta/sync/persons', { method: 'POST' });
-                if (res.ok) {
-                    setStatus('Sincronització de Persons iniciada correctament.');
-                    pollProgress('Persons', () => { btnPersons.disabled = false; });
-                } else {
-                    setStatus('Error a l\'iniciar la Sincronització de Persons.', 'error');
-                    btnPersons.disabled = false;
-                }
-            } catch (e) {
-                setStatus('Error de red.', 'error');
-                btnPersons.disabled = false;
-            }
-        };
-
-        btnPressmedia.onclick = async () => {
-            btnPressmedia.disabled = true;
-            setStatus('Sincronitzant Pressmedia...');
-            try {
-                const res = await fetch('/egreta/sync/pressmedia', { method: 'POST' });
-                if (res.ok) {
-                    setStatus('Sincronització de Pressmedia iniciada correctament.');
-                    pollProgress('Pressmedia', () => { btnPressmedia.disabled = false; });
-                } else {
-                    setStatus('Error a l\'iniciar la Sincronització de Pressmedia.', 'error');
-                    btnPressmedia.disabled = false;
-                }
-            } catch (e) {
-                setStatus('Error de red.', 'error');
-                btnPressmedia.disabled = false;
-            }
-        };
-
-        btnPrizes.onclick = async () => {
-            btnPrizes.disabled = true;
-            setStatus('Sincronitzant Prizes...');
-            try {
-                const res = await fetch('/egreta/sync/prizes', { method: 'POST' });
-                if (res.ok) {
-                    setStatus('Sincronització de Prizes iniciada correctament.');
-                    pollProgress('Prizes', () => { btnPrizes.disabled = false; });
-                } else {
-                    setStatus('Error a l\'iniciar la Sincronització de Prizes.', 'error');
-                    btnPrizes.disabled = false;
-                }
-            } catch (e) {
-                setStatus('Error de red.', 'error');
-                btnPrizes.disabled = false;
-            }
-        };
-
-        btnProjects.onclick = async () => {
-            btnProjects.disabled = true;
-            setStatus('Sincronitzant Projects...');
-            try {
-                const res = await fetch('/egreta/sync/projects', { method: 'POST' });
-                if (res.ok) {
-                    setStatus('Sincronització de Projects iniciada correctament.');
-                    pollProgress('Projects', () => { btnProjects.disabled = false; });
-                } else {
-                    setStatus('Error a l\'iniciar la Sincronització de Projects.', 'error');
-                    btnProjects.disabled = false;
-                }
-            } catch (e) {
-                setStatus('Error de red.', 'error');
-                btnProjects.disabled = false;
-            }
-        };
-
-        btnPublishers.onclick = async () => {
-            btnPublishers.disabled = true;
-            setStatus('Sincronitzant Publishers...');
-            try {
-                const res = await fetch('/egreta/sync/publishers', { method: 'POST' });
-                if (res.ok) {
-                    setStatus('Sincronització de Publishers iniciada correctament.');
-                    pollProgress('Publishers', () => { btnPublishers.disabled = false; });
-                } else {
-                    setStatus('Error a l\'iniciar la Sincronització de Publishers.', 'error');
-                    btnPublishers.disabled = false;
-                }
-            } catch (e) {
-                setStatus('Error de red.', 'error');
-                btnPublishers.disabled = false;
-            }
-        };
-
-        btnResearchoutputs.onclick = async () => {
-            btnResearchoutputs.disabled = true;
-            setStatus('Sincronitzant Researchoutputs...');
-            try {
-                const res = await fetch('/egreta/sync/researchoutputs', { method: 'POST' });
-                if (res.ok) {
-                    setStatus('Sincronització de Researchoutputs iniciada correctament.');
-                    pollProgress('Researchoutputs', () => { btnResearchoutputs.disabled = false; });
-                } else {
-                    setStatus('Error a l\'iniciar la Sincronització de Researchoutputs.', 'error');
-                    btnResearchoutputs.disabled = false;
-                }
-            } catch (e) {
-                setStatus('Error de red.', 'error');
-                btnResearchoutputs.disabled = false;
-            }
-        };
-
-        btnStudenttheses.onclick = async () => {
-            btnStudenttheses.disabled = true;
-            setStatus('Sincronitzant Studenttheses...');
-            try {
-                const res = await fetch('/egreta/sync/studenttheses', { method: 'POST' });
-                if (res.ok) {
-                    setStatus('Sincronització de Studenttheses iniciada correctament.');
-                    pollProgress('StudentTheses', () => { btnStudenttheses.disabled = false; });
-                } else {
-                    setStatus('Error a l\'iniciar la Sincronització de Studenttheses.', 'error');
-                    btnStudenttheses.disabled = false;
-                }
-            } catch (e) {
-                setStatus('Error de red.', 'error');
-                btnStudenttheses.disabled = false;
-            }
-        };
-
-        btnUsers.onclick = async () => {
-            btnUsers.disabled = true;
-            setStatus('Sincronitzant Users...');
-            try {
-                const res = await fetch('/egreta/sync/users', { method: 'POST' });
-                if (res.ok) {
-                    setStatus('Sincronització de Users iniciada correctament.');
-                    pollProgress('Users', () => { btnUsers.disabled = false; });
-                } else {
-                    setStatus('Error a l\'iniciar la Sincronització de Users.', 'error');
-                    btnUsers.disabled = false;
-                }
-            } catch (e) {
-                setStatus('Error de red.', 'error');
-                btnUsers.disabled = false;
-            }
-        };
-    btnAwards.onclick = async () => {
-        btnAwards.disabled = true;
-        setStatus('Sincronitzant Awards...');
-        try {
-            const res = await fetch('/egreta/sync/awards', { method: 'POST' });
-            if (res.ok) {
-                setStatus('Sincronització de Awards iniciada correctament.');
-                pollProgress('Awards', () => { btnAwards.disabled = false; });
-            } else {
-                setStatus('Error a l\'iniciar la Sincronització de Awards.', 'error');
-                btnAwards.disabled = false;
-            }
-        } catch (e) {
-            setStatus('Error de red.', 'error');
-            btnAwards.disabled = false;
-        }
-    };
-
-    function setStatus(text, type) {
-        status.textContent = text;
-        status.className = 'status' + (type ? ' ' + type : '');
-    }
-
     function pollProgress(collection, onFinish) {
         progressBar.style.display = 'block';
         progressFill.style.width = '0%';
-        progressFill.style.background = '#1976d2';
-        progressFill.textContent = 'Iniciando...';
+        progressFill.style.background = 'linear-gradient(90deg, #0284c7 0%, #38bdf8 100%)';
+        progressFill.textContent = 'Iniciant...';
 
         setTimeout(() => {
             const interval = setInterval(async () => {
                 try {
-                    const res = await fetch(`/egreta/sync/progress/${collection}`);
+                    const res = await fetch(`/egreta/sync/progress/${encodeURIComponent(collection)}`);
                     if (!res.ok) {
-                        setStatus('Error al consultar el progreso.', 'error');
-                        progressFill.style.background = '#d32f2f';
+                        setStatus('<i class="fa-solid fa-triangle-exclamation"></i> Error al consultar el progrés.', 'error');
+                        progressFill.style.background = '#dc2626';
                         progressFill.style.width = '100%';
                         progressFill.textContent = 'Error';
                         clearInterval(interval);
@@ -768,10 +643,10 @@
                     const data = await res.json();
 
                     if (data && data.error) {
-                        progressFill.style.background = '#d32f2f';
+                        progressFill.style.background = '#dc2626';
                         progressFill.style.width = '100%';
                         progressFill.textContent = 'Error';
-                        setStatus(data.error, 'error');
+                        setStatus(`<i class="fa-solid fa-circle-xmark"></i> ${data.error}`, 'error');
                         clearInterval(interval);
                         setTimeout(() => {
                             progressBar.style.display = 'none';
@@ -782,11 +657,10 @@
 
                     if (data && data.total > 0) {
                         if (data.completed) {
-                            // Completado: barra en verde al 100%
-                            progressFill.style.background = '#388e3c';
+                            progressFill.style.background = '#15803d';
                             progressFill.style.width = '100%';
-                            progressFill.textContent = `100% (${data.total}/${data.total})`;
-                            setStatus(`Sincronització completada (${data.total} registros).`, 'ok');
+                            progressFill.textContent = `100% (${data.total.toLocaleString()}/${data.total.toLocaleString()})`;
+                            setStatus(`<i class="fa-solid fa-circle-check"></i> Sincronització de <b>${collection}</b> completada (${data.total.toLocaleString()} registres).`, 'ok');
                             clearInterval(interval);
                             setTimeout(async () => {
                                 progressBar.style.display = 'none';
@@ -794,15 +668,14 @@
                                 if (onFinish) onFinish();
                             }, 2000);
                         } else {
-                            // En progreso: máximo 99% hasta confirmar completed
                             const percent = Math.min(99, Math.round(100 * data.current / data.total));
                             progressFill.style.width = percent + '%';
-                            progressFill.textContent = `${percent}% (${data.current}/${data.total})`;
+                            progressFill.textContent = `${percent}% (${data.current.toLocaleString()}/${data.total.toLocaleString()})`;
                         }
                     }
                 } catch (e) {
-                    setStatus('Error de red o de formato en la respuesta.', 'error');
-                    progressFill.style.background = '#d32f2f';
+                    setStatus('<i class="fa-solid fa-triangle-exclamation"></i> Error de xarxa en comprovar el progrés.', 'error');
+                    progressFill.style.background = '#dc2626';
                     progressFill.style.width = '100%';
                     progressFill.textContent = 'Error';
                     clearInterval(interval);
@@ -815,7 +688,41 @@
         }, 500);
     }
 
-    
+    buttonStatsMap.forEach(entry => {
+        const { button, collection, endpoint } = entry;
+        button.onclick = async () => {
+            button.disabled = true;
+            setStatus(`<i class="fa-solid fa-arrows-rotate fa-spin"></i> Sincronitzant <b>${collection}</b>...`);
+            try {
+                const res = await fetch(endpoint, { method: 'POST' });
+                if (res.ok) {
+                    setStatus(`<i class="fa-solid fa-spinner fa-spin"></i> Sincronització de <b>${collection}</b> iniciada.`);
+                    pollProgress(collection, () => {
+                        button.disabled = false;
+                    });
+                } else {
+                    setStatus(`<i class="fa-solid fa-triangle-exclamation"></i> Error a l'iniciar la sincronització de <b>${collection}</b> (HTTP ${res.status}).`, 'error');
+                    button.disabled = false;
+                }
+            } catch (e) {
+                setStatus('<i class="fa-solid fa-triangle-exclamation"></i> Error de xarxa en connectar amb el servidor.', 'error');
+                button.disabled = false;
+            }
+        };
+    });
+
+    async function bootstrapPage() {
+        let statsLoaded = false;
+        while (!statsLoaded) {
+            statsLoaded = await loadCollectionStats();
+            if (!statsLoaded) {
+                await new Promise(resolve => setTimeout(resolve, 1000));
+            }
+        }
+        document.body.classList.remove('loading');
+    }
+
+    bootstrapPage();
 </script>
 </body>
 </html>

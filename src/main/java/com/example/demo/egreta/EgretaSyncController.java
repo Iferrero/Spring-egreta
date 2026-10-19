@@ -99,13 +99,18 @@ public class EgretaSyncController {
     @Autowired private ResearchoutputsSyncService researchoutputsSyncService;
     @Autowired private StudentthesesSyncService studentthesesSyncService;
     @Autowired private UsersSyncService usersSyncService;
+    @Autowired private EthicalReviewsSyncService ethicalReviewsSyncService;
+    @Autowired private ImpactsSyncService impactsSyncService;
+    @Autowired private MilestonesSyncService milestonesSyncService;
+    @Autowired private PersonExpertisesSyncService personExpertisesSyncService;
+    @Autowired private ThesauriSyncService thesauriSyncService;
     @PostMapping("/sync/authorcollaborations")
     public ResponseEntity<String> syncAuthorcollaborations() {
         authorcollaborationsSyncService.sync();
         return ResponseEntity.ok("Sincronització de 'authorcollaborations' iniciada.");
     }
 
-    @PostMapping("/sync/classificationschemes")
+    @PostMapping({"/sync/classificationschemes", "/sync/classification-schemes"})
     public ResponseEntity<String> syncClassificationschemes() {
         classificationschemesSyncService.sync();
         return ResponseEntity.ok("Sincronització de 'classificationschemes' iniciada.");
@@ -237,4 +242,49 @@ public class EgretaSyncController {
         usersSyncService.sync();
         return ResponseEntity.ok("Sincronització de 'users' iniciada.");
     }
+
+    @PostMapping({"/sync/ethicalreviews", "/sync/ethical-reviews"})
+    public ResponseEntity<String> syncEthicalReviews() {
+        ethicalReviewsSyncService.sync();
+        return ResponseEntity.ok("Sincronització de 'ethical-reviews' iniciada.");
+    }
+
+    @PostMapping("/sync/impacts")
+    public ResponseEntity<String> syncImpacts() {
+        impactsSyncService.sync();
+        return ResponseEntity.ok("Sincronització de 'impacts' iniciada.");
+    }
+
+    @PostMapping("/sync/milestones")
+    public ResponseEntity<String> syncMilestones() {
+        milestonesSyncService.sync();
+        return ResponseEntity.ok("Sincronització de 'milestones' iniciada.");
+    }
+
+    @PostMapping({"/sync/personexpertises", "/sync/person-expertises"})
+    public ResponseEntity<String> syncPersonExpertises() {
+        personExpertisesSyncService.sync();
+        return ResponseEntity.ok("Sincronització de 'person-expertises' iniciada.");
+    }
+
+    @PostMapping("/sync/thesauri")
+    public ResponseEntity<String> syncThesauri() {
+        thesauriSyncService.sync();
+        return ResponseEntity.ok("Sincronització de 'thesauri' iniciada.");
+    }
+
+    @PostMapping("/sync/{collection}")
+    public ResponseEntity<String> syncCollectionGeneric(@PathVariable String collection) {
+        String cleanParam = collection.replace("-", "").toLowerCase();
+        for (AbstractEgretaSyncService service : syncServices) {
+            String colClean = service.collectionName().replace("-", "").toLowerCase();
+            String epClean = service.getEndpoint().replace("-", "").toLowerCase();
+            if (colClean.equals(cleanParam) || epClean.equals(cleanParam)) {
+                service.sync();
+                return ResponseEntity.ok("Sincronització de '" + service.collectionName() + "' iniciada.");
+            }
+        }
+        return ResponseEntity.notFound().build();
+    }
 }
+

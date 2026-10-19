@@ -13,6 +13,8 @@ import org.springframework.data.mongodb.core.CollectionOptions;
 import org.springframework.dao.DataAccessException;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.util.UriComponentsBuilder;
 import org.springframework.beans.factory.annotation.Value;
@@ -87,6 +89,7 @@ public abstract class AbstractEgretaSyncService {
 
     protected WebClient buildClient() {
         return webClientBuilder
+                .defaultHeader(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON_VALUE)
                 .codecs(configurer -> configurer
                         .defaultCodecs()
                         .maxInMemorySize(getMaxBufferSizeMB() * 1024 * 1024))
@@ -265,6 +268,7 @@ public abstract class AbstractEgretaSyncService {
             ResponseEntity<Map> response = client.get()
                     .uri(url)
                 .header("api-key", getApiKey())
+                    .accept(MediaType.APPLICATION_JSON)
                     .retrieve()
                     .toEntity(Map.class)
                     .block();
@@ -300,6 +304,7 @@ public abstract class AbstractEgretaSyncService {
                 ResponseEntity<Map> response = client.get()
                         .uri(url)
                 .header("api-key", getApiKey())
+                        .accept(MediaType.APPLICATION_JSON)
                         .retrieve()
                         .toEntity(Map.class)
                         .block();
@@ -386,6 +391,7 @@ public abstract class AbstractEgretaSyncService {
             response = client.get()
                     .uri(url)
                     .header("api-key", getApiKey())
+                    .accept(MediaType.APPLICATION_JSON)
                     .retrieve()
                     .toEntity(Map.class)
                     .block();
