@@ -598,7 +598,7 @@ public class EquipmentLoaderController {
             if (!sb.isEmpty()) {
                 sb.append("<br/><br/>");
             }
-            sb.append("<b>").append(heading).append("</b><br/>");
+            sb.append("<b>").append(heading).append(":</b><br/>");
             sb.append(fundingText.trim());
         }
         return sb.toString();
@@ -662,13 +662,19 @@ public class EquipmentLoaderController {
         String dCat = (String) row.getOrDefault("descCat", "");
         String dCas = (String) row.getOrDefault("descCas", "");
         String dAng = (String) row.getOrDefault("descAng", "");
+        String proj = (String) row.getOrDefault("project", "");
+        String projDesc = (String) row.getOrDefault("projectDesc", "");
         String financament = (String) row.getOrDefault("financament", "");
 
-        MultilingualFunding funding = adaptFunding(financament);
+        String fundingRaw = (projDesc != null && !projDesc.isBlank() && !projDesc.equals("#")) ? projDesc : financament;
+        MultilingualFunding funding = adaptFunding(fundingRaw);
+        String fundCat = !funding.cat().isBlank() ? funding.cat() : fundingRaw;
+        String fundCas = !funding.cas().isBlank() ? funding.cas() : fundingRaw;
+        String fundAng = !funding.eng().isBlank() ? funding.eng() : fundingRaw;
 
-        String fullCat = buildDescriptionWithFunding(dCat, "Finançament", funding.cat());
-        String fullCas = buildDescriptionWithFunding(dCas, "Financiación", funding.cas());
-        String fullAng = buildDescriptionWithFunding(dAng, "Funding", funding.eng());
+        String fullCat = buildDescriptionWithFunding(dCat, "Finançament", fundCat);
+        String fullCas = buildDescriptionWithFunding(dCas, "Financiación", fundCas);
+        String fullAng = buildDescriptionWithFunding(dAng, "Funding", fundAng);
 
         // Per a actius fixos, afegir bloc de metadades a les descripcions si existeixen
         String assetNum = (String) row.getOrDefault("assetNumber", "");
@@ -677,8 +683,6 @@ public class EquipmentLoaderController {
         String capYr = (String) row.getOrDefault("capYear", "");
         String resp = (String) row.getOrDefault("responsible", "");
         String niu = (String) row.getOrDefault("niu", "");
-        String proj = (String) row.getOrDefault("project", "");
-        String projDesc = (String) row.getOrDefault("projectDesc", "");
 
         if (!assetNum.isBlank() || !loc.isBlank() || !capYr.isBlank() || !resp.isBlank()) {
             StringBuilder metaCat = new StringBuilder();
@@ -710,9 +714,9 @@ public class EquipmentLoaderController {
                 metaAng.append("• <b>Responsible person:</b> ").append(resp).append(!niu.isBlank() ? " (NIU: " + niu + ")" : "").append("<br/>");
             }
             if (!proj.isBlank() && !proj.equals("#")) {
-                metaCat.append("• <b>Projecte:</b> ").append(proj).append(!projDesc.isBlank() && !projDesc.equals("#") ? " (" + projDesc + ")" : "").append("<br/>");
-                metaCas.append("• <b>Proyecto:</b> ").append(proj).append(!projDesc.isBlank() && !projDesc.equals("#") ? " (" + projDesc + ")" : "").append("<br/>");
-                metaAng.append("• <b>Project:</b> ").append(proj).append(!projDesc.isBlank() && !projDesc.equals("#") ? " (" + projDesc + ")" : "").append("<br/>");
+                metaCat.append("• <b>Codi projecte:</b> ").append(proj).append("<br/>");
+                metaCas.append("• <b>Código proyecto:</b> ").append(proj).append("<br/>");
+                metaAng.append("• <b>Project code:</b> ").append(proj).append("<br/>");
             }
 
             if (!fullCat.isBlank()) fullCat += "<br/><br/>" + metaCat;
@@ -742,19 +746,6 @@ public class EquipmentLoaderController {
                 "type", Map.of("uri", "/dk/atira/pure/equipment/descriptions/equipmentdescription")
             ));
         }
-
-        // Descripció de l'origen del finançament (Source of funding description)
-        if (projDesc != null && !projDesc.isBlank() && !projDesc.equals("#")) {
-            descriptions.add(Map.of(
-                "value", Map.of(
-                    "ca_ES", projDesc,
-                    "es_ES", projDesc,
-                    "en_GB", projDesc
-                ),
-                "type", Map.of("uri", "/dk/atira/pure/equipment/descriptions/source_of_funding_description")
-            ));
-        }
-
         if (!descriptions.isEmpty()) {
             payload.put("descriptions", descriptions);
         }

@@ -817,6 +817,21 @@
             let dCas = item.descCas || '';
             let dAng = item.descAng || '';
 
+            // Finançament (Source of funding) afegit a la descripció principal posant en negreta Financiación:
+            const fundingText = (item.projectDesc && item.projectDesc !== '#') 
+                ? item.projectDesc 
+                : (item.financament || '');
+
+            if (fundingText) {
+                const fCat = `<b>Finançament:</b><br/>${escapeHtml(fundingText)}`;
+                const fCas = `<b>Financiación:</b><br/>${escapeHtml(fundingText)}`;
+                const fAng = `<b>Funding:</b><br/>${escapeHtml(fundingText)}`;
+
+                dCat = dCat ? `${dCat}<br/><br/>${fCat}` : fCat;
+                dCas = dCas ? `${dCas}<br/><br/>${fCas}` : fCas;
+                dAng = dAng ? `${dAng}<br/><br/>${fAng}` : fAng;
+            }
+
             if (includeMeta) {
                 const metaCat = [];
                 const metaCas = [];
@@ -845,10 +860,9 @@
                     metaAng.push(`• <b>Responsible person:</b> ${escapeHtml(respInfo)}`);
                 }
                 if (item.project && item.project !== '#') {
-                    const projInfo = item.project + (item.projectDesc && item.projectDesc !== '#' ? `: ${item.projectDesc}` : '');
-                    metaCat.push(`• <b>Projecte:</b> ${escapeHtml(projInfo)}`);
-                    metaCas.push(`• <b>Proyecto:</b> ${escapeHtml(projInfo)}`);
-                    metaAng.push(`• <b>Project:</b> ${escapeHtml(projInfo)}`);
+                    metaCat.push(`• <b>Codi projecte:</b> ${escapeHtml(item.project)}`);
+                    metaCas.push(`• <b>Código proyecto:</b> ${escapeHtml(item.project)}`);
+                    metaAng.push(`• <b>Project code:</b> ${escapeHtml(item.project)}`);
                 }
 
                 if (metaCat.length > 0) {
@@ -862,29 +876,15 @@
                 }
             }
 
-            payload.descriptions = [];
-
             if (dCat || dCas || dAng) {
                 const descVal = {};
                 if (dCat) descVal.ca_ES = dCat;
                 if (dCas) descVal.es_ES = dCas;
                 if (dAng) descVal.en_GB = dAng;
-                payload.descriptions.push({
+                payload.descriptions = [{
                     value: descVal,
                     type: { uri: "/dk/atira/pure/equipment/descriptions/equipmentdescription" }
-                });
-            }
-
-            // Descripció de l'origen del finançament (Source of funding description)
-            if (item.projectDesc && item.projectDesc !== '#') {
-                payload.descriptions.push({
-                    value: {
-                        ca_ES: item.projectDesc,
-                        es_ES: item.projectDesc,
-                        en_GB: item.projectDesc
-                    },
-                    type: { uri: "/dk/atira/pure/equipment/descriptions/source_of_funding_description" }
-                });
+                }];
             }
 
             // Details (només si és un model real)
@@ -1002,6 +1002,11 @@
                     ${item.descCat ? `
                         <div class="mt-1 text-[11px] text-slate-600 bg-slate-50 p-1.5 rounded border border-slate-200 line-clamp-2 max-w-sm" title="${escapeHtml(item.descCat)}">
                             ${escapeHtml(item.descCat)}
+                        </div>
+                    ` : ''}
+                    ${item.projectDesc && item.projectDesc !== '#' ? `
+                        <div class="mt-1 text-[10px] text-slate-600 bg-slate-50/80 px-1.5 py-0.5 rounded border border-slate-200 line-clamp-1 max-w-sm" title="Finançament: ${escapeHtml(item.projectDesc)}">
+                            <span class="font-bold text-slate-700">Finançament:</span> ${escapeHtml(item.projectDesc)}
                         </div>
                     ` : ''}
                 `;
