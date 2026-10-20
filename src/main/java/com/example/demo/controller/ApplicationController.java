@@ -507,7 +507,7 @@ public class ApplicationController {
             return null;
         }
 
-        String[] segments = path.split("\\\\.");
+        String[] segments = path.split("\\.");
         Object current = root;
 
         for (String segment : segments) {

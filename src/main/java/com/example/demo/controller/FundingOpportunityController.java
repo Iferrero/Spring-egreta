@@ -58,7 +58,13 @@ public class FundingOpportunityController {
         Query query = new Query();
         if (buscar != null && !buscar.isBlank()) {
             String escaped = Pattern.quote(buscar.trim());
-            query.addCriteria(Criteria.where("title.value").regex(escaped, "i"));
+            query.addCriteria(new Criteria().orOperator(
+                Criteria.where("title.ca_ES").regex(escaped, "i"),
+                Criteria.where("title.es_ES").regex(escaped, "i"),
+                Criteria.where("title.en_GB").regex(escaped, "i"),
+                Criteria.where("title.value").regex(escaped, "i"),
+                Criteria.where("uuid").regex(escaped, "i")
+            ));
         }
 
         long total = mongoTemplate.count(query, collectionName);

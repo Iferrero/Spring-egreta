@@ -32,7 +32,7 @@
       "$match": {
         "$or": [
           { "fOpp.type.key": { "$in": ["pro", "pjn"] } },
-          { "fOpp.type.uri": { "$regex": "/(pro|pjn)$" } }
+          { "fOpp.type.uri": { "$regex": "/(pro|pjn)($|/)" } }
         ]
       }
     },

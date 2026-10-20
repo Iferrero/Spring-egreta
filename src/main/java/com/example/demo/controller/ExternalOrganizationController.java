@@ -389,7 +389,7 @@ public class ExternalOrganizationController {
             return Map.of("merged", false, "reason", "missing-target-or-sources");
         }
 
-        
+        if (useEgreta) {
             // Llamada a la API de Egreta para fusionar
             if (!egretaExternalOrgEnabled) {
                 return Map.of("merged", false, "reason", "egreta-sync-disabled");
@@ -421,6 +421,16 @@ public class ExternalOrganizationController {
                         "body", trimResponseBody(response.body())
                     );
                 }
+
+                // Egreta ha fusionado con éxito. Actualizar MongoDB local:
+                // 1) Combinar propiedades locales de fuentes en el target si existe en Mongo
+                mergeLocalSourcesIntoTarget(targetId, sourceIds);
+
+                // 2) Eliminar las organizaciones fuente de MongoDB para que no queden huérfanas
+                mongoTemplate.remove(new Query(Criteria.where("uuid").in(sourceIds)), ExternalOrganization.class);
+
+                invalidateMetadataCatalogCaches();
+
                 // Devuelve el resultado de Egreta
                 return Map.of(
                     "merged", true,
@@ -436,9 +446,9 @@ public class ExternalOrganizationController {
                     "message", e.getMessage() == null ? "unknown" : e.getMessage()
                 );
             }
-        
-        /* 
-        // Fusión local MongoDB (comportamiento anterior)
+        }
+
+        // Fusión local MongoDB (cuando egreta = false)
         Query targetQuery = new Query(Criteria.where("uuid").is(targetId));
         ExternalOrganization target = mongoTemplate.findOne(targetQuery, ExternalOrganization.class);
         if (target == null) {
@@ -453,12 +463,45 @@ public class ExternalOrganizationController {
             return Map.of("merged", false, "reason", "sources-not-found", "sourceIds", sourceIds);
         }
 
-        // Ejemplo de fusión: combinar nombres, identificadores, links, etc.
+        mergeProperties(target, sources);
+
+        // Guardar la organización fusionada
+        repository.save(target);
+
+        // Eliminar las fuentes de MongoDB
+        mongoTemplate.remove(new Query(Criteria.where("uuid").in(sourceIds)), ExternalOrganization.class);
+
+        invalidateMetadataCatalogCaches();
+
+        return Map.of(
+            "merged", true,
+            "targetId", targetId,
+            "removed", sourceIds,
+            "target", target
+        );
+    }
+
+    private void mergeLocalSourcesIntoTarget(String targetId, List<String> sourceIds) {
+        try {
+            ExternalOrganization target = mongoTemplate.findOne(new Query(Criteria.where("uuid").is(targetId)), ExternalOrganization.class);
+            List<ExternalOrganization> sources = mongoTemplate.find(new Query(Criteria.where("uuid").in(sourceIds)), ExternalOrganization.class);
+            if (target != null && !sources.isEmpty()) {
+                mergeProperties(target, sources);
+                repository.save(target);
+            }
+        } catch (Exception e) {
+            log.warn("Error combinando propiedades locales tras fusión en Egreta: {}", e.getMessage());
+        }
+    }
+
+    private void mergeProperties(ExternalOrganization target, List<ExternalOrganization> sources) {
         for (ExternalOrganization source : sources) {
             // Fusionar nombres (añadir los que falten)
             if (source.getName() != null) {
                 if (target.getName() == null) target.setName(new java.util.HashMap<>());
-                target.getName().putAll(source.getName());
+                for (Map.Entry<String, String> entry : source.getName().entrySet()) {
+                    target.getName().putIfAbsent(entry.getKey(), entry.getValue());
+                }
             }
             // Fusionar identificadores
             if (source.getIdentifiers() != null) {
@@ -495,24 +538,6 @@ public class ExternalOrganizationController {
             if (target.getVisibility() == null && source.getVisibility() != null) target.setVisibility(source.getVisibility());
             if (target.getWorkflow() == null && source.getWorkflow() != null) target.setWorkflow(source.getWorkflow());
         }
-
-        // Guardar la organización fusionada
-        repository.save(target);
-
-        // Eliminar las fuentes
-        for (ExternalOrganization source : sources) {
-            mongoTemplate.remove(new Query(Criteria.where("uuid").is(source.getUuid())), ExternalOrganization.class);
-        }
-        
-        // TODO: Actualizar referencias externas en otras colecciones si es necesario
-
-        return Map.of(
-            "merged", true,
-            "targetId", targetId,
-            "removed", sourceIds,
-            "target", target
-        );
-        */
     }
 
     // -------------------------------------------------------------------------
@@ -3711,6 +3736,7 @@ public class ExternalOrganizationController {
             "externalOrganizations.uuid"
         )),
         Map.entry("fundingopportunities", List.of(
+            "fundingOrganizations.uuid",
             "funders.externalOrganization.uuid",
             "managingOrganisation.uuid"
         ))

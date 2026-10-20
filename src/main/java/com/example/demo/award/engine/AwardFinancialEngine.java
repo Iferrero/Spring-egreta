@@ -1074,15 +1074,31 @@ public class AwardFinancialEngine {
                 if (!(gObj instanceof Document gDoc)) continue;
                 if (!"/uab/fundingopportunities/programes".equals(gDoc.getString("logicalName"))) continue;
                 List<?> containers = (List<?>) gDoc.get("keywordContainers");
-                if (containers == null) continue;
-                for (Object cObj : containers) {
-                    if (!(cObj instanceof Document cDoc)) continue;
-                    Document skw = (Document) cDoc.get("structuredKeyword");
-                    if (skw == null) continue;
-                    Document term = (Document) skw.get("term");
-                    if (term != null && term.containsKey("ca_ES")) {
-                        String val = term.getString("ca_ES");
-                        if (val != null && !val.isBlank()) programs.add(val);
+                if (containers != null) {
+                    for (Object cObj : containers) {
+                        if (!(cObj instanceof Document cDoc)) continue;
+                        Document skw = (Document) cDoc.get("structuredKeyword");
+                        if (skw == null) continue;
+                        Document term = (Document) skw.get("term");
+                        if (term != null) {
+                            String val = term.getString("ca_ES");
+                            if (val == null || val.isBlank()) val = term.getString("es_ES");
+                            if (val == null || val.isBlank()) val = term.getString("en_GB");
+                            if (val != null && !val.isBlank()) programs.add(val);
+                        }
+                    }
+                }
+                List<?> classifications = (List<?>) gDoc.get("classifications");
+                if (classifications != null) {
+                    for (Object clObj : classifications) {
+                        if (!(clObj instanceof Document clDoc)) continue;
+                        Document term = (Document) clDoc.get("term");
+                        if (term != null) {
+                            String val = term.getString("ca_ES");
+                            if (val == null || val.isBlank()) val = term.getString("es_ES");
+                            if (val == null || val.isBlank()) val = term.getString("en_GB");
+                            if (val != null && !val.isBlank()) programs.add(val);
+                        }
                     }
                 }
             }
@@ -1125,6 +1141,8 @@ public class AwardFinancialEngine {
                 Object termObj = tDoc.get("term");
                 if (termObj instanceof Document termDoc) {
                     String caVal = termDoc.getString("ca_ES");
+                    if (caVal == null || caVal.isBlank()) caVal = termDoc.getString("es_ES");
+                    if (caVal == null || caVal.isBlank()) caVal = termDoc.getString("en_GB");
                     if (caVal != null && !caVal.isBlank()) {
                         callTypes.add(caVal);
                         continue;

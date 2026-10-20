@@ -101,6 +101,10 @@ public class AwardClassificationEngine {
         if (termObj instanceof Map<?, ?> termMap) {
             Object ca = termMap.get("ca_ES");
             if (ca != null && !String.valueOf(ca).isBlank()) return String.valueOf(ca);
+            Object es = termMap.get("es_ES");
+            if (es != null && !String.valueOf(es).isBlank()) return String.valueOf(es);
+            Object en = termMap.get("en_GB");
+            if (en != null && !String.valueOf(en).isBlank()) return String.valueOf(en);
             Object textObj = termMap.get("text");
             if (textObj instanceof List<?> list) {
                 for (Object o : list) {

@@ -48,7 +48,8 @@
             <tr class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider">
                 <th class="px-6 py-4 font-bold">Títol</th>
                 <th class="px-6 py-4 font-bold">Tipus</th>
-                <th class="px-6 py-4 font-bold text-center">Workflow</th>
+                <th class="px-6 py-4 font-bold text-center">Estat / Visibilitat</th>
+                <th class="px-6 py-4 font-bold">Terminis</th>
                 <th class="px-6 py-4 font-bold text-right">UUID</th>
             </tr>
             </thead>
@@ -73,17 +74,22 @@
     let debounceBuscar = null;
 
     function badgeWorkflow(step) {
-        const value = (step || 'unknown').toLowerCase();
-        if (value === 'validated') return '<span class="px-2 py-1 rounded-full text-[10px] font-bold uppercase bg-emerald-100 text-emerald-700">Validated</span>';
-        if (value === 'draft') return '<span class="px-2 py-1 rounded-full text-[10px] font-bold uppercase bg-amber-100 text-amber-700">Draft</span>';
-        return `<span class="px-2 py-1 rounded-full text-[10px] font-bold uppercase bg-slate-100 text-slate-600">${step || 'N/A'}</span>`;
+        if (!step) return '<span class="px-2 py-1 rounded-full text-[10px] font-bold uppercase bg-slate-100 text-slate-500">N/A</span>';
+        const val = String(step).toLowerCase();
+        if (val.includes('valid') || val.includes('public') || val.includes('públic') || val.includes('free')) {
+            return `<span class="px-2 py-1 rounded-full text-[10px] font-bold uppercase bg-emerald-100 text-emerald-700">${step}</span>`;
+        }
+        if (val.includes('draft') || val.includes('internal') || val.includes('intern') || val.includes('backend')) {
+            return `<span class="px-2 py-1 rounded-full text-[10px] font-bold uppercase bg-amber-100 text-amber-700">${step}</span>`;
+        }
+        return `<span class="px-2 py-1 rounded-full text-[10px] font-bold uppercase bg-indigo-50 text-indigo-700">${step}</span>`;
     }
 
     function renderTabla(lista) {
         const body = document.getElementById('tabla-body');
 
         if (!lista || lista.length === 0) {
-            body.innerHTML = '<tr><td colspan="4" class="px-6 py-12 text-center text-slate-400 italic">No s\'han trobat oportunitats</td></tr>';
+            body.innerHTML = '<tr><td colspan="5" class="px-6 py-12 text-center text-slate-400 italic">No s\'han trobat oportunitats</td></tr>';
             return;
         }
 
@@ -94,6 +100,11 @@
                 </td>
                 <td class="px-6 py-4 text-sm text-slate-600">${item.typeName || 'Desconocido'}</td>
                 <td class="px-6 py-4 text-center">${badgeWorkflow(item.workflowStep)}</td>
+                <td class="px-6 py-4 text-xs text-slate-500">
+                    ${item.openingDate ? `<div title="Data obertura"><i class="fa-regular fa-calendar-check mr-1 text-emerald-500"></i>${item.openingDate}</div>` : ''}
+                    ${item.deadline ? `<div title="Termini límit"><i class="fa-regular fa-calendar-xmark mr-1 text-rose-400"></i>${item.deadline}</div>` : ''}
+                    ${!item.openingDate && !item.deadline ? '<span class="text-slate-300">-</span>' : ''}
+                </td>
                 <td class="px-6 py-4 text-right text-xs font-mono text-slate-500">${item.uuid || '-'}</td>
             </tr>
         `).join('');

@@ -12,6 +12,7 @@ import java.util.Map;
 
 @Document(collection = "FundingOpportunities")
 @CompoundIndexes({
+    @CompoundIndex(name = "title_ca_ES", def = "{'title.ca_ES': 1}"),
     @CompoundIndex(name = "title_value", def = "{'title.value': 1}")
 })
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -25,6 +26,9 @@ public class FundingOpportunity {
     private Object title;
     private Object type;
     private Workflow workflow;
+    private String openingDate;
+    private String deadline;
+    private Object visibility;
 
     public String getId() {
         return id;
@@ -32,6 +36,63 @@ public class FundingOpportunity {
 
     public String getUuid() {
         return uuid;
+    }
+
+    public String getOpeningDate() {
+        return openingDate;
+    }
+
+    public String getDeadline() {
+        return deadline;
+    }
+
+    public Object getVisibility() {
+        return visibility;
+    }
+
+    public void setUuid(String uuid) {
+        this.uuid = uuid;
+    }
+
+    public void setTitle(Object title) {
+        this.title = title;
+    }
+
+    public void setType(Object type) {
+        this.type = type;
+    }
+
+    public void setWorkflow(Workflow workflow) {
+        this.workflow = workflow;
+    }
+
+    public void setOpeningDate(String openingDate) {
+        this.openingDate = openingDate;
+    }
+
+    public void setDeadline(String deadline) {
+        this.deadline = deadline;
+    }
+
+    public void setVisibility(Object visibility) {
+        this.visibility = visibility;
+    }
+
+    public String getVisibilityKey() {
+        if (visibility instanceof Map<?, ?> vMap) {
+            Object key = vMap.get("key");
+            if (key != null) return String.valueOf(key);
+        }
+        return null;
+    }
+
+    public String getVisibilityDescription() {
+        if (visibility instanceof Map<?, ?> vMap) {
+            Object desc = vMap.get("description");
+            String resolved = extractLocalizedValue(desc);
+            if (resolved != null) return resolved;
+        }
+        return null;
     }
 
     public String getFullTitle() {
@@ -48,7 +109,12 @@ public class FundingOpportunity {
     }
 
     public String getWorkflowStep() {
-        return workflow != null ? workflow.getStep() : null;
+        if (workflow != null && workflow.getStep() != null) {
+            return workflow.getStep();
+        }
+        String vis = getVisibilityDescription();
+        if (vis != null) return vis;
+        return getVisibilityKey();
     }
 
     private String extractTypeValue(Object rawType) {

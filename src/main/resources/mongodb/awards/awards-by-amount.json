@@ -100,7 +100,8 @@
                 "in": {
                   "$let": {
                     "vars": {
-                      "kc": { "$arrayElemAt": ["$$progGroup.keywordContainers", 0] }
+                      "kc": { "$arrayElemAt": ["$$progGroup.keywordContainers", 0] },
+                      "cl": { "$arrayElemAt": ["$$progGroup.classifications", 0] }
                     },
                     "in": {
                       "$let": {
@@ -117,7 +118,27 @@
                           "$cond": [
                             { "$gt": [{ "$size": "$$caText" }, 0] },
                             { "$arrayElemAt": ["$$caText.value", 0] },
-                            null
+                            {
+                              "$ifNull": [
+                                "$$kc.structuredKeyword.term.ca_ES",
+                                {
+                                  "$ifNull": [
+                                    "$$cl.term.ca_ES",
+                                    {
+                                      "$ifNull": [
+                                        "$$kc.structuredKeyword.term.es_ES",
+                                        {
+                                          "$ifNull": [
+                                            "$$cl.term.es_ES",
+                                            "$$kc.structuredKeyword.term.en_GB"
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
                           ]
                         }
                       }
@@ -141,7 +162,17 @@
                   "$cond": [
                     { "$gt": [{ "$size": "$$caText" }, 0] },
                     { "$arrayElemAt": ["$$caText.value", 0] },
-                    { "$ifNull": ["$fOpp.type.term.ca_ES", null] }
+                    {
+                      "$ifNull": [
+                        "$fOpp.type.term.ca_ES",
+                        {
+                          "$ifNull": [
+                            "$fOpp.type.term.es_ES",
+                            "$fOpp.type.term.en_GB"
+                          ]
+                        }
+                      ]
+                    }
                   ]
                 }
               }
