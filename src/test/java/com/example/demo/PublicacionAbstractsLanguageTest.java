@@ -87,6 +87,28 @@ public class PublicacionAbstractsLanguageTest {
     }
 
     @Test
+    public void testShortAbstractDetection() {
+        // Specific case reported by user (UUID cbb4827d-9a6d-4197-a1e4-8983c90bb9a8)
+        assertEquals("ca_ES", PublicacionAbstractsService.detectLanguage("Guió per a vídeo"));
+        assertEquals("es_ES", PublicacionAbstractsService.detectLanguage("Guía para video"));
+        assertEquals("en_GB", PublicacionAbstractsService.detectLanguage("Video script"));
+
+        // Database short abstracts
+        assertEquals("ca_ES", PublicacionAbstractsService.detectLanguage("Distribució normal"));
+        assertEquals("ca_ES", PublicacionAbstractsService.detectLanguage("Intervenció al Fòrum"));
+        assertEquals("ca_ES", PublicacionAbstractsService.detectLanguage("Article d'investigació"));
+        assertEquals("ca_ES", PublicacionAbstractsService.detectLanguage("Revista de divulgació"));
+        assertEquals("ca_ES", PublicacionAbstractsService.detectLanguage("Generalitat de Catalunya."));
+        assertEquals("ca_ES", PublicacionAbstractsService.detectLanguage("Resum d'acció"));
+        assertEquals("ca_ES", PublicacionAbstractsService.detectLanguage("Presentació a congrés"));
+
+        // Spanish short abstracts
+        assertEquals("es_ES", PublicacionAbstractsService.detectLanguage("Distribución normal"));
+        assertEquals("es_ES", PublicacionAbstractsService.detectLanguage("Intervención en el Foro"));
+        assertEquals("es_ES", PublicacionAbstractsService.detectLanguage("Artículo de investigación"));
+    }
+
+    @Test
     public void testFindRealDiscrepancies() {
         try (var client = com.mongodb.client.MongoClients.create("mongodb://myUserAdmin:Mongoplex.00@ymir.uab.cat:8000/kraken?authSource=admin")) {
             var db = client.getDatabase("kraken");

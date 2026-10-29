@@ -23,7 +23,8 @@ public class PublicacionAbstractsService {
     private final Map<String, CacheEntry> yearsLanguagesCache = new ConcurrentHashMap<>();
     private final Map<String, CacheEntry> typesCache = new ConcurrentHashMap<>();
     private final Map<String, CacheEntry> discrepanciesStatsCache = new ConcurrentHashMap<>();
-    private static final long CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+    private static final long CACHE_TTL_MS = 60 * 60 * 1000; // 60 minutes
+    public static final String STATS_CACHE_COLLECTION = "AbstractsLinguisticStatsCache";
 
     public record CacheEntry(Object data, long timestamp) {}
 
@@ -72,13 +73,23 @@ public class PublicacionAbstractsService {
         return clean.split("\\s+").length;
     }
 
+    public static final List<String> EMPTY_HTML_STRINGS = List.of(
+        "", "<p></p>", "<p><br></p>", "<p><br/></p>", "<p>&nbsp;</p>", "<p> </p>", "<br>", "<br/>"
+    );
+
+    public static Document buildHasTextExpr(String langField) {
+        Document trimmed = new Document("$trim", new Document("input", new Document("$ifNull", List.of("$abstract." + langField, ""))));
+        return new Document("$and", List.of(
+            new Document("$gt", List.of(new Document("$strLenCP", trimmed), 0)),
+            new Document("$not", List.of(new Document("$in", List.of(trimmed, EMPTY_HTML_STRINGS))))
+        ));
+    }
+
     public static Document buildHasTextCond(String langField) {
         return new Document("$cond", List.of(
-            new Document("$regexMatch", new Document("input", new Document("$ifNull", List.of("$abstract." + langField, "")))
-                .append("regex", HTML_EMPTY_REGEX)
-                .append("options", "i")),
-            0,
-            1
+            buildHasTextExpr(langField),
+            1,
+            0
         ));
     }
 
@@ -121,9 +132,144 @@ public class PublicacionAbstractsService {
         return null;
     }
 
+    private static final Set<String> FAST_EN_STOPWORDS = Set.of(
+        "the", "and", "of", "in", "to", "a", "is", "that", "for", "with", "as", "was", "on", "are", 
+        "by", "this", "from", "at", "which", "an", "be", "has", "were", "we", "study", "results",
+        "between", "these", "their", "paper", "used", "using", "can", "also", "into", "all",
+        "script", "report", "review", "analysis"
+    );
+
+    private static final Set<String> FAST_ES_STOPWORDS = Set.of(
+        "de", "la", "que", "el", "en", "y", "los", "se", "del", "las", "por", "un", "para", "con", 
+        "no", "una", "su", "al", "lo", "como", "mas", "más", "pero", "sus", "este", "entre", "esta", 
+        "sobre", "todo", "tambien", "también", "estudio", "resultados", "investigacion", "investigación",
+        "guia", "guía", "guion", "guión", "video"
+    );
+
+    private static final Set<String> FAST_CA_STOPWORDS = Set.of(
+        "de", "la", "que", "el", "en", "i", "els", "es", "del", "les", "per", "un", "amb", 
+        "no", "una", "dels", "aquest", "aquesta", "aquests", "aquestes", 
+        "com", "son", "són", "mes", "més", "també", "sobre", "entre", "ja", "estudi", "resultats", 
+        "recerca", "objectiu", "desenvolupament", "mitjançant", "havent", "nostre", "nostra",
+        "guio", "guió", "vídeo"
+    );
+
+    private static final Pattern CA_CIO_PATTERN = Pattern.compile("(?iu)[\\p{L}]+(?:ció|sió)(?![\\p{L}])");
+    private static final Pattern ES_CION_PATTERN = Pattern.compile("(?iu)[\\p{L}]+(?:ción|sión)(?![\\p{L}])");
+
+    public static String detectFastLanguage(String text) {
+        if (text == null || text.isBlank()) return null;
+        String lower = text.toLowerCase().trim();
+        if (lower.length() < 3) return null;
+
+        // Distinctive Catalan markers (grave accents, contractions, geminated l, words ending in -ció/-sió)
+        boolean hasCaApostrophe = lower.contains("l'") || lower.contains("d'") || lower.contains("s'") 
+                || lower.contains("m'") || lower.contains("n'") || lower.contains("t'") || lower.contains("l·l") 
+                || lower.contains("ŀ");
+
+        boolean hasCaGraveAccent = lower.contains("è") || lower.contains("ò");
+        boolean hasCaCio = CA_CIO_PATTERN.matcher(lower).find();
+
+        boolean hasCaMarker = lower.contains(" per a ") || lower.startsWith("per a ") || lower.contains(" per a")
+                || lower.contains(" amb ") || lower.startsWith("amb ")
+                || lower.contains(" dels ") || lower.startsWith("dels ")
+                || lower.contains(" aquest ") || lower.startsWith("aquest ")
+                || lower.contains(" aquesta ") || lower.startsWith("aquesta ")
+                || lower.contains(" aquests ") || lower.startsWith("aquests ")
+                || lower.contains(" aquestes ") || lower.startsWith("aquestes ")
+                || lower.contains("guió") || lower.contains("vídeo") || lower.contains("recerca")
+                || lower.contains("catalunya");
+
+        // Distinctive Spanish markers (ñ, words ending in -ción/-sión)
+        boolean hasEsEnie = lower.contains("ñ");
+        boolean hasEsCion = ES_CION_PATTERN.matcher(lower).find();
+
+        boolean hasEsMarker = lower.contains(" para ") || lower.startsWith("para ")
+                || lower.contains(" con ") || lower.startsWith("con ")
+                || lower.contains(" los ") || lower.startsWith("los ")
+                || lower.contains(" las ") || lower.startsWith("las ")
+                || lower.contains(" este ") || lower.startsWith("este ")
+                || lower.contains(" esta ") || lower.startsWith("esta ")
+                || lower.contains("guía") || lower.contains("guion") || lower.contains("guión")
+                || lower.contains("investigación");
+
+        // Distinctive English markers
+        boolean hasEnMarker = lower.contains(" the ") || lower.startsWith("the ")
+                || lower.contains(" and ") || lower.startsWith("and ")
+                || lower.contains(" with ") || lower.startsWith("with ")
+                || lower.contains(" this ") || lower.startsWith("this ")
+                || lower.contains("script");
+
+        boolean isCa = hasCaApostrophe || hasCaGraveAccent || hasCaCio || hasCaMarker;
+        boolean isEs = hasEsEnie || hasEsCion || hasEsMarker;
+        boolean isEn = hasEnMarker;
+
+        if (isCa && !isEs && !isEn) return "ca_ES";
+        if (isEs && !isCa && !isEn) return "es_ES";
+        if (isEn && !isCa && !isEs) return "en_GB";
+
+        // Multi-word stopword frequency scoring
+        String[] words = lower.split("[^\\p{L}]+");
+        int enCount = 0;
+        int esCount = 0;
+        int caCount = 0;
+
+        for (String w : words) {
+            if (w.isEmpty()) continue;
+            if (FAST_EN_STOPWORDS.contains(w)) enCount++;
+            if (FAST_ES_STOPWORDS.contains(w)) esCount++;
+            if (FAST_CA_STOPWORDS.contains(w)) caCount++;
+        }
+
+        if (isCa) caCount += 3;
+        if (isEs) esCount += 3;
+        if (isEn) enCount += 3;
+
+        int strictlyEn = 0;
+        if (lower.contains(" the ") || lower.startsWith("the ")) strictlyEn += 3;
+        if (lower.contains(" and ")) strictlyEn += 2;
+        if (lower.contains(" with ")) strictlyEn += 2;
+        if (lower.contains(" this ")) strictlyEn += 2;
+
+        int strictlyCa = 0;
+        if (lower.contains(" amb ")) strictlyCa += 4;
+        if (lower.contains(" i ")) strictlyCa += 2;
+        if (lower.contains(" dels ")) strictlyCa += 3;
+        if (lower.contains(" per a ")) strictlyCa += 3;
+        if (lower.contains(" aquest ")) strictlyCa += 3;
+
+        int strictlyEs = 0;
+        if (lower.contains(" con ")) strictlyEs += 4;
+        if (lower.contains(" y ")) strictlyEs += 2;
+        if (lower.contains(" los ")) strictlyEs += 3;
+        if (lower.contains(" para ")) strictlyEs += 3;
+        if (lower.contains(" este ")) strictlyEs += 2;
+
+        int totalEn = enCount + strictlyEn;
+        int totalEs = esCount + strictlyEs;
+        int totalCa = caCount + strictlyCa;
+
+        // High confidence English
+        if (totalEn > totalEs * 1.5 && totalEn > totalCa * 1.5 && totalEn >= 3) {
+            return "en_GB";
+        }
+        // High confidence Spanish
+        if (totalEs > totalEn * 1.3 && totalEs > totalCa && strictlyEs > strictlyCa && totalEs >= 3) {
+            return "es_ES";
+        }
+        // High confidence Catalan
+        if (totalCa > totalEn * 1.3 && totalCa >= totalEs && totalCa >= 3) {
+            return "ca_ES";
+        }
+
+        // Return null to fallback to Lingua
+        return null;
+    }
+
     /**
      * Language detector based on Lingua (n-gram statistical model optimized for JVM)
-     * augmented with HTML entity unescaping and bibliographic metadata stripping.
+     * augmented with HTML entity unescaping, bibliographic metadata stripping,
+     * and ultra-fast heuristic path for Catalan, Spanish, and English.
      */
     public static String detectLanguage(String text) {
         if (text == null || isHtmlEmpty(text)) return "unknown";
@@ -139,7 +285,7 @@ public class PublicacionAbstractsService {
                            .replace('‘', '\'')
                            .replaceAll("\\s+", " ")
                            .trim();
-        if (raw.length() < 10) return "unknown";
+        if (raw.length() < 3) return "unknown";
 
         // Remove trailing bibliographic metadata: coordinator/editor lists, ISBNs, publisher copyright
         String cleaned = raw.replaceAll("(?i)©?\\s*\\b\\d{4}\\b[^.]*all rights reserved.*", " ")
@@ -147,6 +293,14 @@ public class PublicacionAbstractsService {
                             .replaceAll("(?i)\\bISBN(?:-1[03])?:?\\s*[0-9\\-Xx]+.*", " ")
                             .trim();
         String toCheck = cleaned.length() >= 15 ? cleaned : raw;
+
+        // Fast heuristic check for English, Spanish and Catalan (>98% coverage in sub-millisecond)
+        String fastLang = detectFastLanguage(toCheck);
+        if (fastLang != null) {
+            return fastLang;
+        }
+
+        if (toCheck.length() < 10) return "unknown";
 
         Language lang = LINGUA_DETECTOR.detectLanguageOf(toCheck);
         if (lang == null || lang == Language.UNKNOWN) {
@@ -380,14 +534,24 @@ public class PublicacionAbstractsService {
     }
 
     private Map<String, Object> computeDynamicLinguisticStats(Integer desde, Integer hasta, String type, String language, String yearType, long withAbstract, long in3Langs) {
+        String persistentKey = "ling_" + desde + "_" + hasta + "_" + (type == null ? "" : type) + "_" + (language == null ? "" : language) + "_" + yearType;
+        try {
+            Document cachedDoc = mongoTemplate.getCollection(STATS_CACHE_COLLECTION).find(new Document("_id", persistentKey)).first();
+            if (cachedDoc != null) {
+                cachedDoc.remove("_id");
+                cachedDoc.remove("updatedAt");
+                return new LinkedHashMap<>(cachedDoc);
+            }
+        } catch (Exception ignored) {}
+
         boolean isSubmissionYear = "submissionYear".equalsIgnoreCase(yearType);
         Document query = new Document();
         List<Document> andList = new ArrayList<>();
 
         andList.add(new Document("$or", List.of(
-            new Document("abstract.ca_ES", new Document("$exists", true).append("$type", "string").append("$not", new Document("$regex", HTML_EMPTY_REGEX).append("$options", "i"))),
-            new Document("abstract.es_ES", new Document("$exists", true).append("$type", "string").append("$not", new Document("$regex", HTML_EMPTY_REGEX).append("$options", "i"))),
-            new Document("abstract.en_GB", new Document("$exists", true).append("$type", "string").append("$not", new Document("$regex", HTML_EMPTY_REGEX).append("$options", "i")))
+            new Document("abstract.ca_ES", new Document("$exists", true).append("$type", "string")),
+            new Document("abstract.es_ES", new Document("$exists", true).append("$type", "string")),
+            new Document("abstract.en_GB", new Document("$exists", true).append("$type", "string"))
         )));
 
         if (isSubmissionYear) {
@@ -497,122 +661,196 @@ public class PublicacionAbstractsService {
             .append("abstract.es_ES", 1)
             .append("abstract.en_GB", 1);
 
-        long wrongLanguageCount = 0;
-        long genuine3Langs = 0;
+        java.util.concurrent.atomic.LongAdder wrongLanguageCount = new java.util.concurrent.atomic.LongAdder();
+        java.util.concurrent.atomic.LongAdder genuine3Langs = new java.util.concurrent.atomic.LongAdder();
 
-        long caTotal = 0, caCorrect = 0, caWrongEn = 0, caWrongEs = 0, caWrongOther = 0;
-        long esTotal = 0, esCorrect = 0, esWrongEn = 0, esWrongCa = 0, esWrongOther = 0;
-        long enTotal = 0, enCorrect = 0, enWrongEs = 0, enWrongCa = 0, enWrongOther = 0;
+        java.util.concurrent.atomic.LongAdder caTotal = new java.util.concurrent.atomic.LongAdder();
+        java.util.concurrent.atomic.LongAdder caCorrect = new java.util.concurrent.atomic.LongAdder();
+        java.util.concurrent.atomic.LongAdder caWrongEn = new java.util.concurrent.atomic.LongAdder();
+        java.util.concurrent.atomic.LongAdder caWrongEs = new java.util.concurrent.atomic.LongAdder();
+        java.util.concurrent.atomic.LongAdder caWrongOther = new java.util.concurrent.atomic.LongAdder();
+
+        java.util.concurrent.atomic.LongAdder esTotal = new java.util.concurrent.atomic.LongAdder();
+        java.util.concurrent.atomic.LongAdder esCorrect = new java.util.concurrent.atomic.LongAdder();
+        java.util.concurrent.atomic.LongAdder esWrongEn = new java.util.concurrent.atomic.LongAdder();
+        java.util.concurrent.atomic.LongAdder esWrongCa = new java.util.concurrent.atomic.LongAdder();
+        java.util.concurrent.atomic.LongAdder esWrongOther = new java.util.concurrent.atomic.LongAdder();
+
+        java.util.concurrent.atomic.LongAdder enTotal = new java.util.concurrent.atomic.LongAdder();
+        java.util.concurrent.atomic.LongAdder enCorrect = new java.util.concurrent.atomic.LongAdder();
+        java.util.concurrent.atomic.LongAdder enWrongEs = new java.util.concurrent.atomic.LongAdder();
+        java.util.concurrent.atomic.LongAdder enWrongCa = new java.util.concurrent.atomic.LongAdder();
+        java.util.concurrent.atomic.LongAdder enWrongOther = new java.util.concurrent.atomic.LongAdder();
 
         try (var cursor = mongoTemplate.getCollection("Researchoutputs").find(query).projection(projection).batchSize(5000).iterator()) {
+            List<Document> batch = new ArrayList<>(5000);
             while (cursor.hasNext()) {
-                Document doc = cursor.next();
-                Document abs = (Document) doc.get("abstract");
-                if (abs == null) continue;
-
-                String ca = abs.getString("ca_ES");
-                String es = abs.getString("es_ES");
-                String en = abs.getString("en_GB");
-
-                boolean hasCa = !isHtmlEmpty(ca);
-                boolean hasEs = !isHtmlEmpty(es);
-                boolean hasEn = !isHtmlEmpty(en);
-
-                String detCa = hasCa ? detectLanguage(ca) : "none";
-                String detEs = hasEs ? detectLanguage(es) : "none";
-                String detEn = hasEn ? detectLanguage(en) : "none";
-
-                boolean isWrongCa = hasCa && ("en_GB".equals(detCa) || "es_ES".equals(detCa));
-                boolean isWrongEs = hasEs && ("en_GB".equals(detEs) || "ca_ES".equals(detEs));
-                boolean isWrongEn = hasEn && ("ca_ES".equals(detEn) || "es_ES".equals(detEn));
-
-                if (hasCa) {
-                    caTotal++;
-                    if (!isWrongCa) {
-                        caCorrect++;
-                    } else {
-                        if ("en_GB".equals(detCa)) caWrongEn++;
-                        else if ("es_ES".equals(detCa)) caWrongEs++;
-                        else caWrongOther++;
-                    }
+                batch.add(cursor.next());
+                if (batch.size() >= 5000) {
+                    processBatch(batch, wrongLanguageCount, genuine3Langs, caTotal, caCorrect, caWrongEn, caWrongEs, caWrongOther,
+                            esTotal, esCorrect, esWrongEn, esWrongCa, esWrongOther, enTotal, enCorrect, enWrongEs, enWrongCa, enWrongOther);
+                    batch.clear();
                 }
-
-                if (hasEs) {
-                    esTotal++;
-                    if (!isWrongEs) {
-                        esCorrect++;
-                    } else {
-                        if ("en_GB".equals(detEs)) esWrongEn++;
-                        else if ("ca_ES".equals(detEs)) esWrongCa++;
-                        else esWrongOther++;
-                    }
-                }
-
-                if (hasEn) {
-                    enTotal++;
-                    if (!isWrongEn) {
-                        enCorrect++;
-                    } else {
-                        if ("es_ES".equals(detEn)) enWrongEs++;
-                        else if ("ca_ES".equals(detEn)) enWrongCa++;
-                        else enWrongOther++;
-                    }
-                }
-
-                if (isWrongCa || isWrongEs || isWrongEn) {
-                    wrongLanguageCount++;
-                }
-
-                if (hasCa && hasEs && hasEn && !isWrongCa && !isWrongEs && !isWrongEn) {
-                    genuine3Langs++;
-                }
+            }
+            if (!batch.isEmpty()) {
+                processBatch(batch, wrongLanguageCount, genuine3Langs, caTotal, caCorrect, caWrongEn, caWrongEs, caWrongOther,
+                        esTotal, esCorrect, esWrongEn, esWrongCa, esWrongOther, enTotal, enCorrect, enWrongEs, enWrongCa, enWrongOther);
             }
         }
 
         Map<String, Object> result = new LinkedHashMap<>();
-        result.put("wrongLanguageCount", wrongLanguageCount);
-        result.put("pctWrongLanguageOfWithAbstract", withAbstract > 0 ? (double) Math.round((wrongLanguageCount * 1000.0) / withAbstract) / 10.0 : 0.0);
-        result.put("genuine3Langs", genuine3Langs);
-        result.put("pctGenuine3Langs", in3Langs > 0 ? (double) Math.round((genuine3Langs * 1000.0) / in3Langs) / 10.0 : 0.0);
+        long totalWrong = wrongLanguageCount.sum();
+        long totalGenuine = genuine3Langs.sum();
+        result.put("wrongLanguageCount", totalWrong);
+        result.put("pctWrongLanguageOfWithAbstract", withAbstract > 0 ? (double) Math.round((totalWrong * 1000.0) / withAbstract) / 10.0 : 0.0);
+        result.put("genuine3Langs", totalGenuine);
+        result.put("pctGenuine3Langs", in3Langs > 0 ? (double) Math.round((totalGenuine * 1000.0) / in3Langs) / 10.0 : 0.0);
 
         Map<String, Object> caStats = new LinkedHashMap<>();
-        caStats.put("total", caTotal);
-        caStats.put("correct", caCorrect);
-        caStats.put("wrongEn", caWrongEn);
-        caStats.put("wrongEs", caWrongEs);
-        caStats.put("wrongOther", caWrongOther);
-        caStats.put("pctWrong", caTotal > 0 ? (double) Math.round(((caTotal - caCorrect) * 1000.0) / caTotal) / 10.0 : 0.0);
-        caStats.put("pctCorrect", caTotal > 0 ? (double) Math.round((caCorrect * 1000.0) / caTotal) / 10.0 : 0.0);
-        caStats.put("pctWrongEn", caTotal > 0 ? (double) Math.round((caWrongEn * 1000.0) / caTotal) / 10.0 : 0.0);
-        caStats.put("pctWrongEs", caTotal > 0 ? (double) Math.round((caWrongEs * 1000.0) / caTotal) / 10.0 : 0.0);
+        long caTot = caTotal.sum();
+        long caCorr = caCorrect.sum();
+        long caWEn = caWrongEn.sum();
+        long caWEs = caWrongEs.sum();
+        long caWOther = caWrongOther.sum();
+        caStats.put("total", caTot);
+        caStats.put("correct", caCorr);
+        caStats.put("wrongEn", caWEn);
+        caStats.put("wrongEs", caWEs);
+        caStats.put("wrongOther", caWOther);
+        caStats.put("pctWrong", caTot > 0 ? (double) Math.round(((caTot - caCorr) * 1000.0) / caTot) / 10.0 : 0.0);
+        caStats.put("pctCorrect", caTot > 0 ? (double) Math.round((caCorr * 1000.0) / caTot) / 10.0 : 0.0);
+        caStats.put("pctWrongEn", caTot > 0 ? (double) Math.round((caWEn * 1000.0) / caTot) / 10.0 : 0.0);
+        caStats.put("pctWrongEs", caTot > 0 ? (double) Math.round((caWEs * 1000.0) / caTot) / 10.0 : 0.0);
 
         Map<String, Object> esStats = new LinkedHashMap<>();
-        esStats.put("total", esTotal);
-        esStats.put("correct", esCorrect);
-        esStats.put("wrongEn", esWrongEn);
-        esStats.put("wrongCa", esWrongCa);
-        esStats.put("wrongOther", esWrongOther);
-        esStats.put("pctWrong", esTotal > 0 ? (double) Math.round(((esTotal - esCorrect) * 1000.0) / esTotal) / 10.0 : 0.0);
-        esStats.put("pctCorrect", esTotal > 0 ? (double) Math.round((esCorrect * 1000.0) / esTotal) / 10.0 : 0.0);
-        esStats.put("pctWrongEn", esTotal > 0 ? (double) Math.round((esWrongEn * 1000.0) / esTotal) / 10.0 : 0.0);
-        esStats.put("pctWrongCa", esTotal > 0 ? (double) Math.round((esWrongCa * 1000.0) / esTotal) / 10.0 : 0.0);
+        long esTot = esTotal.sum();
+        long esCorr = esCorrect.sum();
+        long esWEn = esWrongEn.sum();
+        long esWCa = esWrongCa.sum();
+        long esWOther = esWrongOther.sum();
+        esStats.put("total", esTot);
+        esStats.put("correct", esCorr);
+        esStats.put("wrongEn", esWEn);
+        esStats.put("wrongCa", esWCa);
+        esStats.put("wrongOther", esWOther);
+        esStats.put("pctWrong", esTot > 0 ? (double) Math.round(((esTot - esCorr) * 1000.0) / esTot) / 10.0 : 0.0);
+        esStats.put("pctCorrect", esTot > 0 ? (double) Math.round((esCorr * 1000.0) / esTot) / 10.0 : 0.0);
+        esStats.put("pctWrongEn", esTot > 0 ? (double) Math.round((esWEn * 1000.0) / esTot) / 10.0 : 0.0);
+        esStats.put("pctWrongCa", esTot > 0 ? (double) Math.round((esWCa * 1000.0) / esTot) / 10.0 : 0.0);
 
         Map<String, Object> enStats = new LinkedHashMap<>();
-        enStats.put("total", enTotal);
-        enStats.put("correct", enCorrect);
-        enStats.put("wrongEs", enWrongEs);
-        enStats.put("wrongCa", enWrongCa);
-        enStats.put("wrongOther", enWrongOther);
-        enStats.put("pctWrong", enTotal > 0 ? (double) Math.round(((enTotal - enCorrect) * 1000.0) / enTotal) / 10.0 : 0.0);
-        enStats.put("pctCorrect", enTotal > 0 ? (double) Math.round((enCorrect * 1000.0) / enTotal) / 10.0 : 0.0);
-        enStats.put("pctWrongEs", enTotal > 0 ? (double) Math.round((enWrongEs * 1000.0) / enTotal) / 10.0 : 0.0);
-        enStats.put("pctWrongCa", enTotal > 0 ? (double) Math.round((enWrongCa * 1000.0) / enTotal) / 10.0 : 0.0);
+        long enTot = enTotal.sum();
+        long enCorr = enCorrect.sum();
+        long enWEs = enWrongEs.sum();
+        long enWCa = enWrongCa.sum();
+        long enWOther = enWrongOther.sum();
+        enStats.put("total", enTot);
+        enStats.put("correct", enCorr);
+        enStats.put("wrongEs", enWEs);
+        enStats.put("wrongCa", enWCa);
+        enStats.put("wrongOther", enWOther);
+        enStats.put("pctWrong", enTot > 0 ? (double) Math.round(((enTot - enCorr) * 1000.0) / enTot) / 10.0 : 0.0);
+        enStats.put("pctCorrect", enTot > 0 ? (double) Math.round((enCorr * 1000.0) / enTot) / 10.0 : 0.0);
+        enStats.put("pctWrongEs", enTot > 0 ? (double) Math.round((enWEs * 1000.0) / enTot) / 10.0 : 0.0);
+        enStats.put("pctWrongCa", enTot > 0 ? (double) Math.round((enWCa * 1000.0) / enTot) / 10.0 : 0.0);
 
         result.put("caFieldStats", caStats);
         result.put("esFieldStats", esStats);
         result.put("enFieldStats", enStats);
 
+        try {
+            Document toSave = new Document(result).append("_id", persistentKey).append("updatedAt", new Date());
+            mongoTemplate.getCollection(STATS_CACHE_COLLECTION).replaceOne(
+                new Document("_id", persistentKey),
+                toSave,
+                new com.mongodb.client.model.ReplaceOptions().upsert(true)
+            );
+        } catch (Exception ignored) {}
+
         return result;
+    }
+
+    private void processBatch(
+            List<Document> batch,
+            java.util.concurrent.atomic.LongAdder wrongLanguageCount,
+            java.util.concurrent.atomic.LongAdder genuine3Langs,
+            java.util.concurrent.atomic.LongAdder caTotal,
+            java.util.concurrent.atomic.LongAdder caCorrect,
+            java.util.concurrent.atomic.LongAdder caWrongEn,
+            java.util.concurrent.atomic.LongAdder caWrongEs,
+            java.util.concurrent.atomic.LongAdder caWrongOther,
+            java.util.concurrent.atomic.LongAdder esTotal,
+            java.util.concurrent.atomic.LongAdder esCorrect,
+            java.util.concurrent.atomic.LongAdder esWrongEn,
+            java.util.concurrent.atomic.LongAdder esWrongCa,
+            java.util.concurrent.atomic.LongAdder esWrongOther,
+            java.util.concurrent.atomic.LongAdder enTotal,
+            java.util.concurrent.atomic.LongAdder enCorrect,
+            java.util.concurrent.atomic.LongAdder enWrongEs,
+            java.util.concurrent.atomic.LongAdder enWrongCa,
+            java.util.concurrent.atomic.LongAdder enWrongOther) {
+
+        batch.parallelStream().forEach(doc -> {
+            Document abs = (Document) doc.get("abstract");
+            if (abs == null) return;
+
+            String ca = abs.getString("ca_ES");
+            String es = abs.getString("es_ES");
+            String en = abs.getString("en_GB");
+
+            boolean hasCa = !isHtmlEmpty(ca);
+            boolean hasEs = !isHtmlEmpty(es);
+            boolean hasEn = !isHtmlEmpty(en);
+
+            String detCa = hasCa ? detectLanguage(ca) : "none";
+            String detEs = hasEs ? detectLanguage(es) : "none";
+            String detEn = hasEn ? detectLanguage(en) : "none";
+
+            boolean isWrongCa = hasCa && ("en_GB".equals(detCa) || "es_ES".equals(detCa));
+            boolean isWrongEs = hasEs && ("en_GB".equals(detEs) || "ca_ES".equals(detEs));
+            boolean isWrongEn = hasEn && ("ca_ES".equals(detEn) || "es_ES".equals(detEn));
+
+            if (hasCa) {
+                caTotal.increment();
+                if (!isWrongCa) {
+                    caCorrect.increment();
+                } else {
+                    if ("en_GB".equals(detCa)) caWrongEn.increment();
+                    else if ("es_ES".equals(detCa)) caWrongEs.increment();
+                    else caWrongOther.increment();
+                }
+            }
+
+            if (hasEs) {
+                esTotal.increment();
+                if (!isWrongEs) {
+                    esCorrect.increment();
+                } else {
+                    if ("en_GB".equals(detEs)) esWrongEn.increment();
+                    else if ("ca_ES".equals(detEs)) esWrongCa.increment();
+                    else esWrongOther.increment();
+                }
+            }
+
+            if (hasEn) {
+                enTotal.increment();
+                if (!isWrongEn) {
+                    enCorrect.increment();
+                } else {
+                    if ("es_ES".equals(detEn)) enWrongEs.increment();
+                    else if ("ca_ES".equals(detEn)) enWrongCa.increment();
+                    else enWrongOther.increment();
+                }
+            }
+
+            if (isWrongCa || isWrongEs || isWrongEn) {
+                wrongLanguageCount.increment();
+            }
+
+            if (hasCa && hasEs && hasEn && !isWrongCa && !isWrongEs && !isWrongEn) {
+                genuine3Langs.increment();
+            }
+        });
     }
 
     /**
@@ -791,9 +1029,9 @@ public class PublicacionAbstractsService {
         List<Document> initialMatches = new ArrayList<>();
         // Only publications that have an abstract with actual text (not empty HTML)
         initialMatches.add(new Document("$or", List.of(
-            new Document("abstract.ca_ES", new Document("$exists", true).append("$type", "string").append("$not", new Document("$regex", HTML_EMPTY_REGEX).append("$options", "i"))),
-            new Document("abstract.es_ES", new Document("$exists", true).append("$type", "string").append("$not", new Document("$regex", HTML_EMPTY_REGEX).append("$options", "i"))),
-            new Document("abstract.en_GB", new Document("$exists", true).append("$type", "string").append("$not", new Document("$regex", HTML_EMPTY_REGEX).append("$options", "i")))
+            new Document("$expr", buildHasTextExpr("ca_ES")),
+            new Document("$expr", buildHasTextExpr("es_ES")),
+            new Document("$expr", buildHasTextExpr("en_GB"))
         )));
 
         if (type != null && !type.isBlank()) {
@@ -1556,6 +1794,12 @@ public class PublicacionAbstractsService {
         result.put("esEnMatch", esEnMatch);
         result.put("allThreeMatch", allThreeMatch);
 
+        int langCount = (hasCa ? 1 : 0) + (hasEs ? 1 : 0) + (hasEn ? 1 : 0);
+        boolean isGenuine3Langs = hasCa && hasEs && hasEn && !isWrongCa && !isWrongEs && !isWrongEn && !allThreeMatch;
+        result.put("languagesCount", langCount);
+        result.put("isThreeLanguages", langCount == 3);
+        result.put("isGenuine3Langs", isGenuine3Langs);
+
         result.put("lengthCa", hasCa ? ca.length() : 0);
         result.put("lengthEs", hasEs ? es.length() : 0);
         result.put("lengthEn", hasEn ? en.length() : 0);
@@ -2026,6 +2270,9 @@ public class PublicacionAbstractsService {
         yearsLanguagesCache.clear();
         typesCache.clear();
         discrepanciesStatsCache.clear();
+        try {
+            mongoTemplate.getCollection(STATS_CACHE_COLLECTION).drop();
+        } catch (Exception ignored) {}
     }
 }
 

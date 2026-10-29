@@ -789,18 +789,29 @@
             });
 
             try {
-                const results = await Promise.allSettled([
+                // FASE 1 (Prioritària): Carregar immediatament KPIs i la primera pàgina de la taula
+                const priorityResults = await Promise.allSettled([
                     carregarKPIsIGrafics(isForced),
-                    carregarEvolucioAnysPub(isForced),
-                    carregarEvolucioAnysSub(isForced),
-                    carregarIdiomesPerAny(isForced),
-                    carregarTipologies(isForced),
                     carregarTaula(isForced)
                 ]);
 
-                results.forEach((res, idx) => {
+                priorityResults.forEach((res, idx) => {
                     if (res.status === 'rejected') {
-                        console.error(`Error en refrescar component #${idx}:`, res.reason);
+                        console.error(`Error en refrescar component prioritari #${idx}:`, res.reason);
+                    }
+                });
+
+                // FASE 2 (Secundària en paral·lel): Carregar gràfics analítics d'evolució i barres
+                const chartResults = await Promise.allSettled([
+                    carregarEvolucioAnysPub(isForced),
+                    carregarEvolucioAnysSub(isForced),
+                    carregarIdiomesPerAny(isForced),
+                    carregarTipologies(isForced)
+                ]);
+
+                chartResults.forEach((res, idx) => {
+                    if (res.status === 'rejected') {
+                        console.error(`Error en refrescar gràfic #${idx}:`, res.reason);
                     }
                 });
             } catch (err) {
@@ -1141,18 +1152,20 @@
             if (!ctx) return;
 
             try {
-                let url = '/pure/abstracts/years?yearType=publicationYear';
-                if (isForced) url += `&_t=${Date.now()}`;
-                const fetchOpts = isForced ? { cache: 'no-store', headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } } : undefined;
+                let data = (!isForced && cachedPubYearsData) ? cachedPubYearsData : null;
+                if (!data) {
+                    let url = '/pure/abstracts/years?yearType=publicationYear';
+                    if (isForced) url += `&_t=${Date.now()}`;
+                    const fetchOpts = isForced ? { cache: 'no-store', headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } } : undefined;
 
-                const res = await apiFetch(url, fetchOpts);
-                const data = await res.json();
-                if (!Array.isArray(data)) {
-                    console.warn("Resposta no vàlida per any de publicació:", data);
-                    return;
+                    const res = await apiFetch(url, fetchOpts);
+                    data = await res.json();
+                    if (!Array.isArray(data)) {
+                        console.warn("Resposta no vàlida per any de publicació:", data);
+                        return;
+                    }
+                    cachedPubYearsData = data;
                 }
-
-                cachedPubYearsData = data;
 
                 const numericYears = data
                     .filter(d => !d.isNoYear && d.year !== 'Sense any' && Number(d.year) > 1900)
@@ -1265,18 +1278,20 @@
             if (!ctx) return;
 
             try {
-                let url = '/pure/abstracts/years-submission';
-                if (isForced) url += `?_t=${Date.now()}`;
-                const fetchOpts = isForced ? { cache: 'no-store', headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } } : undefined;
+                let data = (!isForced && cachedSubYearsData) ? cachedSubYearsData : null;
+                if (!data) {
+                    let url = '/pure/abstracts/years-submission';
+                    if (isForced) url += `?_t=${Date.now()}`;
+                    const fetchOpts = isForced ? { cache: 'no-store', headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } } : undefined;
 
-                const res = await apiFetch(url, fetchOpts);
-                const data = await res.json();
-                if (!Array.isArray(data)) {
-                    console.warn("Resposta no vàlida per any de submission:", data);
-                    return;
+                    const res = await apiFetch(url, fetchOpts);
+                    data = await res.json();
+                    if (!Array.isArray(data)) {
+                        console.warn("Resposta no vàlida per any de submission:", data);
+                        return;
+                    }
+                    cachedSubYearsData = data;
                 }
-
-                cachedSubYearsData = data;
 
                 const numericYears = data
                     .filter(d => !d.isNoYear && d.year !== 'Sense any' && Number(d.year) > 1900)
