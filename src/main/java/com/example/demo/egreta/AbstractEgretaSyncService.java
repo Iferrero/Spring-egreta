@@ -1,9 +1,12 @@
 package com.example.demo.egreta;
 
 import com.example.demo.egreta.SyncProgressRegistry;
+import com.mongodb.client.model.IndexModel;
+import com.mongodb.client.model.IndexOptions;
 import io.netty.channel.ChannelOption;
 import io.netty.handler.timeout.ReadTimeoutHandler;
 import io.netty.handler.timeout.WriteTimeoutHandler;
+import org.bson.Document;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -137,11 +140,92 @@ public abstract class AbstractEgretaSyncService {
 
     protected void rebuildIndexes() {
         try {
-            mongoTemplate.getCollection(getCollectionName()).createIndex(new org.bson.Document("uuid", 1));
+            mongoTemplate.getCollection(getCollectionName()).createIndex(new Document("uuid", 1));
             logger.info("[{}] Rebuilt base indexes", getCollectionName());
         } catch (Exception e) {
             throw new RuntimeException("Error rebuilding base indexes for '" + getCollectionName() + "': " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * Extrae las definiciones de índices existentes de una colección (excluyendo _id_).
+     */
+    protected List<IndexModel> extractIndexes(String collectionName) {
+        List<IndexModel> models = new ArrayList<>();
+        try {
+            if (mongoTemplate == null || !mongoTemplate.collectionExists(collectionName)) {
+                return models;
+            }
+            for (Document doc : mongoTemplate.getCollection(collectionName).listIndexes()) {
+                String name = doc.getString("name");
+                if ("_id_".equals(name)) {
+                    continue;
+                }
+                Document key = (Document) doc.get("key");
+                if (key == null || key.isEmpty()) {
+                    continue;
+                }
+
+                IndexOptions options = new IndexOptions();
+                if (name != null) {
+                    options.name(name);
+                }
+                if (doc.containsKey("unique")) {
+                    options.unique(Boolean.TRUE.equals(doc.getBoolean("unique")));
+                }
+                if (doc.containsKey("sparse")) {
+                    options.sparse(Boolean.TRUE.equals(doc.getBoolean("sparse")));
+                }
+                if (doc.containsKey("expireAfterSeconds")) {
+                    Number exp = (Number) doc.get("expireAfterSeconds");
+                    if (exp != null) {
+                        options.expireAfter(exp.longValue(), TimeUnit.SECONDS);
+                    }
+                }
+                if (doc.containsKey("partialFilterExpression") && doc.get("partialFilterExpression") instanceof Document pfe) {
+                    options.partialFilterExpression(pfe);
+                }
+                if (doc.containsKey("default_language")) {
+                    options.defaultLanguage(doc.getString("default_language"));
+                }
+                if (doc.containsKey("language_override")) {
+                    options.languageOverride(doc.getString("language_override"));
+                }
+                if (doc.containsKey("weights") && doc.get("weights") instanceof Document w) {
+                    options.weights(w);
+                }
+                if (doc.containsKey("hidden")) {
+                    options.hidden(Boolean.TRUE.equals(doc.getBoolean("hidden")));
+                }
+
+                models.add(new IndexModel(key, options));
+            }
+        } catch (Exception e) {
+            logger.warn("[{}] Error capturando índices existentes: {}", collectionName, e.getMessage());
+        }
+        return models;
+    }
+
+    /**
+     * Aplica una lista de modelos de índices sobre una colección de destino.
+     */
+    protected void applyIndexes(String targetCollection, List<IndexModel> indexes) {
+        if (mongoTemplate == null || indexes == null || indexes.isEmpty()) {
+            return;
+        }
+        var coll = mongoTemplate.getCollection(targetCollection);
+        int created = 0;
+        for (IndexModel model : indexes) {
+            try {
+                coll.createIndexes(List.of(model));
+                created++;
+            } catch (Exception e) {
+                String indexName = model.getOptions() != null ? model.getOptions().getName() : model.getKeys().toString();
+                logger.warn("[{}] No se pudo recrear el índice '{}': {}",
+                        targetCollection, indexName, e.getMessage());
+            }
+        }
+        logger.info("[{}] Recreados {}/{} índices de la colección original", targetCollection, created, indexes.size());
     }
 
     @Async
@@ -153,7 +237,11 @@ public abstract class AbstractEgretaSyncService {
 
         WebClient client = buildClient();
 
-        // 1. Obtener total de registros
+        // 1. Obtener total de registros y capturar índices existentes de la colección original
+        List<IndexModel> originalIndexes = extractIndexes(getCollectionName());
+        logger.info("[{}] Capturados {} índices de la colección original antes de sincronizar",
+                getCollectionName(), originalIndexes.size());
+
         int total = fetchTotalCount(client);
         if (total <= 0) {
             logger.warn("No records to sync (total={})", total);
@@ -331,9 +419,22 @@ public abstract class AbstractEgretaSyncService {
                 }
             }
 
-            // 4. Swap atómico si no hubo errores
+            // 4. Recrear índices y Swap atómico si no hubo errores
             if (failedOffsets.isEmpty()) {
                 try {
+                    // Refrescar índices de la colección original por si se añadieron índices nuevos
+                    List<IndexModel> latestIndexes = extractIndexes(getCollectionName());
+                    if (!latestIndexes.isEmpty()) {
+                        originalIndexes = latestIndexes;
+                    }
+
+                    // Recrear índices originales en la colección temporal ANTES del swap
+                    if (!originalIndexes.isEmpty()) {
+                        syncProgressRegistry.setProgress(getCollectionName(), total, totalSaved,
+                                "Recreant " + originalIndexes.size() + " índexs originals...");
+                        applyIndexes(tmpCollection, originalIndexes);
+                    }
+
                     if (mongoTemplate.collectionExists(getCollectionName())) {
                         mongoTemplate.dropCollection(getCollectionName());
                     }
@@ -351,7 +452,7 @@ public abstract class AbstractEgretaSyncService {
                     syncProgressRegistry.clearProgress(getCollectionName());
                     return;
                 }
-                // 5. Post-procesado
+                // 5. Post-procesado y asegurar índices base
                 try {
                     postProcess();
                     rebuildIndexes();

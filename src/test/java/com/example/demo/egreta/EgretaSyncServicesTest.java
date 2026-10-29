@@ -130,4 +130,16 @@ public class EgretaSyncServicesTest {
         assertEquals(1000, recovered, "Ha de recuperar els 1000 registres subdividint adaptativament fins a 250");
         assertTrue(unrecoverable.isEmpty(), "No hi ha d'haver cap tram irrecuperable");
     }
+
+    @Test
+    void testExtractIndexesNonExistentReturnsEmpty() {
+        class MockSyncService extends AbstractEgretaSyncService {
+            @Override protected String getEndpoint() { return "test"; }
+            @Override protected String getCollectionName() { return "NonExistentCollectionTest"; }
+        }
+        MockSyncService service = new MockSyncService();
+        var indexes = service.extractIndexes("NonExistentCollectionTest");
+        assertNotNull(indexes);
+        assertTrue(indexes.isEmpty());
+    }
 }
