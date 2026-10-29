@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Documents i Tipus per Col·lecció - UAB Recerca</title>
+    <script src="config.js"></script>
+    <script src="uab-brand.js" defer></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="uab-theme.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .progress-bar-segment {
+            transition: width 0.4s ease-in-out;
+        }
+        .expand-row {
+            transition: all 0.3s ease;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen font-sans text-slate-800">
+
+    <div class="mx-auto py-8 px-4 max-w-7xl">
+
+        <!-- Breadcrumb & Top Bar -->
+        <nav class="flex items-center gap-2 text-xs text-slate-500 mb-6">
+            <a href="index.html" class="hover:text-emerald-700 transition-colors flex items-center gap-1">
+                <i class="fa-solid fa-house"></i> Inici
+            </a>
+            <i class="fa-solid fa-chevron-right text-[10px] text-slate-400"></i>
+            <span class="text-slate-700 font-semibold">Documents i Tipus per Col·lecció</span>
+        </nav>
+
+        <!-- Header -->
+        <header class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+            <div>
+                <h1 class="text-2xl lg:text-3xl font-extrabold text-slate-900 tracking-tight flex items-center gap-3">
+                    <span class="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center text-xl shadow-sm">
+                        <i class="fa-solid fa-layer-group"></i>
+                    </span>
+                    Documents i Tipus per Col·lecció
+                </h1>
+                <p class="text-sm text-slate-500 mt-1">
+                    Recompte de documents de MongoDB amb el camp <code class="bg-slate-200/70 text-slate-800 px-1 py-0.5 rounded text-xs font-semibold">documents</code> (o <code class="bg-slate-200/70 text-slate-800 px-1 py-0.5 rounded text-xs font-semibold">links</code> a Researchoutputs), mida en <span class="font-semibold text-slate-700">MB</span> i desglossament detallat per <span class="font-bold text-emerald-800">tipus de document</span>.
+                </p>
+            </div>
+            <div class="flex items-center gap-3">
+                <button id="btnRefresh" onclick="loadStats(true)"
+                        class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-slate-300 hover:border-emerald-500 hover:text-emerald-700 text-sm font-semibold text-slate-700 shadow-sm transition-all">
+                    <i id="refreshIcon" class="fa-solid fa-arrows-rotate"></i> Recalcular dades
+                </button>
+                <button id="btnExport" onclick="exportToCsv()"
+                        class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-sm font-semibold text-white shadow-sm transition-all">
+                    <i class="fa-solid fa-file-csv"></i> Exportar CSV
+                </button>
+            </div>
+        </header>
+
+        <!-- Notification Banner / Meta -->
+        <div id="metaBanner" class="hidden items-center justify-between bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-2.5 text-xs text-emerald-800 mb-6">
+            <span class="flex items-center gap-2">
+                <i class="fa-solid fa-circle-check text-emerald-600"></i>
+                <span id="metaText">Dades carregades correctament</span>
+            </span>
+            <span id="metaTime" class="text-slate-500"></span>
+        </div>
+
+        <!-- KPI Cards Row -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+            <!-- Card 1: Espai total -->
+            <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
+                <div class="flex items-center justify-between text-slate-400 mb-2">
+                    <span class="text-xs font-semibold uppercase tracking-wider">Espai Total Ocupat</span>
+                    <span class="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center text-sm">
+                        <i class="fa-solid fa-hard-drive"></i>
+                    </span>
+                </div>
+                <div class="flex items-baseline gap-2">
+                    <span id="kpiTotalMB" class="text-2xl font-black text-slate-900">-</span>
+                    <span class="text-xs text-slate-500 font-medium">MB</span>
+                </div>
+                <p id="kpiTotalGB" class="text-xs text-emerald-700 font-bold mt-1">- GB totals</p>
+            </div>
+
+            <!-- Card 2: Total documents coincidents -->
+            <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
+                <div class="flex items-center justify-between text-slate-400 mb-2">
+                    <span class="text-xs font-semibold uppercase tracking-wider">Documents amb Contingut</span>
+                    <span class="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center text-sm">
+                        <i class="fa-solid fa-file-circle-check"></i>
+                    </span>
+                </div>
+                <div class="flex items-baseline gap-2">
+                    <span id="kpiRecordsWithDocs" class="text-2xl font-black text-slate-900">-</span>
+                    <span class="text-xs text-slate-500 font-medium">documents</span>
+                </div>
+                <p id="kpiRecordsSub" class="text-xs text-slate-500 mt-1">- de tots els registres</p>
+            </div>
+
+            <!-- Card 3: Col·lecció amb més espai -->
+            <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
+                <div class="flex items-center justify-between text-slate-400 mb-2">
+                    <span class="text-xs font-semibold uppercase tracking-wider">Col·lecció Majoritària</span>
+                    <span class="w-8 h-8 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center text-sm">
+                        <i class="fa-solid fa-trophy"></i>
+                    </span>
+                </div>
+                <div class="flex items-baseline gap-2">
+                    <span id="kpiTopStorageName" class="text-xl font-black text-slate-900 truncate">-</span>
+                </div>
+                <p id="kpiTopStorageDetail" class="text-xs text-purple-700 font-bold mt-1">- MB</p>
+            </div>
+
+            <!-- Card 4: Col·leccions actives -->
+            <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
+                <div class="flex items-center justify-between text-slate-400 mb-2">
+                    <span class="text-xs font-semibold uppercase tracking-wider">Col·leccions amb Dades</span>
+                    <span class="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center text-sm">
+                        <i class="fa-solid fa-folder-open"></i>
+                    </span>
+                </div>
+                <div class="flex items-baseline gap-2">
+                    <span id="kpiCollectionsCount" class="text-2xl font-black text-slate-900">-</span>
+                    <span class="text-xs text-slate-500 font-medium">col·leccions</span>
+                </div>
+                <p class="text-xs text-amber-700 font-semibold mt-1">amb documents/links actius</p>
+            </div>
+        </div>
+
+        <!-- Storage Distribution Visual Bar -->
+        <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm mb-8">
+            <div class="flex items-center justify-between mb-3">
+                <h2 class="text-sm font-bold text-slate-800 flex items-center gap-2">
+                    <i class="fa-solid fa-chart-pie text-emerald-600"></i> Distribució de l'Espai per Col·lecció (BSON Size)
+                </h2>
+                <span class="text-xs text-slate-500">Fes clic a una col·lecció per veure'n els tipus</span>
+            </div>
+            
+            <!-- Progress Bar Stack -->
+            <div id="storageBar" class="w-full h-5 bg-slate-100 rounded-lg overflow-hidden flex shadow-inner mb-4">
+                <div class="w-full bg-slate-200 animate-pulse"></div>
+            </div>
+
+            <!-- Legend Container -->
+            <div id="storageLegend" class="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-slate-600"></div>
+        </div>
+
+        <!-- Table Card -->
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden mb-8">
+            
+            <!-- Toolbar -->
+            <div class="p-4 sm:p-5 border-b border-slate-200 bg-slate-50/50 flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div class="relative w-full sm:w-80">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                    <input type="text" id="searchInput" oninput="applyFilters()"
+                           placeholder="Cercar col·lecció (ex: Researchoutputs, Awards)..."
+                           class="w-full pl-9 pr-3 py-2 bg-white border border-slate-300 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 shadow-sm">
+                </div>
+
+                <div class="flex items-center gap-4 w-full sm:w-auto justify-end">
+                    <label class="inline-flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700 select-none">
+                        <input type="checkbox" id="chkOnlyWithDocs" onchange="applyFilters()" checked
+                               class="w-4 h-4 rounded text-emerald-600 border-slate-300 focus:ring-emerald-500 cursor-pointer">
+                        <span>Només amb contingut (<span id="countWithDocsBadge">0</span>)</span>
+                    </label>
+
+                    <div class="text-xs text-slate-500 border-l border-slate-300 pl-4">
+                        Mostrant <span id="filteredCount" class="font-bold text-slate-800">0</span> col·leccions
+                    </div>
+                </div>
+            </div>
+
+            <!-- Table -->
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-xs border-collapse">
+                    <thead>
+                        <tr class="bg-slate-100/70 text-slate-700 border-b border-slate-200 font-bold uppercase tracking-wider text-[11px]">
+                            <th scope="col" class="py-3 px-3 text-center w-10">
+                                Desglòs
+                            </th>
+                            <th scope="col" class="py-3 px-4 cursor-pointer hover:bg-slate-200/70 transition-colors" onclick="sortBy('collection')">
+                                Col·lecció <i id="sort_collection" class="fa-solid fa-sort text-slate-400 ml-1"></i>
+                            </th>
+                            <th scope="col" class="py-3 px-4 text-center">
+                                Camp
+                            </th>
+                            <th scope="col" class="py-3 px-4 text-right cursor-pointer hover:bg-slate-200/70 transition-colors" onclick="sortBy('totalRecords')">
+                                Registres Totals <i id="sort_totalRecords" class="fa-solid fa-sort text-slate-400 ml-1"></i>
+                            </th>
+                            <th scope="col" class="py-3 px-4 text-right cursor-pointer hover:bg-slate-200/70 transition-colors" onclick="sortBy('recordsWithDocuments')">
+                                Amb Contingut <i id="sort_recordsWithDocuments" class="fa-solid fa-sort text-slate-400 ml-1"></i>
+                            </th>
+                            <th scope="col" class="py-3 px-4 text-center">
+                                % Cobertura
+                            </th>
+                            <th scope="col" class="py-3 px-4 text-right cursor-pointer hover:bg-slate-200/70 transition-colors" onclick="sortBy('totalMB')">
+                                Espai (MB) <i id="sort_totalMB" class="fa-solid fa-sort-down text-emerald-600 ml-1"></i>
+                            </th>
+                            <th scope="col" class="py-3 px-4 text-right cursor-pointer hover:bg-slate-200/70 transition-colors" onclick="sortBy('totalGB')">
+                                Espai (GB) <i id="sort_totalGB" class="fa-solid fa-sort text-slate-400 ml-1"></i>
+                            </th>
+                            <th scope="col" class="py-3 px-4 text-center cursor-pointer hover:bg-slate-200/70 transition-colors" onclick="sortBy('pctOfTotalStorage')">
+                                % Espai Total <i id="sort_pctOfTotalStorage" class="fa-solid fa-sort text-slate-400 ml-1"></i>
+                            </th>
+                            <th scope="col" class="py-3 px-4 text-center">
+                                Tipus de Document
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody" class="divide-y divide-slate-100">
+                        <tr>
+                            <td colspan="10" class="py-12 text-center text-slate-400">
+                                <i class="fa-solid fa-spinner fa-spin text-xl text-emerald-600 mb-2"></i>
+                                <p>Carregant dades des de MongoDB...</p>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Table Footer -->
+            <div id="tableFooter" class="p-4 bg-slate-50 border-t border-slate-200 text-xs text-slate-500 flex flex-col sm:flex-row items-center justify-between gap-2">
+                <span>Font de dades: base de dades <strong class="text-slate-700">kraken</strong> de MongoDB. Fes clic a <strong>"Veure tipus"</strong> per explorar el detall per tipologia.</span>
+                <span id="footerTotals" class="font-semibold text-slate-700"></span>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Modal for Detailed Types Breakdown -->
+    <div id="typeModal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-200">
+            <!-- Modal Header -->
+            <div class="px-6 py-4 border-b border-slate-200 bg-slate-50/70 flex items-center justify-between">
+                <div>
+                    <h3 id="modalTitle" class="text-lg font-bold text-slate-900 flex items-center gap-2">
+                        <i class="fa-solid fa-layer-group text-emerald-600"></i> Desglossament per Tipus
+                    </h3>
+                    <p id="modalSub" class="text-xs text-slate-500 mt-0.5"></p>
+                </div>
+                <button onclick="closeModal()" class="w-8 h-8 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-600 flex items-center justify-center transition-colors">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <!-- Modal Content (Scrollable) -->
+            <div class="p-6 overflow-y-auto space-y-6">
+                
+                <!-- Section 1: Record Types -->
+                <div>
+                    <div class="flex items-center justify-between mb-3">
+                        <h4 class="text-sm font-bold text-slate-800 flex items-center gap-2">
+                            <span class="w-6 h-6 rounded-md bg-emerald-100 text-emerald-800 flex items-center justify-center text-xs">1</span>
+                            Tipus de Document / Registre Principal (<code class="text-xs text-emerald-700">type</code>)
+                        </h4>
+                        <span id="modalRecTypesCount" class="text-xs text-slate-500"></span>
+                    </div>
+                    <div class="border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                        <table class="w-full text-left text-xs">
+                            <thead class="bg-slate-100/70 text-slate-700 font-bold border-b border-slate-200 text-[11px] uppercase">
+                                <tr>
+                                    <th class="py-2.5 px-4">Tipologia de Document</th>
+                                    <th class="py-2.5 px-4 text-right">Quantitat</th>
+                                    <th class="py-2.5 px-4 text-right">Mida (MB)</th>
+                                    <th class="py-2.5 px-4 text-center">% sobre Col·lecció</th>
+                                </tr>
+                            </thead>
+                            <tbody id="modalRecTypesBody" class="divide-y divide-slate-100 bg-white"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Section 2: Attachment / Link Types -->
+                <div id="modalAttSection">
+                    <div class="flex items-center justify-between mb-3">
+                        <h4 class="text-sm font-bold text-slate-800 flex items-center gap-2">
+                            <span class="w-6 h-6 rounded-md bg-blue-100 text-blue-800 flex items-center justify-center text-xs">2</span>
+                            Tipus de Fitxer Adjunt / Enllaç (<code id="modalAttFieldCode" class="text-xs text-blue-700">documents.type</code>)
+                        </h4>
+                        <span id="modalAttTypesCount" class="text-xs text-slate-500"></span>
+                    </div>
+                    <div class="border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                        <table class="w-full text-left text-xs">
+                            <thead class="bg-slate-100/70 text-slate-700 font-bold border-b border-slate-200 text-[11px] uppercase">
+                                <tr>
+                                    <th class="py-2.5 px-4">Tipus d'Adjunt / Link</th>
+                                    <th class="py-2.5 px-4 text-right">Quantitat d'elements</th>
+                                    <th class="py-2.5 px-4 text-center">% Distribució</th>
+                                </tr>
+                            </thead>
+                            <tbody id="modalAttTypesBody" class="divide-y divide-slate-100 bg-white"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="px-6 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-end">
+                <button onclick="closeModal()" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white text-xs font-semibold shadow-sm transition-all">
+                    Tancar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script>
+        let rawData = null;
+        let currentSort = { column: 'totalBytes', asc: false };
+        let expandedRows = new Set();
+
+        const PALETTE = [
+            '#059669', // Emerald
+            '#2563eb', // Blue
+            '#d97706', // Amber
+            '#7c3aed', // Purple
+            '#db2777', // Pink
+            '#0891b2', // Cyan
+            '#ea580c', // Orange
+            '#4f46e5', // Indigo
+            '#16a34a', // Green
+            '#64748b'  // Slate
+        ];
+
+        async function loadStats(forceRefresh = false) {
+            const btn = document.getElementById('btnRefresh');
+            const icon = document.getElementById('refreshIcon');
+            const tbody = document.getElementById('tableBody');
+
+            icon.classList.add('fa-spin');
+            btn.disabled = true;
+
+            try {
+                const endpoint = `/mongo/collections/document-stats${forceRefresh ? '?refresh=true' : ''}`;
+                const res = await window.apiFetch(endpoint);
+                
+                if (!res.ok) {
+                    throw new Error(`HTTP Error: ${res.status}`);
+                }
+
+                rawData = await res.json();
+                renderAll(rawData);
+
+                // Show meta banner
+                const banner = document.getElementById('metaBanner');
+                banner.classList.remove('hidden');
+                banner.classList.add('flex');
+                document.getElementById('metaText').textContent = forceRefresh ? 'Dades recalculades i actualitzades des de MongoDB.' : 'Dades obtingudes correctament de la memòria cau.';
+                document.getElementById('metaTime').textContent = `Temps de procés: ${rawData.elapsedMs || 0} ms | Generat: ${new Date(rawData.calculatedAt).toLocaleTimeString('ca-ES')}`;
+
+            } catch (err) {
+                console.error('Error fetching stats:', err);
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="10" class="py-8 text-center text-rose-600 bg-rose-50/50">
+                            <i class="fa-solid fa-triangle-exclamation text-2xl mb-2"></i>
+                            <p class="font-bold">Error en carregar les estadístiques</p>
+                            <p class="text-xs text-rose-500 mt-1">${escapeHtml(err.message)}</p>
+                            <button onclick="loadStats(true)" class="mt-3 px-3 py-1.5 rounded-lg bg-rose-600 text-white font-semibold text-xs hover:bg-rose-700">
+                                Reintentar
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            } finally {
+                icon.classList.remove('fa-spin');
+                btn.disabled = false;
+            }
+        }
+
+        function renderAll(data) {
+            if (!data) return;
+
+            // Render KPIs
+            document.getElementById('kpiTotalMB').textContent = (data.totalMegabytes || 0).toLocaleString('ca-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            document.getElementById('kpiTotalGB').textContent = `${(data.totalGigabytes || 0).toLocaleString('ca-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} GB totals`;
+
+            document.getElementById('kpiRecordsWithDocs').textContent = (data.grandTotalRecordsWithDocs || 0).toLocaleString('ca-ES');
+            const pctRecords = data.grandTotalRecords > 0 ? ((data.grandTotalRecordsWithDocs / data.grandTotalRecords) * 100).toFixed(1) : 0;
+            document.getElementById('kpiRecordsSub').textContent = `${pctRecords}% de tots els registres (${(data.grandTotalRecords || 0).toLocaleString('ca-ES')})`;
+
+            document.getElementById('kpiCollectionsCount').textContent = (data.collectionsWithDocumentsCount || 0).toLocaleString('ca-ES');
+            
+            const collections = data.collections || [];
+            const topCol = collections.length > 0 ? collections[0] : null;
+            if (topCol && topCol.totalMB > 0) {
+                document.getElementById('kpiTopStorageName').textContent = topCol.collection;
+                document.getElementById('kpiTopStorageDetail').textContent = `${topCol.totalMB.toLocaleString('ca-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MB (${topCol.totalGB.toFixed(2)} GB)`;
+            }
+
+            document.getElementById('countWithDocsBadge').textContent = (data.collectionsWithDocumentsCount || 0);
+
+            // Render visual storage bar
+            renderStorageBar(collections, data.totalBytes);
+
+            // Render table
+            applyFilters();
+        }
+
+        function renderStorageBar(collections, totalBytes) {
+            const bar = document.getElementById('storageBar');
+            const legend = document.getElementById('storageLegend');
+            bar.innerHTML = '';
+            legend.innerHTML = '';
+
+            if (!collections || collections.length === 0 || !totalBytes) {
+                bar.innerHTML = '<div class="w-full bg-slate-200"></div>';
+                return;
+            }
+
+            const withDocs = collections.filter(c => (c.totalBytes || 0) > 0);
+            
+            withDocs.forEach((col, idx) => {
+                const color = PALETTE[idx % PALETTE.length];
+                const pct = ((col.totalBytes / totalBytes) * 100);
+                
+                // Segment
+                const seg = document.createElement('div');
+                seg.className = 'progress-bar-segment h-full relative group cursor-pointer';
+                seg.style.width = `${Math.max(pct, 0.4)}%`;
+                seg.style.backgroundColor = color;
+                seg.title = `${col.collection}: ${col.totalMB.toLocaleString('ca-ES')} MB (${pct.toFixed(1)}%) - Fes clic per veure tipus`;
+                seg.onclick = () => openModalForCollection(col.collection);
+                bar.appendChild(seg);
+
+                // Legend item (for top 7)
+                if (idx < 7) {
+                    const legItem = document.createElement('div');
+                    legItem.className = 'inline-flex items-center gap-1.5 cursor-pointer hover:opacity-80 transition-opacity';
+                    legItem.onclick = () => openModalForCollection(col.collection);
+                    legItem.innerHTML = `
+                        <span class="w-2.5 h-2.5 rounded-full" style="background-color: ${color}"></span>
+                        <span class="font-semibold text-slate-700">${escapeHtml(col.collection)}</span>
+                        <span class="text-slate-400">(${pct.toFixed(1)}%)</span>
+                    `;
+                    legend.appendChild(legItem);
+                }
+            });
+
+            if (withDocs.length > 7) {
+                const moreItem = document.createElement('span');
+                moreItem.className = 'text-slate-400 italic';
+                moreItem.textContent = `+ ${withDocs.length - 7} altres col·leccions`;
+                legend.appendChild(moreItem);
+            }
+        }
+
+        function applyFilters() {
+            if (!rawData || !rawData.collections) return;
+
+            const q = (document.getElementById('searchInput').value || '').toLowerCase().trim();
+            const onlyWithDocs = document.getElementById('chkOnlyWithDocs').checked;
+
+            let list = rawData.collections.filter(item => {
+                const matchesSearch = !q || item.collection.toLowerCase().includes(q) || (item.field || '').toLowerCase().includes(q);
+                const matchesDocs = !onlyWithDocs || item.recordsWithDocuments > 0;
+                return matchesSearch && matchesDocs;
+            });
+
+            // Sort list
+            list.sort((a, b) => {
+                let valA = a[currentSort.column];
+                let valB = b[currentSort.column];
+
+                if (typeof valA === 'string') {
+                    valA = valA.toLowerCase();
+                    valB = (valB || '').toLowerCase();
+                    return currentSort.asc ? valA.localeCompare(valB) : valB.localeCompare(valA);
+                }
+
+                valA = Number(valA) || 0;
+                valB = Number(valB) || 0;
+                return currentSort.asc ? valA - valB : valB - valA;
+            });
+
+            renderTable(list);
+        }
+
+        function renderTable(list) {
+            const tbody = document.getElementById('tableBody');
+            document.getElementById('filteredCount').textContent = list.length;
+
+            if (list.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="10" class="py-8 text-center text-slate-400">
+                            <i class="fa-solid fa-folder-minus text-2xl mb-1 text-slate-300"></i>
+                            <p>No s'han trobat col·leccions amb aquests criteris.</p>
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            let html = '';
+            list.forEach(item => {
+                const hasDocs = item.recordsWithDocuments > 0;
+                const pctCoverage = item.pctRecordsWithDocuments || 0;
+                const pctStorage = item.pctOfTotalStorage || 0;
+                const recTypes = item.recordTypes || [];
+                const topRecType = recTypes.length > 0 ? recTypes[0] : null;
+
+                html += `
+                    <tr class="hover:bg-slate-50/80 transition-colors">
+                        <td class="py-3 px-3 text-center">
+                            ${hasDocs ? `
+                                <button onclick="openModalForCollection('${escapeHtml(item.collection)}')"
+                                        class="w-7 h-7 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 flex items-center justify-center transition-colors shadow-sm"
+                                        title="Veure quantitat per tipus de document">
+                                    <i class="fa-solid fa-chart-column text-xs"></i>
+                                </button>
+                            ` : `<span class="text-slate-300">-</span>`}
+                        </td>
+                        <td class="py-3 px-4 font-bold text-slate-900 cursor-pointer" onclick="openModalForCollection('${escapeHtml(item.collection)}')">
+                            <div class="flex items-center gap-2">
+                                <span class="w-6 h-6 rounded-md ${hasDocs ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-400'} flex items-center justify-center text-xs">
+                                    <i class="fa-solid ${hasDocs ? 'fa-folder' : 'fa-folder-open'}"></i>
+                                </span>
+                                <span class="hover:text-emerald-700 transition-colors">${escapeHtml(item.collection)}</span>
+                            </div>
+                        </td>
+                        <td class="py-3 px-4 text-center">
+                            <span class="inline-block px-2 py-0.5 rounded text-[10px] font-mono font-medium ${item.field === 'links' ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'bg-slate-100 text-slate-600'}">
+                                ${escapeHtml(item.field)}
+                            </span>
+                        </td>
+                        <td class="py-3 px-4 text-right font-medium text-slate-600">
+                            ${(item.totalRecords || 0).toLocaleString('ca-ES')}
+                        </td>
+                        <td class="py-3 px-4 text-right font-bold ${hasDocs ? 'text-slate-900' : 'text-slate-400'}">
+                            ${(item.recordsWithDocuments || 0).toLocaleString('ca-ES')}
+                        </td>
+                        <td class="py-3 px-4 text-center">
+                            <div class="inline-flex items-center gap-2">
+                                <div class="w-14 bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                                    <div class="bg-emerald-500 h-1.5 rounded-full" style="width: ${Math.min(pctCoverage, 100)}%"></div>
+                                </div>
+                                <span class="text-[11px] font-medium text-slate-600 w-10 text-right">${pctCoverage.toFixed(1)}%</span>
+                            </div>
+                        </td>
+                        <td class="py-3 px-4 text-right font-bold text-emerald-800 bg-emerald-50/30">
+                            ${(item.totalMB || 0).toLocaleString('ca-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </td>
+                        <td class="py-3 px-4 text-right font-extrabold text-emerald-900 bg-emerald-50/50">
+                            ${(item.totalGB || 0).toLocaleString('ca-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </td>
+                        <td class="py-3 px-4 text-center">
+                            <div class="inline-flex items-center gap-2">
+                                <div class="w-14 bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                                    <div class="bg-emerald-600 h-1.5 rounded-full" style="width: ${Math.min(pctStorage, 100)}%"></div>
+                                </div>
+                                <span class="text-[11px] font-semibold text-emerald-700 w-10 text-right">${pctStorage.toFixed(1)}%</span>
+                            </div>
+                        </td>
+                        <td class="py-3 px-4 text-center">
+                            ${hasDocs && topRecType ? `
+                                <button onclick="openModalForCollection('${escapeHtml(item.collection)}')"
+                                        class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-emerald-50 hover:text-emerald-800 text-slate-700 font-medium transition-colors text-[11px]">
+                                    <span class="truncate max-w-[130px] font-semibold">${escapeHtml(topRecType.typeName)}</span>
+                                    <span class="text-slate-400 font-mono text-[10px]">(${topRecType.count.toLocaleString('ca-ES')})</span>
+                                    <i class="fa-solid fa-arrow-up-right-from-square text-[9px] text-slate-400 ml-0.5"></i>
+                                </button>
+                            ` : `<span class="text-slate-400 text-[11px]">-</span>`}
+                        </td>
+                    </tr>
+                `;
+            });
+
+            tbody.innerHTML = html;
+
+            // Summary footer
+            const sumMB = list.reduce((acc, c) => acc + (c.totalMB || 0), 0);
+            const sumGB = list.reduce((acc, c) => acc + (c.totalGB || 0), 0);
+            const sumDocs = list.reduce((acc, c) => acc + (c.recordsWithDocuments || 0), 0);
+
+            document.getElementById('footerTotals').textContent = 
+                `Total filtrat: ${sumDocs.toLocaleString('ca-ES')} documents | ${sumMB.toLocaleString('ca-ES', { maximumFractionDigits: 2 })} MB (${sumGB.toFixed(2)} GB)`;
+        }
+
+        function sortBy(col) {
+            if (currentSort.column === col) {
+                currentSort.asc = !currentSort.asc;
+            } else {
+                currentSort.column = col;
+                currentSort.asc = false; // default desc for numbers
+            }
+
+            // Update header icons
+            document.querySelectorAll('th i').forEach(icon => {
+                icon.className = 'fa-solid fa-sort text-slate-400 ml-1';
+            });
+            const activeIcon = document.getElementById(`sort_${col}`);
+            if (activeIcon) {
+                activeIcon.className = `fa-solid ${currentSort.asc ? 'fa-sort-up' : 'fa-sort-down'} text-emerald-600 ml-1`;
+            }
+
+            applyFilters();
+        }
+
+        function openModalForCollection(colName) {
+            if (!rawData || !rawData.collections) return;
+            const item = rawData.collections.find(c => c.collection === colName);
+            if (!item) return;
+
+            document.getElementById('modalTitle').innerHTML = `
+                <i class="fa-solid fa-layer-group text-emerald-600"></i>
+                Desglossament per tipus: <span class="text-emerald-700">${escapeHtml(item.collection)}</span>
+            `;
+            document.getElementById('modalSub').textContent = 
+                `Total documents amb contingut: ${item.recordsWithDocuments.toLocaleString('ca-ES')} | Espai total: ${item.totalMB.toLocaleString('ca-ES')} MB (${item.totalGB} GB) | Camp: ${item.field}`;
+
+            // 1. Record types
+            const recList = item.recordTypes || [];
+            document.getElementById('modalRecTypesCount').textContent = `${recList.length} tipologies de document`;
+            const recTbody = document.getElementById('modalRecTypesBody');
+            
+            if (recList.length === 0) {
+                recTbody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-slate-400">No hi ha tipus registrats.</td></tr>`;
+            } else {
+                let html = '';
+                recList.forEach(r => {
+                    html += `
+                        <tr class="hover:bg-slate-50 transition-colors">
+                            <td class="py-2.5 px-4 font-semibold text-slate-800">
+                                ${escapeHtml(r.typeName)}
+                            </td>
+                            <td class="py-2.5 px-4 text-right font-bold text-slate-900">
+                                ${(r.count || 0).toLocaleString('ca-ES')}
+                            </td>
+                            <td class="py-2.5 px-4 text-right text-emerald-700 font-mono">
+                                ${(r.totalMB || 0).toLocaleString('ca-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MB
+                            </td>
+                            <td class="py-2.5 px-4 text-center">
+                                <div class="inline-flex items-center gap-2">
+                                    <div class="w-16 bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                                        <div class="bg-emerald-500 h-1.5 rounded-full" style="width: ${Math.min(r.pctOfCollection, 100)}%"></div>
+                                    </div>
+                                    <span class="text-[11px] font-semibold text-slate-600 w-10 text-right">${r.pctOfCollection.toFixed(1)}%</span>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                });
+                recTbody.innerHTML = html;
+            }
+
+            // 2. Attachment types
+            const attList = item.attachmentTypes || [];
+            const attSection = document.getElementById('modalAttSection');
+            const attFieldCode = document.getElementById('modalAttFieldCode');
+            attFieldCode.textContent = item.field === 'links' ? 'links.linkType' : 'documents.type';
+
+            document.getElementById('modalAttTypesCount').textContent = `${attList.length} tipus d'adjunt registrats`;
+            const attTbody = document.getElementById('modalAttTypesBody');
+
+            if (attList.length === 0) {
+                attTbody.innerHTML = `<tr><td colspan="3" class="p-4 text-center text-slate-400">No hi ha adjunts addicionals.</td></tr>`;
+            } else {
+                let html = '';
+                attList.forEach(a => {
+                    html += `
+                        <tr class="hover:bg-slate-50 transition-colors">
+                            <td class="py-2.5 px-4 font-semibold text-slate-800">
+                                ${escapeHtml(a.typeName)}
+                            </td>
+                            <td class="py-2.5 px-4 text-right font-bold text-slate-900">
+                                ${(a.count || 0).toLocaleString('ca-ES')}
+                            </td>
+                            <td class="py-2.5 px-4 text-center">
+                                <div class="inline-flex items-center gap-2">
+                                    <div class="w-16 bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                                        <div class="bg-blue-500 h-1.5 rounded-full" style="width: ${Math.min(a.pctOfAttachments, 100)}%"></div>
+                                    </div>
+                                    <span class="text-[11px] font-semibold text-slate-600 w-10 text-right">${a.pctOfAttachments.toFixed(1)}%</span>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                });
+                attTbody.innerHTML = html;
+            }
+
+            // Show modal
+            document.getElementById('typeModal').classList.remove('hidden');
+        }
+
+        function closeModal() {
+            document.getElementById('typeModal').classList.add('hidden');
+        }
+
+        // Close on ESC
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closeModal();
+        });
+
+        function exportToCsv() {
+            if (!rawData || !rawData.collections) return;
+
+            const headers = ['Col·leccio', 'Camp', 'Total Registres', 'Registres amb Contingut', '% Cobertura', 'Total MB', 'Total GB', '% Espai Total', 'Tipus Majoritari', 'Quantitat Tipus'];
+            const rows = rawData.collections.map(c => {
+                const topT = c.recordTypes && c.recordTypes.length > 0 ? c.recordTypes[0] : null;
+                return [
+                    `"${c.collection}"`,
+                    `"${c.field}"`,
+                    c.totalRecords,
+                    c.recordsWithDocuments,
+                    c.pctRecordsWithDocuments,
+                    c.totalMB,
+                    c.totalGB,
+                    c.pctOfTotalStorage,
+                    `"${topT ? topT.typeName : '-'}"`,
+                    topT ? topT.count : 0
+                ];
+            });
+
+            const csvContent = 'data:text/csv;charset=utf-8,\uFEFF' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement('a');
+            link.setAttribute('href', encodedUri);
+            link.setAttribute('download', `documents_i_tipus_per_colleccio_${new Date().toISOString().slice(0, 10)}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function escapeHtml(str) {
+            if (str === null || str === undefined) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        // Initialize on load
+        document.addEventListener('DOMContentLoaded', () => {
+            loadStats(false);
+        });
+    </script>
+</body>
+</html>
