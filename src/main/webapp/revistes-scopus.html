@@ -1,0 +1,1748 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Revistes Scopus i Estat de ScopusID - UAB Recerca</title>
+    <script src="config.js"></script>
+    <script src="uab-brand.js" defer></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="uab-theme.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .progress-bar-fill {
+            transition: width 0.4s ease-in-out;
+        }
+        .modal-enter {
+            animation: fadeIn 0.2s ease-out forwards;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.98); }
+            to { opacity: 1; transform: scale(1); }
+        }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen font-sans text-slate-800">
+
+    <div class="mx-auto py-8 px-4 max-w-7xl">
+
+        <!-- Breadcrumb & Top Bar -->
+        <nav class="flex items-center gap-2 text-xs text-slate-500 mb-6">
+            <a href="index.html" class="hover:text-emerald-700 transition-colors flex items-center gap-1">
+                <i class="fa-solid fa-house"></i> Inici
+            </a>
+            <i class="fa-solid fa-chevron-right text-[10px] text-slate-400"></i>
+            <span class="text-slate-700 font-semibold">Revistes Scopus i Articles</span>
+        </nav>
+
+        <!-- Header -->
+        <header class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+            <div>
+                <h1 class="text-2xl lg:text-3xl font-extrabold text-slate-900 tracking-tight flex items-center gap-3">
+                    <span class="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center text-xl shadow-sm">
+                        <i class="fa-solid fa-book-bookmark"></i>
+                    </span>
+                    Revistes Scopus i Articles UAB
+                </h1>
+                <p class="text-sm text-slate-500 mt-1">
+                    Anàlisi de producció científica per revista indexada a Scopus i control d'identificadors <span class="font-semibold text-emerald-800">ScopusID</span> en els articles associats.
+                </p>
+            </div>
+            <div class="flex items-center gap-3 flex-wrap">
+                <!-- Selector Pujada Egreta (Producció vs Test) -->
+                <div class="flex items-center gap-2 bg-white border border-slate-300 rounded-xl px-3 py-2 shadow-sm">
+                    <i class="fa-solid fa-cloud-arrow-up text-xs text-emerald-700"></i>
+                    <label for="selectEntornPrincipal" class="text-xs font-bold text-slate-700 whitespace-nowrap">Pujar a Egreta:</label>
+                    <select id="selectEntornPrincipal" onchange="syncEntorn(this.value)"
+                            class="bg-transparent text-xs font-bold text-emerald-800 focus:outline-none cursor-pointer">
+                        <option value="prod" selected>Producció (MongoDB: kraken | Egreta: prod)</option>
+                        <option value="test">Test (MongoDB: kraken_test | Egreta: test)</option>
+                    </select>
+                </div>
+
+                <button id="btnOpenBatchModal" onclick="openBatchModal()"
+                        class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-sm font-bold text-white shadow-sm transition-all cursor-pointer">
+                    <i class="fa-solid fa-wand-magic-sparkles text-amber-300"></i> Asignació Automàtica per DOI
+                </button>
+                <button id="btnRefresh" onclick="loadStats(true)"
+                        class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-slate-300 hover:border-emerald-500 hover:text-emerald-700 text-sm font-semibold text-slate-700 shadow-sm transition-all">
+                    <i id="refreshIcon" class="fa-solid fa-arrows-rotate"></i> Recalcular dades
+                </button>
+                <button id="btnExport" onclick="exportToCsv()"
+                        class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-sm font-semibold text-white shadow-sm transition-all">
+                    <i class="fa-solid fa-file-csv"></i> Exportar CSV
+                </button>
+            </div>
+        </header>
+
+        <!-- Notification Banner -->
+        <div id="metaBanner" class="hidden items-center justify-between bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-2.5 text-xs text-emerald-800 mb-6">
+            <span class="flex items-center gap-2">
+                <i class="fa-solid fa-circle-check text-emerald-600"></i>
+                <span id="metaText">Dades carregades correctament</span>
+            </span>
+            <span id="metaTime" class="text-slate-500"></span>
+        </div>
+
+        <!-- KPI Cards Row -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+            <!-- Card 1: Total Revistes Scopus -->
+            <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
+                <div class="flex items-center justify-between text-slate-400 mb-2">
+                    <span class="text-xs font-semibold uppercase tracking-wider">Revistes Scopus Actives</span>
+                    <span class="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center text-sm">
+                        <i class="fa-solid fa-newspaper"></i>
+                    </span>
+                </div>
+                <div class="flex items-baseline gap-2">
+                    <span id="kpiTotalJournals" class="text-2xl font-black text-slate-900">-</span>
+                    <span class="text-xs text-slate-500 font-medium">amb articles</span>
+                </div>
+                <div class="mt-2 text-xs text-slate-500">Revistes amb producció UAB</div>
+            </div>
+
+            <!-- Card 2: Total Articles -->
+            <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
+                <div class="flex items-center justify-between text-slate-400 mb-2">
+                    <span class="text-xs font-semibold uppercase tracking-wider">Total Articles</span>
+                    <span class="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center text-sm">
+                        <i class="fa-solid fa-file-lines"></i>
+                    </span>
+                </div>
+                <div class="flex items-baseline gap-2">
+                    <span id="kpiTotalArticles" class="text-2xl font-black text-slate-900">-</span>
+                    <span class="text-xs text-slate-500 font-medium">publicacions</span>
+                </div>
+                <div class="mt-2 text-xs text-slate-500">A la col·lecció Researchoutputs</div>
+            </div>
+
+            <!-- Card 3: Amb ScopusID -->
+            <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
+                <div class="flex items-center justify-between text-slate-400 mb-2">
+                    <span class="text-xs font-semibold uppercase tracking-wider">Amb Scopus ID</span>
+                    <span class="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center text-sm">
+                        <i class="fa-solid fa-circle-check"></i>
+                    </span>
+                </div>
+                <div class="flex items-baseline gap-2">
+                    <span id="kpiWithScopus" class="text-2xl font-black text-emerald-600">-</span>
+                    <span id="kpiCoverage" class="text-xs font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">-%</span>
+                </div>
+                <div class="mt-2 text-xs text-slate-500">Articles identificats correctament</div>
+            </div>
+
+            <!-- Card 4: Sense ScopusID -->
+            <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
+                <div class="flex items-center justify-between text-slate-400 mb-2">
+                    <span class="text-xs font-semibold uppercase tracking-wider">Sense Scopus ID</span>
+                    <span class="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center text-sm">
+                        <i class="fa-solid fa-triangle-exclamation"></i>
+                    </span>
+                </div>
+                <div class="flex items-baseline gap-2">
+                    <span id="kpiWithoutScopus" class="text-2xl font-black text-amber-600">-</span>
+                    <span id="kpiMissingPercent" class="text-xs font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">-%</span>
+                </div>
+                <div class="mt-2 text-xs text-slate-500">Pendents d'identificar o vincular</div>
+            </div>
+        </div>
+
+        <!-- Filter & Search Controls -->
+        <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            
+            <!-- Search Input -->
+            <div class="relative flex-1">
+                <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+                <input type="text" id="searchInput" oninput="applyFilters()"
+                       placeholder="Cerca per títol de revista o ISSN..."
+                       class="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-600 bg-slate-50/50">
+            </div>
+
+            <!-- Filter Status Pills -->
+            <div class="flex items-center gap-1.5 flex-wrap">
+                <button onclick="setStatusFilter('all')" id="filterAll"
+                        class="status-pill px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 text-white shadow-sm transition-all">
+                    Totes (<span id="countAll">0</span>)
+                </button>
+                <button onclick="setStatusFilter('missing')" id="filterMissing"
+                        class="status-pill px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 text-slate-600 hover:bg-slate-200 transition-all">
+                    Sense ScopusID 0% (<span id="countMissing">0</span>)
+                </button>
+                <button onclick="setStatusFilter('partial')" id="filterPartial"
+                        class="status-pill px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 text-slate-600 hover:bg-slate-200 transition-all">
+                    Parcials &lt;100% (<span id="countPartial">0</span>)
+                </button>
+                <button onclick="setStatusFilter('complete')" id="filterComplete"
+                        class="status-pill px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 text-slate-600 hover:bg-slate-200 transition-all">
+                    Completes 100% (<span id="countComplete">0</span>)
+                </button>
+            </div>
+
+            <!-- Sort selector -->
+            <div class="flex items-center gap-2">
+                <label for="sortSelect" class="text-xs font-medium text-slate-500 whitespace-nowrap">Ordenar per:</label>
+                <select id="sortSelect" onchange="applyFilters()"
+                        class="px-3 py-2 rounded-xl border border-slate-300 text-xs font-medium text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/30">
+                    <option value="articles-desc">Articles (més a menys)</option>
+                    <option value="articles-asc">Articles (menys a més)</option>
+                    <option value="without-desc">Sense Scopus ID (més pendents)</option>
+                    <option value="coverage-asc">Cobertura (menor a major)</option>
+                    <option value="coverage-desc">Cobertura (major a menor)</option>
+                    <option value="title-asc">Títol (A-Z)</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Table Card -->
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden mb-6">
+            
+            <!-- Table Header Stats Info -->
+            <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+                <div class="text-xs font-semibold text-slate-600">
+                    Mostrant <span id="showingCount" class="font-bold text-slate-900">0</span> de <span id="totalMatchingCount" class="font-bold text-slate-900">0</span> revistes
+                </div>
+                <div class="flex items-center gap-2 text-xs text-slate-500">
+                    <span>Files per pàgina:</span>
+                    <select id="pageSizeSelect" onchange="changePageSize()" class="border border-slate-200 rounded px-2 py-1 text-xs">
+                        <option value="15">15</option>
+                        <option value="25" selected>25</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Loading Spinner -->
+            <div id="loadingState" class="py-20 flex flex-col items-center justify-center gap-3 text-slate-400">
+                <i class="fa-solid fa-circle-notch fa-spin text-3xl text-emerald-600"></i>
+                <p class="text-sm font-medium text-slate-600">Calculant estadístiques de revistes i articles a MongoDB kraken...</p>
+                <p class="text-xs text-slate-400">Aquesta operació creua més de 117.000 articles amb 42.000 revistes de Scopus.</p>
+            </div>
+
+            <!-- Main Table Container -->
+            <div id="tableContainer" class="hidden overflow-x-auto">
+                <table class="w-full text-left text-sm text-slate-600">
+                    <thead class="bg-slate-50/75 text-xs uppercase font-semibold text-slate-500 border-b border-slate-200">
+                        <tr>
+                            <th class="py-3.5 px-6">Revista / ISSN</th>
+                            <th class="py-3.5 px-4 text-center">Scopus Source ID</th>
+                            <th class="py-3.5 px-4 text-center">Total Articles</th>
+                            <th class="py-3.5 px-4 text-center">Amb Scopus ID</th>
+                            <th class="py-3.5 px-4 text-center">Sense Scopus ID</th>
+                            <th class="py-3.5 px-6 text-center w-48">Cobertura Scopus</th>
+                            <th class="py-3.5 px-4 text-center">Acció</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody" class="divide-y divide-slate-100 font-normal">
+                        <!-- Dynamic rows -->
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Empty State -->
+            <div id="emptyState" class="hidden py-16 flex flex-col items-center justify-center gap-2 text-slate-400">
+                <i class="fa-solid fa-magnifying-glass text-3xl text-slate-300"></i>
+                <p class="text-sm font-semibold text-slate-600">No s'han trobat revistes amb els filtres aplicats.</p>
+                <button onclick="resetFilters()" class="mt-2 text-xs text-emerald-600 hover:underline">Reinicialitzar filtres</button>
+            </div>
+
+            <!-- Pagination Bar -->
+            <div id="paginationBar" class="hidden px-6 py-4 border-t border-slate-100 flex items-center justify-between">
+                <div class="text-xs text-slate-500" id="paginationInfo">Pàgina 1 de 1</div>
+                <div class="flex items-center gap-1.5" id="paginationButtons">
+                    <!-- Dynamic page buttons -->
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- Modal / Drawer de Detall d'Articles d'una Revista -->
+    <div id="articlesModal" class="hidden fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="modal-enter bg-white w-full max-w-5xl rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
+            
+            <!-- Modal Header -->
+            <div class="px-6 py-5 bg-gradient-to-r from-emerald-800 to-teal-800 text-white flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <span class="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-lg">
+                        <i class="fa-solid fa-file-lines"></i>
+                    </span>
+                    <div>
+                        <h2 id="modalJournalTitle" class="text-lg font-bold text-white line-clamp-1">Títol de la Revista</h2>
+                        <div class="flex items-center gap-3 text-xs text-emerald-200 mt-0.5">
+                            <span id="modalJournalIssns">ISSNs: -</span>
+                            <span>•</span>
+                            <span id="modalJournalSourceId">Scopus ID: -</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <div class="flex items-center gap-1.5 bg-white/10 px-2.5 py-1 rounded-xl text-xs">
+                        <i class="fa-solid fa-cloud-arrow-up text-[11px] text-emerald-300"></i>
+                        <label for="selectEntorn" class="text-[11px] text-emerald-200">Entorn:</label>
+                        <select id="selectEntorn" onchange="syncEntorn(this.value)" class="bg-emerald-950/70 text-white rounded-lg px-2 py-0.5 text-xs border border-emerald-500/50 focus:outline-none cursor-pointer">
+                            <option value="prod" selected>Prod (kraken | egreta)</option>
+                            <option value="test">Test (kraken_test | egretat)</option>
+                        </select>
+                    </div>
+                    <button onclick="openBatchModalForCurrentJournal()" title="Asignació automàtica de Scopus ID per DOI en aquesta revista"
+                            class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer">
+                        <i class="fa-solid fa-wand-magic-sparkles text-amber-300 text-[11px]"></i> Asignar per DOI
+                    </button>
+                    <button onclick="configureApiKey()" title="Configura la teva Clau d'API de Scopus"
+                            class="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-semibold transition-colors flex items-center gap-1.5">
+                        <i class="fa-solid fa-key text-[10px]"></i> Clau API Scopus
+                    </button>
+                    <button onclick="closeArticlesModal()" class="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors">
+                        <i class="fa-solid fa-xmark text-lg"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Modal Subheader & Controls -->
+            <div class="px-6 py-4 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                
+                <!-- Internal Search in Modal -->
+                <div class="relative flex-1">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                    <input type="text" id="modalSearchInput" oninput="debounceModalSearch()"
+                           placeholder="Cerca per títol, autor o DOI..."
+                           class="w-full pl-9 pr-3 py-1.5 rounded-lg border border-slate-300 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500/30 bg-white">
+                </div>
+
+                <!-- Filter by Scopus ID status -->
+                <div class="flex items-center gap-1.5">
+                    <button onclick="setModalFilter(null)" id="modalFilterAll"
+                            class="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-emerald-700 text-white transition-all">
+                        Tots
+                    </button>
+                    <button onclick="setModalFilter(true)" id="modalFilterWith"
+                            class="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-white text-slate-600 hover:bg-slate-100 border border-slate-200 transition-all flex items-center gap-1">
+                        <i class="fa-solid fa-circle-check text-emerald-600 text-[10px]"></i> Amb Scopus ID
+                    </button>
+                    <button onclick="setModalFilter(false)" id="modalFilterWithout"
+                            class="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-white text-slate-600 hover:bg-slate-100 border border-slate-200 transition-all flex items-center gap-1">
+                        <i class="fa-solid fa-circle-xmark text-red-500 text-[10px]"></i> Sense Scopus ID
+                    </button>
+                </div>
+
+                <div class="text-xs text-slate-500 whitespace-nowrap" id="modalArticleCount">
+                    Carregant...
+                </div>
+            </div>
+
+            <!-- Modal Body / Articles List -->
+            <div class="overflow-y-auto flex-1 p-6" id="modalArticlesBody">
+                <div id="modalLoading" class="py-16 flex flex-col items-center justify-center gap-2 text-slate-400">
+                    <i class="fa-solid fa-circle-notch fa-spin text-2xl text-emerald-600"></i>
+                    <span class="text-xs">Carregant articles de la revista...</span>
+                </div>
+                <div id="modalArticlesList" class="space-y-3 hidden">
+                    <!-- Dynamic articles -->
+                </div>
+                <div id="modalEmpty" class="hidden py-12 text-center text-slate-400 text-xs">
+                    No s'han trobat articles amb els criteris seleccionats.
+                </div>
+            </div>
+
+            <!-- Modal Footer / Pagination -->
+            <div class="px-6 py-3.5 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs">
+                <span id="modalPaginationText" class="text-slate-500">Mostrant 0 de 0</span>
+                <div class="flex items-center gap-2">
+                    <button id="modalBtnPrev" onclick="modalPrevPage()" class="px-3 py-1.5 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed font-medium text-slate-700">
+                        <i class="fa-solid fa-chevron-left text-[10px] mr-1"></i> Anterior
+                    </button>
+                    <button id="modalBtnNext" onclick="modalNextPage()" class="px-3 py-1.5 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed font-medium text-slate-700">
+                        Següent <i class="fa-solid fa-chevron-right text-[10px] ml-1"></i>
+                    </button>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Modal Procés Automàtic per DOI -->
+    <div id="batchModal" class="hidden fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="modal-enter bg-white w-full max-w-3xl rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
+            
+            <!-- Batch Header -->
+            <div class="px-6 py-5 bg-gradient-to-r from-teal-800 via-emerald-800 to-slate-900 text-white flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <span class="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-lg text-amber-300">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i>
+                    </span>
+                    <div>
+                        <h2 class="text-lg font-bold text-white flex items-center gap-2">
+                            Asignació Automàtica de Scopus ID
+                        </h2>
+                        <p class="text-xs text-emerald-200 mt-0.5" id="batchScopeDescription">
+                            Cerca normal en 2 fases: prioritària per DOI i fallback automàtic a cerca complexa per títol, autors i any.
+                        </p>
+                    </div>
+                </div>
+                <button onclick="closeBatchModal()" class="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+
+            <!-- Batch Body -->
+            <div class="overflow-y-auto flex-1 p-6 space-y-5">
+                
+                <!-- State 1: Configuration Panel -->
+                <div id="batchConfigPanel" class="space-y-4">
+                    <!-- Previous Job Banner (shown when a previous batch completed) -->
+                    <div id="batchPreviousJobBanner" class="hidden p-3.5 bg-slate-100 border border-slate-200 rounded-2xl flex items-center justify-between text-xs text-slate-700">
+                        <div class="flex items-center gap-2 min-w-0">
+                            <i class="fa-solid fa-clock-rotate-left text-emerald-600"></i>
+                            <span id="batchPreviousJobText" class="truncate font-medium"></span>
+                        </div>
+                        <button type="button" onclick="showLastBatchResults()" class="font-bold text-emerald-700 hover:text-emerald-800 hover:underline flex items-center gap-1 shrink-0 ml-2 cursor-pointer">
+                            Veure registre anterior <i class="fa-solid fa-arrow-right text-[10px]"></i>
+                        </button>
+                    </div>
+
+                    <!-- Scope & Candidate Count Card -->
+                    <div class="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-between">
+                        <div>
+                            <span class="text-xs font-semibold text-emerald-800 uppercase tracking-wider">Articles candidats</span>
+                            <div class="text-2xl font-black text-emerald-950 mt-0.5" id="batchCandidateCountLabel">Carregant...</div>
+                            <p class="text-xs text-emerald-700 mt-1" id="batchCandidateScopeLabel">Articles en revistes Scopus amb DOI i sense Scopus ID</p>
+                        </div>
+                        <span class="w-12 h-12 rounded-2xl bg-white/80 text-emerald-700 flex items-center justify-center text-2xl shadow-xs">
+                            <i class="fa-solid fa-newspaper"></i>
+                        </span>
+                    </div>
+
+                    <!-- Config Form Options -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <!-- Entorn Selector -->
+                        <div class="p-4 rounded-2xl border border-slate-200 bg-white shadow-xs">
+                            <label class="text-xs font-bold text-slate-800 flex items-center gap-1.5 mb-2">
+                                <i class="fa-solid fa-cloud-arrow-up text-emerald-600"></i> Entorn de sincronització:
+                            </label>
+                            <select id="batchSelectEnv" onchange="syncEntorn(this.value); updateBatchCandidateCount();" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-semibold text-slate-800 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                                <option value="prod">Producció (MongoDB: kraken | Egreta: prod)</option>
+                                <option value="test">Test (MongoDB: kraken_test | Egreta: test)</option>
+                            </select>
+                            <p class="text-[11px] text-slate-500 mt-1.5 leading-normal">
+                                En Test es consultarà i actualitzarà la base de dades <strong>kraken_test</strong> i es pujarà a l'API de proves d'Egreta (egretat.uab.cat).
+                            </p>
+                        </div>
+
+                        <!-- Batch Limit Selector -->
+                        <div class="p-4 rounded-2xl border border-slate-200 bg-white shadow-xs">
+                            <label class="text-xs font-bold text-slate-800 flex items-center gap-1.5 mb-2">
+                                <i class="fa-solid fa-list-ol text-blue-600"></i> Mida del lot:
+                            </label>
+                            <select id="batchSelectLimit" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-semibold text-slate-800 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                                <option value="25">25 articles</option>
+                                <option value="50" selected>50 articles (Recomanat)</option>
+                                <option value="100">100 articles</option>
+                                <option value="250">250 articles</option>
+                                <option value="500">500 articles</option>
+                                <option value="0">Tots els pendents</option>
+                            </select>
+                            <p class="text-[11px] text-slate-500 mt-1.5 leading-normal">
+                                S'executa amb una petita pausa de 150ms per petició per respectar la quota d'Elsevier.
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Dry-run checkbox -->
+                    <div class="p-4 rounded-2xl border border-amber-200 bg-amber-50/70 flex items-start gap-3">
+                        <input type="checkbox" id="batchCheckDryRun" class="mt-0.5 w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500 cursor-pointer">
+                        <label for="batchCheckDryRun" class="text-xs text-amber-900 cursor-pointer">
+                            <span class="font-bold">Mode Simulació (Dry-Run):</span> Cercar els Scopus IDs a l'API d'Elsevier i mostrar els resultats trobats a la llista, però <strong>sense desar res a MongoDB ni enviar-ho a Egreta</strong>.
+                        </label>
+                    </div>
+
+                    <!-- Start Button -->
+                    <div class="pt-2 flex justify-end">
+                        <button onclick="startBatchProcess()" id="btnStartBatch"
+                                class="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-sm font-bold text-white shadow-md transition-all cursor-pointer">
+                            <i class="fa-solid fa-play"></i> Iniciar Asignació Automàtica
+                        </button>
+                    </div>
+                </div>
+
+                <!-- State 2: Progress & Activity Panel -->
+                <div id="batchProgressPanel" class="space-y-4 hidden">
+                    
+                    <!-- Progress Bar Header -->
+                    <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+                        <div class="flex items-center justify-between text-xs font-bold text-slate-700">
+                            <span class="flex items-center gap-2">
+                                <i id="batchRunningSpinner" class="fa-solid fa-circle-notch fa-spin text-emerald-600"></i>
+                                <span id="batchStatusTitle">Executant procés automàtic...</span>
+                            </span>
+                            <div class="flex items-center gap-2">
+                                <button type="button" onclick="resetBatchToConfigView()" id="btnBackToConfigTop"
+                                        class="hidden px-2.5 py-1 bg-white hover:bg-slate-100 border border-slate-300 rounded-xl text-xs font-bold text-slate-700 transition-colors cursor-pointer flex items-center gap-1">
+                                    <i class="fa-solid fa-arrow-left text-[10px]"></i> Nou procés
+                                </button>
+                                <span id="batchPercentLabel" class="text-sm font-black text-emerald-700 font-mono">0%</span>
+                            </div>
+                        </div>
+
+                        <!-- Progress Bar -->
+                        <div class="w-full h-3 rounded-full bg-slate-200 overflow-hidden shadow-inner">
+                            <div id="batchProgressBar" class="h-full bg-emerald-600 rounded-full transition-all duration-300" style="width: 0%"></div>
+                        </div>
+
+                        <!-- Current Title -->
+                        <div class="text-xs text-slate-500 truncate" id="batchCurrentArticleLabel">
+                            Preparant articles...
+                        </div>
+                    </div>
+
+                    <!-- KPI Counters Grid -->
+                    <div class="grid grid-cols-2 sm:grid-cols-5 gap-2 text-center text-xs">
+                        <div class="p-2.5 rounded-xl bg-white border border-slate-200 shadow-xs">
+                            <span class="text-slate-400 block text-[10px] uppercase font-bold">Processats</span>
+                            <span id="batchCountProcessed" class="text-base font-black text-slate-800">0</span>
+                            <span class="text-[10px] text-slate-400 block" id="batchCountTotal">/ 0</span>
+                        </div>
+                        <div class="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 shadow-xs">
+                            <span class="text-emerald-700 block text-[10px] uppercase font-bold">Trobats</span>
+                            <span id="batchCountFound" class="text-base font-black text-emerald-700">0</span>
+                        </div>
+                        <div class="p-2.5 rounded-xl bg-teal-50 border border-teal-200 shadow-xs">
+                            <span class="text-teal-700 block text-[10px] uppercase font-bold">Assignats</span>
+                            <span id="batchCountAssigned" class="text-base font-black text-teal-700">0</span>
+                        </div>
+                        <div class="p-2.5 rounded-xl bg-slate-100 border border-slate-200 shadow-xs">
+                            <span class="text-slate-500 block text-[10px] uppercase font-bold">No Trobats</span>
+                            <span id="batchCountNotFound" class="text-base font-black text-slate-600">0</span>
+                        </div>
+                        <div class="p-2.5 rounded-xl bg-red-50 border border-red-200 shadow-xs">
+                            <span class="text-red-700 block text-[10px] uppercase font-bold">Errors</span>
+                            <span id="batchCountErrors" class="text-base font-black text-red-700">0</span>
+                        </div>
+                    </div>
+
+                    <!-- Live Log Feed -->
+                    <div class="space-y-1.5">
+                        <div class="flex items-center justify-between text-xs font-semibold text-slate-600">
+                            <span>Activitat en temps real (últims articles)</span>
+                            <span class="text-[11px] text-slate-400 font-normal">Actualització automàtica cada segon</span>
+                        </div>
+                        <div id="batchLogContainer" class="max-h-60 overflow-y-auto space-y-2 p-2 rounded-xl bg-slate-900 text-slate-100 font-mono text-[11px] border border-slate-800">
+                            <!-- Live log rows -->
+                            <div class="text-slate-500 italic p-2">Esperant primeres respostes de l'API...</div>
+                        </div>
+                    </div>
+
+                </div>
+
+            </div>
+
+            <!-- Batch Footer -->
+            <div class="px-6 py-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs">
+                <span id="batchFooterMessage" class="text-slate-500">Prést per iniciar</span>
+                <div class="flex items-center gap-2">
+                    <button onclick="resetBatchToConfigView()" id="btnNewBatch"
+                            class="hidden px-4 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold transition-all shadow-sm cursor-pointer flex items-center gap-1.5">
+                        <i class="fa-solid fa-rotate-left"></i> Nou procés / Configurar
+                    </button>
+                    <button onclick="stopBatchProcess()" id="btnStopBatch"
+                            class="hidden px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold transition-all shadow-sm cursor-pointer">
+                        <i class="fa-solid fa-stop mr-1"></i> Aturar procés
+                    </button>
+                    <button onclick="exportBatchLogsToCsv()" id="btnExportBatchCsv"
+                            class="hidden px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold transition-all shadow-sm cursor-pointer">
+                        <i class="fa-solid fa-file-csv mr-1"></i> Exportar Resultats
+                    </button>
+                    <button onclick="closeBatchModal()" class="px-4 py-2 rounded-xl bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 font-semibold transition-all cursor-pointer">
+                        Tancar
+                    </button>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- JavaScript Application Logic -->
+    <script>
+        let allJournals = [];
+        let filteredJournals = [];
+        let currentFilterStatus = 'all'; // all, missing, partial, complete
+        let currentPage = 1;
+        let pageSize = 25;
+
+        // Modal State
+        let currentModalJournalUuid = null;
+        let modalFilterHasScopus = null; // null, true, false
+        let modalSearchText = '';
+        let modalOffset = 0;
+        let modalLimit = 30;
+        let modalTotal = 0;
+        let modalDebounceTimer = null;
+
+        // Environment Management (Produccio -> kraken / Test -> kraken_test)
+        let currentActiveEnv = null;
+
+        function getSelectedEntorn() {
+            const el = document.getElementById('selectEntornPrincipal');
+            return el ? el.value : (localStorage.getItem('egreta_target_env') || 'prod');
+        }
+
+        function getMongoDbName() {
+            return getSelectedEntorn() === 'test' ? 'kraken_test' : 'kraken';
+        }
+
+        function getEgretaDomain() {
+            return getSelectedEntorn() === 'test' ? 'egretat.uab.cat' : 'egreta.uab.cat';
+        }
+
+        function getEnvShort() {
+            return getSelectedEntorn() === 'test' ? 'Test' : 'Prod';
+        }
+
+        function getEnvLong() {
+            return getSelectedEntorn() === 'test' ? 'Test (egretat.uab.cat | kraken_test)' : 'Producció (egreta.uab.cat | kraken)';
+        }
+
+        function syncEntorn(val, shouldReload = true) {
+            const prev = currentActiveEnv;
+            currentActiveEnv = val;
+
+            const main = document.getElementById('selectEntornPrincipal');
+            const modal = document.getElementById('selectEntorn');
+            const batch = document.getElementById('batchSelectEnv');
+            if (main && main.value !== val) main.value = val;
+            if (modal && modal.value !== val) modal.value = val;
+            if (batch && batch.value !== val) batch.value = val;
+
+            localStorage.setItem('egreta_target_env', val);
+            updateEnvElements();
+
+            if (shouldReload && prev !== null && prev !== val) {
+                // S'ha canviat d'entorn: recarregar les estadístiques de la nova base de dades
+                loadStats(false);
+                if (currentModalJournalUuid) {
+                    modalOffset = 0;
+                    fetchModalArticles();
+                }
+            }
+        }
+
+        function updateEnvElements() {
+            const domain = getEgretaDomain();
+            const shortEnv = getEnvShort();
+            const dbName = getMongoDbName();
+
+            document.querySelectorAll('.env-label').forEach(el => {
+                el.textContent = shortEnv;
+            });
+
+            document.querySelectorAll('.env-db-label').forEach(el => {
+                el.textContent = dbName;
+            });
+
+            document.querySelectorAll('a[data-egreta-uuid]').forEach(link => {
+                const uuid = link.getAttribute('data-egreta-uuid');
+                link.href = `https://${domain}/portal/ca/publications/${encodeURIComponent(uuid)}`;
+                link.title = `Veure fitxa a Egreta (${shortEnv})`;
+                const textSpan = link.querySelector('.egreta-env-text');
+                if (textSpan) textSpan.textContent = shortEnv;
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const savedEnv = localStorage.getItem('egreta_target_env') || 'prod';
+            syncEntorn(savedEnv, false);
+            loadStats(false);
+            checkActiveBatchStatus();
+        });
+
+        async function loadStats(forceRefresh = false) {
+            const loadingState = document.getElementById('loadingState');
+            const tableContainer = document.getElementById('tableContainer');
+            const refreshIcon = document.getElementById('refreshIcon');
+            const btnRefresh = document.getElementById('btnRefresh');
+
+            if (forceRefresh) {
+                refreshIcon.classList.add('fa-spin');
+                btnRefresh.disabled = true;
+            }
+
+            loadingState.classList.remove('hidden');
+            tableContainer.classList.add('hidden');
+            document.getElementById('paginationBar').classList.add('hidden');
+
+            const env = getSelectedEntorn();
+            try {
+                const url = window.apiUrl 
+                    ? window.apiUrl(`/scopus/journals-stats?refresh=${forceRefresh}&env=${encodeURIComponent(env)}`)
+                    : `/api/scopus/journals-stats?refresh=${forceRefresh}&env=${encodeURIComponent(env)}`;
+                const resp = await fetch(url);
+                if (!resp.ok) throw new Error(`HTTP error ${resp.status}`);
+                const data = await resp.json();
+
+                renderKPIs(data);
+                allJournals = data.journals || [];
+                
+                // Show notification banner with DB info
+                const banner = document.getElementById('metaBanner');
+                const metaText = document.getElementById('metaText');
+                const metaTime = document.getElementById('metaTime');
+                if (metaText) {
+                    const db = data.database || getMongoDbName();
+                    metaText.innerHTML = `Base de dades: <span class="font-mono font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-900 border border-emerald-300">${escapeHtml(db)}</span> | API Egreta: <span class="font-mono font-bold">${escapeHtml(getEgretaDomain())}</span>`;
+                }
+                if (data.calculatedAt) {
+                    const d = new Date(data.calculatedAt);
+                    metaTime.textContent = `Calculat: ${d.toLocaleDateString()} ${d.toLocaleTimeString()} (${data.durationMs || 0} ms)`;
+                    banner.classList.remove('hidden');
+                    banner.classList.add('flex');
+                }
+
+                applyFilters();
+
+            } catch (err) {
+                console.error("Error al carregar estadístiques de Scopus:", err);
+                alert("Error al carregar dades del servidor. Comprova que l'API estigui activa.");
+            } finally {
+                loadingState.classList.add('hidden');
+                refreshIcon.classList.remove('fa-spin');
+                btnRefresh.disabled = false;
+            }
+        }
+
+        function renderKPIs(data) {
+            document.getElementById('kpiTotalJournals').textContent = (data.totalScopusJournals || 0).toLocaleString();
+            document.getElementById('kpiTotalArticles').textContent = (data.totalArticles || 0).toLocaleString();
+            document.getElementById('kpiWithScopus').textContent = (data.totalWithScopusId || 0).toLocaleString();
+            document.getElementById('kpiCoverage').textContent = `${data.globalCoveragePercent || 0}%`;
+            document.getElementById('kpiWithoutScopus').textContent = (data.totalWithoutScopusId || 0).toLocaleString();
+            
+            const missingPercent = data.totalArticles > 0 
+                ? ((data.totalWithoutScopusId / data.totalArticles) * 100).toFixed(2)
+                : 0;
+            document.getElementById('kpiMissingPercent').textContent = `${missingPercent}%`;
+        }
+
+        function setStatusFilter(status) {
+            currentFilterStatus = status;
+            document.querySelectorAll('.status-pill').forEach(btn => {
+                btn.className = 'status-pill px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 text-slate-600 hover:bg-slate-200 transition-all';
+            });
+
+            const activeBtn = {
+                'all': 'filterAll',
+                'missing': 'filterMissing',
+                'partial': 'filterPartial',
+                'complete': 'filterComplete'
+            }[status];
+
+            if (activeBtn) {
+                document.getElementById(activeBtn).className = 'status-pill px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 text-white shadow-sm transition-all';
+            }
+
+            currentPage = 1;
+            applyFilters();
+        }
+
+        function applyFilters() {
+            const query = (document.getElementById('searchInput').value || '').trim().toLowerCase();
+            const sortVal = document.getElementById('sortSelect').value;
+
+            // Update Counts for pills
+            let cAll = allJournals.length;
+            let cMissing = 0;
+            let cPartial = 0;
+            let cComplete = 0;
+
+            for (const j of allJournals) {
+                if (j.coveragePercent === 0) cMissing++;
+                else if (j.coveragePercent >= 100) cComplete++;
+                else cPartial++;
+            }
+
+            document.getElementById('countAll').textContent = cAll.toLocaleString();
+            document.getElementById('countMissing').textContent = cMissing.toLocaleString();
+            document.getElementById('countPartial').textContent = cPartial.toLocaleString();
+            document.getElementById('countComplete').textContent = cComplete.toLocaleString();
+
+            // Filter
+            filteredJournals = allJournals.filter(j => {
+                // Status Filter
+                if (currentFilterStatus === 'missing' && j.coveragePercent > 0) return false;
+                if (currentFilterStatus === 'complete' && j.coveragePercent < 100) return false;
+                if (currentFilterStatus === 'partial' && (j.coveragePercent === 0 || j.coveragePercent >= 100)) return false;
+
+                // Text search (Title or ISSN)
+                if (query) {
+                    const matchTitle = j.title && j.title.toLowerCase().includes(query);
+                    const matchIssn = j.issns && j.issns.some(issn => issn.toLowerCase().includes(query));
+                    const matchScopusId = j.scopusSourceId && j.scopusSourceId.toLowerCase().includes(query);
+                    if (!matchTitle && !matchIssn && !matchScopusId) return false;
+                }
+
+                return true;
+            });
+
+            // Sort
+            filteredJournals.sort((a, b) => {
+                switch (sortVal) {
+                    case 'articles-desc': return b.totalArticles - a.totalArticles;
+                    case 'articles-asc': return a.totalArticles - b.totalArticles;
+                    case 'without-desc': return b.withoutScopusId - a.withoutScopusId;
+                    case 'coverage-asc': return a.coveragePercent - b.coveragePercent;
+                    case 'coverage-desc': return b.coveragePercent - a.coveragePercent;
+                    case 'title-asc': return (a.title || '').localeCompare(b.title || '');
+                    default: return b.totalArticles - a.totalArticles;
+                }
+            });
+
+            renderTable();
+        }
+
+        function renderTable() {
+            const tableContainer = document.getElementById('tableContainer');
+            const emptyState = document.getElementById('emptyState');
+            const tableBody = document.getElementById('tableBody');
+            const paginationBar = document.getElementById('paginationBar');
+
+            document.getElementById('totalMatchingCount').textContent = filteredJournals.length.toLocaleString();
+
+            if (filteredJournals.length === 0) {
+                tableContainer.classList.add('hidden');
+                paginationBar.classList.add('hidden');
+                emptyState.classList.remove('hidden');
+                document.getElementById('showingCount').textContent = '0';
+                return;
+            }
+
+            emptyState.classList.add('hidden');
+            tableContainer.classList.remove('hidden');
+            paginationBar.classList.remove('hidden');
+
+            const totalPages = Math.ceil(filteredJournals.length / pageSize);
+            if (currentPage > totalPages) currentPage = totalPages;
+            if (currentPage < 1) currentPage = 1;
+
+            const startIndex = (currentPage - 1) * pageSize;
+            const endIndex = Math.min(startIndex + pageSize, filteredJournals.length);
+            const pageData = filteredJournals.slice(startIndex, endIndex);
+
+            document.getElementById('showingCount').textContent = `${startIndex + 1} - ${endIndex}`;
+
+            tableBody.innerHTML = pageData.map(j => {
+                const issnsBadge = j.issns && j.issns.length > 0
+                    ? j.issns.map(i => `<span class="inline-block px-1.5 py-0.5 rounded text-[11px] font-mono bg-slate-100 text-slate-600 border border-slate-200">${escapeHtml(i)}</span>`).join(' ')
+                    : '<span class="text-xs text-slate-400">Sense ISSN</span>';
+
+                const scopusIdBadge = j.scopusSourceId
+                    ? `<a href="https://www.scopus.com/sourceid/${encodeURIComponent(j.scopusSourceId)}" target="_blank" rel="noopener" class="inline-flex items-center gap-1 font-mono text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-2 py-0.5 rounded-md transition-colors" title="Veure a Scopus">
+                         <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i> ${escapeHtml(j.scopusSourceId)}
+                       </a>`
+                    : `<span class="text-xs text-slate-400 font-mono">-</span>`;
+
+                const covColor = j.coveragePercent >= 90 ? 'bg-emerald-500' : (j.coveragePercent >= 50 ? 'bg-amber-500' : 'bg-red-500');
+                const covTextColor = j.coveragePercent >= 90 ? 'text-emerald-700' : (j.coveragePercent >= 50 ? 'text-amber-700' : 'text-red-700');
+
+                return `
+                    <tr class="hover:bg-slate-50/80 transition-colors">
+                        <td class="py-3.5 px-6">
+                            <div class="font-bold text-slate-900 leading-snug">${escapeHtml(j.title)}</div>
+                            <div class="mt-1 flex items-center gap-1.5 flex-wrap">${issnsBadge}</div>
+                        </td>
+                        <td class="py-3.5 px-4 text-center whitespace-nowrap">${scopusIdBadge}</td>
+                        <td class="py-3.5 px-4 text-center font-bold text-slate-900">${j.totalArticles.toLocaleString()}</td>
+                        <td class="py-3.5 px-4 text-center">
+                            <span class="inline-flex items-center gap-1 text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                                <i class="fa-solid fa-check text-[10px]"></i> ${j.withScopusId.toLocaleString()}
+                            </span>
+                        </td>
+                        <td class="py-3.5 px-4 text-center">
+                            ${j.withoutScopusId > 0
+                                ? `<span class="inline-flex items-center gap-1 text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+                                     <i class="fa-solid fa-triangle-exclamation text-[10px]"></i> ${j.withoutScopusId.toLocaleString()}
+                                   </span>`
+                                : `<span class="text-xs text-slate-400">0</span>`}
+                        </td>
+                        <td class="py-3.5 px-6">
+                            <div class="flex items-center justify-between text-xs font-semibold mb-1">
+                                <span class="${covTextColor}">${j.coveragePercent}%</span>
+                                <span class="text-[11px] text-slate-400">${j.withScopusId}/${j.totalArticles}</span>
+                            </div>
+                            <div class="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
+                                <div class="progress-bar-fill h-full ${covColor} rounded-full" style="width: ${j.coveragePercent}%"></div>
+                            </div>
+                        </td>
+                        <td class="py-3.5 px-4 text-center whitespace-nowrap">
+                            <button onclick="openArticlesModal('${j.uuid}')"
+                                    class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-emerald-600 hover:text-white text-xs font-semibold text-slate-700 transition-colors shadow-sm">
+                                <i class="fa-solid fa-list-check"></i> Veure articles
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+
+            renderPagination(totalPages);
+        }
+
+        function renderPagination(totalPages) {
+            document.getElementById('paginationInfo').textContent = `Pàgina ${currentPage} de ${totalPages}`;
+            const container = document.getElementById('paginationButtons');
+
+            let btnsHtml = `
+                <button onclick="goToPage(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''}
+                        class="px-2.5 py-1 rounded-lg border border-slate-200 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed">
+                    <i class="fa-solid fa-chevron-left text-[10px]"></i>
+                </button>
+            `;
+
+            // Max 5 page numbers
+            let start = Math.max(1, currentPage - 2);
+            let end = Math.min(totalPages, start + 4);
+            if (end - start < 4) start = Math.max(1, end - 4);
+
+            for (let i = start; i <= end; i++) {
+                const isActive = i === currentPage;
+                btnsHtml += `
+                    <button onclick="goToPage(${i})"
+                            class="px-3 py-1 rounded-lg text-xs font-semibold ${isActive ? 'bg-emerald-600 text-white shadow-sm' : 'border border-slate-200 text-slate-700 hover:bg-slate-50'}">
+                        ${i}
+                    </button>
+                `;
+            }
+
+            btnsHtml += `
+                <button onclick="goToPage(${currentPage + 1})" ${currentPage === totalPages ? 'disabled' : ''}
+                        class="px-2.5 py-1 rounded-lg border border-slate-200 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed">
+                    <i class="fa-solid fa-chevron-right text-[10px]"></i>
+                </button>
+            `;
+
+            container.innerHTML = btnsHtml;
+        }
+
+        function goToPage(p) {
+            const totalPages = Math.ceil(filteredJournals.length / pageSize);
+            if (p < 1 || p > totalPages) return;
+            currentPage = p;
+            renderTable();
+            window.scrollTo({ top: 380, behavior: 'smooth' });
+        }
+
+        function changePageSize() {
+            pageSize = parseInt(document.getElementById('pageSizeSelect').value, 10) || 25;
+            currentPage = 1;
+            renderTable();
+        }
+
+        function resetFilters() {
+            document.getElementById('searchInput').value = '';
+            document.getElementById('sortSelect').value = 'articles-desc';
+            setStatusFilter('all');
+        }
+
+        /* --- Modal Articles Logic --- */
+
+        async function openArticlesModal(journalUuid) {
+            currentModalJournalUuid = journalUuid;
+            modalFilterHasScopus = null;
+            modalSearchText = '';
+            modalOffset = 0;
+            document.getElementById('modalSearchInput').value = '';
+            
+            updateModalFilterButtons();
+
+            const modal = document.getElementById('articlesModal');
+            modal.classList.remove('hidden');
+
+            document.getElementById('modalJournalTitle').textContent = 'Carregant revista...';
+            document.getElementById('modalJournalIssns').textContent = 'ISSNs: -';
+            document.getElementById('modalJournalSourceId').textContent = 'Scopus ID: -';
+
+            await fetchModalArticles();
+        }
+
+        function closeArticlesModal() {
+            document.getElementById('articlesModal').classList.add('hidden');
+            currentModalJournalUuid = null;
+        }
+
+        function setModalFilter(hasScopus) {
+            modalFilterHasScopus = hasScopus;
+            modalOffset = 0;
+            updateModalFilterButtons();
+            fetchModalArticles();
+        }
+
+        function updateModalFilterButtons() {
+            const btnAll = document.getElementById('modalFilterAll');
+            const btnWith = document.getElementById('modalFilterWith');
+            const btnWithout = document.getElementById('modalFilterWithout');
+
+            const inactiveClass = 'px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-white text-slate-600 hover:bg-slate-100 border border-slate-200 transition-all flex items-center gap-1';
+            btnAll.className = inactiveClass;
+            btnWith.className = inactiveClass;
+            btnWithout.className = inactiveClass;
+
+            if (modalFilterHasScopus === null) {
+                btnAll.className = 'px-2.5 py-1.5 rounded-lg text-xs font-bold bg-emerald-700 text-white transition-all flex items-center gap-1';
+            } else if (modalFilterHasScopus === true) {
+                btnWith.className = 'px-2.5 py-1.5 rounded-lg text-xs font-bold bg-emerald-700 text-white transition-all flex items-center gap-1';
+            } else if (modalFilterHasScopus === false) {
+                btnWithout.className = 'px-2.5 py-1.5 rounded-lg text-xs font-bold bg-amber-600 text-white transition-all flex items-center gap-1';
+            }
+        }
+
+        function debounceModalSearch() {
+            clearTimeout(modalDebounceTimer);
+            modalDebounceTimer = setTimeout(() => {
+                modalSearchText = document.getElementById('modalSearchInput').value.trim();
+                modalOffset = 0;
+                fetchModalArticles();
+            }, 300);
+        }
+
+        async function fetchModalArticles() {
+            if (!currentModalJournalUuid) return;
+
+            const modalLoading = document.getElementById('modalLoading');
+            const modalList = document.getElementById('modalArticlesList');
+            const modalEmpty = document.getElementById('modalEmpty');
+
+            modalLoading.classList.remove('hidden');
+            modalList.classList.add('hidden');
+            modalEmpty.classList.add('hidden');
+
+            const currentEnv = getSelectedEntorn();
+            let url = window.apiUrl 
+                ? window.apiUrl(`/scopus/journals/${currentModalJournalUuid}/articles?limit=${modalLimit}&offset=${modalOffset}&env=${encodeURIComponent(currentEnv)}`)
+                : `/api/scopus/journals/${currentModalJournalUuid}/articles?limit=${modalLimit}&offset=${modalOffset}&env=${encodeURIComponent(currentEnv)}`;
+
+            if (modalFilterHasScopus !== null) {
+                url += `&hasScopusId=${modalFilterHasScopus}`;
+            }
+            if (modalSearchText) {
+                url += `&search=${encodeURIComponent(modalSearchText)}`;
+            }
+
+            try {
+                const resp = await fetch(url);
+                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                const data = await resp.json();
+
+                // Fill Journal Header Info
+                const j = data.journal || {};
+                document.getElementById('modalJournalTitle').textContent = j.title || 'Sense títol';
+                document.getElementById('modalJournalIssns').textContent = `ISSNs: ${j.issns && j.issns.length ? j.issns.join(', ') : 'Cap'}`;
+                document.getElementById('modalJournalSourceId').textContent = `Scopus ID: ${j.scopusSourceId || 'Cap'}`;
+
+                modalTotal = data.total || 0;
+                const articles = data.articles || [];
+
+                document.getElementById('modalArticleCount').textContent = `Total trobats: ${modalTotal.toLocaleString()}`;
+                document.getElementById('modalPaginationText').textContent = `Mostrant ${articles.length ? modalOffset + 1 : 0} - ${modalOffset + articles.length} de ${modalTotal.toLocaleString()}`;
+
+                document.getElementById('modalBtnPrev').disabled = modalOffset === 0;
+                document.getElementById('modalBtnNext').disabled = modalOffset + articles.length >= modalTotal;
+
+                if (articles.length === 0) {
+                    modalLoading.classList.add('hidden');
+                    modalEmpty.classList.remove('hidden');
+                    return;
+                }
+
+                modalList.innerHTML = articles.map(a => {
+                    const scopusBadge = a.hasScopusId
+                        ? `<a href="https://www.scopus.com/record/display.uri?eid=2-s2.0-${encodeURIComponent(a.scopusId)}&origin=resultslist"
+                              target="_blank" rel="noopener"
+                              class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold text-emerald-800 bg-emerald-100/80 hover:bg-emerald-200 border border-emerald-300 transition-colors">
+                             <i class="fa-solid fa-circle-check text-emerald-600"></i> Scopus ID: ${escapeHtml(a.scopusId)}
+                             <i class="fa-solid fa-arrow-up-right-from-square text-[9px] ml-0.5"></i>
+                           </a>`
+                        : `<div class="flex items-center gap-1.5 flex-wrap justify-end">
+                             <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold text-red-700 bg-red-50 border border-red-200">
+                               <i class="fa-solid fa-circle-xmark text-red-500"></i> Sense Scopus ID
+                             </span>
+                             <button onclick="lookupScopus('${a.uuid}', this)"
+                                     id="btnLookup_${a.uuid}"
+                                     class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 transition-colors shadow-xs cursor-pointer">
+                               <i class="fa-solid fa-magnifying-glass text-[10px]"></i> Cercar Scopus ID
+                             </button>
+                           </div>`;
+
+                    const doiBadge = a.doi
+                        ? `<a href="https://doi.org/${encodeURIComponent(a.doi)}" target="_blank" rel="noopener" class="text-xs text-blue-600 hover:underline flex items-center gap-1">
+                             <i class="fa-solid fa-link text-[10px]"></i> DOI: ${escapeHtml(a.doi)}
+                           </a>`
+                        : '';
+
+                    const egretaLink = `
+                        <a href="https://${getEgretaDomain()}/portal/ca/publications/${encodeURIComponent(a.uuid)}"
+                           data-egreta-uuid="${escapeHtml(a.uuid)}"
+                           target="_blank" rel="noopener"
+                           class="text-xs text-slate-500 hover:text-emerald-700 flex items-center gap-1 font-medium transition-colors"
+                           title="Veure publicació a Egreta (${getEnvShort()})">
+                            <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i> Egreta (<span class="egreta-env-text font-semibold">${getEnvShort()}</span>)
+                        </a>
+                    `;
+
+                    return `
+                        <div id="articleCard_${a.uuid}" class="p-4 rounded-2xl border border-slate-200 hover:border-emerald-300 bg-white transition-all flex flex-col gap-2 shadow-xs">
+                            <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                                <div class="flex-1">
+                                    <div class="flex items-center gap-2 mb-1 flex-wrap">
+                                        <span class="px-2 py-0.5 rounded text-[11px] font-bold bg-slate-100 text-slate-700 border border-slate-200">${a.submissionYear || 'S/A'}</span>
+                                        <span class="px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">${escapeHtml(a.typeName || 'Article')}</span>
+                                        ${doiBadge}
+                                        ${egretaLink}
+                                    </div>
+                                    <h4 class="text-sm font-bold text-slate-900 leading-snug">${escapeHtml(a.title)}</h4>
+                                    <p class="text-xs text-slate-500 mt-1"><i class="fa-solid fa-user-pen text-[10px] text-slate-400 mr-1"></i>${escapeHtml(a.authors || 'Sense autors')}</p>
+                                </div>
+                                <div id="badgeContainer_${a.uuid}" class="whitespace-nowrap flex md:flex-col items-end justify-between gap-1">
+                                    ${scopusBadge}
+                                    <span class="text-[10px] text-slate-400 font-mono">UUID: ${a.uuid.substring(0, 8)}...</span>
+                                </div>
+                            </div>
+                            <div id="lookupPanel_${a.uuid}" class="hidden mt-2 pt-2 border-t border-slate-100 text-xs"></div>
+                        </div>
+                    `;
+                }).join('');
+
+                modalLoading.classList.add('hidden');
+                modalList.classList.remove('hidden');
+
+            } catch (err) {
+                console.error("Error al carregar articles de la revista:", err);
+                modalLoading.classList.add('hidden');
+                modalEmpty.textContent = "Error al carregar els articles.";
+                modalEmpty.classList.remove('hidden');
+            }
+        }
+
+        function modalPrevPage() {
+            if (modalOffset >= modalLimit) {
+                modalOffset -= modalLimit;
+                fetchModalArticles();
+            }
+        }
+
+        function modalNextPage() {
+            if (modalOffset + modalLimit < modalTotal) {
+                modalOffset += modalLimit;
+                fetchModalArticles();
+            }
+        }
+
+        /* --- Scopus ID Lookup & Assignment Logic --- */
+
+        function configureApiKey() {
+            const currentKey = localStorage.getItem('scopus_api_key') || '';
+            const newKey = prompt("Introdueix la teva Clau d'API de Scopus (Elsevier) per habilitar la cerca automàtica d'articles:\n(Es guardarà de forma segura al teu navegador)", currentKey);
+            if (newKey !== null) {
+                if (newKey.trim()) {
+                    localStorage.setItem('scopus_api_key', newKey.trim());
+                    alert("Clau d'API de Scopus desada correctament.");
+                } else {
+                    localStorage.removeItem('scopus_api_key');
+                    alert("Clau d'API eliminada.");
+                }
+            }
+        }
+
+        async function lookupScopus(articleUuid, btn) {
+            const originalHtml = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin text-[10px]"></i> Cercant...';
+
+            const panel = document.getElementById(`lookupPanel_${articleUuid}`);
+            panel.classList.remove('hidden');
+            panel.innerHTML = `
+                <div class="flex items-center gap-2 text-slate-500 p-2.5 bg-slate-50 rounded-xl">
+                    <i class="fa-solid fa-circle-notch fa-spin text-emerald-600"></i>
+                    <span>Consultant base de dades i serveis Scopus per DOI o títol...</span>
+                </div>
+            `;
+
+            try {
+                const userKey = localStorage.getItem('scopus_api_key') || '';
+                const currentEnv = getSelectedEntorn();
+                let url = window.apiUrl 
+                    ? window.apiUrl(`/scopus/articles/${articleUuid}/lookup?env=${encodeURIComponent(currentEnv)}`)
+                    : `/api/scopus/articles/${articleUuid}/lookup?env=${encodeURIComponent(currentEnv)}`;
+                if (userKey) {
+                    url += `&apiKey=${encodeURIComponent(userKey)}`;
+                }
+
+                const resp = await fetch(url);
+                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                const data = await resp.json();
+
+                if (data.found && data.scopusId) {
+                    // Match found!
+                    const verifiedBadge = data.matchScore 
+                        ? `<span class="text-[10px] bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-0.5 rounded-full font-bold inline-flex items-center gap-1"><i class="fa-solid fa-user-check text-[9px]"></i> Autor i títol verificats (${data.matchScore}%)</span>` 
+                        : (data.source === 'api_doi' ? `<span class="text-[10px] bg-blue-100 text-blue-800 border border-blue-300 px-2 py-0.5 rounded-full font-bold inline-flex items-center gap-1"><i class="fa-solid fa-link text-[9px]"></i> Verificat per DOI</span>` : '');
+
+                    const authorInfo = data.scopusCreator
+                        ? `<div class="text-[11px] text-emerald-800 mt-0.5"><i class="fa-solid fa-user-pen text-[10px] mr-1 text-emerald-600"></i>Primer autor a Scopus: <strong>${escapeHtml(data.scopusCreator)}</strong></div>`
+                        : '';
+
+                    panel.innerHTML = `
+                        <div class="p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-emerald-900">
+                            <div>
+                                <div class="font-bold flex items-center gap-2 text-emerald-800 flex-wrap">
+                                    <i class="fa-solid fa-circle-check text-emerald-600"></i>
+                                    <span>Scopus ID trobat:</span>
+                                    <span class="font-mono bg-white px-2 py-0.5 rounded border border-emerald-300 font-bold">${escapeHtml(data.scopusId)}</span>
+                                    ${verifiedBadge}
+                                </div>
+                                <div class="text-xs text-slate-800 mt-1 font-semibold">${escapeHtml(data.scopusTitle || data.title || '')}</div>
+                                ${authorInfo}
+                            </div>
+                            <div class="flex items-center gap-2 whitespace-nowrap">
+                                <a href="${escapeHtml(data.directUrl)}" target="_blank" rel="noopener"
+                                   class="px-2.5 py-1.5 rounded-lg bg-white hover:bg-emerald-100 border border-emerald-300 text-xs font-semibold text-emerald-800 transition-colors flex items-center gap-1">
+                                    <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i> Obrir a Scopus
+                                </a>
+                                <button onclick="assignScopusId('${articleUuid}', '${escapeHtml(data.scopusId)}', this)"
+                                        class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-xs font-bold text-white shadow-sm transition-colors flex items-center gap-1.5 cursor-pointer">
+                                    <i class="fa-solid fa-cloud-arrow-up text-[11px]"></i> Vincular i pujar a Egreta (<span class="env-label font-bold">${getEnvShort()}</span>)
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    // Not found automatically or needs direct search
+                    const directUrl = data.searchUrl || 'https://www.scopus.com';
+                    const discardedMsg = (data.candidatesFound && data.candidatesFound > 0)
+                        ? `<div class="mt-1 text-[11px] text-amber-800 font-medium flex items-center gap-1.5 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-lg">
+                             <i class="fa-solid fa-shield-halved text-amber-600"></i>
+                             <span>S'han analitzat ${data.candidatesFound} entrades a Scopus, però s'han descartat perquè els autors no coincideixen amb la publicació.</span>
+                           </div>`
+                        : '';
+
+                    panel.innerHTML = `
+                        <div class="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-2.5 text-slate-700">
+                            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                <div>
+                                    <span class="font-semibold text-slate-800 flex items-center gap-1.5">
+                                        <i class="fa-solid fa-info-circle text-blue-500"></i> Cerca directa a Scopus.com
+                                    </span>
+                                    <p class="text-[11px] text-slate-500 mt-0.5">${escapeHtml(data.message || 'Pots obrir la cerca directa a Scopus amb la informació d\'aquest article.')}</p>
+                                    ${discardedMsg}
+                                </div>
+                                <a href="${escapeHtml(directUrl)}" target="_blank" rel="noopener"
+                                   class="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs transition-colors whitespace-nowrap">
+                                    <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i> Obrir cerca a Scopus.com
+                                </a>
+                            </div>
+                            <div class="pt-2 border-t border-slate-200 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                                <span class="text-[11px] text-slate-500 whitespace-nowrap">Has trobat el Scopus ID a la cerca?</span>
+                                <input type="text" id="manualInput_${articleUuid}"
+                                       placeholder="Ex: 85065919046"
+                                       class="flex-1 px-2.5 py-1 rounded-lg border border-slate-300 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-emerald-500 bg-white">
+                                <button onclick="assignManualScopusId('${articleUuid}', this)"
+                                        class="px-3 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-xs font-semibold text-white transition-colors whitespace-nowrap flex items-center gap-1.5 cursor-pointer">
+                                    <i class="fa-solid fa-cloud-arrow-up text-[11px]"></i> Vincular i pujar a Egreta (<span class="env-label font-bold">${getEnvShort()}</span>)
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                }
+
+            } catch (err) {
+                console.error("Error cercant Scopus ID:", err);
+                panel.innerHTML = `
+                    <div class="p-2.5 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs flex items-center justify-between">
+                        <span>Error de connexió amb el servidor en cercar Scopus ID.</span>
+                        <button onclick="document.getElementById('lookupPanel_${articleUuid}').classList.add('hidden')" class="text-red-500 font-bold ml-2">✕</button>
+                    </div>
+                `;
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalHtml;
+            }
+        }
+
+        async function assignManualScopusId(articleUuid, btn) {
+            const input = document.getElementById(`manualInput_${articleUuid}`);
+            const val = input ? input.value.trim() : '';
+            if (!val) {
+                alert("Introdueix un Scopus ID vàlid.");
+                return;
+            }
+            await assignScopusId(articleUuid, val, btn);
+        }
+
+        async function assignScopusId(articleUuid, scopusId, btn) {
+            const originalText = btn.innerHTML;
+            const targetEnv = getSelectedEntorn();
+            const targetEnvLabel = getEnvShort();
+            btn.disabled = true;
+            btn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin text-[10px]"></i> Pujant a Egreta (${targetEnvLabel})...`;
+
+            try {
+                const url = window.apiUrl 
+                    ? window.apiUrl(`/scopus/articles/${articleUuid}/assign-scopus-id`)
+                    : `/api/scopus/articles/${articleUuid}/assign-scopus-id`;
+
+                const resp = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        scopusId: scopusId,
+                        env: targetEnv
+                    })
+                });
+
+                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                const resData = await resp.json();
+
+                if (resData.success) {
+                    const badgeContainer = document.getElementById(`badgeContainer_${articleUuid}`);
+                    if (badgeContainer) {
+                        const isTestEnv = targetEnv === 'test' || !resData.mongoUpdated;
+                        badgeContainer.innerHTML = isTestEnv
+                            ? `
+                                <div class="flex flex-col items-end gap-1">
+                                    <a href="${escapeHtml(resData.directUrl)}" target="_blank" rel="noopener"
+                                       class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold text-amber-900 bg-amber-100 hover:bg-amber-200 border border-amber-300 transition-colors animate-pulse"
+                                       title="Scopus ID pujat a Egreta Test (egretat.uab.cat). MongoDB no s'ha modificat.">
+                                       <i class="fa-solid fa-flask text-amber-700"></i> Scopus ID: ${escapeHtml(resData.scopusId)}
+                                       <span class="text-[9px] bg-amber-300 text-amber-900 px-1.5 py-0.5 rounded font-mono font-black">TEST</span>
+                                       <i class="fa-solid fa-arrow-up-right-from-square text-[9px] ml-0.5"></i>
+                                    </a>
+                                    <span class="text-[10px] text-amber-700 font-medium">Només pujat a Egreta Test</span>
+                                </div>
+                            `
+                            : `
+                                <a href="${escapeHtml(resData.directUrl)}" target="_blank" rel="noopener"
+                                   class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold text-emerald-800 bg-emerald-100 hover:bg-emerald-200 border border-emerald-300 transition-colors animate-pulse">
+                                   <i class="fa-solid fa-circle-check text-emerald-600"></i> Scopus ID: ${escapeHtml(resData.scopusId)}
+                                   <i class="fa-solid fa-arrow-up-right-from-square text-[9px] ml-0.5"></i>
+                                </a>
+                                <span class="text-[10px] text-slate-400 font-mono">UUID: ${articleUuid.substring(0, 8)}...</span>
+                            `;
+                    }
+
+                    const panel = document.getElementById(`lookupPanel_${articleUuid}`);
+                    if (panel) {
+                        const isSynced = resData.egretaSynced;
+                        const bgColor = isSynced ? (resData.mongoUpdated ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-amber-50 border-amber-200 text-amber-900') : 'bg-red-50 border-red-200 text-red-800';
+                        const icon = isSynced ? (resData.mongoUpdated ? 'fa-circle-check text-emerald-600' : 'fa-flask text-amber-600') : 'fa-triangle-exclamation text-red-600';
+
+                        panel.innerHTML = `
+                            <div class="p-2.5 ${bgColor} border rounded-xl font-semibold text-xs flex items-center justify-between gap-2">
+                                <span class="flex items-center gap-1.5">
+                                    <i class="fa-solid ${icon}"></i>
+                                    <span>${escapeHtml(resData.egretaMessage || resData.message || 'Scopus ID sincronitzat.')}</span>
+                                </span>
+                                <button onclick="document.getElementById('lookupPanel_${articleUuid}').classList.add('hidden')" class="opacity-70 hover:opacity-100 ml-2">✕</button>
+                            </div>
+                        `;
+                    }
+
+                    // Reload stats in background only if MongoDB was modified (Prod)
+                    if (resData.mongoUpdated) {
+                        loadStats(true);
+                    }
+                } else {
+                    alert(resData.message || "Error al vincular el Scopus ID.");
+                    btn.disabled = false;
+                    btn.innerHTML = originalText;
+                }
+            } catch (err) {
+                console.error("Error assignant Scopus ID:", err);
+                alert("Error al desar el Scopus ID.");
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+            }
+        }
+
+        /* --- Batch Automatic Scopus ID Assignment Logic --- */
+
+        let batchPollTimer = null;
+        let batchActiveJournalUuid = null;
+        let batchActiveJournalTitle = null;
+        let lastBatchLogs = [];
+
+        async function openBatchModal(journalUuid = null, journalTitle = null) {
+            batchActiveJournalUuid = journalUuid;
+            batchActiveJournalTitle = journalTitle;
+
+            const modal = document.getElementById('batchModal');
+            modal.classList.remove('hidden');
+
+            const scopeDesc = document.getElementById('batchScopeDescription');
+            const candidateScopeLabel = document.getElementById('batchCandidateScopeLabel');
+            const candidateCountLabel = document.getElementById('batchCandidateCountLabel');
+            const selectEnv = document.getElementById('batchSelectEnv');
+
+            if (selectEnv) {
+                selectEnv.value = getSelectedEntorn();
+            }
+
+            if (journalUuid && journalTitle) {
+                scopeDesc.textContent = `Revista: ${journalTitle}`;
+                candidateScopeLabel.textContent = `Articles d'aquesta revista sense Scopus ID`;
+            } else {
+                scopeDesc.textContent = `Totes les revistes Scopus actives`;
+                candidateScopeLabel.textContent = `Articles en revistes Scopus sense Scopus ID`;
+            }
+
+            candidateCountLabel.textContent = 'Calculant...';
+
+            await updateBatchCandidateCount();
+
+            checkActiveBatchStatus();
+        }
+
+        async function updateBatchCandidateCount() {
+            const candidateCountLabel = document.getElementById('batchCandidateCountLabel');
+            if (!candidateCountLabel) return;
+            candidateCountLabel.textContent = 'Calculant...';
+
+            try {
+                const currentEnv = getSelectedEntorn();
+                let url = window.apiUrl 
+                    ? window.apiUrl('/scopus/batch/candidates-count') 
+                    : '/api/scopus/batch/candidates-count';
+                const params = new URLSearchParams();
+                if (batchActiveJournalUuid) params.set('journalUuid', batchActiveJournalUuid);
+                params.set('env', currentEnv);
+                url += '?' + params.toString();
+
+                const resp = await fetch(url);
+                if (resp.ok) {
+                    const data = await resp.json();
+                    candidateCountLabel.textContent = (data.candidatesCount || 0).toLocaleString();
+                }
+            } catch (err) {
+                console.error("Error carregant candidats batch:", err);
+                candidateCountLabel.textContent = '-';
+            }
+        }
+
+        function openBatchModalForCurrentJournal() {
+            if (currentModalJournalUuid) {
+                const title = document.getElementById('modalJournalTitle')?.textContent || 'Revista';
+                openBatchModal(currentModalJournalUuid, title);
+            }
+        }
+
+        function closeBatchModal() {
+            document.getElementById('batchModal').classList.add('hidden');
+        }
+
+        async function startBatchProcess() {
+            const limit = parseInt(document.getElementById('batchSelectLimit').value, 10);
+            const dryRun = document.getElementById('batchCheckDryRun').checked;
+            const env = document.getElementById('batchSelectEnv').value;
+            const userApiKey = localStorage.getItem('scopus_api_key') || '';
+
+            const btnStart = document.getElementById('btnStartBatch');
+            btnStart.disabled = true;
+            btnStart.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Iniciant...';
+
+            try {
+                const url = window.apiUrl ? window.apiUrl('/scopus/batch/start') : '/api/scopus/batch/start';
+                const resp = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        limit: limit,
+                        dryRun: dryRun,
+                        env: env,
+                        journalUuid: batchActiveJournalUuid,
+                        apiKey: userApiKey
+                    })
+                });
+
+                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                const data = await resp.json();
+
+                renderBatchProgressState(data);
+                startBatchPolling();
+
+            } catch (err) {
+                console.error("Error iniciant batch:", err);
+                alert("Error en iniciar el procés automàtic: " + err.message);
+                btnStart.disabled = false;
+                btnStart.innerHTML = '<i class="fa-solid fa-play"></i> Iniciar Asignació Automàtica';
+            }
+        }
+
+        function startBatchPolling() {
+            if (batchPollTimer) clearInterval(batchPollTimer);
+            batchPollTimer = setInterval(pollBatchStatus, 1000);
+        }
+
+        async function pollBatchStatus() {
+            try {
+                const url = window.apiUrl ? window.apiUrl('/scopus/batch/status') : '/api/scopus/batch/status';
+                const resp = await fetch(url);
+                if (!resp.ok) return;
+                const data = await resp.json();
+
+                renderBatchProgressState(data);
+
+                if (!data.running) {
+                    clearInterval(batchPollTimer);
+                    batchPollTimer = null;
+                    if (data.targetEnv === 'prod' && !data.dryRun) {
+                        loadStats(true);
+                    }
+                }
+            } catch (err) {
+                console.error("Error consultant estat del batch:", err);
+            }
+        }
+
+        let lastBatchStatusData = null;
+
+        function resetBatchToConfigView(data = null) {
+            document.getElementById('batchConfigPanel').classList.remove('hidden');
+            document.getElementById('batchProgressPanel').classList.add('hidden');
+
+            const btnStart = document.getElementById('btnStartBatch');
+            if (btnStart) {
+                btnStart.disabled = false;
+                btnStart.innerHTML = '<i class="fa-solid fa-play"></i> Iniciar Asignació Automàtica';
+            }
+            const btnStop = document.getElementById('btnStopBatch');
+            if (btnStop) btnStop.classList.add('hidden');
+            const btnNew = document.getElementById('btnNewBatch');
+            if (btnNew) btnNew.classList.add('hidden');
+            const btnBack = document.getElementById('btnBackToConfigTop');
+            if (btnBack) btnBack.classList.add('hidden');
+
+            const statusData = data || lastBatchStatusData;
+            const banner = document.getElementById('batchPreviousJobBanner');
+            if (statusData && statusData.hasActiveJob && statusData.processed > 0 && !statusData.running) {
+                if (banner) banner.classList.remove('hidden');
+                const prevText = document.getElementById('batchPreviousJobText');
+                if (prevText) {
+                    prevText.textContent = `Últim lot executat (${statusData.dryRun ? 'Simulació' : (statusData.targetEnv === 'prod' ? 'Producció' : 'Test')}): ${statusData.processed} processats, ${statusData.foundCount} trobats, ${statusData.assignedCount} assignats.`;
+                }
+                const btnExport = document.getElementById('btnExportBatchCsv');
+                if (btnExport) btnExport.classList.remove('hidden');
+            } else {
+                if (banner) banner.classList.add('hidden');
+            }
+            const footerMsg = document.getElementById('batchFooterMessage');
+            if (footerMsg) footerMsg.textContent = 'Prést per iniciar';
+        }
+
+        function showLastBatchResults() {
+            if (lastBatchStatusData) {
+                renderBatchProgressState(lastBatchStatusData);
+            }
+        }
+
+        async function checkActiveBatchStatus() {
+            try {
+                const url = window.apiUrl ? window.apiUrl('/scopus/batch/status') : '/api/scopus/batch/status';
+                const resp = await fetch(url);
+                if (!resp.ok) return;
+                const data = await resp.json();
+                lastBatchStatusData = data;
+
+                if (data.hasActiveJob && data.running) {
+                    renderBatchProgressState(data);
+                    startBatchPolling();
+                } else {
+                    resetBatchToConfigView(data);
+                }
+            } catch (err) {
+                console.error("Error verificant estat inicial batch:", err);
+            }
+        }
+
+        async function stopBatchProcess() {
+            const btnStop = document.getElementById('btnStopBatch');
+            btnStop.disabled = true;
+            btnStop.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin mr-1"></i> Aturant...';
+
+            try {
+                const url = window.apiUrl ? window.apiUrl('/scopus/batch/stop') : '/api/scopus/batch/stop';
+                await fetch(url, { method: 'POST' });
+            } catch (err) {
+                console.error("Error aturant batch:", err);
+            }
+        }
+
+        function renderBatchProgressState(data) {
+            document.getElementById('batchConfigPanel').classList.add('hidden');
+            document.getElementById('batchProgressPanel').classList.remove('hidden');
+
+            const percent = data.progressPercent || 0;
+            document.getElementById('batchProgressBar').style.width = `${percent}%`;
+            document.getElementById('batchPercentLabel').textContent = `${percent}%`;
+
+            document.getElementById('batchCountProcessed').textContent = (data.processed || 0).toLocaleString();
+            document.getElementById('batchCountTotal').textContent = `/ ${(data.total || 0).toLocaleString()}`;
+            document.getElementById('batchCountFound').textContent = (data.foundCount || 0).toLocaleString();
+            document.getElementById('batchCountAssigned').textContent = (data.assignedCount || 0).toLocaleString();
+            document.getElementById('batchCountNotFound').textContent = (data.notFoundCount || 0).toLocaleString();
+            document.getElementById('batchCountErrors').textContent = (data.errorCount || 0).toLocaleString();
+
+            const isRunning = data.running;
+            const btnStop = document.getElementById('btnStopBatch');
+            const btnExport = document.getElementById('btnExportBatchCsv');
+            const spinner = document.getElementById('batchRunningSpinner');
+            const statusTitle = document.getElementById('batchStatusTitle');
+            const footerMsg = document.getElementById('batchFooterMessage');
+            const currentArticleLabel = document.getElementById('batchCurrentArticleLabel');
+
+            lastBatchStatusData = data;
+            const btnNewBatch = document.getElementById('btnNewBatch');
+            const btnBackToConfigTop = document.getElementById('btnBackToConfigTop');
+
+            if (isRunning) {
+                btnStop.classList.remove('hidden');
+                btnStop.disabled = false;
+                btnStop.innerHTML = '<i class="fa-solid fa-stop mr-1"></i> Aturar procés';
+                btnExport.classList.add('hidden');
+                if (btnNewBatch) btnNewBatch.classList.add('hidden');
+                if (btnBackToConfigTop) btnBackToConfigTop.classList.add('hidden');
+                spinner.classList.remove('hidden');
+                statusTitle.textContent = `Processant articles (${data.dryRun ? 'Simulació' : 'Entorn: ' + (data.targetEnv === 'prod' ? 'Producció' : 'Test')})...`;
+                currentArticleLabel.textContent = data.currentTitle ? `Consultant Scopus per: ${data.currentTitle}` : 'Consultant Scopus...';
+                footerMsg.textContent = `En execució... ${data.processed} de ${data.total}`;
+            } else {
+                btnStop.classList.add('hidden');
+                btnExport.classList.remove('hidden');
+                if (btnNewBatch) btnNewBatch.classList.remove('hidden');
+                if (btnBackToConfigTop) btnBackToConfigTop.classList.remove('hidden');
+                spinner.classList.add('hidden');
+                const isCancelled = data.cancelled;
+                statusTitle.textContent = isCancelled ? 'Procés aturat per l\'usuari.' : 'Procés finalitzat!';
+                currentArticleLabel.textContent = `Total processats: ${data.processed} | Scopus IDs trobats: ${data.foundCount} | Assignats: ${data.assignedCount}`;
+                footerMsg.textContent = `Finalitzat ${data.finishedAt ? new Date(data.finishedAt).toLocaleTimeString() : ''}`;
+            }
+
+            // Render live logs
+            lastBatchLogs = data.logs || [];
+            const logContainer = document.getElementById('batchLogContainer');
+            if (lastBatchLogs.length === 0) {
+                logContainer.innerHTML = '<div class="text-slate-500 italic p-2">Sense registres encara...</div>';
+            } else {
+                const reversed = [...lastBatchLogs].reverse();
+                logContainer.innerHTML = reversed.map(item => {
+                    let badgeClass = 'bg-slate-700 text-slate-300';
+                    let statusLabel = item.status;
+                    if (item.status === 'ASSIGNED') {
+                        badgeClass = 'bg-emerald-600 text-white font-bold';
+                        statusLabel = 'ASSIGNAT';
+                    } else if (item.status === 'DRY_RUN_FOUND') {
+                        badgeClass = 'bg-amber-600 text-white font-bold';
+                        statusLabel = 'SIMULAT';
+                    } else if (item.status === 'NOT_FOUND') {
+                        badgeClass = 'bg-slate-800 text-slate-400';
+                        statusLabel = 'NO TROBAT';
+                    } else if (item.status === 'ERROR') {
+                        badgeClass = 'bg-red-600 text-white font-bold';
+                        statusLabel = 'ERROR';
+                    }
+
+                    const scopusText = item.scopusId 
+                        ? `<a href="https://www.scopus.com/record/display.uri?eid=2-s2.0-${encodeURIComponent(item.scopusId)}&origin=resultslist" target="_blank" rel="noopener" class="text-emerald-400 hover:underline">ScopusID: ${escapeHtml(item.scopusId)}</a>`
+                        : '';
+
+                    let methodBadge = '';
+                    if (item.source === 'api_doi') {
+                        methodBadge = '<span class="px-1 py-0.5 rounded text-[9px] bg-blue-900/60 text-blue-300 border border-blue-700/50 font-bold ml-1.5">DOI</span>';
+                    } else if (item.source === 'api_title_author_verified') {
+                        methodBadge = '<span class="px-1 py-0.5 rounded text-[9px] bg-teal-900/60 text-teal-300 border border-teal-700/50 font-bold ml-1.5">Títol+Autor</span>';
+                    }
+
+                    return `
+                        <div class="p-1.5 border-b border-slate-800/80 flex items-baseline justify-between gap-2 hover:bg-slate-800/50 rounded">
+                            <div class="flex-1 min-w-0">
+                                <span class="px-1.5 py-0.5 rounded text-[9px] uppercase ${badgeClass} mr-1.5">${statusLabel}</span>
+                                <span class="text-slate-200 truncate inline-block max-w-[380px] align-bottom">${escapeHtml(item.title || 'Sense títol')}</span>
+                                ${methodBadge}
+                                <span class="text-slate-400 text-[10px] ml-1">DOI: ${escapeHtml(item.doi || '-')}</span>
+                            </div>
+                            <div class="text-right whitespace-nowrap text-[10px]">
+                                ${scopusText}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+        }
+
+        function exportBatchLogsToCsv() {
+            if (!lastBatchLogs || lastBatchLogs.length === 0) {
+                alert("No hi ha registres per exportar.");
+                return;
+            }
+
+            const headers = ["Estat", "Scopus ID", "DOI", "Títol", "UUID", "Missatge", "DataHora"];
+            const rows = lastBatchLogs.map(l => [
+                `"${l.status || ''}"`,
+                `"${l.scopusId || ''}"`,
+                `"${l.doi || ''}"`,
+                `"${(l.title || '').replace(/"/g, '""')}"`,
+                `"${l.uuid || ''}"`,
+                `"${(l.message || '').replace(/"/g, '""')}"`,
+                `"${l.timestamp || ''}"`
+            ]);
+
+            const csvContent = "\uFEFF" + [headers.join(","), ...rows.map(r => r.join(","))].join("\r\n");
+            const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `batch_scopus_assign_${new Date().toISOString().slice(0, 10)}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        /* --- Export CSV --- */
+        function exportToCsv() {
+            if (!filteredJournals || filteredJournals.length === 0) {
+                alert("No hi ha dades per exportar.");
+                return;
+            }
+
+            const headers = ["Revista", "ISSNs", "Scopus Source ID", "Total Articles", "Amb Scopus ID", "Sense Scopus ID", "Percentatge Cobertura %", "UUID"];
+            const rows = filteredJournals.map(j => [
+                `"${(j.title || '').replace(/"/g, '""')}"`,
+                `"${(j.issns || []).join('; ')}"`,
+                `"${j.scopusSourceId || ''}"`,
+                j.totalArticles,
+                j.withScopusId,
+                j.withoutScopusId,
+                j.coveragePercent,
+                `"${j.uuid}"`
+            ]);
+
+            const csvContent = "\uFEFF" + [headers.join(","), ...rows.map(r => r.join(","))].join("\r\n");
+            const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `revistes_scopus_uab_${new Date().toISOString().slice(0, 10)}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+    </script>
+</body>
+</html>
