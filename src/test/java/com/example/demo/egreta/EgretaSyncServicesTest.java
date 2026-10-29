@@ -98,4 +98,36 @@ public class EgretaSyncServicesTest {
             assertFalse(content.contains("data-collection=\"" + col + "\""), "Admin UI must NOT contain button for " + col);
         }
     }
+
+    @Test
+    void testRecoverRangeWithSubdivision() {
+        class MockSyncService extends AbstractEgretaSyncService {
+            @Override protected String getEndpoint() { return "test"; }
+            @Override protected String getCollectionName() { return "Test"; }
+            @Override protected void saveBulkToCollection(List<java.util.Map<String, Object>> items, String collectionName) {
+                // no-op per al test
+            }
+            @Override
+            protected List<java.util.Map<String, Object>> fetchPage(org.springframework.web.reactive.function.client.WebClient client, int offset, int pageSize) {
+                // Simula fallida quan la mida > 250 (timeout en mides grans)
+                if (pageSize > 250) {
+                    return null;
+                }
+                List<java.util.Map<String, Object>> items = new java.util.ArrayList<>();
+                for (int i = 0; i < pageSize; i++) {
+                    items.add(java.util.Map.of("id", offset + i));
+                }
+                return items;
+            }
+        }
+
+        MockSyncService service = new MockSyncService();
+        service.syncProgressRegistry = new SyncProgressRegistry();
+
+        List<Integer> unrecoverable = new java.util.ArrayList<>();
+        int recovered = service.recoverRangeWithSubdivision(null, 1000, 1000, 10, "Test_tmp", unrecoverable);
+
+        assertEquals(1000, recovered, "Ha de recuperar els 1000 registres subdividint adaptativament fins a 250");
+        assertTrue(unrecoverable.isEmpty(), "No hi ha d'haver cap tram irrecuperable");
+    }
 }

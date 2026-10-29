@@ -671,6 +671,9 @@
                             const percent = Math.min(99, Math.round(100 * data.current / data.total));
                             progressFill.style.width = percent + '%';
                             progressFill.textContent = `${percent}% (${data.current.toLocaleString()}/${data.total.toLocaleString()})`;
+                            if (data.message) {
+                                setStatus(`<i class="fa-solid fa-spinner fa-spin"></i> Sincronitzant <b>${collection}</b> (${data.message})`);
+                            }
                         }
                     }
                 } catch (e) {

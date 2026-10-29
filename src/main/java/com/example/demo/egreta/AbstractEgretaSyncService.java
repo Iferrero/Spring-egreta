@@ -1,6 +1,9 @@
 package com.example.demo.egreta;
 
 import com.example.demo.egreta.SyncProgressRegistry;
+import io.netty.channel.ChannelOption;
+import io.netty.handler.timeout.ReadTimeoutHandler;
+import io.netty.handler.timeout.WriteTimeoutHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,12 +18,19 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.reactive.ReactorClientHttpConnector;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 import org.springframework.web.util.UriComponentsBuilder;
 import org.springframework.beans.factory.annotation.Value;
+import reactor.netty.http.client.HttpClient;
+import reactor.netty.resources.ConnectionProvider;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.Locale;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.concurrent.ExecutionException;
@@ -28,18 +38,24 @@ import java.util.concurrent.ExecutorCompletionService;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 
 public abstract class AbstractEgretaSyncService {
 
     private record PageResult(int offset, List<Map<String, Object>> items) {}
 
+    // Códigos transitorios (incluye 403 y 52x de Cloudflare, idéntico a egreta_sync_base.py)
+    private static final Set<Integer> RETRYABLE_STATUS = Set.of(
+            403, 408, 429, 500, 502, 503, 504, 520, 521, 522, 523, 524, 525, 526, 527, 530
+    );
+
     protected final Logger logger = LoggerFactory.getLogger(this.getClass());
 
     @Autowired
     protected MongoTemplate mongoTemplate;
 
-    @Autowired
+    @Autowired(required = false)
     protected WebClient.Builder webClientBuilder;
 
     @Autowired
@@ -63,8 +79,13 @@ public abstract class AbstractEgretaSyncService {
 
     // Configurables por subclase
     protected int getPageSize() { return 1000; }
-    protected int getMaxBufferSizeMB() { return 20; }
+    protected int getMaxBufferSizeMB() { return 50; }
     protected int getMaxWorkers() { return 4; }
+    protected int getMaxTailPages() { return 20; }
+    protected int getMinSplitSize() { return 10; }
+    protected int getConnectTimeoutSeconds() { return 15; }
+    protected int getResponseTimeoutSeconds() { return 120; }
+    protected int getReadTimeoutSeconds() { return 120; }
     protected String getItemsField() { return "items"; }
     protected String getCountField() { return "count"; }
 
@@ -88,7 +109,22 @@ public abstract class AbstractEgretaSyncService {
     }
 
     protected WebClient buildClient() {
-        return webClientBuilder
+        ConnectionProvider provider = ConnectionProvider.builder("egreta-sync-" + getCollectionName().toLowerCase())
+                .maxConnections(Math.max(20, getMaxWorkers() * 4))
+                .maxIdleTime(Duration.ofSeconds(30))
+                .evictInBackground(Duration.ofSeconds(60))
+                .build();
+
+        HttpClient httpClient = HttpClient.create(provider)
+                .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, getConnectTimeoutSeconds() * 1000)
+                .responseTimeout(Duration.ofSeconds(getResponseTimeoutSeconds()))
+                .doOnConnected(conn -> conn
+                        .addHandlerLast(new ReadTimeoutHandler(getReadTimeoutSeconds(), TimeUnit.SECONDS))
+                        .addHandlerLast(new WriteTimeoutHandler(60, TimeUnit.SECONDS))
+                );
+
+        return WebClient.builder()
+                .clientConnector(new ReactorClientHttpConnector(httpClient))
                 .defaultHeader(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON_VALUE)
                 .codecs(configurer -> configurer
                         .defaultCodecs()
@@ -123,7 +159,7 @@ public abstract class AbstractEgretaSyncService {
             logger.warn("No records to sync (total={})", total);
             return;
         }
-        logger.info("Total records to sync: {}", total);
+        logger.info("[{}] Total records to sync: {}", getCollectionName(), total);
         syncProgressRegistry.setProgress(getCollectionName(), total, 0);
 
         // 2. Preparar colección temporal
@@ -159,6 +195,7 @@ public abstract class AbstractEgretaSyncService {
 
         int totalSaved = 0;
         List<Integer> failedOffsets = new ArrayList<>();
+        List<Integer> fetchFailed = new ArrayList<>();
         String finalErrorMessage = null;
 
         try {
@@ -181,6 +218,10 @@ public abstract class AbstractEgretaSyncService {
 
                     if (items == null) {
                         failedOffsets.add(offset);
+                        fetchFailed.add(offset);
+                        logger.error("[{}] [FETCH ERROR] Offset {} fallat en passada paral·lela", getCollectionName(), offset);
+                    } else if (items.isEmpty()) {
+                        logger.warn("[{}] [BUIT] Offset {}: sense ítems, saltant", getCollectionName(), offset);
                     } else {
                         saveBulkToCollection(items, tmpCollection);
                         totalSaved += items.size();
@@ -203,6 +244,92 @@ public abstract class AbstractEgretaSyncService {
             }
             executor.shutdown();
             try { executor.awaitTermination(10, TimeUnit.MINUTES); } catch (InterruptedException ignored) {}
+
+            // Segunda pasada en serie con partición adaptativa (Chunk Splitting)
+            if (!fetchFailed.isEmpty()) {
+                logger.warn("[{}] Reintentando en serie {} página(s) fallida(s) con partición adaptativa...",
+                        getCollectionName(), fetchFailed.size());
+                syncProgressRegistry.setProgress(getCollectionName(), total, totalSaved,
+                        "Pausa de refredament abans de reintentar " + fetchFailed.size() + " pàgina(s)...");
+                try {
+                    Thread.sleep(15_000);
+                } catch (InterruptedException ignored) {
+                    Thread.currentThread().interrupt();
+                }
+
+                List<Integer> toRetry = new ArrayList<>(fetchFailed);
+                int retryIndex = 0;
+                for (int off : toRetry) {
+                    retryIndex++;
+                    syncProgressRegistry.setProgress(getCollectionName(), total, totalSaved,
+                            "Reintentant pàgina fallida " + retryIndex + "/" + toRetry.size() + " (offset " + off + ")...");
+
+                    List<Integer> unrecoverable = new ArrayList<>();
+                    int recovered = recoverRangeWithSubdivision(client, off, pageSize, getMinSplitSize(), tmpCollection, unrecoverable);
+
+                    if (unrecoverable.isEmpty() && recovered > 0) {
+                        totalSaved += recovered;
+                        failedOffsets.remove(Integer.valueOf(off));
+                        syncProgressRegistry.setProgress(getCollectionName(), total, totalSaved);
+                        logger.info("[{}] [RETRY PASS OK] Offset {} completament recuperat (+{} registres, total: {})",
+                                getCollectionName(), off, recovered, totalSaved);
+                    } else if (recovered > 0) {
+                        totalSaved += recovered;
+                        syncProgressRegistry.setProgress(getCollectionName(), total, totalSaved);
+                        logger.warn("[{}] [RETRY PASS PARCIAL] Offset {} parcialment recuperat (+{} registres, {} sub-trams fallits)",
+                                getCollectionName(), off, recovered, unrecoverable.size());
+                    } else {
+                        logger.error("[{}] [RETRY PASS FAILED] Offset {} no s'ha pogut recuperar", getCollectionName(), off);
+                    }
+                }
+            }
+
+            // Comprobación de total final y drenaje dinámico de páginas adicionales (tail) si no hubo fallos
+            if (failedOffsets.isEmpty()) {
+                int totalFinal;
+                try {
+                    totalFinal = fetchTotalCount(client);
+                    logger.info("[{}] Total registres a l'API al finalitzar: {}", getCollectionName(), totalFinal);
+                } catch (Exception e) {
+                    logger.warn("[{}] No s'ha pogut obtenir el total final de l'API: {}", getCollectionName(), e.getMessage());
+                    totalFinal = total;
+                }
+
+                int currentTailOffset = nextOffset;
+                int tailPagesCount = 0;
+                int maxTailPages = getMaxTailPages();
+                while (currentTailOffset < totalFinal && tailPagesCount < maxTailPages) {
+                    logger.info("[{}] [TAIL] Descarregant pàgina addicional offset {} (total API final: {})...",
+                            getCollectionName(), currentTailOffset, totalFinal);
+                    List<Map<String, Object>> tailItems = fetchPage(client, currentTailOffset, pageSize);
+                    if (tailItems == null) {
+                        logger.error("[{}] [TAIL ERROR] Offset {}", getCollectionName(), currentTailOffset);
+                        failedOffsets.add(currentTailOffset);
+                        break;
+                    }
+                    if (tailItems.isEmpty()) {
+                        break;
+                    }
+                    try {
+                        saveBulkToCollection(tailItems, tmpCollection);
+                        totalSaved += tailItems.size();
+                        total = Math.max(total, totalSaved);
+                        syncProgressRegistry.setProgress(getCollectionName(), total, totalSaved);
+                        logger.info("[{}] [TAIL OK] Offset {}: +{} (total: {})",
+                                getCollectionName(), currentTailOffset, tailItems.size(), totalSaved);
+                    } catch (Exception e) {
+                        logger.error("[{}] [TAIL MONGO ERROR] Offset {}: {}", getCollectionName(), currentTailOffset, e.getMessage(), e);
+                        failedOffsets.add(currentTailOffset);
+                        break;
+                    }
+
+                    if (tailItems.size() < pageSize) {
+                        break;
+                    }
+                    currentTailOffset += pageSize;
+                    tailPagesCount++;
+                }
+            }
 
             // 4. Swap atómico si no hubo errores
             if (failedOffsets.isEmpty()) {
@@ -259,74 +386,193 @@ public abstract class AbstractEgretaSyncService {
         }
     }
 
+    /**
+     * Intenta recuperar un rango [offset, offset + size] subdividiéndolo
+     * recursivamente si falla la petición principal (Chunk Splitting adaptativo).
+     * Guarda directamente en tmpCollection los sub-lotes que respondan correctamente.
+     *
+     * @param client                Cliente WebClient.
+     * @param offset                Offset inicial del tramo.
+     * @param size                  Número de registros solicitados.
+     * @param minSize               Tamaño mínimo antes de considerar un tramo irrecoverable.
+     * @param tmpCollection         Nombre de la colección temporal en Mongo.
+     * @param unrecoverableOffsets  Lista acumulativa de offsets que no se han podido recuperar.
+     * @return Número de registros recuperados e insertados.
+     */
+    protected int recoverRangeWithSubdivision(
+            WebClient client,
+            int offset,
+            int size,
+            int minSize,
+            String tmpCollection,
+            List<Integer> unrecoverableOffsets) {
+
+        // 1. Intento directo con el tamaño actual
+        List<Map<String, Object>> items = fetchPage(client, offset, size);
+        if (items != null) {
+            if (!items.isEmpty()) {
+                saveBulkToCollection(items, tmpCollection);
+            }
+            logger.info("[{}] [RECOVER OK] Offset {} (size={}): +{} registres",
+                    getCollectionName(), offset, size, items.size());
+            return items.size();
+        }
+
+        // 2. Si ha fallado y ya estamos en el tamaño mínimo indivisible
+        if (size <= minSize) {
+            logger.error("[{}] [UNRECOVERABLE] No s'ha pogut recuperar el rang offset {} (size={})",
+                    getCollectionName(), offset, size);
+            unrecoverableOffsets.add(offset);
+            return 0;
+        }
+
+        // 3. Subdivisión en 2 mitades
+        int half1 = size / 2;
+        int half2 = size - half1;
+        logger.warn("[{}] [SPLIT] Offset {} (size={}) ha fallat. Subdividint a: [offset={}, size={}] i [offset={}, size={}]",
+                getCollectionName(), offset, size, offset, half1, offset + half1, half2);
+
+        int currentTotal = 0;
+        int currentSaved = 0;
+        SyncProgressRegistry.SyncProgress p = syncProgressRegistry.getProgress(getCollectionName());
+        if (p != null) {
+            currentTotal = p.total;
+            currentSaved = p.current;
+        }
+        syncProgressRegistry.setProgress(getCollectionName(), currentTotal, currentSaved,
+                "Subdividint bloc " + offset + " (mida " + size + " → " + half1 + ")...");
+
+        int rec1 = recoverRangeWithSubdivision(client, offset, half1, minSize, tmpCollection, unrecoverableOffsets);
+        int rec2 = recoverRangeWithSubdivision(client, offset + half1, half2, minSize, tmpCollection, unrecoverableOffsets);
+
+        return rec1 + rec2;
+    }
+
     // Obtiene el total de registros del endpoint
     protected int fetchTotalCount(WebClient client) {
         String url = UriComponentsBuilder.fromUriString(getApiBaseUrl() + "/" + getEndpoint())
                 .queryParam("size", 1)
                 .toUriString();
-        try {
-            ResponseEntity<Map> response = client.get()
-                    .uri(url)
-                .header("api-key", getApiKey())
-                    .accept(MediaType.APPLICATION_JSON)
-                    .retrieve()
-                    .toEntity(Map.class)
-                    .block();
-            if (response == null || !response.getStatusCode().is2xxSuccessful()) return 0;
-            Map body = response.getBody();
-            if (body == null) return 0;
-            Object count = body.get(getCountField());
-            if (count instanceof Number) return ((Number) count).intValue();
-            if (count instanceof String) return Integer.parseInt((String) count);
-            for (String alt : new String[]{"count", "total", "totalItems", "totalResults"}) {
-                if (body.containsKey(alt)) {
-                    Object v = body.get(alt);
-                    if (v instanceof Number) return ((Number) v).intValue();
-                    if (v instanceof String) return Integer.parseInt((String) v);
-                }
-            }
-            return 0;
-        } catch (Exception e) {
-            logger.error("Error fetching total count: {}", e.getMessage(), e);
-            return 0;
-        }
-    }
-
-    // Descarga una página con reintentos
-    protected List<Map<String, Object>> fetchPage(WebClient client, int offset, int pageSize) {
-        int maxAttempts = 5;
-        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+        for (int attempt = 0; attempt < 3; attempt++) {
             try {
-            String url = UriComponentsBuilder.fromUriString(getApiBaseUrl() + "/" + getEndpoint())
-                        .queryParam("size", pageSize)
-                        .queryParam("offset", offset)
-                        .toUriString();
                 ResponseEntity<Map> response = client.get()
                         .uri(url)
-                .header("api-key", getApiKey())
+                        .header("api-key", getApiKey())
                         .accept(MediaType.APPLICATION_JSON)
                         .retrieve()
                         .toEntity(Map.class)
                         .block();
                 if (response == null || !response.getStatusCode().is2xxSuccessful()) {
-                    logger.warn("Non-2xx response at offset {}: {}", offset,
-                            response != null ? response.getStatusCode() : "null");
-                    continue;
+                    if (attempt < 2) {
+                        Thread.sleep(1000);
+                        continue;
+                    }
+                    return 0;
                 }
                 Map body = response.getBody();
-                if (body == null || !body.containsKey(getItemsField())) {
-                    logger.warn("No '{}' key in response at offset {}", getItemsField(), offset);
-                    continue;
+                if (body == null) return 0;
+                Object count = body.get(getCountField());
+                if (count instanceof Number) return ((Number) count).intValue();
+                if (count instanceof String) return Integer.parseInt((String) count);
+                for (String alt : new String[]{"count", "total", "totalItems", "totalResults"}) {
+                    if (body.containsKey(alt)) {
+                        Object v = body.get(alt);
+                        if (v instanceof Number) return ((Number) v).intValue();
+                        if (v instanceof String) return Integer.parseInt((String) v);
+                    }
                 }
-                @SuppressWarnings("unchecked")
-                List<Map<String, Object>> items = (List<Map<String, Object>>) body.get(getItemsField());
-                return items != null ? items : Collections.emptyList();
+                return 0;
             } catch (Exception e) {
-                logger.warn("Attempt {}/{} failed at offset {}: {}", attempt, maxAttempts, offset, e.getMessage());
-                try { Thread.sleep(500L * attempt); } catch (InterruptedException ignored) {}
+                logger.warn("[{}] Intent {}/3 per obtenir total count ha fallat: {}", getCollectionName(), attempt + 1, e.getMessage());
+                if (attempt < 2) {
+                    try { Thread.sleep(1500); } catch (InterruptedException ignored) {}
+                }
             }
         }
-        logger.error("All attempts failed for offset {}", offset);
+        return 0;
+    }
+
+    // Descarga una página con reintentos (idéntico a Python egreta_sync_base.py)
+    protected List<Map<String, Object>> fetchPage(WebClient client, int offset, int pageSize) {
+        int maxAttempts = 8;
+        String lastError = "Agotados todos los reintentos";
+
+        for (int attempt = 0; attempt < maxAttempts; attempt++) {
+            double retryAfter = 0.0;
+            try {
+                String url = UriComponentsBuilder.fromUriString(getApiBaseUrl() + "/" + getEndpoint())
+                        .queryParam("size", pageSize)
+                        .queryParam("offset", offset)
+                        .toUriString();
+
+                ResponseEntity<Map> response = client.get()
+                        .uri(url)
+                        .header("api-key", getApiKey())
+                        .accept(MediaType.APPLICATION_JSON)
+                        .retrieve()
+                        .toEntity(Map.class)
+                        .block();
+
+                if (response != null && response.getStatusCode().is2xxSuccessful()) {
+                    Map body = response.getBody();
+                    if (body != null && body.containsKey(getItemsField())) {
+                        @SuppressWarnings("unchecked")
+                        List<Map<String, Object>> items = (List<Map<String, Object>>) body.get(getItemsField());
+                        return items != null ? items : Collections.emptyList();
+                    }
+                    lastError = "JSON inválido o respuesta vacía";
+                } else {
+                    int statusCode = response != null ? response.getStatusCode().value() : 0;
+                    if (RETRYABLE_STATUS.contains(statusCode)) {
+                        lastError = "HTTP " + statusCode;
+                    } else {
+                        // Error no transitorio (400, 401, 404...): no tiene sentido reintentar
+                        logger.error("[{}] Error no transitorio a offset {}: HTTP {}", getCollectionName(), offset, statusCode);
+                        return null;
+                    }
+                }
+            } catch (WebClientResponseException e) {
+                int statusCode = e.getStatusCode().value();
+                if (RETRYABLE_STATUS.contains(statusCode)) {
+                    String bodySnippet = e.getResponseBodyAsString();
+                    if (bodySnippet != null && bodySnippet.length() > 200) {
+                        bodySnippet = bodySnippet.substring(0, 200);
+                    }
+                    lastError = "HTTP " + statusCode + ": " + bodySnippet;
+                    String retryAfterHeader = e.getHeaders().getFirst("Retry-After");
+                    if (retryAfterHeader != null) {
+                        try {
+                            retryAfter = Double.parseDouble(retryAfterHeader);
+                        } catch (NumberFormatException ignored) {}
+                    }
+                } else {
+                    // Error no transitorio (400, 401, 404...): no tiene sentido reintentar
+                    logger.error("[{}] Error no transitorio a offset {}: HTTP {}: {}",
+                            getCollectionName(), offset, statusCode, e.getMessage());
+                    return null;
+                }
+            } catch (Exception e) {
+                lastError = e.getClass().getSimpleName() + ": " + e.getMessage();
+            }
+
+            if (attempt < maxAttempts - 1) {
+                // Backoff exponencial (tope 60s) + jitter para desincronizar workers
+                double backoff = Math.min(Math.pow(2, attempt), 60.0);
+                double wait = Math.max(retryAfter, backoff) + ThreadLocalRandom.current().nextDouble(0.5, 2.0);
+                logger.warn("[{}] [RETRY] Offset {}, intento {}/{} ({}), esperando {}s",
+                        getCollectionName(), offset, attempt + 1, maxAttempts, lastError,
+                        String.format(Locale.ROOT, "%.1f", wait));
+                try {
+                    Thread.sleep((long) (wait * 1000));
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    logger.error("[{}] Reintento interrumpido para offset {}", getCollectionName(), offset);
+                    return null;
+                }
+            }
+        }
+
+        logger.error("[{}] Todos los intentos fallaron para offset {}: {}", getCollectionName(), offset, lastError);
         return null;
     }
 

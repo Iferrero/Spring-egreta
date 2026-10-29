@@ -145,6 +145,73 @@ public class EgretaApiService {
     }
 
     @SuppressWarnings("unchecked")
+    public String syncScopusIdToEgreta(String uuid, String scopusId, String targetEnv) {
+        try {
+            RestTemplate restTemplate = new RestTemplate();
+            HttpHeaders headers = buildHeaders();
+            String url = baseUrl(targetEnv) + "research-outputs/" + uuid;
+
+            ResponseEntity<Map> getResp;
+            try {
+                getResp = restTemplate.exchange(url, HttpMethod.GET, new HttpEntity<>(headers), Map.class);
+            } catch (org.springframework.web.client.HttpClientErrorException.NotFound e) {
+                return "La publicacio no s'ha trobat a Egreta (404) en l'entorn de "
+                        + ("prod".equalsIgnoreCase(targetEnv) ? "produccio" : "tests") + ".";
+            } catch (Exception e) {
+                return "Error al consultar la publicacio a Egreta: " + e.getMessage();
+            }
+
+            if (!getResp.getStatusCode().is2xxSuccessful() || getResp.getBody() == null) {
+                return "Error al consultar la publicacio a Egreta. Status: " + getResp.getStatusCode();
+            }
+
+            Map<String, Object> data = new LinkedHashMap<>(getResp.getBody());
+            List<Map<String, Object>> identifiers = (List<Map<String, Object>>) data.get("identifiers");
+            if (identifiers == null) {
+                identifiers = new ArrayList<>();
+                data.put("identifiers", identifiers);
+            } else {
+                identifiers = new ArrayList<>(identifiers);
+                data.put("identifiers", identifiers);
+            }
+
+            boolean found = false;
+            for (Map<String, Object> idObj : identifiers) {
+                if ("Scopus".equalsIgnoreCase((String) idObj.get("idSource"))) {
+                    idObj.put("value", scopusId);
+                    found = true;
+                    break;
+                }
+            }
+
+            if (!found) {
+                Map<String, Object> newId = new LinkedHashMap<>();
+                newId.put("typeDiscriminator", "Id");
+                newId.put("idSource", "Scopus");
+                newId.put("value", scopusId);
+                identifiers.add(newId);
+            }
+
+            try {
+                HttpEntity<Map<String, Object>> putEntity = new HttpEntity<>(data, headers);
+                ResponseEntity<Map> putResp = restTemplate.exchange(url, HttpMethod.PUT, putEntity, Map.class);
+                if (putResp.getStatusCode().is2xxSuccessful()) {
+                    return null; // Sincronitzacio correcta
+                }
+                return "Error al desar a Egreta. Status: " + putResp.getStatusCode();
+            } catch (org.springframework.web.client.HttpClientErrorException e) {
+                String body = e.getResponseBodyAsString();
+                return "Error de validacio de l'API d'Egreta (" + e.getStatusCode().value() + "): "
+                        + (body.length() > 500 ? body.substring(0, 500) + "..." : body);
+            } catch (Exception e) {
+                return "Error al enviar la publicacio actualitzada a Egreta: " + e.getMessage();
+            }
+        } catch (Exception e) {
+            return "Error inesperat de sincronitzacio amb Egreta: " + e.getMessage();
+        }
+    }
+
+    @SuppressWarnings("unchecked")
     public Integer syncJournalIssnToEgreta(String journalUuid, String newIssn, String targetEnv) throws Exception {
         RestTemplate restTemplate = new RestTemplate();
         HttpHeaders headers = buildHeaders();
