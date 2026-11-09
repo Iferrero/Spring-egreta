@@ -938,7 +938,8 @@ function escaparHtml(valor) {
 
 function formatearTituloAwardConEnlace(cell) {
     const row = cell.getRow()?.getData?.() || {};
-    const titulo = cell.getValue() ?? '-';
+    const rawVal = cell.getValue();
+    const titulo = (rawVal != null && String(rawVal).trim() !== '') ? String(rawVal).trim() : 'Sense títol';
     const pureId = row.pureId;
     if (pureId == null || String(pureId).trim() === '') {
         return escaparHtml(titulo);

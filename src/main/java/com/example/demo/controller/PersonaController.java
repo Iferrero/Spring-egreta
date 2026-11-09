@@ -425,13 +425,32 @@ public class PersonaController {
             ibbEmployment
         ));
 
-        pipeline.add(new Document("$addFields", new Document("empleo_final", empleoFinal)));
+        Document ultimoStaffType = new Document("$ifNull", Arrays.asList(
+            "$ultimo_contrato.staffType.term.ca_ES",
+            new Document("$ifNull", Arrays.asList(
+                "$ultimo_contrato.staffType.term.es_ES",
+                new Document("$ifNull", Arrays.asList(
+                    "$ultimo_contrato.staffType.term.en_GB",
+                    new Document("$ifNull", Arrays.asList(
+                        "$assoc_data.deptAssoc.staffType.term.ca_ES",
+                        new Document("$ifNull", Arrays.asList(
+                            "$assoc_data.deptAssoc.staffType.term.es_ES",
+                            ""
+                        ))
+                    ))
+                ))
+            ))
+        ));
+
+        pipeline.add(new Document("$addFields", new Document("empleo_final", empleoFinal)
+            .append("staff_type_final", ultimoStaffType)));
 
         // project final
         Document project = new Document();
         project.put("_id", 0);
         project.put("nombre", 1);
         project.put("empleo", "$empleo_final");
+        project.put("staff_type", "$staff_type_final");
         project.put("dedicacion", buildDedicationExpr("$ibb_assoc"));
         project.put("inicio_asociacion_IBB", "$ibb_assoc.period.startDate");
         project.put("fin_asociacion_IBB", "$ibb_assoc.period.endDate");
@@ -641,12 +660,31 @@ public class PersonaController {
                 ultimoEmployment
         ));
 
-        pipeline.add(new Document("$addFields", new Document("empleo_final", empleoFinal)));
+        Document ultimoStaffType = new Document("$ifNull", Arrays.asList(
+            "$ultimo_contrato.staffType.term.ca_ES",
+            new Document("$ifNull", Arrays.asList(
+                "$ultimo_contrato.staffType.term.es_ES",
+                new Document("$ifNull", Arrays.asList(
+                    "$ultimo_contrato.staffType.term.en_GB",
+                    new Document("$ifNull", Arrays.asList(
+                        "$assoc_data.deptAssoc.staffType.term.ca_ES",
+                        new Document("$ifNull", Arrays.asList(
+                            "$assoc_data.deptAssoc.staffType.term.es_ES",
+                            ""
+                        ))
+                    ))
+                ))
+            ))
+        ));
+
+        pipeline.add(new Document("$addFields", new Document("empleo_final", empleoFinal)
+            .append("staff_type_final", ultimoStaffType)));
 
         Document project = new Document();
         project.put("_id", 0);
         project.put("nombre", 1);
         project.put("empleo", "$empleo_final");
+        project.put("staff_type", "$staff_type_final");
         project.put("dedicacion", buildDedicationExpr("$ultimo_contrato"));
         project.put("inicio_asociacion_IBB", "$ultimo_contrato.period.startDate");
         project.put("fin_asociacion_IBB", "$ultimo_contrato.period.endDate");

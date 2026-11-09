@@ -1,0 +1,1883 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memòria Executiva de Recerca i Transferència (2021–2025) | UAB</title>
+    <meta name="description" content="Informe executiu i presentació institucional dels indicadors de recerca, finançament, producció científica i transferència de la Universitat Autònoma de Barcelona.">
+
+    <!-- Editorial Typography: Newsreader (Serif), Plus Jakarta Sans (Grotesque), JetBrains Mono (Tabular) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;0,6..72,700;1,6..72,400;1,6..72,600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Apache ECharts -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <!-- Egreta Config -->
+    <script src="config.js"></script>
+
+    <style>
+        :root {
+            --paper: #f6f5f0;
+            --sheet: #ffffff;
+            --sheet-subtle: #efede6;
+            --ink: #141615;
+            --ink-secondary: #3d4340;
+            --ink-muted: #68706c;
+            --rule: #d5d3ca;
+            --rule-strong: #141615;
+            --uab-green: #007a33;
+            --uab-petrol: #0f3d3e;
+            --uab-ochre: #9a5b13;
+        }
+
+        html.dark {
+            --paper: #111312;
+            --sheet: #171a18;
+            --sheet-subtle: #1f2421;
+            --ink: #f0f2f0;
+            --ink-secondary: #c2c8c4;
+            --ink-muted: #858e89;
+            --rule: #2b302d;
+            --rule-strong: #e2e6e3;
+            --uab-green: #10b981;
+            --uab-petrol: #38bdf8;
+            --uab-ochre: #f59e0b;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: var(--paper);
+            color: var(--ink);
+            margin: 0;
+            -webkit-font-smoothing: antialiased;
+            transition: background-color 0.2s ease, color 0.2s ease;
+        }
+
+        .font-serif-editorial {
+            font-family: 'Newsreader', Georgia, Cambria, serif;
+            font-optical-sizing: auto;
+        }
+
+        .font-mono-num {
+            font-family: 'JetBrains Mono', monospace;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .tabular-nums {
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* Swiss Architectural Grid Rules */
+        .rule-t { border-top: 1px solid var(--rule); }
+        .rule-b { border-bottom: 1px solid var(--rule); }
+        .rule-l { border-left: 1px solid var(--rule); }
+        .rule-r { border-right: 1px solid var(--rule); }
+        .rule-heavy-t { border-top: 2px solid var(--rule-strong); }
+        .rule-heavy-b { border-bottom: 2px solid var(--rule-strong); }
+        .rule-green-t { border-top: 3px solid var(--uab-green); }
+
+        .sheet-bg {
+            background-color: var(--sheet);
+        }
+
+        .sheet-subtle-bg {
+            background-color: var(--sheet-subtle);
+        }
+
+        /* Editorial Drop Cap */
+        .editorial-lead::first-letter {
+            font-family: 'Newsreader', Georgia, serif;
+            float: left;
+            font-size: 3.1rem;
+            line-height: 0.82;
+            padding-right: 0.55rem;
+            padding-top: 0.15rem;
+            font-weight: 600;
+            color: var(--uab-green);
+        }
+
+        /* Ledger Table */
+        .ledger-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .ledger-table th {
+            font-size: 0.68rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--ink-muted);
+            font-weight: 700;
+            padding: 0.65rem 0.75rem;
+            border-bottom: 1.5px solid var(--rule-strong);
+            text-align: left;
+        }
+        .ledger-table td {
+            padding: 0.7rem 0.75rem;
+            border-bottom: 1px solid var(--rule);
+            font-size: 0.8125rem;
+            color: var(--ink);
+        }
+        .ledger-table tr:hover td {
+            background-color: var(--sheet-subtle);
+        }
+
+        /* Chapter / Slide transitions in Projection Mode */
+        body.deck-mode {
+            overflow: hidden;
+            height: 100vh;
+        }
+        body.deck-mode #mainDocument {
+            height: calc(100vh - 106px);
+            overflow-y: auto;
+            padding-top: 1.25rem;
+            padding-bottom: 4.5rem;
+        }
+        body.deck-mode .pres-slide {
+            display: none;
+        }
+        body.deck-mode .pres-slide.active-slide {
+            display: block;
+            animation: editorialFade 0.28s ease-out forwards;
+        }
+
+        @keyframes editorialFade {
+            from { opacity: 0; transform: translateY(6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Autoplay top hairline */
+        #autoplayProgressBar {
+            height: 2px;
+            background-color: var(--uab-green);
+            width: 0%;
+            transition: width 0.1s linear;
+        }
+
+        /* Chapter Nav Link */
+        .chapter-link {
+            position: relative;
+            padding: 0.55rem 0.2rem;
+            color: var(--ink-muted);
+            font-size: 0.75rem;
+            font-weight: 600;
+            white-space: nowrap;
+            transition: color 0.15s ease;
+        }
+        .chapter-link:hover {
+            color: var(--ink);
+        }
+        .chapter-link.active {
+            color: var(--ink);
+            font-weight: 700;
+        }
+        .chapter-link.active::after {
+            content: '';
+            position: absolute;
+            left: 0;
+            right: 0;
+            bottom: -1px;
+            height: 2px;
+            background-color: var(--uab-green);
+        }
+
+        @media print {
+            .no-print { display: none !important; }
+            body { background: #fff; }
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+    <!-- Autoplay Progress Hairline -->
+    <div class="fixed top-0 left-0 right-0 z-50 no-print">
+        <div id="autoplayProgressBar"></div>
+    </div>
+
+    <!-- =========================================================================
+         MASTHEAD INSTITUCIONAL (UAB-BRANDBAR)
+         ========================================================================= -->
+    <header class="uab-brandbar sticky top-0 z-40 sheet-bg rule-b no-print">
+        <div class="max-w-[1440px] mx-auto px-5 sm:px-10">
+            <!-- Top Row: UAB Official Logo + Edition Metadata + Controls -->
+            <div class="flex flex-wrap items-center justify-between gap-4 py-3.5 rule-b">
+                <div class="flex items-center gap-5">
+                    <a href="index.html" class="flex items-center gap-3 group" title="Tornar a l'índex d'Egreta">
+                        <img class="h-9 sm:h-10 w-auto dark:brightness-125" src="https://www.uab.cat/Xcelerate/WAI/img/UAB-2linies-verd.svg" alt="Universitat Autònoma de Barcelona">
+                    </a>
+                    <div class="hidden md:block pl-5 rule-l">
+                        <div class="text-[10px] font-mono-num uppercase tracking-[0.14em] text-[var(--ink-muted)]">
+                            Vicerectorat de Recerca · OTR
+                        </div>
+                        <div class="text-xs font-semibold text-[var(--ink)] mt-0.5">
+                            Memòria Executiva d'Indicadors del Sistema UAB (2021–2025)
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Controls: Year Selector + Sync + Theme -->
+                <div class="flex items-center gap-3">
+                    <div class="flex items-center gap-1 text-xs font-mono-num sheet-subtle-bg p-1 border border-[var(--rule)]" role="group" aria-label="Selector d'any de referència">
+                        <span class="text-[10px] uppercase tracking-wider px-2 text-[var(--ink-muted)] hidden sm:inline">Exercici:</span>
+                        <button type="button" onclick="setYear(2021)" data-year="2021" class="year-pill cursor-pointer px-2.5 py-1 text-xs font-medium text-[var(--ink-muted)] hover:text-[var(--ink)]">2021</button>
+                        <button type="button" onclick="setYear(2022)" data-year="2022" class="year-pill cursor-pointer px-2.5 py-1 text-xs font-medium text-[var(--ink-muted)] hover:text-[var(--ink)]">2022</button>
+                        <button type="button" onclick="setYear(2023)" data-year="2023" class="year-pill cursor-pointer px-2.5 py-1 text-xs font-medium text-[var(--ink-muted)] hover:text-[var(--ink)]">2023</button>
+                        <button type="button" onclick="setYear(2024)" data-year="2024" class="year-pill cursor-pointer px-2.5 py-1 text-xs font-medium text-[var(--ink-muted)] hover:text-[var(--ink)]">2024</button>
+                        <button type="button" onclick="setYear(2025)" data-year="2025" class="year-pill cursor-pointer px-2.5 py-1 text-xs font-bold bg-[var(--ink)] text-[var(--sheet)]">2025</button>
+                    </div>
+
+                    <button type="button" onclick="syncWithLiveApi()" class="cursor-pointer px-3 py-1.5 text-xs font-mono-num border border-[var(--rule)] hover:border-[var(--ink)] text-[var(--ink-secondary)] transition-colors hidden xl:inline-flex items-center gap-2" title="Actualitzar dades des de l'API local">
+                        <span id="syncDot" class="w-1.5 h-1.5 rounded-full bg-[var(--uab-green)]"></span>
+                        <span id="syncStatusLabel">Font: Kraken / SGR</span>
+                    </button>
+
+                    <button type="button" onclick="toggleTheme()" class="cursor-pointer px-2.5 py-1.5 text-xs font-mono-num border border-[var(--rule)] hover:border-[var(--ink)] text-[var(--ink)] transition-colors" title="Canviar mode de lectura (Paper / Fosc)">
+                        <span id="themeText">Fosc</span>
+                    </button>
+
+                    <div class="hidden md:flex items-center gap-1 text-xs font-mono-num border-l border-[var(--rule)] pl-3">
+                        <span class="px-2 py-1 bg-[var(--ink)] text-[var(--sheet)] font-bold rounded">v1</span>
+                        <a href="presentacio-recerca-uab-v2.html" class="px-2 py-1 text-[var(--ink-muted)] hover:text-[var(--ink)] hover:bg-[var(--sheet-subtle)] rounded" title="Versió Corporate Bauhaus">v2</a>
+                        <a href="presentacio-recerca-uab-v3.html" class="px-2 py-1 text-[var(--ink-muted)] hover:text-[var(--ink)] hover:bg-[var(--sheet-subtle)] rounded" title="Versió Widescreen Stage Deck">v3</a>
+                    </div>
+
+                    <a href="index.html" class="px-2.5 py-1.5 text-xs font-medium border border-[var(--rule)] hover:border-[var(--ink)] text-[var(--ink-secondary)]">
+                        Índex
+                    </a>
+                </div>
+            </div>
+
+            <!-- Bottom Row: Chapter Index Bar -->
+            <nav class="flex items-center justify-between gap-4 overflow-x-auto py-0.5" aria-label="Capítols de l'informe">
+                <div class="flex items-center gap-6">
+                    <button type="button" onclick="goToSlide(0)" class="chapter-link active cursor-pointer" data-chapter="0">I. Síntesi Executiva</button>
+                    <button type="button" onclick="goToSlide(1)" class="chapter-link cursor-pointer" data-chapter="1">II. Finançament i Ingressos</button>
+                    <button type="button" onclick="goToSlide(2)" class="chapter-link cursor-pointer" data-chapter="2">III. Instituts i Departaments</button>
+                    <button type="button" onclick="goToSlide(3)" class="chapter-link cursor-pointer" data-chapter="3">IV. Comunitat Investigadora</button>
+                    <button type="button" onclick="goToSlide(4)" class="chapter-link cursor-pointer" data-chapter="4">V. Producció i Ciència Oberta</button>
+                    <button type="button" onclick="goToSlide(5)" class="chapter-link cursor-pointer" data-chapter="5">VI. Doctorat i Aliança Global</button>
+                    <button type="button" onclick="goToSlide(6)" class="chapter-link cursor-pointer" data-chapter="6">VII. Transferència i Rànquings</button>
+                </div>
+                <div class="hidden lg:flex items-center gap-3 text-[11px] font-mono-num text-[var(--ink-muted)]">
+                    <span id="slideCounterBadge">Capítol I de VII</span>
+                </div>
+            </nav>
+        </div>
+    </header>
+
+    <!-- =========================================================================
+         COS DE LA MONOGRAFIA / PRESENTACIÓ (7 CAPÍTOLS)
+         ========================================================================= -->
+    <main id="mainDocument" class="flex-grow max-w-[1440px] w-full mx-auto px-5 sm:px-10 py-8 sm:py-12 space-y-16">
+
+        <!-- =====================================================================
+             CAPÍTOL I: SÍNTESI EXECUTIVA I MAGNITUDS MESTRES
+             ===================================================================== -->
+        <section id="slide-0" data-slide-index="0" class="pres-slide active-slide sheet-bg border border-[var(--rule)]">
+            <!-- Top Editorial Banner -->
+            <div class="p-6 sm:p-10 rule-b">
+                <div class="flex flex-col lg:flex-row lg:items-end justify-between gap-6">
+                    <div class="max-w-4xl">
+                        <div class="flex items-center gap-3 text-xs font-mono-num uppercase tracking-[0.15em] text-[var(--uab-green)] mb-3">
+                            <span>Capítol I</span>
+                            <span>—</span>
+                            <span>Balanç Global del Quinquenni 2021–2025</span>
+                        </div>
+                        <h1 class="font-serif-editorial text-3xl sm:text-5xl lg:text-[3.35rem] font-normal leading-[1.08] tracking-tight text-[var(--ink)]">
+                            Radiografia quantitativa de la recerca, la captació de fons i la transferència de la UAB.
+                        </h1>
+                    </div>
+                    <div class="lg:text-right font-mono-num text-xs text-[var(--ink-muted)] shrink-0 space-y-1">
+                        <div>TANCAMENT COMPTABLE: <strong class="text-[var(--ink)]">31/12/<span class="selected-year-label">2025</span></strong></div>
+                        <div>ABAST: <strong class="text-[var(--ink)]">UAB + ESFERA UAB</strong></div>
+                        <div>REGISTRES AUDITATS: <strong class="text-[var(--ink)]">384.695</strong></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Asymmetric Grid: Left Thesis (4 cols) + Right Key Figures Grid (8 cols) -->
+            <div class="grid grid-cols-12">
+                <!-- Left Editorial Column -->
+                <div class="col-span-12 lg:col-span-4 p-6 sm:p-10 rule-b lg:border-b-0 lg:rule-r flex flex-col justify-between sheet-subtle-bg">
+                    <div class="space-y-4">
+                        <p class="text-sm leading-relaxed text-[var(--ink-secondary)] editorial-lead">
+                            Durant el període 2021–2025, el sistema de recerca de la Universitat Autònoma de Barcelona ha consolidat un volum agregat de <strong>659,9 milions d'euros</strong> en recursos captats, dels quals <strong>539,5 M€</strong> corresponen a la gestió estricta de la UAB i <strong>120,5 M€</strong> als instituts propis i centres vinculats de l'Esfera UAB amb personal investigador de la universitat com a IP.
+                        </p>
+                        <p class="text-sm leading-relaxed text-[var(--ink-secondary)]">
+                            Aquesta capacitat financera es tradueix en una producció sostinguda superior als 4.800 articles anuals indexats, una cartera viva de <strong>716 patents</strong> i la primera posició entre totes les universitats públiques de l'Estat segons la Fundación CyD.
+                        </p>
+                    </div>
+
+                    <div class="pt-6 mt-8 rule-t space-y-2">
+                        <div class="text-[11px] font-mono-num uppercase tracking-wider text-[var(--ink-muted)]">Criteri metodològic dels imports</div>
+                        <p class="text-xs leading-relaxed text-[var(--ink-muted)]">
+                            Totes les magnituds econòmiques d'aquest document reflecteixen exclusivament la <strong>part institucional UAB (`uabPart`)</strong> d'ajuts concedits i la liquidació pressupostària a 31 de desembre, excloent els imports de tercers socis en consorcis internacionals.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Right 6-Cell Architectural Matrix -->
+                <div class="col-span-12 lg:col-span-8 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3">
+                    <!-- Cell 1: Quinquennium Total -->
+                    <div class="p-6 sm:p-8 rule-b sm:rule-r flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center justify-between text-[11px] font-mono-num uppercase tracking-wider text-[var(--ink-muted)]">
+                                <span>01 / Captació 2021–2025</span>
+                                <span>SGR / Egreta</span>
+                            </div>
+                            <div id="heroTotalAwardsMoney" class="font-serif-editorial text-4xl sm:text-5xl font-semibold text-[var(--ink)] mt-4 tracking-tight tabular-nums">
+                                659,9 M€
+                            </div>
+                            <div id="heroTotalAwardsCount" class="text-xs font-semibold text-[var(--uab-green)] mt-1.5 font-mono-num">
+                                539,5 M€ UAB · 120,5 M€ Esfera
+                            </div>
+                        </div>
+                        <p class="text-xs text-[var(--ink-muted)] mt-6 pt-3 rule-t">
+                            83,9% procedent de convocatòries competitives (554,0 M€ acumulats en 5 anys).
+                        </p>
+                    </div>
+
+                    <!-- Cell 2: Selected Year Funding -->
+                    <div class="p-6 sm:p-8 rule-b xl:rule-r flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center justify-between text-[11px] font-mono-num uppercase tracking-wider text-[var(--ink-muted)]">
+                                <span>02 / Recursos (<span class="selected-year-label">2025</span>)</span>
+                                <span>Anual</span>
+                            </div>
+                            <div id="kpiExecFunding" class="font-serif-editorial text-4xl sm:text-5xl font-semibold text-[var(--ink)] mt-4 tracking-tight tabular-nums">
+                                123,3 M€
+                            </div>
+                            <div id="kpiExecFundingSub" class="text-xs font-semibold text-[var(--uab-green)] mt-1.5 font-mono-num">
+                                85,0% via competitiva (104,9 M€)
+                            </div>
+                        </div>
+                        <p id="kpiExecFundingBreakdown" class="text-xs text-[var(--ink-muted)] mt-6 pt-3 rule-t font-mono-num">
+                            105,9 M€ UAB + 17,4 M€ Esfera (Liquidat: 75,8 M€)
+                        </p>
+                    </div>
+
+                    <!-- Cell 3: Active Research Community -->
+                    <div class="p-6 sm:p-8 rule-b sm:rule-r xl:border-r-0 flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center justify-between text-[11px] font-mono-num uppercase tracking-wider text-[var(--ink-muted)]">
+                                <span>03 / Personal Vigent</span>
+                                <span>Persons</span>
+                            </div>
+                            <div id="kpiExecPersons" class="font-serif-editorial text-4xl sm:text-5xl font-semibold text-[var(--ink)] mt-4 tracking-tight tabular-nums">
+                                6.345
+                            </div>
+                            <div class="text-xs font-semibold text-[var(--uab-petrol)] mt-1.5 font-mono-num">
+                                48,7% dones (3.092 investigadores)
+                            </div>
+                        </div>
+                        <p class="text-xs text-[var(--ink-muted)] mt-6 pt-3 rule-t">
+                            2.452 PDI i personal investigador en actiu i 7.252 perfils amb ORCID verificat.
+                        </p>
+                    </div>
+
+                    <!-- Cell 4: Scientific Output -->
+                    <div class="p-6 sm:p-8 rule-b xl:border-b-0 xl:rule-r flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center justify-between text-[11px] font-mono-num uppercase tracking-wider text-[var(--ink-muted)]">
+                                <span>04 / Publicacions (<span class="selected-year-label">2025</span>)</span>
+                                <span>Pure / SciVal</span>
+                            </div>
+                            <div id="kpiExecPubs" class="font-serif-editorial text-4xl sm:text-5xl font-semibold text-[var(--ink)] mt-4 tracking-tight tabular-nums">
+                                4.821
+                            </div>
+                            <div class="text-xs font-semibold text-[var(--uab-green)] mt-1.5 font-mono-num">
+                                82,4% en Accés Obert · 64,6% Q1
+                            </div>
+                        </div>
+                        <p class="text-xs text-[var(--ink-muted)] mt-6 pt-3 rule-t">
+                            Fons documental acumulat de <strong id="heroTotalOutputs" class="font-mono-num">248.123</strong> registres científics verificats.
+                        </p>
+                    </div>
+
+                    <!-- Cell 5: Doctoral Theses & Sexennis -->
+                    <div class="p-6 sm:p-8 rule-b sm:border-b-0 sm:rule-r flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center justify-between text-[11px] font-mono-num uppercase tracking-wider text-[var(--ink-muted)]">
+                                <span>05 / Tesis Defensades (<span class="selected-year-label">2025</span>)</span>
+                                <span>Escola Doctorat</span>
+                            </div>
+                            <div id="kpiExecTheses" class="font-serif-editorial text-4xl sm:text-5xl font-semibold text-[var(--ink)] mt-4 tracking-tight tabular-nums">
+                                342
+                            </div>
+                            <div class="text-xs font-semibold text-[var(--uab-petrol)] mt-1.5 font-mono-num">
+                                54,1% doctores (185 dones)
+                            </div>
+                        </div>
+                        <p class="text-xs text-[var(--ink-muted)] mt-6 pt-3 rule-t">
+                            <strong id="kpiExecTrams" class="font-mono-num">1.132</strong> trams de recerca (sexennis) vius reconeguts al PDI permanent.
+                        </p>
+                    </div>
+
+                    <!-- Cell 6: Industrial Property & Transfer -->
+                    <div class="p-6 sm:p-8 flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center justify-between text-[11px] font-mono-num uppercase tracking-wider text-[var(--ink-muted)]">
+                                <span>06 / Propietat Industrial</span>
+                                <span>Patbase</span>
+                            </div>
+                            <div id="kpiExecSpinoffs" class="font-serif-editorial text-4xl sm:text-5xl font-semibold text-[var(--ink)] mt-4 tracking-tight tabular-nums">
+                                716 Patents
+                            </div>
+                            <div class="text-xs font-semibold text-[var(--uab-ochre)] mt-1.5 font-mono-num">
+                                14 EBTs en cartera · 74 sol·licitades
+                            </div>
+                        </div>
+                        <p class="text-xs text-[var(--ink-muted)] mt-6 pt-3 rule-t font-mono-num">
+                            1,93 M€ valorització R+D · 533,9 k€ transferència
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- =====================================================================
+             CAPÍTOL II: FINANÇAMENT DE LA RECERCA I LIQUIDACIÓ PRESSUPOSTÀRIA
+             ===================================================================== -->
+        <section id="slide-1" data-slide-index="1" class="pres-slide sheet-bg border border-[var(--rule)]">
+            <div class="p-6 sm:p-10 rule-b flex flex-col lg:flex-row lg:items-end justify-between gap-4">
+                <div>
+                    <div class="text-xs font-mono-num uppercase tracking-[0.15em] text-[var(--uab-green)] mb-2">
+                        Capítol II — Estructura Financera (2020–2025)
+                    </div>
+                    <h2 class="font-serif-editorial text-2xl sm:text-4xl font-normal text-[var(--ink)]">
+                        Recursos concedits per via competitiva i no competitiva vs. liquidació pressupostària
+                    </h2>
+                </div>
+                <div class="text-xs font-mono-num text-[var(--ink-muted)] shrink-0">
+                    Fonts: <code class="px-1.5 py-0.5 sheet-subtle-bg">/api/strategic-indicators/financament-recerca</code> i <code class="px-1.5 py-0.5 sheet-subtle-bg">Ingressos Recerca.xlsx</code>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-12">
+                <!-- Left Chart Area (7 cols) -->
+                <div class="col-span-12 lg:col-span-7 p-6 sm:p-8 rule-b lg:border-b-0 lg:rule-r flex flex-col justify-between">
+                    <div class="flex flex-wrap items-baseline justify-between gap-4 mb-4">
+                        <div>
+                            <h3 class="text-sm font-bold uppercase tracking-wider text-[var(--ink)]">Evolució Anual (2021–2025, en M€)</h3>
+                            <p class="text-xs text-[var(--ink-muted)] mt-0.5">Comparativa entre concessió (Part UAB + Esfera UAB) i drets reconeguts nets a 31/12</p>
+                        </div>
+                        <div class="flex flex-wrap items-center gap-4 text-[11px] font-mono-num">
+                            <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 bg-[#007a33]"></span>Via Competitiva</span>
+                            <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 bg-[#c98a2c]"></span>Convenis i Serveis</span>
+                            <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-0.5 bg-[#0f3d3e]"></span>Liquidat a 31/12</span>
+                        </div>
+                    </div>
+
+                    <div id="chartFundingEvolution" class="w-full h-80" role="img" aria-label="Gràfic d'evolució anual del finançament de recerca 2021-2025"></div>
+
+                    <!-- Selected Year Breakdown Strip -->
+                    <div class="grid grid-cols-3 gap-4 pt-6 mt-4 rule-t text-xs">
+                        <div>
+                            <span class="text-[10px] font-mono-num uppercase text-[var(--ink-muted)] block">Part Estricta UAB (<span class="selected-year-label">2025</span>)</span>
+                            <span id="slide2UabPart" class="font-serif-editorial text-2xl font-semibold text-[var(--ink)] tabular-nums">105,9 M€</span>
+                            <span id="slide2UabPct" class="text-[11px] font-mono-num text-[var(--uab-green)] block">85,9% del total anual</span>
+                        </div>
+                        <div class="pl-4 rule-l">
+                            <span class="text-[10px] font-mono-num uppercase text-[var(--ink-muted)] block">Esfera UAB (<span class="selected-year-label">2025</span>)</span>
+                            <span id="slide2EsferaPart" class="font-serif-editorial text-2xl font-semibold text-[var(--ink)] tabular-nums">17,4 M€</span>
+                            <span class="text-[11px] font-mono-num text-[var(--ink-muted)] block">Centres CERCA / IR</span>
+                        </div>
+                        <div class="pl-4 rule-l">
+                            <span class="text-[10px] font-mono-num uppercase text-[var(--ink-muted)] block">Captació Internacional</span>
+                            <span id="slide2IntlPart" class="font-serif-editorial text-2xl font-semibold text-[var(--ink)] tabular-nums">19,1 M€</span>
+                            <span class="text-[11px] font-mono-num text-[var(--ink-muted)] block">Màxim: 40,4 M€ (2023)</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Complete Accounting Table (5 cols) -->
+                <div class="col-span-12 lg:col-span-5 p-6 sm:p-8 flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center justify-between mb-3">
+                            <h3 class="text-sm font-bold uppercase tracking-wider text-[var(--ink)]">Quadre Comptable Complet (en M€)</h3>
+                            <span class="text-[11px] font-mono-num text-[var(--ink-muted)]">Sèrie 2020–2025</span>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="ledger-table font-mono-num">
+                                <thead>
+                                    <tr>
+                                        <th>Any</th>
+                                        <th class="text-right">Total</th>
+                                        <th class="text-right">UAB</th>
+                                        <th class="text-right">Esfera</th>
+                                        <th class="text-right">Compet.</th>
+                                        <th class="text-right">Liquidat</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td class="font-bold">2020</td>
+                                        <td class="text-right font-semibold">100,9</td>
+                                        <td class="text-right">78,9</td>
+                                        <td class="text-right">21,9</td>
+                                        <td class="text-right text-[var(--uab-green)]">82,1</td>
+                                        <td class="text-right text-[var(--ink-muted)]">—</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="font-bold">2021</td>
+                                        <td class="text-right font-semibold">139,4</td>
+                                        <td class="text-right">113,9</td>
+                                        <td class="text-right">25,5</td>
+                                        <td class="text-right text-[var(--uab-green)]">116,5</td>
+                                        <td class="text-right">59,5</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="font-bold">2022</td>
+                                        <td class="text-right font-semibold">123,2</td>
+                                        <td class="text-right">98,0</td>
+                                        <td class="text-right">25,2</td>
+                                        <td class="text-right text-[var(--uab-green)]">102,3</td>
+                                        <td class="text-right">72,1</td>
+                                    </tr>
+                                    <tr class="sheet-subtle-bg">
+                                        <td class="font-bold">2023*</td>
+                                        <td class="text-right font-bold">145,9</td>
+                                        <td class="text-right font-semibold">119,6</td>
+                                        <td class="text-right">26,3</td>
+                                        <td class="text-right font-semibold text-[var(--uab-green)]">127,7</td>
+                                        <td class="text-right font-semibold">84,5</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="font-bold">2024</td>
+                                        <td class="text-right font-semibold">128,2</td>
+                                        <td class="text-right">102,1</td>
+                                        <td class="text-right">26,1</td>
+                                        <td class="text-right text-[var(--uab-green)]">102,7</td>
+                                        <td class="text-right">77,0</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="font-bold">2025</td>
+                                        <td class="text-right font-semibold">123,3</td>
+                                        <td class="text-right">105,9</td>
+                                        <td class="text-right">17,4</td>
+                                        <td class="text-right text-[var(--uab-green)]">104,9</td>
+                                        <td class="text-right">75,8</td>
+                                    </tr>
+                                </tbody>
+                                <tfoot>
+                                    <tr class="border-t-2 border-[var(--rule-strong)] font-bold">
+                                        <td class="pt-3">21–25</td>
+                                        <td class="pt-3 text-right text-[var(--uab-green)]">659,9</td>
+                                        <td class="pt-3 text-right">539,5</td>
+                                        <td class="pt-3 text-right">120,5</td>
+                                        <td class="pt-3 text-right">554,0</td>
+                                        <td class="pt-3 text-right">368,9</td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="pt-4 mt-6 rule-t text-xs text-[var(--ink-muted)] space-y-1.5">
+                        <div><strong>* Màxim històric de la sèrie (2023):</strong> 145,9 M€ captats (87,3 M€ estatals + 40,4 M€ internacionals) i 84,5 M€ liquidats.</div>
+                        <div><strong>Desglossament Liquidació 2025 (75,8 M€):</strong> 47,0 M€ Projectes (Cap. 4, 7 i 9) · 16,5 M€ Personal Investigador · 12,3 M€ Prestació de Serveis (Cap. 3).</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- =====================================================================
+             CAPÍTOL III: DISTRIBUCIÓ PER INSTITUTS, CENTRES I DEPARTAMENTS
+             ===================================================================== -->
+        <section id="slide-2" data-slide-index="2" class="pres-slide sheet-bg border border-[var(--rule)]">
+            <div class="p-6 sm:p-10 rule-b flex flex-col lg:flex-row lg:items-end justify-between gap-4">
+                <div>
+                    <div class="text-xs font-mono-num uppercase tracking-[0.15em] text-[var(--uab-green)] mb-2">
+                        Capítol III — Cartografia Econòmica d'Unitats (2021–2025)
+                    </div>
+                    <h2 class="font-serif-editorial text-2xl sm:text-4xl font-normal text-[var(--ink)]">
+                        Principals pols de captació: instituts universitaris, Esfera UAB i departaments
+                    </h2>
+                </div>
+                <div class="text-xs font-mono-num text-[var(--ink-muted)] shrink-0">
+                    Font: <code class="px-1.5 py-0.5 sheet-subtle-bg">/api/organizations/stats/economic?startYear=2021&amp;endYear=2025</code>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-12">
+                <!-- Left: Top Institutes & Research Centers (6 cols) -->
+                <div class="col-span-12 lg:col-span-6 p-6 sm:p-8 rule-b lg:border-b-0 lg:rule-r">
+                    <div class="flex items-baseline justify-between mb-4">
+                        <div>
+                            <h3 class="text-sm font-bold uppercase tracking-wider text-[var(--ink)]">A. Instituts i Centres de l'Esfera UAB</h3>
+                            <p class="text-xs text-[var(--ink-muted)] mt-0.5">Import acumulat Part UAB (2021–2025) i nombre d'ajuts concedits</p>
+                        </div>
+                        <span class="text-xs font-mono-num text-[var(--uab-green)] font-semibold">Part UAB (M€)</span>
+                    </div>
+
+                    <table class="ledger-table">
+                        <thead>
+                            <tr>
+                                <th>Institut / Centre de Recerca</th>
+                                <th class="text-right">Ajuts</th>
+                                <th class="text-right">Import (21–25)</th>
+                            </tr>
+                        </thead>
+                        <tbody class="font-mono-num">
+                            <tr>
+                                <td class="font-sans">
+                                    <div class="font-semibold text-[var(--ink)]">IR Hospital Universitari Vall d'Hebron</div>
+                                    <div class="w-full h-1 bg-[var(--rule)] mt-1.5"><div class="h-full bg-[var(--uab-green)]" style="width: 100%"></div></div>
+                                </td>
+                                <td class="text-right text-[var(--ink-muted)]">1.321</td>
+                                <td class="text-right font-bold text-[var(--ink)]">51,04 M€</td>
+                            </tr>
+                            <tr>
+                                <td class="font-sans">
+                                    <div class="font-semibold text-[var(--ink)]">Institut de Ciència i Tecnologia Ambientals (ICTA-UAB)</div>
+                                    <div class="w-full h-1 bg-[var(--rule)] mt-1.5"><div class="h-full bg-[var(--uab-green)]" style="width: 93%"></div></div>
+                                </td>
+                                <td class="text-right text-[var(--ink-muted)]">381</td>
+                                <td class="text-right font-bold text-[var(--ink)]">47,51 M€</td>
+                            </tr>
+                            <tr>
+                                <td class="font-sans">
+                                    <div class="font-semibold text-[var(--ink)]">Institut de Neurociències (INc-UAB)</div>
+                                    <div class="w-full h-1 bg-[var(--rule)] mt-1.5"><div class="h-full bg-[var(--uab-green)]" style="width: 52%"></div></div>
+                                </td>
+                                <td class="text-right text-[var(--ink-muted)]">934</td>
+                                <td class="text-right font-bold text-[var(--ink)]">26,40 M€</td>
+                            </tr>
+                            <tr>
+                                <td class="font-sans">
+                                    <div class="font-semibold text-[var(--ink)]">Institut de Biotecnologia i de Biomedicina (IBB-UAB)</div>
+                                    <div class="w-full h-1 bg-[var(--rule)] mt-1.5"><div class="h-full bg-[var(--uab-green)]" style="width: 31%"></div></div>
+                                </td>
+                                <td class="text-right text-[var(--ink-muted)]">312</td>
+                                <td class="text-right font-bold text-[var(--ink)]">15,84 M€</td>
+                            </tr>
+                            <tr>
+                                <td class="font-sans">
+                                    <div class="font-semibold text-[var(--ink)]">Centre d'Estudis Demogràfics (CED) / CREAF</div>
+                                    <div class="w-full h-1 bg-[var(--rule)] mt-1.5"><div class="h-full bg-[var(--uab-green)]" style="width: 28%"></div></div>
+                                </td>
+                                <td class="text-right text-[var(--ink-muted)]">245</td>
+                                <td class="text-right font-bold text-[var(--ink)]">14,20 M€</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Right: Top University Departments (6 cols) -->
+                <div class="col-span-12 lg:col-span-6 p-6 sm:p-8">
+                    <div class="flex items-baseline justify-between mb-4">
+                        <div>
+                            <h3 class="text-sm font-bold uppercase tracking-wider text-[var(--ink)]">B. Departaments Universitaris UAB</h3>
+                            <p class="text-xs text-[var(--ink-muted)] mt-0.5">Departaments amb major captació acumulada en el quinquenni 2021–2025</p>
+                        </div>
+                        <span class="text-xs font-mono-num text-[var(--uab-petrol)] font-semibold">Part UAB (M€)</span>
+                    </div>
+
+                    <table class="ledger-table">
+                        <thead>
+                            <tr>
+                                <th>Departament UAB</th>
+                                <th class="text-right">Ajuts</th>
+                                <th class="text-right">Import (21–25)</th>
+                            </tr>
+                        </thead>
+                        <tbody class="font-mono-num">
+                            <tr>
+                                <td class="font-sans">
+                                    <div class="font-semibold text-[var(--ink)]">Departament de Física</div>
+                                    <div class="w-full h-1 bg-[var(--rule)] mt-1.5"><div class="h-full bg-[var(--uab-petrol)]" style="width: 100%"></div></div>
+                                </td>
+                                <td class="text-right text-[var(--ink-muted)]">272</td>
+                                <td class="text-right font-bold text-[var(--ink)]">23,81 M€</td>
+                            </tr>
+                            <tr>
+                                <td class="font-sans">
+                                    <div class="font-semibold text-[var(--ink)]">Departament de Ciència Animal i dels Aliments</div>
+                                    <div class="w-full h-1 bg-[var(--rule)] mt-1.5"><div class="h-full bg-[var(--uab-petrol)]" style="width: 88%"></div></div>
+                                </td>
+                                <td class="text-right text-[var(--ink-muted)]">1.029</td>
+                                <td class="text-right font-bold text-[var(--ink)]">20,87 M€</td>
+                            </tr>
+                            <tr>
+                                <td class="font-sans">
+                                    <div class="font-semibold text-[var(--ink)]">Dept. d'Enginyeria Química, Biològica i Ambiental</div>
+                                    <div class="w-full h-1 bg-[var(--rule)] mt-1.5"><div class="h-full bg-[var(--uab-petrol)]" style="width: 86%"></div></div>
+                                </td>
+                                <td class="text-right text-[var(--ink-muted)]">383</td>
+                                <td class="text-right font-bold text-[var(--ink)]">20,50 M€</td>
+                            </tr>
+                            <tr>
+                                <td class="font-sans">
+                                    <div class="font-semibold text-[var(--ink)]">Departament de Química</div>
+                                    <div class="w-full h-1 bg-[var(--rule)] mt-1.5"><div class="h-full bg-[var(--uab-petrol)]" style="width: 81%"></div></div>
+                                </td>
+                                <td class="text-right text-[var(--ink-muted)]">329</td>
+                                <td class="text-right font-bold text-[var(--ink)]">19,40 M€</td>
+                            </tr>
+                            <tr>
+                                <td class="font-sans">
+                                    <div class="font-semibold text-[var(--ink)]">Dept. de Bioquímica i Biologia Molecular / Genètica</div>
+                                    <div class="w-full h-1 bg-[var(--rule)] mt-1.5"><div class="h-full bg-[var(--uab-petrol)]" style="width: 72%"></div></div>
+                                </td>
+                                <td class="text-right text-[var(--ink-muted)]">418</td>
+                                <td class="text-right font-bold text-[var(--ink)]">17,15 M€</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- =====================================================================
+             CAPÍTOL IV: COMUNITAT INVESTIGADORA, CATEGORIA ACADÈMICA I PARITAT
+             ===================================================================== -->
+        <section id="slide-3" data-slide-index="3" class="pres-slide sheet-bg border border-[var(--rule)]">
+            <div class="p-6 sm:p-10 rule-b flex flex-col lg:flex-row lg:items-end justify-between gap-4">
+                <div>
+                    <div class="text-xs font-mono-num uppercase tracking-[0.15em] text-[var(--uab-green)] mb-2">
+                        Capítol IV — Capital Humà i Demografia Científica
+                    </div>
+                    <h2 class="font-serif-editorial text-2xl sm:text-4xl font-normal text-[var(--ink)]">
+                        Estructura de la plantilla investigadora, paritat de gènere i identificadors ORCID
+                    </h2>
+                </div>
+                <div class="text-xs font-mono-num text-[var(--ink-muted)] shrink-0">
+                    Font: <code class="px-1.5 py-0.5 sheet-subtle-bg">/api/persons/stats/*</code> (Col·lecció <code class="px-1 py-0.5">Persons</code>)
+                </div>
+            </div>
+
+            <div class="grid grid-cols-12">
+                <!-- Left: Academic Categories Chart (7 cols) -->
+                <div class="col-span-12 lg:col-span-7 p-6 sm:p-8 rule-b lg:border-b-0 lg:rule-r">
+                    <div class="flex items-baseline justify-between mb-4">
+                        <div>
+                            <h3 class="text-sm font-bold uppercase tracking-wider text-[var(--ink)]">Piràmide i Categories del Personal Investigador Actiu</h3>
+                            <p class="text-xs text-[var(--ink-muted)] mt-0.5">Efectius vigents per categoria docent i investigadora a Egreta</p>
+                        </div>
+                        <span class="text-xs font-mono-num text-[var(--ink-muted)]">Total PDI / Recerca: 2.452</span>
+                    </div>
+                    <div id="chartHrCategories" class="w-full h-80" role="img" aria-label="Distribució del personal investigador per categoria"></div>
+                </div>
+
+                <!-- Right: Gender Parity & ORCID Audit (5 cols) -->
+                <div class="col-span-12 lg:col-span-5 flex flex-col justify-between">
+                    <div class="p-6 sm:p-8 rule-b">
+                        <div class="flex items-baseline justify-between mb-3">
+                            <h3 class="text-sm font-bold uppercase tracking-wider text-[var(--ink)]">Equilibri de Gènere (6.345 Vigents)</h3>
+                            <span class="text-xs font-mono-num text-[var(--uab-green)]">Índex de paritat: 0,95</span>
+                        </div>
+                        <div class="grid grid-cols-12 items-center gap-4">
+                            <div class="col-span-5">
+                                <div id="chartHrGender" class="w-full h-40" role="img" aria-label="Proporció dones i homes entre el personal vigent"></div>
+                            </div>
+                            <div class="col-span-7 space-y-3 font-mono-num text-xs">
+                                <div class="p-3 sheet-subtle-bg border-l-2 border-[var(--uab-green)] flex justify-between items-center">
+                                    <span class="font-sans font-semibold">Dones investigadores</span>
+                                    <span id="hrMujeresVal" class="font-bold text-[var(--ink)]">3.092 (48,7%)</span>
+                                </div>
+                                <div class="p-3 sheet-subtle-bg border-l-2 border-[var(--uab-petrol)] flex justify-between items-center">
+                                    <span class="font-sans font-semibold">Homes investigadors</span>
+                                    <span id="hrHombresVal" class="font-bold text-[var(--ink)]">3.242 (51,1%)</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="p-6 sm:p-8 flex flex-col justify-between flex-grow">
+                        <div>
+                            <div class="flex items-center justify-between text-[11px] font-mono-num uppercase tracking-wider text-[var(--ink-muted)]">
+                                <span>Identitat Digital i Normalització</span>
+                                <span>ORCID / Scopus / WoS</span>
+                            </div>
+                            <div class="flex items-baseline gap-4 mt-3">
+                                <span id="hrOrcidVal" class="font-serif-editorial text-4xl sm:text-5xl font-semibold text-[var(--ink)] tabular-nums">7.252</span>
+                                <span class="text-xs font-mono-num text-[var(--uab-green)] font-semibold">perfils amb ORCID connectat</span>
+                            </div>
+                            <p class="text-xs text-[var(--ink-secondary)] leading-relaxed mt-3">
+                                Sincronització bidireccional amb Scopus Author ID, Web of Science ResearcherID i OpenAlex per garantir la desambiguació d'autoria i l'atribució institucional correcta.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- =====================================================================
+             CAPÍTOL V: PRODUCCIÓ CIENTÍFICA, IMPACTE Q1 I CIÈNCIA OBERTA
+             ===================================================================== -->
+        <section id="slide-4" data-slide-index="4" class="pres-slide sheet-bg border border-[var(--rule)]">
+            <div class="p-6 sm:p-10 rule-b flex flex-col lg:flex-row lg:items-end justify-between gap-4">
+                <div>
+                    <div class="text-xs font-mono-num uppercase tracking-[0.15em] text-[var(--uab-green)] mb-2">
+                        Capítol V — Producció Científica i Ciència Oberta
+                    </div>
+                    <h2 class="font-serif-editorial text-2xl sm:text-4xl font-normal text-[var(--ink)]">
+                        Evolució bibliomètrica a Scopus i Web of Science, quartils d'impacte i Accés Obert
+                    </h2>
+                </div>
+                <div class="text-xs font-mono-num text-[var(--ink-muted)] shrink-0">
+                    Font: <code class="px-1.5 py-0.5 sheet-subtle-bg">/api/pure/stats/types</code> (248.123 registres a <code class="px-1 py-0.5">Researchoutputs</code>)
+                </div>
+            </div>
+
+            <div class="grid grid-cols-12">
+                <!-- Left: Publications Evolution Line Chart (7 cols) -->
+                <div class="col-span-12 lg:col-span-7 p-6 sm:p-8 rule-b lg:border-b-0 lg:rule-r flex flex-col justify-between">
+                    <div class="flex flex-wrap items-baseline justify-between gap-4 mb-4">
+                        <div>
+                            <h3 class="text-sm font-bold uppercase tracking-wider text-[var(--ink)]">Sèrie Anual de Publicacions Indexades (2021–2025)</h3>
+                            <p class="text-xs text-[var(--ink-muted)] mt-0.5">Volum d'articles a Scopus, Web of Science (JCR) i primer quartil (Q1)</p>
+                        </div>
+                        <span class="text-xs font-mono-num font-bold text-[var(--uab-green)]">81,4% en Q1 + Q2</span>
+                    </div>
+
+                    <div id="chartPubsEvolution" class="w-full h-72" role="img" aria-label="Evolució de publicacions a Scopus, Web of Science i Q1"></div>
+
+                    <div class="grid grid-cols-3 gap-4 pt-6 mt-4 rule-t text-xs">
+                        <div>
+                            <span class="text-[10px] font-mono-num uppercase text-[var(--ink-muted)] block">Accés Obert (2025)</span>
+                            <span class="font-serif-editorial text-2xl font-semibold text-[var(--ink)] tabular-nums">82,4%</span>
+                            <span class="text-[11px] text-[var(--ink-muted)] block">Via Daurada, Híbrida o DDD</span>
+                        </div>
+                        <div class="pl-4 rule-l">
+                            <span class="text-[10px] font-mono-num uppercase text-[var(--ink-muted)] block">Articles en Q1 (2025)</span>
+                            <span class="font-serif-editorial text-2xl font-semibold text-[var(--ink)] tabular-nums">3.115</span>
+                            <span class="text-[11px] text-[var(--uab-green)] font-mono-num block">64,6% sobre total Scopus</span>
+                        </div>
+                        <div class="pl-4 rule-l">
+                            <span class="text-[10px] font-mono-num uppercase text-[var(--ink-muted)] block">Coautoria Internacional</span>
+                            <span class="font-serif-editorial text-2xl font-semibold text-[var(--ink)] tabular-nums">58,2%</span>
+                            <span class="text-[11px] text-[var(--ink-muted)] block">Col·laboració multinacional</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right: Pure Document Typology Ledger (5 cols) -->
+                <div class="col-span-12 lg:col-span-5 p-6 sm:p-8 flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-baseline justify-between mb-3">
+                            <h3 class="text-sm font-bold uppercase tracking-wider text-[var(--ink)]"> composició del Fons Històric a Pure</h3>
+                            <span class="text-xs font-mono-num text-[var(--ink-muted)]">248.123 registres</span>
+                        </div>
+                        <div id="chartPubTypes" class="w-full h-52" role="img" aria-label="Distribució per tipologia documental a Pure"></div>
+
+                        <table class="ledger-table mt-4 font-mono-num">
+                            <thead>
+                                <tr>
+                                    <th>Tipologia Documental</th>
+                                    <th class="text-right">Registres</th>
+                                    <th class="text-right">Quota</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td class="font-sans font-medium">Articles científics en revista</td>
+                                    <td class="text-right font-semibold">160.890</td>
+                                    <td class="text-right text-[var(--uab-green)]">64,8%</td>
+                                </tr>
+                                <tr>
+                                    <td class="font-sans font-medium">Capítols de llibre i actes</td>
+                                    <td class="text-right font-semibold">49.951</td>
+                                    <td class="text-right">20,1%</td>
+                                </tr>
+                                <tr>
+                                    <td class="font-sans font-medium">Llibres i monografies</td>
+                                    <td class="text-right font-semibold">15.900</td>
+                                    <td class="text-right">6,4%</td>
+                                </tr>
+                                <tr>
+                                    <td class="font-sans font-medium">Articles de revisió (Reviews)</td>
+                                    <td class="text-right font-semibold">4.828</td>
+                                    <td class="text-right">1,9%</td>
+                                </tr>
+                                <tr>
+                                    <td class="font-sans font-medium">Altres resultats i ressenyes</td>
+                                    <td class="text-right font-semibold">16.554</td>
+                                    <td class="text-right">6,7%</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- =====================================================================
+             CAPÍTOL VI: ESCOLA DE DOCTORAT, XARXA ROR I CONVENIS R+D
+             ===================================================================== -->
+        <section id="slide-5" data-slide-index="5" class="pres-slide sheet-bg border border-[var(--rule)]">
+            <div class="p-6 sm:p-10 rule-b flex flex-col lg:flex-row lg:items-end justify-between gap-4">
+                <div>
+                    <div class="text-xs font-mono-num uppercase tracking-[0.15em] text-[var(--uab-green)] mb-2">
+                        Capítol VI — Formació Doctoral i Aliança Internacional
+                    </div>
+                    <h2 class="font-serif-editorial text-2xl sm:text-4xl font-normal text-[var(--ink)]">
+                        Tesis doctorals defensades, xarxa d'organitzacions externes (ROR) i convenis R+D
+                    </h2>
+                </div>
+                <div class="text-xs font-mono-num text-[var(--ink-muted)] shrink-0">
+                    Fonts: <code class="px-1.5 py-0.5 sheet-subtle-bg">Studenttheses</code>, <code class="px-1.5 py-0.5 sheet-subtle-bg">ExternalOrganizations</code> i <code class="px-1.5 py-0.5 sheet-subtle-bg">/api/awards/stats/map-convenis</code>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-12">
+                <!-- Left: Doctoral Theses by Gender (4 cols) -->
+                <div class="col-span-12 lg:col-span-4 p-6 sm:p-8 rule-b lg:border-b-0 lg:rule-r flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-baseline justify-between mb-3">
+                            <h3 class="text-sm font-bold uppercase tracking-wider text-[var(--ink)]">A. Tesis Doctorals (2021–2025)</h3>
+                            <span class="text-xs font-mono-num text-[var(--uab-green)]">1.554 defenses</span>
+                        </div>
+                        <p class="text-xs text-[var(--ink-muted)] mb-4">
+                            Evolució anual per gènere de l'autor/a i menció internacional (64,8% el 2025).
+                        </p>
+                        <div id="chartThesesGender" class="w-full h-64" role="img" aria-label="Evolució de tesis doctorals per gènere"></div>
+                    </div>
+                    <div class="pt-4 mt-4 rule-t text-xs font-mono-num flex justify-between">
+                        <span>Creixement 2021–2025: <strong class="text-[var(--uab-green)]">+25,3%</strong></span>
+                        <span>Doctores 2025: <strong>54,1%</strong></span>
+                    </div>
+                </div>
+
+                <!-- Middle: External Organizations by Type (4 cols) -->
+                <div class="col-span-12 lg:col-span-4 p-6 sm:p-8 rule-b lg:border-b-0 lg:rule-r flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-baseline justify-between mb-3">
+                            <h3 class="text-sm font-bold uppercase tracking-wider text-[var(--ink)]">B. Entitats Col·laboradores</h3>
+                            <span class="text-xs font-mono-num text-[var(--ink-muted)]">ROR Integrat</span>
+                        </div>
+                        <p class="text-xs text-[var(--ink-muted)] mb-4">
+                            Classificació d'organitzacions externes vinculades a projectes i publicacions UAB.
+                        </p>
+                        <div id="chartExtOrgs" class="w-full h-64" role="img" aria-label="Tipologia d'organitzacions externes"></div>
+                    </div>
+                    <div class="pt-4 mt-4 rule-t text-xs font-mono-num flex justify-between">
+                        <span>Països socis actius: <strong>110+</strong></span>
+                        <span>Principal soci: <strong>EUA / Alemanya</strong></span>
+                    </div>
+                </div>
+
+                <!-- Right: Verified Top R&D Convenis Funders (4 cols) -->
+                <div class="col-span-12 lg:col-span-4 p-6 sm:p-8 flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-baseline justify-between mb-3">
+                            <h3 class="text-sm font-bold uppercase tracking-wider text-[var(--ink)]">C. Principals Entitats en Convenis</h3>
+                            <span class="text-xs font-mono-num text-[var(--uab-ochre)]">2021–2025</span>
+                        </div>
+                        <p class="text-xs text-[var(--ink-muted)] mb-4">
+                            Entitats finançadores amb major volum de contractació directa i convenis R+D registrats a Egreta.
+                        </p>
+
+                        <table class="ledger-table font-mono-num">
+                            <thead>
+                                <tr>
+                                    <th>Entitat Finançadora</th>
+                                    <th class="text-right">Conv.</th>
+                                    <th class="text-right">Import (€)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td class="font-sans font-semibold">European Space Agency (ESA)</td>
+                                    <td class="text-right text-[var(--ink-muted)]">2</td>
+                                    <td class="text-right font-bold text-[var(--uab-green)]">3.319.993 €</td>
+                                </tr>
+                                <tr>
+                                    <td class="font-sans font-semibold">KRIYA Therapeutics, INC</td>
+                                    <td class="text-right text-[var(--ink-muted)]">2</td>
+                                    <td class="text-right font-bold">1.442.405 €</td>
+                                </tr>
+                                <tr>
+                                    <td class="font-sans font-semibold">Tramontane Therapeutics Inc</td>
+                                    <td class="text-right text-[var(--ink-muted)]">5</td>
+                                    <td class="text-right font-bold">1.409.925 €</td>
+                                </tr>
+                                <tr>
+                                    <td class="font-sans font-semibold">Telomere Therapeutics</td>
+                                    <td class="text-right text-[var(--ink-muted)]">2</td>
+                                    <td class="text-right font-bold">981.000 €</td>
+                                </tr>
+                                <tr>
+                                    <td class="font-sans font-semibold">Servei Català de Trànsit</td>
+                                    <td class="text-right text-[var(--ink-muted)]">6</td>
+                                    <td class="text-right font-bold">894.280 €</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="pt-4 mt-4 rule-t text-xs text-[var(--ink-muted)]">
+                        Volum total de convenis i prestació de serveis no competitius el quinquenni 2021–2025: <strong class="font-mono-num text-[var(--ink)]">105,9 M€</strong>.
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- =====================================================================
+             CAPÍTOL VII: VALORITZACIÓ, TRANSFERÈNCIA, ODS I RÀNQUINGS
+             ===================================================================== -->
+        <section id="slide-6" data-slide-index="6" class="pres-slide sheet-bg border border-[var(--rule)]">
+            <div class="p-6 sm:p-10 rule-b flex flex-col lg:flex-row lg:items-end justify-between gap-4">
+                <div>
+                    <div class="text-xs font-mono-num uppercase tracking-[0.15em] text-[var(--uab-green)] mb-2">
+                        Capítol VII — Valorització, Transferència i Posicionament Global
+                    </div>
+                    <h2 class="font-serif-editorial text-2xl sm:text-4xl font-normal text-[var(--ink)]">
+                        Indicadors de transferència tecnològica, alineació amb l'Agenda 2030 i rànquings internacionals
+                    </h2>
+                </div>
+                <div class="text-xs font-mono-num text-[var(--ink-muted)] shrink-0">
+                    Font: <code class="px-1.5 py-0.5 sheet-subtle-bg">/api/indicadors-resum/data</code> (<code class="px-1 py-0.5">Indicadors resum_2025.xlsx</code>)
+                </div>
+            </div>
+
+            <div class="grid grid-cols-12">
+                <!-- Left: Rankings & Valorització Table (7 cols) -->
+                <div class="col-span-12 lg:col-span-7 p-6 sm:p-8 rule-b lg:border-b-0 lg:rule-r flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-baseline justify-between mb-3">
+                            <h3 class="text-sm font-bold uppercase tracking-wider text-[var(--ink)]">Posicionament als Rànquings Internacionals i Estatals</h3>
+                            <span class="text-xs font-mono-num text-[var(--uab-green)] font-semibold">Top 1% Mundial</span>
+                        </div>
+
+                        <table class="ledger-table">
+                            <thead>
+                                <tr>
+                                    <th>Rànquing de Referència</th>
+                                    <th class="text-right">Posició UAB</th>
+                                    <th>Dimensió Destacada d'Avaluació</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td class="font-semibold">Rànquing CyD (Fundación CyD 2025/26)</td>
+                                    <td class="text-right font-mono-num font-bold text-[var(--uab-green)]">1a Pública d'Espanya</td>
+                                    <td class="text-xs text-[var(--ink-secondary)]">28 indicadors de màxim rendiment en recerca i transferència</td>
+                                </tr>
+                                <tr>
+                                    <td class="font-semibold">QS World University Rankings</td>
+                                    <td class="text-right font-mono-num font-bold">#149 – #172 Mundial</td>
+                                    <td class="text-xs text-[var(--ink-secondary)]">2a d'Espanya; excel·lència en citacions per PDI i reputació</td>
+                                </tr>
+                                <tr>
+                                    <td class="font-semibold">Times Higher Education (THE WUR)</td>
+                                    <td class="text-right font-mono-num font-bold">#183 Mundial</td>
+                                    <td class="text-xs text-[var(--ink-secondary)]">2a d'Espanya; lideratge en impacte de citacions i projecció</td>
+                                </tr>
+                                <tr>
+                                    <td class="font-semibold">U-Ranking (Ivie / Fundació BBVA)</td>
+                                    <td class="text-right font-mono-num font-bold">Top 3 d'Espanya</td>
+                                    <td class="text-xs text-[var(--ink-secondary)]">Grup G1 de màxima productivitat investigadora i docent</td>
+                                </tr>
+                                <tr>
+                                    <td class="font-semibold">ARWU (Rànquing de Xangai)</td>
+                                    <td class="text-right font-mono-num font-bold">Top 3a d'Espanya</td>
+                                    <td class="text-xs text-[var(--ink-secondary)]">Articles a Nature i Science i investigadors altament citats (HiCi)</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Official Valorització & Transfer Ledger (2021-2025) -->
+                    <div class="pt-6 mt-6 rule-t">
+                        <div class="text-xs font-bold uppercase tracking-wider text-[var(--ink)] mb-3">
+                            Sèrie Oficial de Transferència i Propietat Industrial (2021–2025)
+                        </div>
+                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
+                            <div class="p-3 sheet-subtle-bg border-t-2 border-[var(--uab-green)]">
+                                <span class="text-[10px] font-mono-num uppercase text-[var(--ink-muted)] block">Patents Vives (2025)</span>
+                                <span class="font-serif-editorial text-2xl font-semibold text-[var(--ink)] tabular-nums">716</span>
+                                <span class="text-[11px] font-mono-num text-[var(--ink-muted)] block">667 (2024) · 613 (2023)</span>
+                            </div>
+                            <div class="p-3 sheet-subtle-bg border-t-2 border-[var(--uab-petrol)]">
+                                <span class="text-[10px] font-mono-num uppercase text-[var(--ink-muted)] block">Valorització R+D (2025)</span>
+                                <span class="font-serif-editorial text-2xl font-semibold text-[var(--ink)] tabular-nums">1,93 M€</span>
+                                <span class="text-[11px] font-mono-num text-[var(--ink-muted)] block">45 projectes assistits</span>
+                            </div>
+                            <div class="p-3 sheet-subtle-bg border-t-2 border-[var(--uab-ochre)]">
+                                <span class="text-[10px] font-mono-num uppercase text-[var(--ink-muted)] block">Acords Transferència</span>
+                                <span class="font-serif-editorial text-2xl font-semibold text-[var(--ink)] tabular-nums">533,9 k€</span>
+                                <span class="text-[11px] font-mono-num text-[var(--ink-muted)] block">699,8 k€ (2023)</span>
+                            </div>
+                            <div class="p-3 sheet-subtle-bg border-t-2 border-[var(--ink)]">
+                                <span class="text-[10px] font-mono-num uppercase text-[var(--ink-muted)] block">EBTs en Cartera</span>
+                                <span class="font-serif-editorial text-2xl font-semibold text-[var(--ink)] tabular-nums">14 EBTs</span>
+                                <span class="text-[11px] font-mono-num text-[var(--ink-muted)] block">60 invencions el 2025</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right: ODS Alignment Chart (5 cols) -->
+                <div class="col-span-12 lg:col-span-5 p-6 sm:p-8 flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-baseline justify-between mb-2">
+                            <h3 class="text-sm font-bold uppercase tracking-wider text-[var(--ink)]">Contribució als Objectius de Desenvolupament Sostenible</h3>
+                            <span class="text-xs font-mono-num text-[var(--ink-muted)]">Agenda 2030</span>
+                        </div>
+                        <p class="text-xs text-[var(--ink-muted)] mb-4">
+                            Projectes competitius i publicacions classificats segons els ODS de les Nacions Unides.
+                        </p>
+                        <div id="chartOdsImpact" class="w-full h-72" role="img" aria-label="Projectes de recerca per ODS"></div>
+                    </div>
+
+                    <div class="pt-4 mt-4 rule-t text-xs text-[var(--ink-muted)] leading-relaxed">
+                        Els àmbits de <strong>Salut i Benestar (ODS 3)</strong>, <strong>Acció Climàtica (ODS 13)</strong> —impulsat per l'ICTA-UAB i el CREAF— i <strong>Indústria i Innovació (ODS 9)</strong> concentren més del 60% dels projectes amb impacte directe en les polítiques públiques.
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- =========================================================================
+         PEU EDITORIAL I CONTROLADOR DISCRET DE PROJECCIÓ
+         ========================================================================= -->
+    <footer class="sheet-bg rule-t py-6 mt-auto no-print">
+        <div class="max-w-[1440px] mx-auto px-5 sm:px-10 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-[var(--ink-muted)]">
+            <div class="flex flex-wrap items-center gap-3 font-mono-num">
+                <span class="font-semibold text-[var(--ink)]">UNIVERSITAT AUTÒNOMA DE BARCELONA</span>
+                <span>·</span>
+                <span>Oficina Tecnològica de Recerca (OTR)</span>
+                <span>·</span>
+                <span>Sistema Egreta / Pure</span>
+            </div>
+
+            <!-- Minimalist Presentation Controller -->
+            <div class="flex flex-wrap items-center gap-2 font-mono-num">
+                <button type="button" onclick="toggleDeckMode()" id="btnDeckMode" class="cursor-pointer px-3 py-1.5 border border-[var(--rule)] hover:border-[var(--ink)] text-[var(--ink)] font-medium transition-colors">
+                    <span id="deckModeText">Mode Projecció (16:9)</span>
+                </button>
+
+                <button type="button" onclick="toggleAutoplay()" id="btnAutoplay" class="cursor-pointer px-3 py-1.5 border border-[var(--rule)] hover:border-[var(--ink)] text-[var(--ink)] font-medium transition-colors">
+                    <span id="autoplayText">Auto-Play: Inactiu</span>
+                </button>
+
+                <select id="autoplaySpeed" onchange="updateAutoplayInterval()" aria-label="Interval d'avanç automàtic" class="cursor-pointer px-2 py-1.5 border border-[var(--rule)] sheet-bg text-[var(--ink)]">
+                    <option value="8000">8 s</option>
+                    <option value="12000" selected>12 s</option>
+                    <option value="20000">20 s</option>
+                </select>
+
+                <div class="flex items-center border border-[var(--rule)]">
+                    <button type="button" onclick="prevSlide()" class="cursor-pointer px-2.5 py-1.5 hover:bg-[var(--sheet-subtle)] text-[var(--ink)]" aria-label="Capítol anterior">←</button>
+                    <button type="button" onclick="nextSlide()" class="cursor-pointer px-2.5 py-1.5 border-l border-[var(--rule)] hover:bg-[var(--sheet-subtle)] text-[var(--ink)]" aria-label="Capítol següent">→</button>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- =========================================================================
+         MOTOR DE DADES VERIFICADES I VISUALITZACIÓ EDITORIAL (ECHARTS)
+         ========================================================================= -->
+    <script>
+        const uabDataStore = {
+            currentYear: 2025,
+            totals: {
+                researchOutputsTotal: 248123,
+                vigentesTotal: 6345,
+                hombres: 3242,
+                mujeres: 3092,
+                otros: 11,
+                orcidCon: 7252
+            },
+            hrCategories: [
+                { name: 'Investigadors/es Predoctorals', value: 550, color: '#007a33' },
+                { name: 'Professors/es Titulars', value: 493, color: '#1b4332' },
+                { name: 'Personal Lector', value: 464, color: '#0f3d3e' },
+                { name: 'Professors/es Agregats', value: 428, color: '#2d6a4f' },
+                { name: 'Catedràtics/ques d\'Universitat', value: 400, color: '#141615' },
+                { name: 'Investigadors/es Postdoctorals', value: 335, color: '#9a5b13' },
+                { name: 'Investigadors/es ICREA', value: 29, color: '#b45309' }
+            ],
+            years: ['2021', '2022', '2023', '2024', '2025'],
+            byYear: {
+                2021: {
+                    fundingTotal: '139,4 M€', comp: 116.5, nonComp: 23.0, liquidat: 59.5,
+                    uabPart: '113,9 M€', esferaPart: '25,5 M€', uabPct: '81,7% del total anual', intlPart: '13,2 M€',
+                    fundingSub: '83,5% via competitiva (116,5 M€)',
+                    fundingBreak: '113,9 M€ UAB + 25,5 M€ Esfera (Liquidat: 59,5 M€)',
+                    pubs: 3890, thesis: 273, trams: 1015, spinoffs: '593 Patents'
+                },
+                2022: {
+                    fundingTotal: '123,2 M€', comp: 102.3, nonComp: 20.9, liquidat: 72.1,
+                    uabPart: '98,0 M€', esferaPart: '25,2 M€', uabPct: '79,5% del total anual', intlPart: '33,0 M€',
+                    fundingSub: '83,0% via competitiva (102,3 M€)',
+                    fundingBreak: '98,0 M€ UAB + 25,2 M€ Esfera (Liquidat: 72,1 M€)',
+                    pubs: 4120, thesis: 297, trams: 1048, spinoffs: '599 Patents'
+                },
+                2023: {
+                    fundingTotal: '145,9 M€', comp: 127.7, nonComp: 18.2, liquidat: 84.5,
+                    uabPart: '119,6 M€', esferaPart: '26,3 M€', uabPct: '82,0% del total anual', intlPart: '40,4 M€',
+                    fundingSub: '87,5% via competitiva (127,7 M€)',
+                    fundingBreak: '119,6 M€ UAB + 26,3 M€ Esfera (Liquidat: 84,5 M€)',
+                    pubs: 4450, thesis: 318, trams: 1084, spinoffs: '613 Patents'
+                },
+                2024: {
+                    fundingTotal: '128,2 M€', comp: 102.7, nonComp: 25.5, liquidat: 77.0,
+                    uabPart: '102,1 M€', esferaPart: '26,1 M€', uabPct: '79,6% del total anual', intlPart: '18,8 M€',
+                    fundingSub: '80,1% via competitiva (102,7 M€)',
+                    fundingBreak: '102,1 M€ UAB + 26,1 M€ Esfera (Liquidat: 77,0 M€)',
+                    pubs: 4610, thesis: 324, trams: 1110, spinoffs: '667 Patents'
+                },
+                2025: {
+                    fundingTotal: '123,3 M€', comp: 104.9, nonComp: 18.4, liquidat: 75.8,
+                    uabPart: '105,9 M€', esferaPart: '17,4 M€', uabPct: '85,9% del total anual', intlPart: '19,1 M€',
+                    fundingSub: '85,0% via competitiva (104,9 M€)',
+                    fundingBreak: '105,9 M€ UAB + 17,4 M€ Esfera (Liquidat: 75,8 M€)',
+                    pubs: 4821, thesis: 342, trams: 1132, spinoffs: '716 Patents'
+                }
+            },
+            publicationsSeries: {
+                scopus: [3890, 4120, 4450, 4610, 4821],
+                wos: [3120, 3340, 3620, 3750, 3912],
+                q1: [2410, 2590, 2810, 2940, 3115]
+            },
+            publicationTypes: [
+                { name: 'Articles científics', value: 160890 },
+                { name: 'Capítols de llibre', value: 49951 },
+                { name: 'Llibres i monografies', value: 15900 },
+                { name: 'Articles de revisió', value: 4828 },
+                { name: 'Ressenyes i altres', value: 16554 }
+            ],
+            thesesSeries: {
+                dones: [142, 155, 168, 172, 185],
+                homes: [131, 142, 150, 152, 157]
+            },
+            externalOrgs: [
+                { name: 'Universitats internacionals', value: 8877 },
+                { name: 'Associacions i xarxes', value: 7749 },
+                { name: 'Entitats empresarials', value: 7540 },
+                { name: 'Departaments universitaris', value: 4668 },
+                { name: 'Institucions sanitàries', value: 3822 },
+                { name: 'Centres de recerca', value: 3778 },
+                { name: 'Organismes públics (OPI)', value: 3392 }
+            ],
+            odsProjects: [
+                { name: 'ODS 3 · Salut i Benestar', value: 145 },
+                { name: 'ODS 13 · Acció Climàtica', value: 118 },
+                { name: 'ODS 9 · Indústria i Innovació', value: 104 },
+                { name: 'ODS 4 · Educació de Qualitat', value: 92 },
+                { name: 'ODS 7 · Energia Neta', value: 76 },
+                { name: 'ODS 5 · Igualtat de Gènere', value: 68 }
+            ]
+        };
+
+        const romanNumerals = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII'];
+        let currentSlideIndex = 0;
+        const totalSlides = 7;
+        let isDeckMode = false;
+        let isAutoplay = false;
+        let progressTimer = null;
+        let autoplayDuration = 12000;
+        let autoplayElapsed = 0;
+        const charts = {};
+
+        function isDarkMode() {
+            return document.documentElement.classList.contains('dark');
+        }
+
+        function getEditorialPalette() {
+            const dark = isDarkMode();
+            return {
+                ink: dark ? '#f0f2f0' : '#141615',
+                muted: dark ? '#858e89' : '#68706c',
+                grid: dark ? '#2b302d' : '#e2e0d8',
+                sheet: dark ? '#171a18' : '#ffffff',
+                border: dark ? '#383f3b' : '#141615',
+                green: dark ? '#10b981' : '#007a33',
+                petrol: dark ? '#38bdf8' : '#0f3d3e',
+                ochre: dark ? '#f59e0b' : '#c98a2c'
+            };
+        }
+
+        function initAllCharts() {
+            const p = getEditorialPalette();
+            const baseTooltip = {
+                backgroundColor: p.sheet,
+                borderColor: p.border,
+                borderWidth: 1,
+                textStyle: { color: p.ink, fontFamily: 'Plus Jakarta Sans', fontSize: 12 },
+                extraCssText: 'box-shadow: none; border-radius: 0;'
+            };
+
+            // 1. Funding Evolution Chart
+            const domFunding = document.getElementById('chartFundingEvolution');
+            if (domFunding) {
+                if (!charts.funding) charts.funding = echarts.init(domFunding);
+                const compList = uabDataStore.years.map(y => uabDataStore.byYear[y].comp);
+                const nonCompList = uabDataStore.years.map(y => uabDataStore.byYear[y].nonComp);
+                const totalList = uabDataStore.years.map(y => +(uabDataStore.byYear[y].comp + uabDataStore.byYear[y].nonComp).toFixed(1));
+                const liquidatList = uabDataStore.years.map(y => uabDataStore.byYear[y].liquidat);
+
+                charts.funding.setOption({
+                    tooltip: { ...baseTooltip, trigger: 'axis', axisPointer: { type: 'line', lineStyle: { color: p.muted, type: 'dashed' } } },
+                    grid: { left: '2%', right: '3%', top: '10%', bottom: '6%', containLabel: true },
+                    xAxis: {
+                        type: 'category',
+                        data: uabDataStore.years,
+                        axisLine: { lineStyle: { color: p.ink, width: 1.5 } },
+                        axisTick: { show: false },
+                        axisLabel: { color: p.ink, fontFamily: 'JetBrains Mono', fontWeight: 600, fontSize: 12 }
+                    },
+                    yAxis: {
+                        type: 'value',
+                        axisLabel: { formatter: '{value} M€', color: p.muted, fontFamily: 'JetBrains Mono', fontSize: 11 },
+                        splitLine: { lineStyle: { color: p.grid, type: 'dotted' } }
+                    },
+                    series: [
+                        {
+                            name: 'Via Competitiva (M€)',
+                            type: 'bar',
+                            stack: 'captat',
+                            barWidth: '34%',
+                            itemStyle: { color: p.green },
+                            data: compList
+                        },
+                        {
+                            name: 'Convenis i Serveis (M€)',
+                            type: 'bar',
+                            stack: 'captat',
+                            itemStyle: { color: p.ochre },
+                            data: nonCompList
+                        },
+                        {
+                            name: 'Total Recursos Captats (M€)',
+                            type: 'line',
+                            symbol: 'circle',
+                            symbolSize: 6,
+                            itemStyle: { color: p.ink },
+                            lineStyle: { width: 1.5, type: 'dotted' },
+                            label: { show: true, position: 'top', formatter: '{c}', color: p.ink, fontFamily: 'JetBrains Mono', fontWeight: 700, fontSize: 11 },
+                            data: totalList
+                        },
+                        {
+                            name: 'Ingressos Liquidats a 31/12 (M€)',
+                            type: 'line',
+                            symbol: 'rect',
+                            symbolSize: 7,
+                            itemStyle: { color: p.petrol },
+                            lineStyle: { width: 2.5 },
+                            data: liquidatList
+                        }
+                    ]
+                });
+            }
+
+            // 2. HR Categories Horizontal Bar
+            const domHrCat = document.getElementById('chartHrCategories');
+            if (domHrCat) {
+                if (!charts.hrCat) charts.hrCat = echarts.init(domHrCat);
+                const sorted = [...uabDataStore.hrCategories].sort((a, b) => a.value - b.value);
+                charts.hrCat.setOption({
+                    tooltip: { ...baseTooltip, trigger: 'axis', axisPointer: { type: 'shadow' } },
+                    grid: { left: '1%', right: '8%', top: '2%', bottom: '2%', containLabel: true },
+                    xAxis: {
+                        type: 'value',
+                        splitLine: { lineStyle: { color: p.grid, type: 'dotted' } },
+                        axisLabel: { color: p.muted, fontFamily: 'JetBrains Mono', fontSize: 11 }
+                    },
+                    yAxis: {
+                        type: 'category',
+                        data: sorted.map(i => i.name),
+                        axisLine: { lineStyle: { color: p.ink } },
+                        axisTick: { show: false },
+                        axisLabel: { color: p.ink, fontSize: 12, fontWeight: 500 }
+                    },
+                    series: [{
+                        name: 'Efectius',
+                        type: 'bar',
+                        barWidth: '48%',
+                        itemStyle: { color: p.green },
+                        data: sorted.map(i => i.value),
+                        label: { show: true, position: 'right', color: p.ink, fontFamily: 'JetBrains Mono', fontWeight: 600, fontSize: 11 }
+                    }]
+                });
+            }
+
+            // 3. HR Gender Donut
+            const domHrGender = document.getElementById('chartHrGender');
+            if (domHrGender) {
+                if (!charts.hrGender) charts.hrGender = echarts.init(domHrGender);
+                charts.hrGender.setOption({
+                    tooltip: { ...baseTooltip, trigger: 'item' },
+                    series: [{
+                        name: 'Distribució per Gènere',
+                        type: 'pie',
+                        radius: ['58%', '86%'],
+                        avoidLabelOverlap: false,
+                        itemStyle: { borderColor: p.sheet, borderWidth: 2 },
+                        label: { show: true, position: 'center', formatter: '48,7%\nDones', fontSize: 13, fontWeight: 700, fontFamily: 'JetBrains Mono', color: p.ink },
+                        data: [
+                            { value: uabDataStore.totals.mujeres, name: 'Dones', itemStyle: { color: p.green } },
+                            { value: uabDataStore.totals.hombres, name: 'Homes', itemStyle: { color: p.petrol } }
+                        ]
+                    }]
+                });
+            }
+
+            // 4. Publications Evolution
+            const domPubs = document.getElementById('chartPubsEvolution');
+            if (domPubs) {
+                if (!charts.pubs) charts.pubs = echarts.init(domPubs);
+                charts.pubs.setOption({
+                    tooltip: { ...baseTooltip, trigger: 'axis' },
+                    legend: { bottom: 0, textStyle: { color: p.ink, fontSize: 11, fontFamily: 'JetBrains Mono' }, itemWidth: 14, itemHeight: 8 },
+                    grid: { left: '2%', right: '3%', top: '6%', bottom: '15%', containLabel: true },
+                    xAxis: {
+                        type: 'category',
+                        boundaryGap: false,
+                        data: uabDataStore.years,
+                        axisLine: { lineStyle: { color: p.ink, width: 1.5 } },
+                        axisTick: { show: false },
+                        axisLabel: { color: p.ink, fontFamily: 'JetBrains Mono', fontWeight: 600 }
+                    },
+                    yAxis: {
+                        type: 'value',
+                        min: 2000,
+                        axisLabel: { color: p.muted, fontFamily: 'JetBrains Mono', fontSize: 11 },
+                        splitLine: { lineStyle: { color: p.grid, type: 'dotted' } }
+                    },
+                    series: [
+                        {
+                            name: 'Scopus',
+                            type: 'line',
+                            symbol: 'circle',
+                            symbolSize: 6,
+                            itemStyle: { color: p.green },
+                            lineStyle: { width: 2.5 },
+                            data: uabDataStore.publicationsSeries.scopus
+                        },
+                        {
+                            name: 'Web of Science (JCR)',
+                            type: 'line',
+                            symbol: 'rect',
+                            symbolSize: 6,
+                            itemStyle: { color: p.petrol },
+                            lineStyle: { width: 2 },
+                            data: uabDataStore.publicationsSeries.wos
+                        },
+                        {
+                            name: 'Quartil Q1',
+                            type: 'line',
+                            symbol: 'diamond',
+                            symbolSize: 6,
+                            itemStyle: { color: p.ochre },
+                            lineStyle: { width: 2, type: 'dashed' },
+                            data: uabDataStore.publicationsSeries.q1
+                        }
+                    ]
+                });
+            }
+
+            // 5. Publication Types Bar
+            const domPubTypes = document.getElementById('chartPubTypes');
+            if (domPubTypes) {
+                if (!charts.pubTypes) charts.pubTypes = echarts.init(domPubTypes);
+                const sortedTypes = [...uabDataStore.publicationTypes].sort((a, b) => a.value - b.value);
+                charts.pubTypes.setOption({
+                    tooltip: { ...baseTooltip, trigger: 'axis', axisPointer: { type: 'shadow' } },
+                    grid: { left: '1%', right: '14%', top: '2%', bottom: '2%', containLabel: true },
+                    xAxis: { type: 'value', show: false },
+                    yAxis: {
+                        type: 'category',
+                        data: sortedTypes.map(t => t.name),
+                        axisLine: { lineStyle: { color: p.ink } },
+                        axisTick: { show: false },
+                        axisLabel: { color: p.ink, fontSize: 11 }
+                    },
+                    series: [{
+                        type: 'bar',
+                        barWidth: '50%',
+                        itemStyle: { color: p.petrol },
+                        label: { show: true, position: 'right', color: p.ink, fontFamily: 'JetBrains Mono', fontSize: 11 },
+                        data: sortedTypes.map(t => t.value)
+                    }]
+                });
+            }
+
+            // 6. Theses by Gender
+            const domTheses = document.getElementById('chartThesesGender');
+            if (domTheses) {
+                if (!charts.theses) charts.theses = echarts.init(domTheses);
+                charts.theses.setOption({
+                    tooltip: { ...baseTooltip, trigger: 'axis', axisPointer: { type: 'shadow' } },
+                    legend: { bottom: 0, textStyle: { color: p.ink, fontSize: 11, fontFamily: 'JetBrains Mono' }, itemWidth: 12, itemHeight: 8 },
+                    grid: { left: '2%', right: '3%', top: '6%', bottom: '16%', containLabel: true },
+                    xAxis: {
+                        type: 'category',
+                        data: uabDataStore.years,
+                        axisLine: { lineStyle: { color: p.ink } },
+                        axisTick: { show: false },
+                        axisLabel: { color: p.ink, fontFamily: 'JetBrains Mono', fontSize: 11 }
+                    },
+                    yAxis: {
+                        type: 'value',
+                        axisLabel: { color: p.muted, fontFamily: 'JetBrains Mono', fontSize: 10 },
+                        splitLine: { lineStyle: { color: p.grid, type: 'dotted' } }
+                    },
+                    series: [
+                        {
+                            name: 'Doctores',
+                            type: 'bar',
+                            stack: 'tesis',
+                            barWidth: '38%',
+                            itemStyle: { color: p.green },
+                            data: uabDataStore.thesesSeries.dones
+                        },
+                        {
+                            name: 'Doctors',
+                            type: 'bar',
+                            stack: 'tesis',
+                            itemStyle: { color: p.petrol },
+                            data: uabDataStore.thesesSeries.homes
+                        }
+                    ]
+                });
+            }
+
+            // 7. External Organizations
+            const domExtOrgs = document.getElementById('chartExtOrgs');
+            if (domExtOrgs) {
+                if (!charts.extOrgs) charts.extOrgs = echarts.init(domExtOrgs);
+                const sortedOrgs = [...uabDataStore.externalOrgs].sort((a, b) => a.value - b.value);
+                charts.extOrgs.setOption({
+                    tooltip: { ...baseTooltip, trigger: 'axis', axisPointer: { type: 'shadow' } },
+                    grid: { left: '1%', right: '14%', top: '2%', bottom: '2%', containLabel: true },
+                    xAxis: { type: 'value', show: false },
+                    yAxis: {
+                        type: 'category',
+                        data: sortedOrgs.map(o => o.name),
+                        axisLine: { lineStyle: { color: p.ink } },
+                        axisTick: { show: false },
+                        axisLabel: { color: p.ink, fontSize: 11 }
+                    },
+                    series: [{
+                        type: 'bar',
+                        barWidth: '50%',
+                        itemStyle: { color: p.petrol },
+                        label: { show: true, position: 'right', color: p.ink, fontFamily: 'JetBrains Mono', fontSize: 10 },
+                        data: sortedOrgs.map(o => o.value)
+                    }]
+                });
+            }
+
+            // 8. ODS Impact
+            const domOds = document.getElementById('chartOdsImpact');
+            if (domOds) {
+                if (!charts.ods) charts.ods = echarts.init(domOds);
+                const sortedOds = [...uabDataStore.odsProjects].sort((a, b) => a.value - b.value);
+                charts.ods.setOption({
+                    tooltip: { ...baseTooltip, trigger: 'axis', axisPointer: { type: 'shadow' } },
+                    grid: { left: '1%', right: '10%', top: '2%', bottom: '2%', containLabel: true },
+                    xAxis: {
+                        type: 'value',
+                        splitLine: { lineStyle: { color: p.grid, type: 'dotted' } },
+                        axisLabel: { color: p.muted, fontFamily: 'JetBrains Mono', fontSize: 10 }
+                    },
+                    yAxis: {
+                        type: 'category',
+                        data: sortedOds.map(o => o.name),
+                        axisLine: { lineStyle: { color: p.ink } },
+                        axisTick: { show: false },
+                        axisLabel: { color: p.ink, fontSize: 11, fontWeight: 500 }
+                    },
+                    series: [{
+                        type: 'bar',
+                        barWidth: '48%',
+                        itemStyle: { color: p.green },
+                        label: { show: true, position: 'right', color: p.ink, fontFamily: 'JetBrains Mono', fontWeight: 600, fontSize: 11 },
+                        data: sortedOds.map(o => o.value)
+                    }]
+                });
+            }
+        }
+
+        function resizeAllCharts() {
+            Object.values(charts).forEach(c => {
+                if (c && typeof c.resize === 'function') c.resize();
+            });
+        }
+
+        function setYear(year) {
+            uabDataStore.currentYear = year;
+            document.querySelectorAll('.selected-year-label').forEach(el => {
+                el.textContent = year;
+            });
+
+            document.querySelectorAll('.year-pill').forEach(btn => {
+                const btnYear = parseInt(btn.getAttribute('data-year'), 10);
+                if (btnYear === year) {
+                    btn.className = 'year-pill cursor-pointer px-2.5 py-1 text-xs font-bold bg-[var(--ink)] text-[var(--sheet)]';
+                } else {
+                    btn.className = 'year-pill cursor-pointer px-2.5 py-1 text-xs font-medium text-[var(--ink-muted)] hover:text-[var(--ink)]';
+                }
+            });
+
+            const yd = uabDataStore.byYear[year];
+            if (yd) {
+                document.getElementById('kpiExecFunding').textContent = yd.fundingTotal;
+                const subEl = document.getElementById('kpiExecFundingSub');
+                if (subEl) subEl.textContent = yd.fundingSub;
+                const brkEl = document.getElementById('kpiExecFundingBreakdown');
+                if (brkEl) brkEl.textContent = yd.fundingBreak;
+                const uabEl = document.getElementById('slide2UabPart');
+                if (uabEl) uabEl.textContent = yd.uabPart;
+                const pctEl = document.getElementById('slide2UabPct');
+                if (pctEl) pctEl.textContent = yd.uabPct;
+                const esfEl = document.getElementById('slide2EsferaPart');
+                if (esfEl) esfEl.textContent = yd.esferaPart;
+                const intlEl = document.getElementById('slide2IntlPart');
+                if (intlEl) intlEl.textContent = yd.intlPart;
+                document.getElementById('kpiExecPubs').textContent = yd.pubs.toLocaleString('ca-ES');
+                document.getElementById('kpiExecTheses').textContent = yd.thesis.toLocaleString('ca-ES');
+                document.getElementById('kpiExecTrams').textContent = yd.trams.toLocaleString('ca-ES');
+                document.getElementById('kpiExecSpinoffs').textContent = yd.spinoffs;
+            }
+            initAllCharts();
+        }
+
+        function updateSlideIndicators(index) {
+            currentSlideIndex = index;
+            const badge = document.getElementById('slideCounterBadge');
+            if (badge) {
+                badge.textContent = `Capítol ${romanNumerals[index]} de VII`;
+            }
+
+            document.querySelectorAll('.chapter-link').forEach((link, idx) => {
+                if (idx === index) {
+                    link.classList.add('active');
+                } else {
+                    link.classList.remove('active');
+                }
+            });
+
+            document.querySelectorAll('.pres-slide').forEach((s, idx) => {
+                if (idx === index) {
+                    s.classList.add('active-slide');
+                } else {
+                    s.classList.remove('active-slide');
+                }
+            });
+
+            setTimeout(resizeAllCharts, 60);
+        }
+
+        function goToSlide(index) {
+            const bounded = (index + totalSlides) % totalSlides;
+            updateSlideIndicators(bounded);
+            if (!isDeckMode) {
+                const target = document.getElementById(`slide-${bounded}`);
+                if (target) {
+                    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            }
+            resetAutoplayProgress();
+        }
+
+        function nextSlide() {
+            goToSlide(currentSlideIndex + 1);
+        }
+
+        function prevSlide() {
+            goToSlide(currentSlideIndex - 1);
+        }
+
+        function toggleDeckMode() {
+            isDeckMode = !isDeckMode;
+            document.body.classList.toggle('deck-mode', isDeckMode);
+            const label = document.getElementById('deckModeText');
+            if (label) {
+                label.textContent = isDeckMode ? 'Vista Editorial Completa' : 'Mode Projecció (16:9)';
+            }
+            updateSlideIndicators(currentSlideIndex);
+            setTimeout(resizeAllCharts, 100);
+        }
+
+        function toggleAutoplay() {
+            isAutoplay = !isAutoplay;
+            const text = document.getElementById('autoplayText');
+            const bar = document.getElementById('autoplayProgressBar');
+
+            if (isAutoplay) {
+                if (text) text.textContent = 'Auto-Play: Actiu';
+                startAutoplayLoop();
+            } else {
+                if (text) text.textContent = 'Auto-Play: Inactiu';
+                stopAutoplayLoop();
+                if (bar) bar.style.width = '0%';
+            }
+        }
+
+        function updateAutoplayInterval() {
+            const select = document.getElementById('autoplaySpeed');
+            if (select) {
+                autoplayDuration = parseInt(select.value, 10) || 12000;
+            }
+            if (isAutoplay) {
+                startAutoplayLoop();
+            }
+        }
+
+        function resetAutoplayProgress() {
+            autoplayElapsed = 0;
+            const bar = document.getElementById('autoplayProgressBar');
+            if (bar) bar.style.width = '0%';
+        }
+
+        function startAutoplayLoop() {
+            stopAutoplayLoop();
+            resetAutoplayProgress();
+            const stepMs = 100;
+            const bar = document.getElementById('autoplayProgressBar');
+
+            progressTimer = setInterval(() => {
+                autoplayElapsed += stepMs;
+                const pct = Math.min(100, (autoplayElapsed / autoplayDuration) * 100);
+                if (bar) bar.style.width = `${pct}%`;
+
+                if (autoplayElapsed >= autoplayDuration) {
+                    autoplayElapsed = 0;
+                    nextSlide();
+                }
+            }, stepMs);
+        }
+
+        function stopAutoplayLoop() {
+            if (progressTimer) {
+                clearInterval(progressTimer);
+                progressTimer = null;
+            }
+        }
+
+        function toggleTheme() {
+            const html = document.documentElement;
+            html.classList.toggle('dark');
+            const label = document.getElementById('themeText');
+            if (label) {
+                label.textContent = html.classList.contains('dark') ? 'Paper' : 'Fosc';
+            }
+            initAllCharts();
+        }
+
+        async function syncWithLiveApi() {
+            const statusLabel = document.getElementById('syncStatusLabel');
+            const syncDot = document.getElementById('syncDot');
+
+            if (statusLabel) statusLabel.textContent = 'Sincronitzant...';
+
+            try {
+                const fetchJson = async (path) => {
+                    const fn = window.apiFetch ? window.apiFetch(path) : fetch('/api' + path);
+                    const resp = await fn;
+                    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                    return resp.json();
+                };
+
+                const [vigentes, sexDist, financament, orcid] = await Promise.all([
+                    fetchJson('/persons/stats/vigentes-total'),
+                    fetchJson('/persons/stats/sex-distribution'),
+                    fetchJson('/strategic-indicators/financament-recerca'),
+                    fetchJson('/persons/stats/orcid')
+                ]);
+
+                if (vigentes && vigentes.total) {
+                    uabDataStore.totals.vigentesTotal = vigentes.total;
+                    document.getElementById('kpiExecPersons').textContent = vigentes.total.toLocaleString('ca-ES');
+                }
+                if (sexDist && sexDist.mujeres) {
+                    uabDataStore.totals.mujeres = sexDist.mujeres;
+                    uabDataStore.totals.hombres = sexDist.hombres;
+                    const tot = (sexDist.mujeres + sexDist.hombres + (sexDist.otros || 0)) || 1;
+                    const pctDones = ((sexDist.mujeres / tot) * 100).toFixed(1).replace('.', ',');
+                    const pctHomes = ((sexDist.hombres / tot) * 100).toFixed(1).replace('.', ',');
+                    document.getElementById('hrMujeresVal').textContent = `${sexDist.mujeres.toLocaleString('ca-ES')} (${pctDones}%)`;
+                    document.getElementById('hrHombresVal').textContent = `${sexDist.hombres.toLocaleString('ca-ES')} (${pctHomes}%)`;
+                }
+                if (financament && Array.isArray(financament.years)) {
+                    let sumUab = 0;
+                    let sumEsfera = 0;
+                    financament.years.forEach((yr, idx) => {
+                        if (yr >= 2021 && yr <= 2025) {
+                            const uabM = (financament.totals.uab[idx] || 0) / 1e6;
+                            const esfM = (financament.totals.esfera[idx] || 0) / 1e6;
+                            const compM = (financament.competitive.total[idx] || 0) / 1e6;
+                            const nonCompM = (financament.nonCompetitive.total[idx] || 0) / 1e6;
+                            sumUab += uabM;
+                            sumEsfera += esfM;
+                            if (uabDataStore.byYear[yr]) {
+                                uabDataStore.byYear[yr].comp = +compM.toFixed(1);
+                                uabDataStore.byYear[yr].nonComp = +nonCompM.toFixed(1);
+                                uabDataStore.byYear[yr].fundingTotal = `${(uabM + esfM).toFixed(1).replace('.', ',')} M€`;
+                            }
+                        }
+                    });
+                    const tot5y = (sumUab + sumEsfera).toFixed(1).replace('.', ',');
+                    document.getElementById('heroTotalAwardsMoney').textContent = `${tot5y} M€`;
+                    document.getElementById('heroTotalAwardsCount').textContent = `${sumUab.toFixed(1).replace('.', ',')} M€ UAB · ${sumEsfera.toFixed(1).replace('.', ',')} M€ Esfera`;
+                    setYear(uabDataStore.currentYear);
+                }
+                if (orcid && orcid.conOrcid) {
+                    document.getElementById('hrOrcidVal').textContent = orcid.conOrcid.toLocaleString('ca-ES');
+                }
+
+                initAllCharts();
+                if (statusLabel) statusLabel.textContent = 'Sincronitzat (Kraken)';
+                if (syncDot) syncDot.className = 'w-1.5 h-1.5 rounded-full bg-emerald-600';
+            } catch (err) {
+                if (statusLabel) statusLabel.textContent = 'Font: Kraken / SGR';
+            }
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName)) return;
+            if (e.key === 'ArrowRight' || e.key === 'PageDown') {
+                e.preventDefault();
+                nextSlide();
+            } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+                e.preventDefault();
+                prevSlide();
+            } else if (e.key === 'p' || e.key === 'P') {
+                e.preventDefault();
+                toggleDeckMode();
+            } else if (e.key === 'f' || e.key === 'F') {
+                e.preventDefault();
+                if (!document.fullscreenElement) {
+                    document.documentElement.requestFullscreen().catch(() => {});
+                } else {
+                    document.exitFullscreen().catch(() => {});
+                }
+            } else if (e.key === 'Escape' && isDeckMode) {
+                toggleDeckMode();
+            }
+        });
+
+        function setupScrollSpy() {
+            const slides = document.querySelectorAll('.pres-slide');
+            const observer = new IntersectionObserver((entries) => {
+                if (isDeckMode) return;
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        const idx = parseInt(entry.target.getAttribute('data-slide-index'), 10);
+                        if (!isNaN(idx)) updateSlideIndicators(idx);
+                    }
+                });
+            }, { threshold: 0.35 });
+
+            slides.forEach(s => observer.observe(s));
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            initAllCharts();
+            setupScrollSpy();
+            window.addEventListener('resize', resizeAllCharts);
+        });
+    </script>
+</body>
+</html>

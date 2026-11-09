@@ -2235,6 +2235,85 @@ public class StudentThesisController {
      * Returns thesis counts per year for supervisors belonging to a given institute.
      * Filters persons by active membership (vigent) or membership overlapping the period (periode).
      */
+    private List<String> getDirectorUuidsForOrg(String orgUuid, Integer desde, Integer hasta, String filtrePersonal) {
+        if (orgUuid == null || orgUuid.isBlank() || "all".equalsIgnoreCase(orgUuid)) {
+            return null;
+        }
+
+        List<Document> conditions = new ArrayList<>();
+        conditions.add(new Document("organization.uuid", orgUuid));
+
+        boolean usePeriode = "periode".equalsIgnoreCase(filtrePersonal);
+        LocalDate now = LocalDate.now();
+        String hoyIso = now.toString();
+        Date hoyDate = Date.from(now.atStartOfDay(ZoneId.systemDefault()).toInstant());
+
+        if (usePeriode) {
+            if (desde != null) {
+                String desdeIso = desde + "-01-01";
+                Date desdeDate = Date.from(LocalDate.of(desde, 1, 1).atStartOfDay(ZoneId.systemDefault()).toInstant());
+                conditions.add(new Document("$or", List.of(
+                        new Document("period.endDate", null),
+                        new Document("period.endDate", new Document("$exists", false)),
+                        new Document("$and", List.of(
+                                new Document("period.endDate", new Document("$type", 9)),
+                                new Document("period.endDate", new Document("$gte", desdeDate))
+                        )),
+                        new Document("$and", List.of(
+                                new Document("period.endDate", new Document("$type", 2)),
+                                new Document("period.endDate", new Document("$gte", desdeIso))
+                        ))
+                )));
+            }
+            if (hasta != null) {
+                String hastaIso = hasta + "-12-31";
+                Date hastaDate = Date.from(LocalDate.of(hasta, 12, 31).atStartOfDay(ZoneId.systemDefault()).toInstant());
+                conditions.add(new Document("$or", List.of(
+                        new Document("period.startDate", null),
+                        new Document("period.startDate", new Document("$exists", false)),
+                        new Document("$and", List.of(
+                                new Document("period.startDate", new Document("$type", 9)),
+                                new Document("period.startDate", new Document("$lte", hastaDate))
+                        )),
+                        new Document("$and", List.of(
+                                new Document("period.startDate", new Document("$type", 2)),
+                                new Document("period.startDate", new Document("$lte", hastaIso))
+                        ))
+                )));
+            }
+        } else {
+            conditions.add(new Document("$or", List.of(
+                    new Document("period.endDate", null),
+                    new Document("period.endDate", new Document("$exists", false)),
+                    new Document("$and", List.of(
+                            new Document("period.endDate", new Document("$type", 9)),
+                            new Document("period.endDate", new Document("$gte", hoyDate))
+                    )),
+                    new Document("$and", List.of(
+                            new Document("period.endDate", new Document("$type", 2)),
+                            new Document("period.endDate", new Document("$gte", hoyIso))
+                    ))
+            )));
+        }
+
+        Document elemMatch = conditions.size() == 1 ? conditions.get(0) : new Document("$and", conditions);
+        Document query = new Document("staffOrganizationAssociations", new Document("$elemMatch", elemMatch));
+
+        List<Document> persons = mongoTemplate.getCollection("Persons")
+                .find(query)
+                .projection(new Document("uuid", 1))
+                .into(new ArrayList<>());
+
+        List<String> uuids = new ArrayList<>();
+        for (Document p : persons) {
+            String u = p.getString("uuid");
+            if (u != null && !u.isBlank()) {
+                uuids.add(u);
+            }
+        }
+        return uuids;
+    }
+
     @GetMapping("/stats/per-year-institute")
     public List<Map<String, Object>> tesisPerAnyInstitut(
             @RequestParam String orgUuid,
@@ -2252,15 +2331,26 @@ public class StudentThesisController {
             new Document("type.term.en_GB", new Document("$regex", "doctoral thesis|phd thesis").append("$options", "i"))
         )));
 
-        if (orgUuid != null && !orgUuid.isBlank() && !"all".equalsIgnoreCase(orgUuid)) {
-            matchConditions.add(new Document("managingOrganization.uuid", orgUuid));
-        }
-
         if (desde != null || hasta != null) {
             Document yearRange = new Document();
             if (desde != null) yearRange.append("$gte", desde);
             if (hasta != null) yearRange.append("$lte", hasta);
             matchConditions.add(new Document("awardDate.year", yearRange));
+        }
+
+        if (orgUuid != null && !orgUuid.isBlank() && !"all".equalsIgnoreCase(orgUuid)) {
+            List<String> personUuids = getDirectorUuidsForOrg(orgUuid, desde, hasta, filtrePersonal);
+            if (personUuids == null || personUuids.isEmpty()) {
+                return List.of();
+            }
+            Document supervisorMatch = new Document("person.uuid", new Document("$in", personUuids))
+                .append("$or", List.of(
+                    new Document("role.term.ca_ES", new Document("$not", new Document("$regex", "tutor").append("$options", "i"))),
+                    new Document("role.term.es_ES", new Document("$not", new Document("$regex", "tutor").append("$options", "i"))),
+                    new Document("role.term.en_GB", new Document("$not", new Document("$regex", "tutor").append("$options", "i"))),
+                    new Document("role", new Document("$exists", false))
+                ));
+            matchConditions.add(new Document("supervisors", new Document("$elemMatch", supervisorMatch)));
         }
 
         pipeline.add(new Document("$match", new Document("$and", matchConditions)));
@@ -2305,15 +2395,27 @@ public class StudentThesisController {
             new Document("type.term.en_GB", new Document("$regex", "doctoral thesis|phd thesis").append("$options", "i"))
         )));
 
-        if (orgUuid != null && !orgUuid.isBlank() && !"all".equalsIgnoreCase(orgUuid)) {
-            matchConditions.add(new Document("managingOrganization.uuid", orgUuid));
-        }
-
         if (desde != null || hasta != null) {
             Document yearRange = new Document();
             if (desde != null) yearRange.append("$gte", desde);
             if (hasta != null) yearRange.append("$lte", hasta);
             matchConditions.add(new Document("awardDate.year", yearRange));
+        }
+
+        List<String> personUuids = null;
+        if (orgUuid != null && !orgUuid.isBlank() && !"all".equalsIgnoreCase(orgUuid)) {
+            personUuids = getDirectorUuidsForOrg(orgUuid, desde, hasta, filtrePersonal);
+            if (personUuids == null || personUuids.isEmpty()) {
+                return List.of();
+            }
+            Document supervisorMatch = new Document("person.uuid", new Document("$in", personUuids))
+                .append("$or", List.of(
+                    new Document("role.term.ca_ES", new Document("$not", new Document("$regex", "tutor").append("$options", "i"))),
+                    new Document("role.term.es_ES", new Document("$not", new Document("$regex", "tutor").append("$options", "i"))),
+                    new Document("role.term.en_GB", new Document("$not", new Document("$regex", "tutor").append("$options", "i"))),
+                    new Document("role", new Document("$exists", false))
+                ));
+            matchConditions.add(new Document("supervisors", new Document("$elemMatch", supervisorMatch)));
         }
 
         pipeline.add(new Document("$match", new Document("$and", matchConditions)));
@@ -2335,6 +2437,11 @@ public class StudentThesisController {
         // Exclude tutors
         pipeline.add(new Document("$match", new Document("supervisorRoleText",
             new Document("$not", new Document("$regex", "tutor")))));
+
+        // If filtering by institute, only keep supervisors who belong to the institute
+        if (personUuids != null) {
+            pipeline.add(new Document("$match", new Document("supervisors.person.uuid", new Document("$in", personUuids))));
+        }
 
         // Create a unique supervisor identifier (using person uuid, external person uuid, or name)
         pipeline.add(new Document("$addFields", new Document("supervisorUuid",
@@ -2404,7 +2511,18 @@ public class StudentThesisController {
         )));
 
         if (orgUuid != null && !orgUuid.isBlank() && !"all".equalsIgnoreCase(orgUuid)) {
-            matchConditions.add(new Document("managingOrganization.uuid", orgUuid));
+            List<String> personUuids = getDirectorUuidsForOrg(orgUuid, desde, hasta, filtrePersonal);
+            if (personUuids == null || personUuids.isEmpty()) {
+                return List.of();
+            }
+            Document supervisorMatch = new Document("person.uuid", new Document("$in", personUuids))
+                .append("$or", List.of(
+                    new Document("role.term.ca_ES", new Document("$not", new Document("$regex", "tutor").append("$options", "i"))),
+                    new Document("role.term.es_ES", new Document("$not", new Document("$regex", "tutor").append("$options", "i"))),
+                    new Document("role.term.en_GB", new Document("$not", new Document("$regex", "tutor").append("$options", "i"))),
+                    new Document("role", new Document("$exists", false))
+                ));
+            matchConditions.add(new Document("supervisors", new Document("$elemMatch", supervisorMatch)));
         }
 
         if (desde != null || hasta != null) {

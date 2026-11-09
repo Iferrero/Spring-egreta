@@ -70,7 +70,38 @@
           "pureId": "$pureId",
           "anyo": "$anyo",
           "titulo": {
-            "$ifNull": ["$title.es_ES", { "$ifNull": ["$title.en_GB", "Sense títol"] }]
+            "$cond": [
+              {
+                "$and": [
+                  { "$ne": ["$title.es_ES", null] },
+                  { "$ne": ["$title.es_ES", ""] }
+                ]
+              },
+              "$title.es_ES",
+              {
+                "$cond": [
+                  {
+                    "$and": [
+                      { "$ne": ["$title.ca_ES", null] },
+                      { "$ne": ["$title.ca_ES", ""] }
+                    ]
+                  },
+                  "$title.ca_ES",
+                  {
+                    "$cond": [
+                      {
+                        "$and": [
+                          { "$ne": ["$title.en_GB", null] },
+                          { "$ne": ["$title.en_GB", ""] }
+                        ]
+                      },
+                      "$title.en_GB",
+                      "Sense títol"
+                    ]
+                  }
+                ]
+              }
+            ]
           },
           "tipoAward": "$type.term.ca_ES",
           "categoria": "$categoria",

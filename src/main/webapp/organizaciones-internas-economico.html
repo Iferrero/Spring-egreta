@@ -456,16 +456,16 @@
 
             const normalized = data.map(d => ({
                 categoria: normalizarCategoria(d.categoria),
-                tipo: d.type_term || d.tipo || "(Sense tipus)",
-                anio: String(Number(d.anio || 0)),
+                tipus: d.type_term || d.tipo || "(Sense tipus)",
+                any: String(Number(d.anio || 0)),
                 import: Number(d.import || 0)
             }));
 
             if (loading) loading.style.display = 'none';
 
             $(container).pivot(normalized, {
-                rows: ['tipo'],
-                cols: ['anio'],
+                rows: ['tipus'],
+                cols: ['any'],
                 vals: ['import'],
                 renderer: renderers['Heatmap'],
                 aggregator: sum(monedaEs)(['import']),
