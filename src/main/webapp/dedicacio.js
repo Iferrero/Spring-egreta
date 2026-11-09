@@ -12,28 +12,87 @@ let activeTab = 'personal';
 let personalDataCompleta = [];
 let filtreAcademic = 'tots';
 
-const PDI_KEYWORDS = [
-    'professor', 'professora', 'lector', 'lectora', 'catedràtic', 'catedrática',
-    'catedrático', 'agregat', 'agregada', 'agregado', 'investigador', 'investigadora',
-    'doctorand', 'doctoranda', 'becari', 'becaria', 'postdoc', 'post-doc',
-    'visitant', 'visitante', 'emèrit', 'emérit', 'col·laborador', 'colaborador',
-    'ajudant', 'ayudante', 'contractat', 'contratado', 'recerca', 'research',
-    'científic', 'científica'
-];
+function normalizeTextAcademic(str) {
+    if (!str) return '';
+    return String(str)
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .trim();
+}
 
-function esAcademic(empleo) {
-    if (!empleo || empleo === '-') return false;
-    const s = empleo.toLowerCase();
-    return PDI_KEYWORDS.some(k => s.includes(k));
+function esTecnicSuportNoAcreditat(rowOrEmpleo) {
+    if (!rowOrEmpleo) return false;
+    const rawEmpleo = typeof rowOrEmpleo === 'object'
+        ? (rowOrEmpleo.empleo_departamento || rowOrEmpleo.empleo || '')
+        : String(rowOrEmpleo);
+    const s = normalizeTextAcademic(rawEmpleo);
+    if (!s || s === '-') return false;
+
+    const esTecnic = s.includes('tecnic') || s.includes('tecnico') || s.includes('tsr');
+    const esSuportRecerca = (s.includes('suport') || s.includes('soport')) && (s.includes('recerca') || s.includes('investiga'));
+    const esTSR = s.includes('tsr') || (esTecnic && esSuportRecerca);
+
+    if (esTSR) {
+        return !s.includes('acredit');
+    }
+    return false;
+}
+
+function esAcademic(rowOrEmpleo) {
+    if (!rowOrEmpleo) return false;
+
+    // If an object is passed, check staff_type first if provided by backend (Pure staffType field)
+    if (typeof rowOrEmpleo === 'object') {
+        const staffType = normalizeTextAcademic(rowOrEmpleo.staff_type);
+        if (staffType) {
+            if (staffType.includes('no academic') || staffType.includes('non-academic') || staffType.includes('no academ')) {
+                return false;
+            }
+            if (staffType.includes('academic') || staffType.includes('academ')) {
+                return true;
+            }
+        }
+    }
+
+    const rawEmpleo = typeof rowOrEmpleo === 'object'
+        ? (rowOrEmpleo.empleo_departamento || rowOrEmpleo.empleo || '')
+        : String(rowOrEmpleo);
+
+    const s = normalizeTextAcademic(rawEmpleo);
+    if (!s || s === '-') return false;
+
+    // Explicit non-academic / PAS indicators
+    const pasIndicators = [
+        'tecnic', 'suport a la recerca', 'suport recerca', 'tsr',
+        'administra', 'gestio', 'gestion', 'auxiliar',
+        'secretari', 'subaltern', 'manteniment'
+    ];
+    if (pasIndicators.some(k => s.includes(k))) {
+        return false;
+    }
+
+    // Explicit academic / PDI indicators
+    const pdiIndicators = [
+        'profess', 'catedr', 'titular', 'agregat', 'agregad',
+        'lector', 'associat', 'asociad', 'substitu', 'sustitu',
+        'emerit', 'honorari', 'visitant', 'visitante',
+        'investig', 'research', 'postdoc', 'post-doc',
+        'doctor', 'predoc', 'fpu', 'fpi', 'fi-joan', 'fi-sdur',
+        'novell', 'formacio', 'becar', 'adscripci',
+        'beatriu', 'cajal', 'cierva', 'zambrano', 'salas',
+        'colabora', 'col·labora', 'cientific'
+    ];
+    return pdiIndicators.some(k => s.includes(k));
 }
 
 function filtrarRowsAcademic(rows, filtre) {
-    const source = rows || [];
+    const source = (rows || []).filter(r => !esTecnicSuportNoAcreditat(r));
     if (filtre === 'pdi') {
-        return source.filter(r => esAcademic(r.empleo_departamento));
+        return source.filter(r => esAcademic(r));
     }
     if (filtre === 'pas') {
-        return source.filter(r => !esAcademic(r.empleo_departamento));
+        return source.filter(r => !esAcademic(r));
     }
     return source;
 }
@@ -56,6 +115,7 @@ function aplicarFiltreAcademic(filtre) {
     const filtered = filtrarRowsAcademic(personalDataCompleta, filtre);
 
     demoTable.setData(filtered);
+    actualizarKPI(filtered);
     updateDedicationChart(filtered);
     updateRoleChart(filtered);
 }
@@ -206,10 +266,12 @@ function renderDemoTable(rows) {
         { title: 'Dedicació', field: 'dedicacion', sorter: 'string' },
         {
             title: 'Inici', field: 'inicio_instituto', sorter: 'date', sorterParams: { format: 'yyyy-MM-dd' },
+            accessorDownload: (value) => formatDateCatalan(value),
             formatter: (cell) => formatDateCatalan(cell.getValue())
         },
         {
             title: 'Fi', field: 'fin_instituto', sorter: 'date', sorterParams: { format: 'yyyy-MM-dd' },
+            accessorDownload: (value) => formatDateCatalan(value),
             formatter: (cell) => formatDateCatalan(cell.getValue())
         }
     ];
@@ -231,6 +293,190 @@ function renderDemoTable(rows) {
     // Apply current academic filter
     const toShow = filtrarRowsAcademic(personalDataCompleta, filtreAcademic);
     demoTable.setData(toShow);
+}
+
+function getOrgYAniosInfo(prefix) {
+    const select = document.getElementById('orgSelect');
+    let nomOrg = 'general';
+    if (select && select.selectedIndex >= 0) {
+        const text = select.options[select.selectedIndex]?.text?.trim();
+        if (text && !text.startsWith('Tots')) {
+            nomOrg = text.replace(/[^a-zA-Z0-9àèéíòóúÀÈÉÍÒÓÚçÇñÑ_-]/g, '_').toLowerCase();
+        }
+    }
+    const slider = document.getElementById('sliderAnios');
+    let aniosInfo = '';
+    if (slider && slider.noUiSlider) {
+        const [desde, hasta] = slider.noUiSlider.get();
+        aniosInfo = '_' + parseInt(desde, 10) + '-' + parseInt(hasta, 10);
+    }
+    const today = new Date().toISOString().slice(0, 10);
+    return prefix + '_' + nomOrg + aniosInfo + '_' + today + '.xlsx';
+}
+
+function exportarExcelPersonal() {
+    if (!demoTable) {
+        alert('No hi ha dades per exportar.');
+        return;
+    }
+    const data = demoTable.getData();
+    if (!data || data.length === 0) {
+        alert('No hi ha dades de personal per exportar.');
+        return;
+    }
+    if (typeof XLSX === 'undefined') {
+        alert("No s'ha pogut carregar la llibreria per exportar a Excel (XLSX).");
+        return;
+    }
+
+    const filtreSufix = (filtreAcademic && filtreAcademic !== 'tots') ? ('_' + filtreAcademic) : '';
+    const filename = getOrgYAniosInfo('personal' + filtreSufix);
+    demoTable.download('xlsx', filename, { sheetName: 'Personal' });
+}
+
+function exportarExcelAjuts() {
+    if (typeof XLSX === 'undefined') {
+        alert("No s'ha pogut carregar la llibreria per exportar a Excel (XLSX).");
+        return;
+    }
+    const dataLlista = (ajutsLlistaTable && ajutsLlistaTable.getData()) || ajutsLlistaDataCompleta || [];
+    if (!dataLlista || dataLlista.length === 0) {
+        alert("No hi ha ajuts per exportar.");
+        return;
+    }
+
+    try {
+        const rowsAjuts = dataLlista.map(r => {
+            let inici = '';
+            if (r.vigenciaInicio) {
+                const f = new Date(r.vigenciaInicio);
+                inici = Number.isNaN(f.getTime()) ? String(r.vigenciaInicio) : f.toLocaleDateString('ca-ES');
+            }
+            let fi = '';
+            if (r.vigenciaFin) {
+                const f = new Date(r.vigenciaFin);
+                fi = Number.isNaN(f.getTime()) ? String(r.vigenciaFin) : f.toLocaleDateString('ca-ES');
+            }
+            return {
+                'Any': r.anyo != null ? r.anyo : '',
+                'Tipus': r.tipoAward || '',
+                'Rol': r._rol || '',
+                'Títol': r.titulo || '',
+                'Import (€)': r.institutionalPart != null ? Number(r.institutionalPart) : '',
+                'Inici': inici,
+                'Fi': fi
+            };
+        });
+
+        const wb = XLSX.utils.book_new();
+        const wsAjuts = XLSX.utils.json_to_sheet(rowsAjuts);
+        XLSX.utils.book_append_sheet(wb, wsAjuts, 'Ajuts');
+
+        if (ajutsIpsTable) {
+            const dataIps = ajutsIpsTable.getData() || [];
+            if (dataIps.length > 0) {
+                const rowsIps = dataIps.map(r => ({
+                    'Investigador/a': r.nom || '',
+                    'Com a IP': r.comIP != null ? r.comIP : 0,
+                    'Com a Co-IP': r.comCoIP != null ? r.comCoIP : 0,
+                    'Total ajuts': r.total != null ? r.total : 0,
+                    'Import gestionat (€)': r.importTotal != null ? Number(r.importTotal) : 0
+                }));
+                const wsIps = XLSX.utils.json_to_sheet(rowsIps);
+                XLSX.utils.book_append_sheet(wb, wsIps, 'IPs i Co-IPs');
+            }
+        }
+
+        const filename = getOrgYAniosInfo('ajuts');
+        XLSX.writeFile(wb, filename);
+    } catch (err) {
+        console.error("Error al exportar ajuts a Excel:", err);
+        alert("Error al generar l'Excel d'ajuts: " + (err.message || err));
+    }
+}
+
+function exportarExcelAjutsIps() {
+    if (typeof XLSX === 'undefined') {
+        alert("No s'ha pogut carregar la llibreria per exportar a Excel (XLSX).");
+        return;
+    }
+    if (!ajutsIpsTable) {
+        alert("No hi ha dades d'IPs per exportar.");
+        return;
+    }
+    const dataIps = ajutsIpsTable.getData('active') || [];
+    if (!dataIps || dataIps.length === 0) {
+        alert("No hi ha dades d'IPs per exportar.");
+        return;
+    }
+    const filename = getOrgYAniosInfo('ajuts_ips');
+    ajutsIpsTable.download('xlsx', filename, { sheetName: 'IPs_i_CoIPs' });
+}
+
+function exportarExcelTesis() {
+    if (typeof XLSX === 'undefined') {
+        alert("No s'ha pogut carregar la llibreria per exportar a Excel (XLSX).");
+        return;
+    }
+    const currentList = selectedDirectorUuid
+        ? (llistaData || []).filter(t => (t.directorUuids || []).includes(selectedDirectorUuid))
+        : (llistaData || []);
+
+    if (!currentList || currentList.length === 0) {
+        alert('No hi ha tesis per exportar.');
+        return;
+    }
+
+    const rowsExport = currentList.map(t => {
+        const autors = (t.autors || []).join(', ');
+        const directors = (t.directors || []).join(', ');
+        let fecha = '';
+        if (t.dia && t.mes && t.any) {
+            const dd = String(t.dia).padStart(2, '0');
+            const mm = String(t.mes).padStart(2, '0');
+            fecha = dd + '/' + mm + '/' + t.any;
+        } else if (t.any) {
+            fecha = String(t.any);
+        }
+        return {
+            'Títol': t.titol || '',
+            'Autor/a': autors,
+            'Director/a': directors,
+            'Any': t.any || '',
+            'Data defensa': fecha
+        };
+    });
+
+    const wb = XLSX.utils.book_new();
+    const wsTesis = XLSX.utils.json_to_sheet(rowsExport);
+    XLSX.utils.book_append_sheet(wb, wsTesis, 'Tesis');
+
+    if (tesisTable) {
+        const dataAny = tesisTable.getData() || [];
+        if (dataAny.length > 0) {
+            const rowsAny = dataAny.map(r => ({
+                'Any': r.any,
+                'Tesis dirigides': r.tesis
+            }));
+            const wsAny = XLSX.utils.json_to_sheet(rowsAny);
+            XLSX.utils.book_append_sheet(wb, wsAny, 'Per Any');
+        }
+    }
+
+    if (directorsTable) {
+        const dataDir = directorsTable.getData() || [];
+        if (dataDir.length > 0) {
+            const rowsDir = dataDir.map(r => ({
+                'Director/a': r.nom,
+                'Tesis dirigides': r.tesis
+            }));
+            const wsDir = XLSX.utils.json_to_sheet(rowsDir);
+            XLSX.utils.book_append_sheet(wb, wsDir, 'Per Director');
+        }
+    }
+
+    const filename = getOrgYAniosInfo('tesis');
+    XLSX.writeFile(wb, filename);
 }
 
 function initDedicationChart() {
@@ -515,6 +761,7 @@ async function cargarDemoData() {
             return {
                 nombre: (d.lastName && d.firstName) ? `${d.lastName}, ${d.firstName}` : formatNombre(d.nombre || '-'),
                 empleo_departamento: d.empleo || d.empleo_departamento || '-',
+                staff_type: d.staff_type || '',
                 dedicacion: ded,
                 inicio_instituto: d.inicio_asociacion_IBB || d.inicio_instituto || '-',
                 fin_instituto: d.fin_asociacion_IBB || d.fin_instituto || '-'
@@ -522,8 +769,8 @@ async function cargarDemoData() {
         });
 
         renderDemoTable(rows);
-        actualizarKPI(rows);
         const rowsFiltrades = filtrarRowsAcademic(rows, filtreAcademic);
+        actualizarKPI(rowsFiltrades);
         updateDedicationChart(rowsFiltrades);
         updateRoleChart(rowsFiltrades);
     } catch (e) {
@@ -556,7 +803,9 @@ function switchTab(tab) {
     activeBtn.classList.remove('bg-slate-50', 'text-slate-500');
     activeBtn.classList.add('bg-white', 'text-indigo-700');
 
-    if (tab === 'ajuts') {
+    if (tab === 'personal') {
+        actualizarKPI(filtrarRowsAcademic(personalDataCompleta, filtreAcademic));
+    } else if (tab === 'ajuts') {
         cargarAjutsData();
     } else if (tab === 'tesis') {
         cargarTesisData();
@@ -581,15 +830,15 @@ function renderAjutsTable(data) {
 
     const normalized = data.map(d => ({
         categoria: d.categoria || 'Sense categoria',
-        type: d.type_term || d.tipo || '(Sense tipus)',
-        anio: String(Number(d.anio || 0)),
+        tipus: d.type_term || d.tipo || d.tipus || '(Sense tipus)',
+        any: String(Number(d.anio || d.any || d.anyo || 0)),
         ajuts: Number(d.ajuts || 0),
         import: Number(d.import || 0)
     }));
 
     $('#ajuts-pivot-container').pivot(normalized, {
-        rows: ['type'],
-        cols: ['anio'],
+        rows: ['tipus'],
+        cols: ['any'],
         vals: ['import'],
         renderer: renderers['Heatmap'],
         aggregator: sum(monedaEs)(['import']),
@@ -613,7 +862,9 @@ function construirPivotDataDesdeLlista(rows) {
         if (!byKey.has(key)) {
             byKey.set(key, {
                 categoria: d.categoria || tipo,
+                tipus: tipo,
                 tipo,
+                any: anio,
                 anio,
                 ajuts: 0,
                 import: 0
@@ -829,7 +1080,8 @@ function escaparHtmlDemo(valor) {
 
 function formatearTituloAjutConEnlace(cell) {
     const row = cell.getRow()?.getData?.() || {};
-    const titulo = cell.getValue() ?? '-';
+    const rawVal = cell.getValue();
+    const titulo = (rawVal != null && String(rawVal).trim() !== '') ? String(rawVal).trim() : 'Sense títol';
     const pureId = row.pureId;
     if (pureId == null || String(pureId).trim() === '') {
         return escaparHtmlDemo(titulo);

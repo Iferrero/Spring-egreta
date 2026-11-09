@@ -17,6 +17,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/pivottable/2.23.0/pivot.min.css">
     <link rel="stylesheet" href="table.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.7.1/nouislider.min.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
     <script src="https://unpkg.com/tabulator-tables@6.3.0/dist/js/tabulator.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
@@ -132,6 +133,14 @@
                     <div id="chartPlaceholder" class="text-sm text-slate-400 mt-2 hidden">No hi ha dades per mostrar.</div>
                 </div>
 
+                <div class="flex items-center justify-between mb-2 mt-4">
+                    <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider">Llista de personal</h3>
+                    <button id="btnExportarExcelPersonalTabla" type="button" onclick="exportarExcelPersonal()" class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg hover:bg-emerald-100 transition shadow-sm active:scale-95" title="Exportar dades de personal a Excel">
+                        <i class="fa-solid fa-file-excel"></i>
+                        <span>Exportar Excel</span>
+                    </button>
+                </div>
+
                 <div id="demoTable"></div>
             </div>
         </section>
@@ -168,8 +177,12 @@
                     </div>
                 </div>
                 <div id="ajutsLlistaWrapper" class="px-6 pb-6 hidden">
-                    <div class="flex items-center gap-3 mb-3 flex-wrap">
+                    <div class="flex items-center justify-between gap-3 mb-3 flex-wrap">
                         <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider">Llista d'ajuts</h3>
+                        <button id="btnExportarExcelAjuts" type="button" onclick="exportarExcelAjuts()" class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg hover:bg-emerald-100 transition shadow-sm active:scale-95" title="Exportar llista d'ajuts a Excel">
+                            <i class="fa-solid fa-file-excel"></i>
+                            <span>Exportar Excel</span>
+                        </button>
                     </div>
                     <div id="ajuts-llista-table"></div>
                 </div>
@@ -194,7 +207,13 @@
                     </div>
                 </div>
                 <div id="tesisLlistaWrapper" class="px-6 pb-6">
-                    <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Llista de tesis</h3>
+                    <div class="flex items-center justify-between gap-3 mb-3 flex-wrap">
+                        <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider">Llista de tesis</h3>
+                        <button id="btnExportarExcelTesis" type="button" onclick="exportarExcelTesis()" class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg hover:bg-emerald-100 transition shadow-sm active:scale-95" title="Exportar llista de tesis a Excel">
+                            <i class="fa-solid fa-file-excel"></i>
+                            <span>Exportar Excel</span>
+                        </button>
+                    </div>
                     <div id="tesis-llista-container" style="max-height:480px;overflow-y:auto;"></div>
                 </div>
             </div>
