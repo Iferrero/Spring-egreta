@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Informe Executiu de Recerca i Transferència (v2) | UAB</title>
+    <meta name="description" content="Variant v2: Dossier executiu d'anàlisi de dades de recerca de la Universitat Autònoma de Barcelona en format Corporate Modernist.">
+
+    <!-- Fonts: Plus Jakarta Sans (UI) + Space Grotesk (Headings) + JetBrains Mono (Numbers) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Apache ECharts -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <script src="config.js"></script>
+
+    <style>
+        :root {
+            --bg-canvas: #f8fafc;
+            --bg-card: #ffffff;
+            --border-color: #e2e8f0;
+            --border-dark: #0f172a;
+            --text-main: #0f172a;
+            --text-muted: #64748b;
+            --uab-green: #008037;
+            --uab-green-soft: #eaf6ee;
+            --uab-petrol: #0f3d3e;
+            --uab-amber: #b45309;
+        }
+
+        body {
+            font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
+            background-color: var(--bg-canvas);
+            color: var(--text-main);
+            margin: 0;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .font-display {
+            font-family: 'Space Grotesk', sans-serif;
+            letter-spacing: -0.025em;
+        }
+
+        .font-mono-num {
+            font-family: 'JetBrains Mono', monospace;
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* Clean Architectural Grid Borders */
+        .border-hairline { border: 1px solid var(--border-color); }
+        .border-hairline-t { border-top: 1px solid var(--border-color); }
+        .border-hairline-b { border-bottom: 1px solid var(--border-color); }
+        .border-hairline-l { border-left: 1px solid var(--border-color); }
+        .border-hairline-r { border-right: 1px solid var(--border-color); }
+
+        .stat-block {
+            border-left: 3px solid var(--uab-green);
+            padding-left: 1rem;
+        }
+
+        .stat-block-petrol {
+            border-left: 3px solid var(--uab-petrol);
+            padding-left: 1rem;
+        }
+
+        .stat-block-amber {
+            border-left: 3px solid var(--uab-amber);
+            padding-left: 1rem;
+        }
+
+        /* Active tab button */
+        .nav-tab-btn.active {
+            background-color: var(--text-main);
+            color: #ffffff;
+            font-weight: 700;
+        }
+
+        .report-section {
+            display: none;
+        }
+        .report-section.active-section {
+            display: block;
+            animation: fadeIn 0.2s ease-in-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(4px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .data-table th {
+            text-align: left;
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-muted);
+            padding: 0.75rem 1rem;
+            background: #f1f5f9;
+            border-bottom: 1px solid #cbd5e1;
+        }
+        .data-table td {
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid #e2e8f0;
+            font-size: 0.825rem;
+        }
+        .data-table tr:hover td {
+            background-color: #f8fafc;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+    <!-- Top Corporate Header -->
+    <header class="bg-white border-hairline-b sticky top-0 z-30 shadow-xs">
+        <div class="max-w-[1400px] mx-auto px-6 py-4 flex flex-wrap items-center justify-between gap-4">
+            <div class="flex items-center gap-5">
+                <a href="index.html" class="flex items-center gap-3" title="Tornar a l'índex">
+                    <img class="h-9 w-auto" src="https://www.uab.cat/Xcelerate/WAI/img/UAB-2linies-verd.svg" alt="Universitat Autònoma de Barcelona">
+                </a>
+                <div class="hidden sm:block border-hairline-l pl-4">
+                    <span class="text-[10px] font-mono-num uppercase tracking-wider text-slate-400 block font-bold">Variació v2 • Executive Briefing</span>
+                    <h1 class="text-xs font-bold text-slate-800">Dossier Executiu d'Indicadors Científics UAB</h1>
+                </div>
+            </div>
+
+            <!-- Right Controls: Year selector + Switch variants -->
+            <div class="flex items-center gap-3">
+                <div class="flex items-center bg-slate-100 p-1 rounded-md text-xs font-mono-num border border-slate-200">
+                    <span class="text-[10px] uppercase font-bold text-slate-400 px-2">Any:</span>
+                    <button type="button" onclick="setYear(2021)" class="year-btn px-2.5 py-1 rounded text-slate-600 hover:text-black font-semibold">2021</button>
+                    <button type="button" onclick="setYear(2022)" class="year-btn px-2.5 py-1 rounded text-slate-600 hover:text-black font-semibold">2022</button>
+                    <button type="button" onclick="setYear(2023)" class="year-btn px-2.5 py-1 rounded text-slate-600 hover:text-black font-semibold">2023</button>
+                    <button type="button" onclick="setYear(2024)" class="year-btn px-2.5 py-1 rounded text-slate-600 hover:text-black font-semibold">2024</button>
+                    <button type="button" onclick="setYear(2025)" class="year-btn px-2.5 py-1 rounded bg-black text-white font-bold">2025</button>
+                </div>
+
+                <div class="hidden md:flex items-center gap-1 border-hairline-l pl-3 text-xs font-mono-num">
+                    <a href="presentacio-recerca-uab.html" class="px-2 py-1 text-slate-500 hover:text-black hover:bg-slate-100 rounded" title="Versió Editorial Swiss Grid">v1</a>
+                    <span class="px-2 py-1 bg-emerald-100 text-emerald-900 font-bold rounded">v2</span>
+                    <a href="presentacio-recerca-uab-v3.html" class="px-2 py-1 text-slate-500 hover:text-black hover:bg-slate-100 rounded" title="Versió Widescreen Stage Deck">v3</a>
+                </div>
+
+                <a href="index.html" class="px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded hover:bg-slate-50">
+                    Índex
+                </a>
+            </div>
+        </div>
+
+        <!-- Section Navigation Ribbon -->
+        <div class="border-hairline-t bg-slate-50">
+            <div class="max-w-[1400px] mx-auto px-6 flex items-center gap-2 overflow-x-auto py-2">
+                <button type="button" onclick="switchSection(0)" class="nav-tab-btn active px-3 py-1.5 rounded text-xs font-semibold text-slate-600 hover:bg-white hover:text-black transition-colors" data-sec="0">
+                    01 • Síntesi Quinquennal
+                </button>
+                <button type="button" onclick="switchSection(1)" class="nav-tab-btn px-3 py-1.5 rounded text-xs font-semibold text-slate-600 hover:bg-white hover:text-black transition-colors" data-sec="1">
+                    02 • Finançament i Liquidació
+                </button>
+                <button type="button" onclick="switchSection(2)" class="nav-tab-btn px-3 py-1.5 rounded text-xs font-semibold text-slate-600 hover:bg-white hover:text-black transition-colors" data-sec="2">
+                    03 • Centres, Instituts i Departaments
+                </button>
+                <button type="button" onclick="switchSection(3)" class="nav-tab-btn px-3 py-1.5 rounded text-xs font-semibold text-slate-600 hover:bg-white hover:text-black transition-colors" data-sec="3">
+                    04 • Comunitat i Producció Científica
+                </button>
+                <button type="button" onclick="switchSection(4)" class="nav-tab-btn px-3 py-1.5 rounded text-xs font-semibold text-slate-600 hover:bg-white hover:text-black transition-colors" data-sec="4">
+                    05 • Transferència, Convenis i Rànquings
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Container -->
+    <main class="flex-grow max-w-[1400px] w-full mx-auto px-6 py-8">
+
+        <!-- =================================================================
+             SECCIÓ 01: SÍNTESI QUINQUENNAL
+             ================================================================= -->
+        <section id="section-0" class="report-section active-section space-y-6">
+            <!-- Executive Statement Banner -->
+            <div class="bg-white border-hairline p-8 rounded-lg shadow-2xs">
+                <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+                    <div>
+                        <span class="text-xs font-mono-num uppercase tracking-wider text-emerald-700 font-bold block mb-1">
+                            MEMÒRIA EXECUTIVA QUINQUENNI 2021–2025
+                        </span>
+                        <h2 class="text-2xl sm:text-3xl font-display font-bold text-slate-900">
+                            Rendiment Científic i Balanç Econòmic del Sistema UAB
+                        </h2>
+                        <p class="text-sm text-slate-600 mt-2 max-w-3xl leading-relaxed">
+                            Resum institucional de les magnituds de recerca verificades de la Universitat Autònoma de Barcelona i l'Esfera UAB. Dades contrastades amb les col·leccions del sistema Egreta i les liquidacions comptables d'ingressos.
+                        </p>
+                    </div>
+                    <div class="flex items-center gap-4 bg-slate-50 border border-slate-200 p-4 rounded-md shrink-0 font-mono-num text-xs">
+                        <div>
+                            <span class="text-slate-400 block text-[10px] uppercase">Any d'anàlisi actiu</span>
+                            <span class="text-xl font-bold text-slate-900 selected-year-label">2025</span>
+                        </div>
+                        <div class="border-hairline-l pl-4">
+                            <span class="text-slate-400 block text-[10px] uppercase">Rànquing CyD</span>
+                            <span class="text-xl font-bold text-emerald-700">1a Pública</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Key Metric Grid (4 Cards) -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="bg-white border-hairline p-5 rounded-lg stat-block">
+                    <span class="text-[11px] font-mono-num uppercase text-slate-400 block">Total Quinquenni (2021–2025)</span>
+                    <div class="text-3xl font-display font-bold text-slate-900 mt-2 font-mono-num" id="kpi5YearTotal">659,9 M€</div>
+                    <div class="text-xs font-semibold text-emerald-700 mt-1">539,5 M€ UAB + 120,5 M€ Esfera</div>
+                    <p class="text-[11px] text-slate-500 mt-3 pt-2 border-hairline-t">83,9% obtingut via convocatòries competitives.</p>
+                </div>
+
+                <div class="bg-white border-hairline p-5 rounded-lg stat-block">
+                    <span class="text-[11px] font-mono-num uppercase text-slate-400 block">Recursos Any <span class="selected-year-label">2025</span></span>
+                    <div class="text-3xl font-display font-bold text-slate-900 mt-2 font-mono-num" id="kpiYearFunding">123,3 M€</div>
+                    <div class="text-xs font-semibold text-emerald-700 mt-1" id="kpiYearSub">104,9 M€ competitius (85,0%)</div>
+                    <p class="text-[11px] text-slate-500 mt-3 pt-2 border-hairline-t" id="kpiYearBreakdown">105,9 M€ UAB + 17,4 M€ Esfera (Liquidat: 75,8 M€)</p>
+                </div>
+
+                <div class="bg-white border-hairline p-5 rounded-lg stat-block-petrol">
+                    <span class="text-[11px] font-mono-num uppercase text-slate-400 block">Comunitat Investigadora</span>
+                    <div class="text-3xl font-display font-bold text-slate-900 mt-2 font-mono-num">6.345</div>
+                    <div class="text-xs font-semibold text-slate-700 mt-1">48,7% dones · Paritat efectiva</div>
+                    <p class="text-[11px] text-slate-500 mt-3 pt-2 border-hairline-t">7.252 investigadors amb ORCID verificat.</p>
+                </div>
+
+                <div class="bg-white border-hairline p-5 rounded-lg stat-block-amber">
+                    <span class="text-[11px] font-mono-num uppercase text-slate-400 block">Cartera de Patents Vives</span>
+                    <div class="text-3xl font-display font-bold text-slate-900 mt-2 font-mono-num">716</div>
+                    <div class="text-xs font-semibold text-amber-800 mt-1">14 EBTs participades en cartera</div>
+                    <p class="text-[11px] text-slate-500 mt-3 pt-2 border-hairline-t">1,93 M€ en valorització R+D assistida.</p>
+                </div>
+            </div>
+
+            <!-- Two-Column Executive Briefing -->
+            <div class="grid grid-cols-12 gap-6">
+                <!-- Left: Historical Trend Line & Highlights (7 cols) -->
+                <div class="col-span-12 lg:col-span-7 bg-white border-hairline p-6 rounded-lg space-y-4">
+                    <div class="flex items-center justify-between border-hairline-b pb-3">
+                        <div>
+                            <h3 class="font-display font-bold text-base text-slate-900">Evolució de Recursos Captats (2021–2025)</h3>
+                            <p class="text-xs text-slate-500">Volum anual concedit vs. Ingressos de recerca liquidats a 31 de desembre</p>
+                        </div>
+                        <span class="text-xs font-mono-num bg-slate-100 text-slate-700 px-2.5 py-1 rounded font-semibold">En M€</span>
+                    </div>
+                    <div id="chartV2Funding" class="w-full h-72"></div>
+                </div>
+
+                <!-- Right: Executive Takeaways List (5 cols) -->
+                <div class="col-span-12 lg:col-span-5 bg-white border-hairline p-6 rounded-lg flex flex-col justify-between">
+                    <div>
+                        <h3 class="font-display font-bold text-base text-slate-900 border-hairline-b pb-3">
+                            Conclusions Clau de la Direcció de Recerca
+                        </h3>
+                        <ul class="divide-y divide-slate-100 text-xs space-y-3 pt-3">
+                            <li class="flex items-start gap-3">
+                                <span class="w-5 h-5 rounded-full bg-emerald-100 text-emerald-800 font-bold flex items-center justify-center shrink-0 font-mono-num text-[10px]">1</span>
+                                <p class="text-slate-700 leading-relaxed">
+                                    <strong>Capacitat de captació sòlida:</strong> La mitjana anual de captació del quinquenni supera els <strong>130 M€</strong>, amb un sostre històric assolit l'any 2023 amb <strong>145,9 M€</strong>.
+                                </p>
+                            </li>
+                            <li class="flex items-start gap-3">
+                                <span class="w-5 h-5 rounded-full bg-emerald-100 text-emerald-800 font-bold flex items-center justify-center shrink-0 font-mono-num text-[10px]">2</span>
+                                <p class="text-slate-700 leading-relaxed">
+                                    <strong>Lideratge estatal en convocatòries:</strong> La via competitiva representa més del <strong>83%</strong> del total de fons, amb una forta presència en fons estatals i en el programa Horitzó Europa.
+                                </p>
+                            </li>
+                            <li class="flex items-start gap-3">
+                                <span class="w-5 h-5 rounded-full bg-emerald-100 text-emerald-800 font-bold flex items-center justify-center shrink-0 font-mono-num text-[10px]">3</span>
+                                <p class="text-slate-700 leading-relaxed">
+                                    <strong>Impacte d'excel·lència:</strong> Més del <strong>81%</strong> dels articles científics publicats es troben als dos primers quartils (Q1 i Q2), i el <strong>82,4%</strong> són d'Accés Obert.
+                                </p>
+                            </li>
+                            <li class="flex items-start gap-3">
+                                <span class="w-5 h-5 rounded-full bg-emerald-100 text-emerald-800 font-bold flex items-center justify-center shrink-0 font-mono-num text-[10px]">4</span>
+                                <p class="text-slate-700 leading-relaxed">
+                                    <strong>Alineació estratègica:</strong> Els instituts de l'Esfera UAB (com Vall d'Hebron i ICTA-UAB) actuen com a catalitzadors clau de finançament de gran escala.
+                                </p>
+                            </li>
+                        </ul>
+                    </div>
+
+                    <div class="mt-6 p-3 bg-slate-50 border border-slate-200 rounded text-[11px] text-slate-600">
+                        Font oficial: Base de dades Kraken / Sistema Egreta (Vicerectorat de Recerca i de Transferència).
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- =================================================================
+             SECCIÓ 02: FINANÇAMENT I LIQUIDACIÓ
+             ================================================================= -->
+        <section id="section-1" class="report-section space-y-6">
+            <div class="bg-white border-hairline p-6 rounded-lg">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-hairline-b pb-4 mb-6">
+                    <div>
+                        <h2 class="font-display font-bold text-xl text-slate-900">Desglossament Pressupostari i Liquidació d'Ingressos</h2>
+                        <p class="text-xs text-slate-500 mt-1">Comparativa entre fons concedits (Via Competitiva / Convenis) i liquidació real d'ingressos (Ingressos Recerca.xlsx)</p>
+                    </div>
+                    <span class="text-xs font-mono-num text-emerald-700 font-bold">2020–2025</span>
+                </div>
+
+                <div class="grid grid-cols-12 gap-6">
+                    <!-- Left: Table (6 cols) -->
+                    <div class="col-span-12 lg:col-span-7">
+                        <div class="overflow-x-auto">
+                            <table class="data-table font-mono-num">
+                                <thead>
+                                    <tr>
+                                        <th>Exercici</th>
+                                        <th class="text-right">Total Captat</th>
+                                        <th class="text-right">Part UAB</th>
+                                        <th class="text-right">Esfera UAB</th>
+                                        <th class="text-right">Via Competitiva</th>
+                                        <th class="text-right">Liquidat a 31/12</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td class="font-bold">2020</td>
+                                        <td class="text-right font-semibold">100,9 M€</td>
+                                        <td class="text-right">78,9 M€</td>
+                                        <td class="text-right">21,9 M€</td>
+                                        <td class="text-right text-emerald-700">82,1 M€</td>
+                                        <td class="text-right text-slate-400">—</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="font-bold">2021</td>
+                                        <td class="text-right font-semibold">139,4 M€</td>
+                                        <td class="text-right">113,9 M€</td>
+                                        <td class="text-right">25,5 M€</td>
+                                        <td class="text-right text-emerald-700">116,5 M€</td>
+                                        <td class="text-right">59,5 M€</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="font-bold">2022</td>
+                                        <td class="text-right font-semibold">123,2 M€</td>
+                                        <td class="text-right">98,0 M€</td>
+                                        <td class="text-right">25,2 M€</td>
+                                        <td class="text-right text-emerald-700">102,3 M€</td>
+                                        <td class="text-right">72,1 M€</td>
+                                    </tr>
+                                    <tr class="bg-amber-50/40">
+                                        <td class="font-bold">2023 (Rècord)</td>
+                                        <td class="text-right font-bold text-amber-900">145,9 M€</td>
+                                        <td class="text-right font-semibold">119,6 M€</td>
+                                        <td class="text-right">26,3 M€</td>
+                                        <td class="text-right text-emerald-700 font-bold">127,7 M€</td>
+                                        <td class="text-right font-bold">84,5 M€</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="font-bold">2024</td>
+                                        <td class="text-right font-semibold">128,2 M€</td>
+                                        <td class="text-right">102,1 M€</td>
+                                        <td class="text-right">26,1 M€</td>
+                                        <td class="text-right text-emerald-700">102,7 M€</td>
+                                        <td class="text-right">77,0 M€</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="font-bold">2025</td>
+                                        <td class="text-right font-semibold">123,3 M€</td>
+                                        <td class="text-right">105,9 M€</td>
+                                        <td class="text-right">17,4 M€</td>
+                                        <td class="text-right text-emerald-700">104,9 M€</td>
+                                        <td class="text-right">75,8 M€</td>
+                                    </tr>
+                                </tbody>
+                                <tfoot>
+                                    <tr class="bg-slate-100 font-bold">
+                                        <td>Total 2021–2025</td>
+                                        <td class="text-right text-emerald-800">659,9 M€</td>
+                                        <td class="text-right">539,5 M€</td>
+                                        <td class="text-right">120,5 M€</td>
+                                        <td class="text-right">554,0 M€</td>
+                                        <td class="text-right">368,9 M€</td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Right: Stacked Analysis Card (5 cols) -->
+                    <div class="col-span-12 lg:col-span-5 bg-slate-50 border border-slate-200 p-5 rounded-lg flex flex-col justify-between">
+                        <div class="space-y-4">
+                            <h3 class="font-display font-bold text-sm text-slate-800 uppercase tracking-wider">
+                                Estructura de Liquidació 2025 (75,8 M€)
+                            </h3>
+                            <div class="space-y-3 text-xs">
+                                <div>
+                                    <div class="flex justify-between font-semibold mb-1">
+                                        <span>Projectes de Recerca (Cap. 4, 7 i 9)</span>
+                                        <span class="font-mono-num">47,0 M€ (62,0%)</span>
+                                    </div>
+                                    <div class="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
+                                        <div class="h-full bg-emerald-600 rounded-full" style="width: 62%"></div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <div class="flex justify-between font-semibold mb-1">
+                                        <span>Personal Investigador Contractat</span>
+                                        <span class="font-mono-num">16,5 M€ (21,8%)</span>
+                                    </div>
+                                    <div class="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
+                                        <div class="h-full bg-teal-700 rounded-full" style="width: 22%"></div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <div class="flex justify-between font-semibold mb-1">
+                                        <span>Prestació de Serveis de Recerca (Cap. 3)</span>
+                                        <span class="font-mono-num">12,3 M€ (16,2%)</span>
+                                    </div>
+                                    <div class="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
+                                        <div class="h-full bg-amber-600 rounded-full" style="width: 16%"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="pt-4 border-hairline-t text-[11px] text-slate-500">
+                            La liquidació reflecteix els fons executats i reconeguts en l'exercici pressupostari anual a 31 de desembre.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- =================================================================
+             SECCIÓ 03: CENTRES, INSTITUTS I DEPARTAMENTS
+             ================================================================= -->
+        <section id="section-2" class="report-section space-y-6">
+            <div class="bg-white border-hairline p-6 rounded-lg">
+                <div class="border-hairline-b pb-4 mb-6">
+                    <h2 class="font-display font-bold text-xl text-slate-900">Distribució Territorial i Orgànica de la Captació (2021–2025)</h2>
+                    <p class="text-xs text-slate-500 mt-1">Ranking d'unitats per import concedit acumulat (Part UAB en milions d'euros)</p>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <!-- Left: Top Institutes -->
+                    <div class="border border-slate-200 rounded-lg p-5">
+                        <h3 class="font-display font-bold text-sm text-slate-800 uppercase tracking-wider mb-4 text-emerald-800">
+                            Top Instituts i Centres de Recerca
+                        </h3>
+                        <table class="data-table font-mono-num">
+                            <thead>
+                                <tr>
+                                    <th>Institut / Centre</th>
+                                    <th class="text-right">Projectes</th>
+                                    <th class="text-right">Part UAB</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td class="font-sans font-medium">IR Hospital Universitari Vall d'Hebron</td>
+                                    <td class="text-right text-slate-500">1.321</td>
+                                    <td class="text-right font-bold text-emerald-800">51,04 M€</td>
+                                </tr>
+                                <tr>
+                                    <td class="font-sans font-medium">Institut de Ciència i Tecnologia Ambientals (ICTA)</td>
+                                    <td class="text-right text-slate-500">381</td>
+                                    <td class="text-right font-bold text-emerald-800">47,51 M€</td>
+                                </tr>
+                                <tr>
+                                    <td class="font-sans font-medium">Institut de Neurociències (INc-UAB)</td>
+                                    <td class="text-right text-slate-500">934</td>
+                                    <td class="text-right font-bold text-emerald-800">26,40 M€</td>
+                                </tr>
+                                <tr>
+                                    <td class="font-sans font-medium">Institut de Biotecnologia i Biomedicina (IBB)</td>
+                                    <td class="text-right text-slate-500">312</td>
+                                    <td class="text-right font-bold">15,84 M€</td>
+                                </tr>
+                                <tr>
+                                    <td class="font-sans font-medium">Centre d'Estudis Demogràfics (CED) / CREAF</td>
+                                    <td class="text-right text-slate-500">245</td>
+                                    <td class="text-right font-bold">14,20 M€</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Right: Top Departments -->
+                    <div class="border border-slate-200 rounded-lg p-5">
+                        <h3 class="font-display font-bold text-sm text-slate-800 uppercase tracking-wider mb-4 text-slate-800">
+                            Top Departaments Universitaris
+                        </h3>
+                        <table class="data-table font-mono-num">
+                            <thead>
+                                <tr>
+                                    <th>Departament UAB</th>
+                                    <th class="text-right">Projectes</th>
+                                    <th class="text-right">Part UAB</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td class="font-sans font-medium">Departament de Física</td>
+                                    <td class="text-right text-slate-500">272</td>
+                                    <td class="text-right font-bold text-slate-900">23,81 M€</td>
+                                </tr>
+                                <tr>
+                                    <td class="font-sans font-medium">Departament de Ciència Animal i dels Aliments</td>
+                                    <td class="text-right text-slate-500">1.029</td>
+                                    <td class="text-right font-bold text-slate-900">20,87 M€</td>
+                                </tr>
+                                <tr>
+                                    <td class="font-sans font-medium">Dept. d'Enginyeria Química, Biològica i Ambiental</td>
+                                    <td class="text-right text-slate-500">383</td>
+                                    <td class="text-right font-bold text-slate-900">20,50 M€</td>
+                                </tr>
+                                <tr>
+                                    <td class="font-sans font-medium">Departament de Química</td>
+                                    <td class="text-right text-slate-500">329</td>
+                                    <td class="text-right font-bold">19,40 M€</td>
+                                </tr>
+                                <tr>
+                                    <td class="font-sans font-medium">Dept. de Bioquímica i Biologia Molecular</td>
+                                    <td class="text-right text-slate-500">418</td>
+                                    <td class="text-right font-bold">17,15 M€</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- =================================================================
+             SECCIÓ 04: COMUNITAT I PRODUCCIÓ CIENTÍFICA
+             ================================================================= -->
+        <section id="section-3" class="report-section space-y-6">
+            <div class="grid grid-cols-12 gap-6">
+                <!-- Publications Trend (7 cols) -->
+                <div class="col-span-12 lg:col-span-7 bg-white border-hairline p-6 rounded-lg space-y-4">
+                    <div class="flex items-center justify-between border-hairline-b pb-3">
+                        <div>
+                            <h2 class="font-display font-bold text-base text-slate-900">Evolució de Publicacions Indexades</h2>
+                            <p class="text-xs text-slate-500">Scopus vs. Web of Science (JCR) i articles situats al primer quartil (Q1)</p>
+                        </div>
+                        <span class="text-xs font-mono-num text-emerald-700 font-bold">64,6% en Q1</span>
+                    </div>
+                    <div id="chartV2Pubs" class="w-full h-72"></div>
+                </div>
+
+                <!-- HR Breakdown (5 cols) -->
+                <div class="col-span-12 lg:col-span-5 bg-white border-hairline p-6 rounded-lg space-y-4">
+                    <div class="border-hairline-b pb-3">
+                        <h2 class="font-display font-bold text-base text-slate-900">Estructura del Personal Vigent (6.345)</h2>
+                        <p class="text-xs text-slate-500">Distribució per categories principals de recerca</p>
+                    </div>
+                    <div class="space-y-2.5 text-xs font-mono-num">
+                        <div class="flex justify-between p-2.5 bg-slate-50 rounded border border-slate-200">
+                            <span class="font-sans font-medium">Investigadors/es Predoctorals</span>
+                            <span class="font-bold text-emerald-800">550</span>
+                        </div>
+                        <div class="flex justify-between p-2.5 bg-slate-50 rounded border border-slate-200">
+                            <span class="font-sans font-medium">Professors/es Titulars d'Universitat</span>
+                            <span class="font-bold">493</span>
+                        </div>
+                        <div class="flex justify-between p-2.5 bg-slate-50 rounded border border-slate-200">
+                            <span class="font-sans font-medium">Professorat Lector</span>
+                            <span class="font-bold">464</span>
+                        </div>
+                        <div class="flex justify-between p-2.5 bg-slate-50 rounded border border-slate-200">
+                            <span class="font-sans font-medium">Professors/es Agregats</span>
+                            <span class="font-bold">428</span>
+                        </div>
+                        <div class="flex justify-between p-2.5 bg-slate-50 rounded border border-slate-200">
+                            <span class="font-sans font-medium">Catedràtics/ques d'Universitat</span>
+                            <span class="font-bold">400</span>
+                        </div>
+                        <div class="flex justify-between p-2.5 bg-slate-50 rounded border border-slate-200">
+                            <span class="font-sans font-medium">Investigadors/es Postdoctorals</span>
+                            <span class="font-bold text-amber-800">335</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- =================================================================
+             SECCIÓ 05: TRANSFERÈNCIA, CONVENIS I RÀNQUINGS
+             ================================================================= -->
+        <section id="section-4" class="report-section space-y-6">
+            <div class="grid grid-cols-12 gap-6">
+                <!-- Convenis Table (6 cols) -->
+                <div class="col-span-12 lg:col-span-6 bg-white border-hairline p-6 rounded-lg space-y-4">
+                    <div class="border-hairline-b pb-3">
+                        <h2 class="font-display font-bold text-base text-slate-900">Top Entitats en Convenis R+D (2021–2025)</h2>
+                        <p class="text-xs text-slate-500">Contractació i convenis registrats a Egreta</p>
+                    </div>
+                    <table class="data-table font-mono-num">
+                        <thead>
+                            <tr>
+                                <th>Entitat Finançadora</th>
+                                <th class="text-right">Convenis</th>
+                                <th class="text-right">Import Concedit</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td class="font-sans font-semibold">European Space Agency (ESA)</td>
+                                <td class="text-right text-slate-500">2</td>
+                                <td class="text-right font-bold text-emerald-800">3.319.993 €</td>
+                            </tr>
+                            <tr>
+                                <td class="font-sans font-semibold">KRIYA Therapeutics, INC</td>
+                                <td class="text-right text-slate-500">2</td>
+                                <td class="text-right font-bold">1.442.405 €</td>
+                            </tr>
+                            <tr>
+                                <td class="font-sans font-semibold">Tramontane Therapeutics Inc</td>
+                                <td class="text-right text-slate-500">5</td>
+                                <td class="text-right font-bold">1.409.925 €</td>
+                            </tr>
+                            <tr>
+                                <td class="font-sans font-semibold">Telomere Therapeutics</td>
+                                <td class="text-right text-slate-500">2</td>
+                                <td class="text-right font-bold">981.000 €</td>
+                            </tr>
+                            <tr>
+                                <td class="font-sans font-semibold">Servei Català de Trànsit (SCT)</td>
+                                <td class="text-right text-slate-500">6</td>
+                                <td class="text-right font-bold">894.280 €</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Rankings & Valorització (6 cols) -->
+                <div class="col-span-12 lg:col-span-6 bg-white border-hairline p-6 rounded-lg space-y-4">
+                    <div class="border-hairline-b pb-3">
+                        <h2 class="font-display font-bold text-base text-slate-900">Posicionament als Rànquings Internacionals</h2>
+                        <p class="text-xs text-slate-500">Avaluació externa del rendiment investigador</p>
+                    </div>
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Rànquing</th>
+                                <th class="text-right font-mono-num">Posició</th>
+                                <th>Àmbit Destacat</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td class="font-semibold text-xs">Rànquing CyD 2025/26</td>
+                                <td class="text-right font-mono-num font-bold text-emerald-700 text-xs">1a Pública</td>
+                                <td class="text-xs text-slate-600">28 indicadors de màxim rendiment</td>
+                            </tr>
+                            <tr>
+                                <td class="font-semibold text-xs">QS World University Rankings</td>
+                                <td class="text-right font-mono-num font-bold text-xs">#149 – #172</td>
+                                <td class="text-xs text-slate-600">Top 1% mundial; 2a d'Espanya</td>
+                            </tr>
+                            <tr>
+                                <td class="font-semibold text-xs">THE World University Rankings</td>
+                                <td class="text-right font-mono-num font-bold text-xs">#183</td>
+                                <td class="text-xs text-slate-600">Alta projecció internacional</td>
+                            </tr>
+                            <tr>
+                                <td class="font-semibold text-xs">U-Ranking (Ivie / BBVA)</td>
+                                <td class="text-right font-mono-num font-bold text-xs">Top 3 Estat</td>
+                                <td class="text-xs text-slate-600">Grup G1 de productivitat màxima</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Corporate Footer -->
+    <footer class="bg-white border-hairline-t py-6 text-xs text-slate-500 font-mono-num">
+        <div class="max-w-[1400px] mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div>UNIVERSITAT AUTÒNOMA DE BARCELONA • VICERECTORAT DE RECERCA I DE TRANSFERÈNCIA</div>
+            <div>SISTEMA EGRETA • VERSIÓ PLANTILLA 2.0 (CORPORATE MINIMALIST)</div>
+        </div>
+    </footer>
+
+    <!-- Logic Script -->
+    <script>
+        const uabDataStore = {
+            currentYear: 2025,
+            years: ['2021', '2022', '2023', '2024', '2025'],
+            byYear: {
+                2021: { total: '139,4 M€', comp: 116.5, nonComp: 23.0, liquidat: 59.5, sub: '116,5 M€ competitius (83,5%)', brk: '113,9 M€ UAB + 25,5 M€ Esfera (Liquidat: 59,5 M€)', pubs: 3890 },
+                2022: { total: '123,2 M€', comp: 102.3, nonComp: 20.9, liquidat: 72.1, sub: '102,3 M€ competitius (83,0%)', brk: '98,0 M€ UAB + 25,2 M€ Esfera (Liquidat: 72,1 M€)', pubs: 4120 },
+                2023: { total: '145,9 M€', comp: 127.7, nonComp: 18.2, liquidat: 84.5, sub: '127,7 M€ competitius (87,5%)', brk: '119,6 M€ UAB + 26,3 M€ Esfera (Liquidat: 84,5 M€)', pubs: 4450 },
+                2024: { total: '128,2 M€', comp: 102.7, nonComp: 25.5, liquidat: 77.0, sub: '102,7 M€ competitius (80,1%)', brk: '102,1 M€ UAB + 26,1 M€ Esfera (Liquidat: 77,0 M€)', pubs: 4610 },
+                2025: { total: '123,3 M€', comp: 104.9, nonComp: 18.4, liquidat: 75.8, sub: '104,9 M€ competitius (85,0%)', brk: '105,9 M€ UAB + 17,4 M€ Esfera (Liquidat: 75,8 M€)', pubs: 4821 }
+            },
+            pubsSeries: {
+                scopus: [3890, 4120, 4450, 4610, 4821],
+                wos: [3120, 3340, 3620, 3750, 3912],
+                q1: [2410, 2590, 2810, 2940, 3115]
+            }
+        };
+
+        const charts = {};
+
+        function initCharts() {
+            // Chart 1: Funding
+            const domFunding = document.getElementById('chartV2Funding');
+            if (domFunding) {
+                if (!charts.funding) charts.funding = echarts.init(domFunding);
+                charts.funding.setOption({
+                    tooltip: { trigger: 'axis' },
+                    legend: { bottom: 0, textStyle: { fontSize: 11, fontFamily: 'Plus Jakarta Sans' } },
+                    grid: { left: '2%', right: '3%', top: '8%', bottom: '14%', containLabel: true },
+                    xAxis: { type: 'category', data: uabDataStore.years, axisLabel: { fontFamily: 'JetBrains Mono', fontWeight: 600 } },
+                    yAxis: { type: 'value', axisLabel: { formatter: '{value} M€', fontFamily: 'JetBrains Mono' } },
+                    series: [
+                        { name: 'Via Competitiva (M€)', type: 'bar', stack: 'fons', barWidth: '35%', itemStyle: { color: '#008037' }, data: uabDataStore.years.map(y => uabDataStore.byYear[y].comp) },
+                        { name: 'Convenis i Serveis (M€)', type: 'bar', stack: 'fons', itemStyle: { color: '#b45309' }, data: uabDataStore.years.map(y => uabDataStore.byYear[y].nonComp) },
+                        { name: 'Liquidat a 31/12 (M€)', type: 'line', itemStyle: { color: '#0f3d3e' }, lineStyle: { width: 3 }, data: uabDataStore.years.map(y => uabDataStore.byYear[y].liquidat) }
+                    ]
+                });
+            }
+
+            // Chart 2: Pubs
+            const domPubs = document.getElementById('chartV2Pubs');
+            if (domPubs) {
+                if (!charts.pubs) charts.pubs = echarts.init(domPubs);
+                charts.pubs.setOption({
+                    tooltip: { trigger: 'axis' },
+                    legend: { bottom: 0, textStyle: { fontSize: 11, fontFamily: 'Plus Jakarta Sans' } },
+                    grid: { left: '2%', right: '3%', top: '8%', bottom: '14%', containLabel: true },
+                    xAxis: { type: 'category', boundaryGap: false, data: uabDataStore.years, axisLabel: { fontFamily: 'JetBrains Mono', fontWeight: 600 } },
+                    yAxis: { type: 'value', min: 2000, axisLabel: { fontFamily: 'JetBrains Mono' } },
+                    series: [
+                        { name: 'Scopus', type: 'line', itemStyle: { color: '#008037' }, lineStyle: { width: 3 }, data: uabDataStore.pubsSeries.scopus },
+                        { name: 'Web of Science (JCR)', type: 'line', itemStyle: { color: '#0f3d3e' }, lineStyle: { width: 2.5 }, data: uabDataStore.pubsSeries.wos },
+                        { name: 'Quartil Q1', type: 'line', itemStyle: { color: '#b45309' }, lineStyle: { width: 2, type: 'dashed' }, data: uabDataStore.pubsSeries.q1 }
+                    ]
+                });
+            }
+        }
+
+        function switchSection(index) {
+            document.querySelectorAll('.report-section').forEach((sec, idx) => {
+                if (idx === index) sec.classList.add('active-section');
+                else sec.classList.remove('active-section');
+            });
+
+            document.querySelectorAll('.nav-tab-btn').forEach((btn, idx) => {
+                if (idx === index) btn.classList.add('active');
+                else btn.classList.remove('active');
+            });
+
+            setTimeout(() => {
+                Object.values(charts).forEach(c => c && c.resize());
+            }, 60);
+        }
+
+        function setYear(year) {
+            uabDataStore.currentYear = year;
+            document.querySelectorAll('.selected-year-label').forEach(el => el.textContent = year);
+            document.querySelectorAll('.year-btn').forEach(btn => {
+                if (btn.textContent.trim() === String(year)) {
+                    btn.className = 'year-btn px-2.5 py-1 rounded bg-black text-white font-bold';
+                } else {
+                    btn.className = 'year-btn px-2.5 py-1 rounded text-slate-600 hover:text-black font-semibold';
+                }
+            });
+
+            const yd = uabDataStore.byYear[year];
+            if (yd) {
+                document.getElementById('kpiYearFunding').textContent = yd.total;
+                document.getElementById('kpiYearSub').textContent = yd.sub;
+                document.getElementById('kpiYearBreakdown').textContent = yd.brk;
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            initCharts();
+            window.addEventListener('resize', () => {
+                Object.values(charts).forEach(c => c && c.resize());
+            });
+        });
+    </script>
+</body>
+</html>

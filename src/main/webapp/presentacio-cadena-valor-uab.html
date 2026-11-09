@@ -1,0 +1,1873 @@
+<!DOCTYPE html>
+<html lang="ca" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cadena de Valor de la Recerca (Model GitMind) | Universitat Autònoma de Barcelona</title>
+    <!-- Google Fonts: Outfit (Display), Plus Jakarta Sans (Body), JetBrains Mono (Tabular Data) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;600;700&family=Outfit:wght@500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Apache ECharts -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+    <!-- Configuració del Portal UAB -->
+    <script src="config.js"></script>
+    <link rel="stylesheet" href="uab-theme.css">
+
+    <style>
+        /* ==========================================================================
+           UI/UX PRO MAX DESIGN SYSTEM — SWISS MODERNISM 2.0 + GITMIND TAXONOMY
+           Diagram Reference: https://gitmind.com/app/docs/mgyxz4fa (143 Nodes)
+           ========================================================================== */
+        :root {
+            --uab-campus: #008037;
+            --uab-collserola: #004d21;
+            --uab-pesol: #00cc58;
+            --uab-jade: #d8f3e3;
+            --uab-cala: #004d5e;
+            --uab-abissal: #003a47;
+            --uab-cantalup: #faae57;
+            --uab-ocas: #f88c12;
+
+            /* GitMind Semantic Node Colors */
+            --gm-green-bg: rgba(66, 189, 65, 0.14);
+            --gm-green-border: rgba(66, 189, 65, 0.45);
+            --gm-green-text: #15803d;
+            --gm-green-dot: #42bd41;
+
+            --gm-blue-bg: rgba(56, 189, 248, 0.16);
+            --gm-blue-border: rgba(56, 189, 248, 0.50);
+            --gm-blue-text: #0369a1;
+            --gm-blue-dot: #38bdf8;
+
+            /* Light Theme Tokens (Contrast >= 4.5:1) */
+            --bg-page: #f4f7f5;
+            --bg-surface: #ffffff;
+            --bg-surface-elevated: #f8faf9;
+            --bg-glass: rgba(255, 255, 255, 0.90);
+            --text-primary: #0f172a;
+            --text-secondary: #334155;
+            --text-muted: #475569;
+            --border-subtle: #dbe3de;
+            --border-strong: #cbd5e1;
+            --shadow-bento: 0 10px 30px -5px rgba(15, 23, 42, 0.05), 0 4px 12px -2px rgba(0, 128, 55, 0.04);
+            --shadow-bento-hover: 0 20px 40px -10px rgba(15, 23, 42, 0.10), 0 8px 20px -4px rgba(0, 128, 55, 0.08);
+            --ring-focus: #008037;
+        }
+
+        html.dark {
+            --gm-green-bg: rgba(66, 189, 65, 0.20);
+            --gm-green-border: rgba(66, 189, 65, 0.55);
+            --gm-green-text: #86efac;
+            --gm-green-dot: #4ade80;
+
+            --gm-blue-bg: rgba(56, 189, 248, 0.20);
+            --gm-blue-border: rgba(56, 189, 248, 0.55);
+            --gm-blue-text: #7dd3fc;
+            --gm-blue-dot: #38bdf8;
+
+            --bg-page: #07110d;
+            --bg-surface: #0f1f18;
+            --bg-surface-elevated: #152920;
+            --bg-glass: rgba(15, 31, 24, 0.90);
+            --text-primary: #f8fafc;
+            --text-secondary: #cbd5e1;
+            --text-muted: #94a3b8;
+            --border-subtle: #1e3a2f;
+            --border-strong: #2d5444;
+            --shadow-bento: 0 12px 32px -6px rgba(0, 0, 0, 0.45);
+            --shadow-bento-hover: 0 20px 44px -8px rgba(0, 204, 88, 0.14);
+            --ring-focus: #52ff9d;
+        }
+
+        body {
+            background-color: var(--bg-page);
+            color: var(--text-primary);
+            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+            transition: background-color 0.25s ease, color 0.25s ease;
+            overflow-x: hidden;
+        }
+
+        h1, h2, h3, h4, .font-display {
+            font-family: 'Outfit', sans-serif;
+            letter-spacing: -0.02em;
+        }
+
+        .font-mono-num {
+            font-family: 'JetBrains Mono', monospace;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .bento-card {
+            background-color: var(--bg-surface);
+            border: 1px solid var(--border-subtle);
+            border-radius: 24px;
+            box-shadow: var(--shadow-bento);
+            transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.22s ease, border-color 0.22s ease, background-color 0.25s ease;
+        }
+
+        .bento-card:hover {
+            box-shadow: var(--shadow-bento-hover);
+            border-color: rgba(0, 128, 55, 0.35);
+        }
+
+        .bento-surface-elevated {
+            background-color: var(--bg-surface-elevated);
+            border: 1px solid var(--border-subtle);
+        }
+
+        .glass-bar {
+            background-color: var(--bg-glass);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border-bottom: 1px solid var(--border-subtle);
+        }
+
+        /* GitMind Node Pill Badges */
+        .gm-node-green {
+            background-color: var(--gm-green-bg);
+            border: 1px solid var(--gm-green-border);
+            color: var(--gm-green-text);
+        }
+
+        .gm-node-blue {
+            background-color: var(--gm-blue-bg);
+            border: 1px solid var(--gm-blue-border);
+            color: var(--gm-blue-text);
+        }
+
+        .gm-node-neutral {
+            background-color: var(--bg-surface-elevated);
+            border: 1px solid var(--border-subtle);
+            color: var(--text-secondary);
+        }
+
+        /* Slide Deck Mode */
+        .pres-slide {
+            scroll-margin-top: 5.5rem;
+            transition: opacity 0.35s ease, transform 0.35s ease;
+        }
+
+        body.deck-mode {
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        body.deck-mode .pres-slide {
+            display: none;
+            height: calc(100vh - 86px);
+            overflow-y: auto;
+            padding-top: 1rem;
+            padding-bottom: 2rem;
+            animation: slideReveal 0.36s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        body.deck-mode .pres-slide.active-slide {
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+        }
+
+        @keyframes slideReveal {
+            from { opacity: 0; transform: translateY(14px) scale(0.992); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        .swiss-grid-bg {
+            background-image: radial-gradient(rgba(0, 128, 55, 0.12) 1px, transparent 1px);
+            background-size: 24px 24px;
+        }
+
+        html.dark .swiss-grid-bg {
+            background-image: radial-gradient(rgba(82, 255, 157, 0.08) 1px, transparent 1px);
+        }
+
+        button:focus-visible, a:focus-visible, select:focus-visible {
+            outline: 2px solid var(--ring-focus);
+            outline-offset: 2px;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, ::before, ::after {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+                scroll-behavior: auto !important;
+            }
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col swiss-grid-bg">
+
+    <!-- Auto-Play Top Progress Bar -->
+    <div class="fixed top-0 left-0 right-0 h-1 z-[60] bg-transparent pointer-events-none">
+        <div id="autoplayProgressBar" class="h-full bg-gradient-to-r from-[#008037] via-[#42bd41] to-[#38bdf8] w-0 transition-all duration-150"></div>
+    </div>
+
+    <!-- Top Navigation & Presentation Control Bar -->
+    <header class="glass-bar sticky top-0 z-50">
+        <div class="max-w-[1440px] mx-auto px-4 sm:px-8 h-20 flex items-center justify-between gap-4">
+            <!-- Brand & Title -->
+            <div class="flex items-center gap-3.5 min-w-0">
+                <a href="index.html" class="flex items-center gap-3 group focus:outline-none" aria-label="Tornar a l'inici del Portal de Recerca">
+                    <div class="w-11 h-11 rounded-2xl bg-[#008037] text-white flex items-center justify-center shadow-sm group-hover:bg-[#004d21] transition-colors">
+                        <i class="fa-solid fa-diagram-project text-lg" aria-hidden="true"></i>
+                    </div>
+                    <div class="min-w-0">
+                        <div class="flex items-center gap-2">
+                            <span class="font-display font-black text-base sm:text-lg tracking-tight truncate">UAB • Cadena de Valor de la Recerca</span>
+                            <span class="hidden md:inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold gm-node-green">
+                                <span id="syncDot" class="w-1.5 h-1.5 rounded-full bg-[#42bd41] animate-pulse"></span>
+                                <span id="syncStatusLabel">Model GitMind (143 Nodes)</span>
+                            </span>
+                        </div>
+                        <p class="text-xs text-[var(--text-muted)] truncate">Measuring Institutional Research Performance • Inputs → Activitats → Outputs → Outcomes → Impact</p>
+                    </div>
+                </a>
+            </div>
+
+            <!-- Interactive Controls -->
+            <div class="flex items-center gap-2 sm:gap-2.5 flex-wrap justify-end">
+                <!-- Year Selector -->
+                <div class="hidden xl:flex items-center p-1 rounded-2xl bento-surface-elevated" role="group" aria-label="Selector d'any de referència">
+                    <button type="button" onclick="setYear(2021)" data-year="2021" class="year-pill cursor-pointer px-3 py-1.5 rounded-xl text-xs font-bold transition-colors text-[var(--text-muted)] hover:text-[var(--text-primary)]">2021</button>
+                    <button type="button" onclick="setYear(2022)" data-year="2022" class="year-pill cursor-pointer px-3 py-1.5 rounded-xl text-xs font-bold transition-colors text-[var(--text-muted)] hover:text-[var(--text-primary)]">2022</button>
+                    <button type="button" onclick="setYear(2023)" data-year="2023" class="year-pill cursor-pointer px-3 py-1.5 rounded-xl text-xs font-bold transition-colors text-[var(--text-muted)] hover:text-[var(--text-primary)]">2023</button>
+                    <button type="button" onclick="setYear(2024)" data-year="2024" class="year-pill cursor-pointer px-3 py-1.5 rounded-xl text-xs font-bold transition-colors text-[var(--text-muted)] hover:text-[var(--text-primary)]">2024</button>
+                    <button type="button" onclick="setYear(2025)" data-year="2025" class="year-pill cursor-pointer px-3 py-1.5 rounded-xl text-xs font-bold transition-colors bg-[#008037] text-white shadow-sm">2025</button>
+                </div>
+
+                <!-- Deck Mode Button -->
+                <button type="button" id="btnDeckMode" onclick="toggleDeckMode()" class="cursor-pointer inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold border border-[var(--border-subtle)] bg-[var(--bg-surface)] hover:border-[#008037] transition-colors">
+                    <i class="fa-solid fa-tv text-[#008037]" aria-hidden="true"></i>
+                    <span id="deckModeText">Mode Diapositives</span>
+                </button>
+
+                <!-- Auto-Play Control -->
+                <div class="inline-flex items-center rounded-xl border border-emerald-600/30 bg-emerald-600/10 p-0.5">
+                    <button type="button" id="btnAutoplay" onclick="toggleAutoplay()" class="cursor-pointer inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold bg-[#008037] hover:bg-[#004d21] text-white transition-colors shadow-sm">
+                        <i id="autoplayIcon" class="fa-solid fa-play text-[10px]" aria-hidden="true"></i>
+                        <span id="autoplayText">Auto-Play</span>
+                    </button>
+                    <label for="autoplaySpeed" class="sr-only">Velocitat d'avanç automàtic</label>
+                    <select id="autoplaySpeed" onchange="updateAutoplayInterval()" class="cursor-pointer bg-transparent text-xs font-bold px-2 py-1 text-[var(--text-primary)] focus:outline-none" title="Temps per diapositiva">
+                        <option value="8000" class="bg-white text-slate-900">8s</option>
+                        <option value="12000" selected class="bg-white text-slate-900">12s</option>
+                        <option value="20000" class="bg-white text-slate-900">20s</option>
+                    </select>
+                </div>
+
+                <!-- Live API Sync Button -->
+                <button type="button" id="btnSyncLive" onclick="syncWithLiveApi()" class="cursor-pointer inline-flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold border border-[var(--border-subtle)] bg-[var(--bg-surface)] hover:border-[#008037] transition-colors" title="Sincronitzar en viu amb les APIs de Spring Boot (/api/*)">
+                    <i id="syncIcon" class="fa-solid fa-arrows-rotate text-[#008037]" aria-hidden="true"></i>
+                    <span class="hidden sm:inline">Sincronitzar API</span>
+                </button>
+
+                <!-- Theme Toggle -->
+                <button type="button" onclick="toggleTheme()" class="cursor-pointer w-9 h-9 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] flex items-center justify-center hover:border-[#008037] transition-colors" aria-label="Canviar entre tema clar i tema fosc" title="Tema Clar / Fosc (Projecció)">
+                    <i id="themeIcon" class="fa-solid fa-moon text-sm text-[var(--text-secondary)]" aria-hidden="true"></i>
+                </button>
+
+                <!-- Portal Link -->
+                <a href="index.html" class="cursor-pointer inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border border-[var(--border-subtle)] bg-[var(--bg-surface)] hover:border-[#008037] transition-colors" title="Tornar al Portal de Recerca">
+                    <i class="fa-solid fa-house text-xs text-[var(--text-secondary)]" aria-hidden="true"></i>
+                    <span class="hidden md:inline">Portal</span>
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <!-- Floating Side Navigation Dots (6 Slides: Overview + 5 GitMind Branches) -->
+    <nav aria-label="Navegació per les 6 diapositives del model GitMind" class="fixed right-4 top-1/2 -translate-y-1/2 z-40 hidden lg:flex flex-col gap-2.5 p-2 rounded-2xl glass-bar border border-[var(--border-subtle)] shadow-lg">
+        <button type="button" onclick="goToSlide(0)" class="slide-dot cursor-pointer w-3 h-3 rounded-full bg-[#008037] scale-125 transition-all" aria-label="Diapositiva 1: Mapa Mestre del Dashboard" title="1. Mapa Mestre del Dashboard"></button>
+        <button type="button" onclick="goToSlide(1)" class="slide-dot cursor-pointer w-3 h-3 rounded-full bg-slate-300 dark:bg-slate-700 hover:bg-[#008037] transition-all" aria-label="Diapositiva 2: 01 • Inputs" title="2. 01 • Inputs (Recursos i Estructures)"></button>
+        <button type="button" onclick="goToSlide(2)" class="slide-dot cursor-pointer w-3 h-3 rounded-full bg-slate-300 dark:bg-slate-700 hover:bg-[#008037] transition-all" aria-label="Diapositiva 3: 02 • Activitats" title="3. 02 • Activitats (Projectes, Convenis, Tesis en curs)"></button>
+        <button type="button" onclick="goToSlide(3)" class="slide-dot cursor-pointer w-3 h-3 rounded-full bg-slate-300 dark:bg-slate-700 hover:bg-[#008037] transition-all" aria-label="Diapositiva 4: 03 • Outputs" title="4. 03 • Outputs (Publicacions, Tesis llegides, Innovacions)"></button>
+        <button type="button" onclick="goToSlide(4)" class="slide-dot cursor-pointer w-3 h-3 rounded-full bg-slate-300 dark:bg-slate-700 hover:bg-[#008037] transition-all" aria-label="Diapositiva 5: 04 • Outcomes" title="5. 04 • Outcomes (Reconeixement, Trams, Transferència)"></button>
+        <button type="button" onclick="goToSlide(5)" class="slide-dot cursor-pointer w-3 h-3 rounded-full bg-slate-300 dark:bg-slate-700 hover:bg-[#008037] transition-all" aria-label="Diapositiva 6: 05 • Impact" title="6. 05 • Impact (Societat, Economia/EBTs, Polítiques, Rànquings)"></button>
+    </nav>
+
+    <!-- Main Content Container -->
+    <main class="flex-grow max-w-[1440px] w-full mx-auto px-4 sm:px-8 py-8 space-y-16">
+
+        <!-- =====================================================================
+             DIAPOSITIVA 1: MAPA MESTRE DEL DASHBOARD (GITMIND 143 NODES)
+             Inputs → Activitats → Outputs → Outcomes → Impact
+             ===================================================================== -->
+        <section id="slide-0" data-slide-index="0" class="pres-slide active-slide space-y-6">
+            <div class="grid grid-cols-12 gap-6">
+                <!-- Left Hero Card (7 cols) -->
+                <div class="col-span-12 lg:col-span-7 bento-card p-8 sm:p-10 relative overflow-hidden bg-gradient-to-br from-[#004d21] via-[#006b2d] to-[#003a47] text-white border-none flex flex-col justify-between min-h-[360px]">
+                    <div class="relative z-10 space-y-4">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <span class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/15 backdrop-blur-md text-xs font-bold tracking-wider uppercase text-emerald-200 border border-white/20">
+                                <i class="fa-solid fa-sitemap text-amber-300" aria-hidden="true"></i>
+                                <span>Diagrama GitMind <code class="font-mono-num">mgyxz4fa</code> • <span class="selected-year-label">2025</span></span>
+                            </span>
+                            <a href="https://gitmind.com/app/docs/mgyxz4fa" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/25 hover:bg-black/40 text-xs font-bold text-cyan-200 border border-white/15 transition-colors">
+                                <span>Measuring Institutional Research Performance</span>
+                                <i class="fa-solid fa-arrow-up-right-from-square text-[10px]" aria-hidden="true"></i>
+                            </a>
+                        </div>
+
+                        <h1 class="text-3xl sm:text-4xl lg:text-[42px] font-black leading-[1.08] tracking-tight">
+                            Arquitectura de la Cadena de Valor de la Recerca i la Transferència UAB.
+                        </h1>
+
+                        <p class="text-sm sm:text-base text-emerald-100/90 leading-relaxed max-w-2xl">
+                            Presentació executiva estructurada fidelment segons els <strong>5 pilars i 143 nodes</strong> del model institucional de mesura del rendiment investigador de la UAB: des dels <strong>Inputs</strong> i les <strong>Activitats</strong> fins als <strong>Outputs</strong>, els <strong>Outcomes</strong> i l'<strong>Impacte</strong>.
+                        </p>
+                    </div>
+
+                    <!-- GitMind Color Coding Legend inside Hero -->
+                    <div class="relative z-10 pt-6 mt-6 border-t border-white/15 flex flex-wrap items-center justify-between gap-4">
+                        <div class="flex flex-wrap items-center gap-3 text-xs">
+                            <span class="font-bold uppercase tracking-wider text-emerald-200/90">Llegenda de Nodes GitMind:</span>
+                            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#42bd41]/25 border border-[#42bd41] text-white font-bold">
+                                <span class="w-2.5 h-2.5 rounded-full bg-[#42bd41]"></span>Node Verd (Consolidat Egreta/Pure)
+                            </span>
+                            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#38bdf8]/25 border border-[#38bdf8] text-white font-bold">
+                                <span class="w-2.5 h-2.5 rounded-full bg-[#38bdf8]"></span>Node Blau (Prioritari / Desplegament)
+                            </span>
+                        </div>
+                        <div class="text-xs font-mono-num text-emerald-200">
+                            Quinquenni 2021–2025: <strong>659,9 M€</strong> captats
+                        </div>
+                    </div>
+
+                    <svg class="absolute -right-16 -bottom-16 w-80 h-80 text-white/5 pointer-events-none" viewBox="0 0 200 200" fill="currentColor" aria-hidden="true">
+                        <circle cx="100" cy="100" r="90" stroke="currentColor" stroke-width="12" fill="none"/>
+                        <circle cx="100" cy="100" r="55" stroke="currentColor" stroke-width="8" fill="none"/>
+                        <path d="M10 100 H190 M100 10 V190" stroke="currentColor" stroke-width="6"/>
+                    </svg>
+                </div>
+
+                <!-- Right Card: Interactive GitMind Tree Map / Hierarchy Chart (5 cols) -->
+                <div class="col-span-12 lg:col-span-5 bento-card p-6 flex flex-col justify-between">
+                    <div class="flex items-center justify-between mb-2">
+                        <div>
+                            <span class="text-[11px] font-bold uppercase tracking-wider text-[#008037]">Estructura Jeràrquica del Diagrama</span>
+                            <h2 class="text-lg font-extrabold text-[var(--text-primary)]">Arbre del Dashboard (5 Branques Mestres)</h2>
+                        </div>
+                        <span class="px-2.5 py-1 rounded-lg text-xs font-bold gm-node-green font-mono-num">143 Nodes</span>
+                    </div>
+                    <div id="chartGitmindTree" class="w-full h-64" role="img" aria-label="Arbre interactiu de les 5 branques del diagrama GitMind"></div>
+                    <p class="text-[11px] text-[var(--text-muted)] leading-relaxed mt-2">
+                        Fes clic a qualsevol dels <strong>5 blocs</strong> inferiors per navegar directament al desglossament complet dels seus nodes i mètriques verificades (<span class="selected-year-label">2025</span>).
+                    </p>
+                </div>
+            </div>
+
+            <!-- 5 Interactive Value-Chain Stage Cards (Direct Mapping to the 5 Top Branches of GitMind) -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                <!-- 1. INPUTS -->
+                <button type="button" onclick="goToSlide(1)" class="bento-card p-5 text-left cursor-pointer group flex flex-col justify-between relative overflow-hidden">
+                    <div class="flex items-center justify-between w-full">
+                        <span class="px-2.5 py-1 rounded-lg text-[11px] font-black uppercase tracking-wider bg-emerald-500/10 text-[#008037]">01 • Inputs</span>
+                        <i class="fa-solid fa-arrow-right text-xs text-[var(--text-muted)] group-hover:translate-x-1 group-hover:text-[#008037] transition-all" aria-hidden="true"></i>
+                    </div>
+                    <div class="my-3">
+                        <div id="ovInputFunding" class="text-2xl font-black font-display font-mono-num text-[var(--text-primary)]">123,3 M€</div>
+                        <div id="ovInputSub" class="text-xs font-bold text-[#008037] mt-0.5">1.405 PDI Estable • 178 SGR</div>
+                    </div>
+                    <div class="flex flex-wrap gap-1 pt-2 border-t border-[var(--border-subtle)] text-[10px]">
+                        <span class="px-2 py-0.5 rounded gm-node-green font-bold">Fin. Extern</span>
+                        <span class="px-2 py-0.5 rounded gm-node-green font-bold">PDI TC Doctor</span>
+                        <span class="px-2 py-0.5 rounded gm-node-blue font-bold">SGRs / SCT</span>
+                    </div>
+                </button>
+
+                <!-- 2. ACTIVITATS -->
+                <button type="button" onclick="goToSlide(2)" class="bento-card p-5 text-left cursor-pointer group flex flex-col justify-between relative overflow-hidden">
+                    <div class="flex items-center justify-between w-full">
+                        <span class="px-2.5 py-1 rounded-lg text-[11px] font-black uppercase tracking-wider bg-sky-500/10 text-sky-600 dark:text-sky-400">02 • Activitats</span>
+                        <i class="fa-solid fa-arrow-right text-xs text-[var(--text-muted)] group-hover:translate-x-1 group-hover:text-sky-600 transition-all" aria-hidden="true"></i>
+                    </div>
+                    <div class="my-3">
+                        <div id="ovActProjects" class="text-2xl font-black font-display font-mono-num text-[var(--text-primary)]">864 Nous Proj.</div>
+                        <div id="ovActSub" class="text-xs font-bold text-sky-600 dark:text-sky-400 mt-0.5">1.747 vigents • 742 convenis</div>
+                    </div>
+                    <div class="flex flex-wrap gap-1 pt-2 border-t border-[var(--border-subtle)] text-[10px]">
+                        <span class="px-2 py-0.5 rounded gm-node-blue font-bold">Lideratge PME</span>
+                        <span class="px-2 py-0.5 rounded gm-node-blue font-bold">Internacionals</span>
+                        <span class="px-2 py-0.5 rounded gm-node-neutral font-bold">Tesis en curs</span>
+                    </div>
+                </button>
+
+                <!-- 3. OUTPUTS -->
+                <button type="button" onclick="goToSlide(3)" class="bento-card p-5 text-left cursor-pointer group flex flex-col justify-between relative overflow-hidden">
+                    <div class="flex items-center justify-between w-full">
+                        <span class="px-2.5 py-1 rounded-lg text-[11px] font-black uppercase tracking-wider bg-amber-500/15 text-amber-700 dark:text-amber-300">03 • Outputs</span>
+                        <i class="fa-solid fa-arrow-right text-xs text-[var(--text-muted)] group-hover:translate-x-1 group-hover:text-amber-600 transition-all" aria-hidden="true"></i>
+                    </div>
+                    <div class="my-3">
+                        <div id="ovOutPubs" class="text-2xl font-black font-display font-mono-num text-[var(--text-primary)]">4.821 Art.</div>
+                        <div id="ovOutSub" class="text-xs font-bold text-amber-600 dark:text-amber-400 mt-0.5">342 Tesis • 74 Patents sol·lic.</div>
+                    </div>
+                    <div class="flex flex-wrap gap-1 pt-2 border-t border-[var(--border-subtle)] text-[10px]">
+                        <span class="px-2 py-0.5 rounded gm-node-green font-bold">CSUC/OpenAlex</span>
+                        <span class="px-2 py-0.5 rounded gm-node-blue font-bold">Q1 i Q2</span>
+                        <span class="px-2 py-0.5 rounded gm-node-green font-bold">Tesis / PCT</span>
+                    </div>
+                </button>
+
+                <!-- 4. OUTCOMES -->
+                <button type="button" onclick="goToSlide(4)" class="bento-card p-5 text-left cursor-pointer group flex flex-col justify-between relative overflow-hidden">
+                    <div class="flex items-center justify-between w-full">
+                        <span class="px-2.5 py-1 rounded-lg text-[11px] font-black uppercase tracking-wider bg-purple-500/10 text-purple-600 dark:text-purple-300">04 • Outcomes</span>
+                        <i class="fa-solid fa-arrow-right text-xs text-[var(--text-muted)] group-hover:translate-x-1 group-hover:text-purple-600 transition-all" aria-hidden="true"></i>
+                    </div>
+                    <div class="my-3">
+                        <div id="ovOutcTrams" class="text-2xl font-black font-display font-mono-num text-[var(--text-primary)]">1.132 Trams</div>
+                        <div id="ovOutcSub" class="text-xs font-bold text-purple-600 dark:text-purple-400 mt-0.5">FWCI 1,62 • 43 ICREA Acad.</div>
+                    </div>
+                    <div class="flex flex-wrap gap-1 pt-2 border-t border-[var(--border-subtle)] text-[10px]">
+                        <span class="px-2 py-0.5 rounded gm-node-green font-bold">Trams Vius</span>
+                        <span class="px-2 py-0.5 rounded gm-node-green font-bold">ICREA Acad.</span>
+                        <span class="px-2 py-0.5 rounded gm-node-blue font-bold">Acords Transf.</span>
+                    </div>
+                </button>
+
+                <!-- 5. IMPACT -->
+                <button type="button" onclick="goToSlide(5)" class="bento-card p-5 text-left cursor-pointer group flex flex-col justify-between relative overflow-hidden">
+                    <div class="flex items-center justify-between w-full">
+                        <span class="px-2.5 py-1 rounded-lg text-[11px] font-black uppercase tracking-wider bg-rose-500/10 text-rose-600 dark:text-rose-400">05 • Impact</span>
+                        <i class="fa-solid fa-arrow-right text-xs text-[var(--text-muted)] group-hover:translate-x-1 group-hover:text-rose-600 transition-all" aria-hidden="true"></i>
+                    </div>
+                    <div class="my-3">
+                        <div id="ovImpMain" class="text-2xl font-black font-display font-mono-num text-[var(--text-primary)]">1a Pública CyD</div>
+                        <div id="ovImpSub" class="text-xs font-bold text-rose-600 dark:text-rose-400 mt-0.5">14 EBTs Cartera • 533,9 k€ IPR</div>
+                    </div>
+                    <div class="flex flex-wrap gap-1 pt-2 border-t border-[var(--border-subtle)] text-[10px]">
+                        <span class="px-2 py-0.5 rounded gm-node-green font-bold">EBTs / IPR</span>
+                        <span class="px-2 py-0.5 rounded gm-node-blue font-bold">Noves Empreses</span>
+                        <span class="px-2 py-0.5 rounded gm-node-neutral font-bold">QS / CyD / U-Rank</span>
+                    </div>
+                </button>
+            </div>
+        </section>
+
+        <!-- =====================================================================
+             DIAPOSITIVA 2: BLOC 1 • INPUTS
+             Recursos Econòmics | Recursos Humans | Estructures de Recerca | Recursos Digitals
+             ===================================================================== -->
+        <section id="slide-1" data-slide-index="1" class="pres-slide space-y-6">
+            <div class="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-[var(--border-subtle)] pb-4">
+                <div>
+                    <span class="text-xs font-bold uppercase tracking-widest text-[#008037]">Branca 01 del Diagrama GitMind • INPUTS</span>
+                    <h2 class="text-2xl sm:text-3xl font-black text-[var(--text-primary)] mt-1">Recursos Econòmics, Recursos Humans, Estructures i Recursos Digitals</h2>
+                </div>
+                <p class="text-xs sm:text-sm text-[var(--text-muted)] max-w-md">
+                    Fidel a les 4 subbranques d'<strong>Inputs</strong> del mapa: <em>Finançament extern (Competitiu / No competitiu) i propi</em>, <em>PDI a TC i PIF</em>, <em>Estructures UAB/Esfera</em> i <em>Recursos digitals</em>.
+                </p>
+            </div>
+
+            <div class="grid grid-cols-12 gap-6">
+                <!-- 1.1 Recursos Econòmics: Chart + GitMind Breakdown Tree (7 cols) -->
+                <div class="col-span-12 lg:col-span-7 bento-card p-6 flex flex-col justify-between space-y-4">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold gm-node-green">1.1 Recursos Econòmics</span>
+                                <span class="text-xs font-mono-num font-bold text-[#008037]" id="inputsTotalEconBadge">123,3 M€ (2025)</span>
+                            </div>
+                            <h3 class="text-lg font-extrabold text-[var(--text-primary)] mt-1">Finançament Extern: Competitiu (Nacional / Internacional) i No Competitiu</h3>
+                        </div>
+                        <div class="flex flex-wrap gap-2 text-[11px] font-bold">
+                            <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-[#008037]"></span>Comp. Nacional</span>
+                            <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-[#00cc58]"></span>Comp. Internacional</span>
+                            <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-[#faae57]"></span>Convenis i Fact. Directa</span>
+                        </div>
+                    </div>
+
+                    <div id="chartInputsEcon" class="w-full h-64" role="img" aria-label="Evolució dels recursos econòmics segons l'estructura del diagrama GitMind"></div>
+
+                    <!-- Exact GitMind Subtree for Recursos Econòmics -->
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-[var(--border-subtle)] text-xs">
+                        <!-- Competitiu -->
+                        <div class="p-3.5 rounded-2xl bento-surface-elevated space-y-1.5">
+                            <div class="flex items-center justify-between">
+                                <span class="px-2 py-0.5 rounded gm-node-green font-bold text-[11px]">Competitiu</span>
+                                <span id="gmCompTotal" class="font-mono-num font-black text-sm text-[#008037]">104,9 M€</span>
+                            </div>
+                            <div class="text-[11px] text-[var(--text-secondary)] space-y-1">
+                                <div class="flex justify-between"><span>• Nacional (Projectes R+D UAB / Empreses / Altres):</span><strong id="gmCompNac" class="font-mono-num">85,7 M€</strong></div>
+                                <div class="flex justify-between"><span>• Internacional (Prog. Marc Europeu / Recerca / Educ.):</span><strong id="gmCompInt" class="font-mono-num">19,1 M€</strong></div>
+                            </div>
+                        </div>
+                        <!-- No Competitiu -->
+                        <div class="p-3.5 rounded-2xl bento-surface-elevated space-y-1.5">
+                            <div class="flex items-center justify-between">
+                                <span class="px-2 py-0.5 rounded gm-node-green font-bold text-[11px]">No competitiu</span>
+                                <span id="gmNoCompTotal" class="font-mono-num font-black text-sm text-amber-600">18,4 M€</span>
+                            </div>
+                            <div class="text-[11px] text-[var(--text-secondary)] space-y-1">
+                                <div class="flex justify-between"><span>• Contractes i convenis (Públic / Privat):</span><strong id="gmNoCompConv" class="font-mono-num">14,1 M€</strong></div>
+                                <div class="flex justify-between"><span>• Facturació directa / Serveis (Públic / Privat):</span><strong id="gmNoCompServ" class="font-mono-num">4,4 M€</strong></div>
+                            </div>
+                        </div>
+                        <!-- Finançament Propi -->
+                        <div class="p-3.5 rounded-2xl bento-surface-elevated space-y-1.5">
+                            <div class="flex items-center justify-between">
+                                <span class="px-2 py-0.5 rounded gm-node-neutral font-bold text-[11px]">Finançament Propi</span>
+                                <span class="font-mono-num font-black text-sm text-[var(--text-primary)]">184,6 M€</span>
+                            </div>
+                            <div class="text-[11px] text-[var(--text-secondary)] space-y-1">
+                                <div>• <strong>Despesa R+D INE</strong> (184,6 M€) • <strong>PAEs</strong> i Pressupost UAB</div>
+                                <div class="pt-0.5"><span class="px-1.5 py-0.5 rounded gm-node-blue font-bold text-[10px]">Cofinançament SCT</span> (10 SCT actius)</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Column (5 cols): 1.2 Recursos Humans + 1.3 Estructures + 1.4 Recursos Digitals -->
+                <div class="col-span-12 lg:col-span-5 space-y-5">
+                    <!-- 1.2 Recursos Humans -->
+                    <div class="bento-card p-5 space-y-3">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold gm-node-green">1.2 Recursos Humans</span>
+                                <h3 class="text-base font-extrabold text-[var(--text-primary)] mt-1">PDI a TC (Doctor), PIF i Investigadors Vinculats</h3>
+                            </div>
+                            <span id="gmHrTotalBadge" class="font-mono-num text-xs font-black text-[#008037]">3.207 Efectius</span>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-3 text-xs">
+                            <div class="p-3 rounded-2xl bento-surface-elevated space-y-1">
+                                <div class="flex items-center justify-between">
+                                    <span class="px-2 py-0.5 rounded gm-node-green font-bold text-[10px]">PDI a TC (Doctor)</span>
+                                    <span id="gmHrPdiTc" class="font-mono-num font-black text-sm">1.761</span>
+                                </div>
+                                <p class="text-[11px] text-[var(--text-muted)]">
+                                    <strong>Permanent (<span id="gmHrPerm">1.405</span>):</strong> LOSU amb tram, <span class="px-1 rounded gm-node-green font-bold">ICREA (29)</span> i altres.<br>
+                                    <strong>No permanent (<span id="gmHrPostdoc">356</span>):</strong> <span class="px-1 rounded gm-node-green font-bold">Postdocs fin. extern</span> i propi.
+                                </p>
+                            </div>
+
+                            <div class="p-3 rounded-2xl bento-surface-elevated space-y-1">
+                                <div class="flex items-center justify-between">
+                                    <span class="px-2 py-0.5 rounded gm-node-neutral font-bold text-[10px]">PIF i Vinculats</span>
+                                    <span id="gmHrPifVinc" class="font-mono-num font-black text-sm">1.446</span>
+                                </div>
+                                <p class="text-[11px] text-[var(--text-muted)]">
+                                    <strong>En formació (<span id="gmHrPredoc">868</span>):</strong> Recerca (<span id="gmHrPif">520</span> PIF) i Doctorats Industrials (<span class="px-1 rounded gm-node-green font-bold">Nous: 299</span> / Vigents).<br>
+                                    <strong>Investigadors vinculats:</strong> <span id="gmHrVinc" class="font-mono-num font-bold">578</span>.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 1.3 Estructures de Recerca -->
+                    <div class="bento-card p-5 space-y-3">
+                        <div class="flex items-center justify-between">
+                            <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold gm-node-blue">1.3 Estructures de Recerca</span>
+                            <span class="text-xs font-mono-num font-bold text-[var(--text-muted)]">Col·lecció <code class="font-mono-num">Organizations</code></span>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3 text-xs">
+                            <div class="p-3 rounded-2xl bento-surface-elevated space-y-1.5">
+                                <div class="font-extrabold text-[var(--text-primary)]">Bàsiques UAB (263 unitats)</div>
+                                <div class="flex flex-wrap gap-1.5 text-[11px]">
+                                    <span class="px-2 py-0.5 rounded gm-node-blue font-bold">SGRs: 178</span>
+                                    <span class="px-2 py-0.5 rounded gm-node-blue font-bold">Membres SGR: <span id="gmSgrDoctors">1.410</span> doc.</span>
+                                    <span class="px-2 py-0.5 rounded gm-node-neutral">57 Departaments</span>
+                                    <span class="px-2 py-0.5 rounded gm-node-neutral">19 CERs</span>
+                                    <span class="px-2 py-0.5 rounded gm-node-neutral">9 Instituts propis</span>
+                                </div>
+                            </div>
+                            <div class="p-3 rounded-2xl bento-surface-elevated space-y-1.5">
+                                <div class="font-extrabold text-[var(--text-primary)]">Esfera UAB (46 centres)</div>
+                                <p class="text-[11px] text-[var(--text-muted)] leading-relaxed">
+                                    <strong>24</strong> centres participats, <strong>10</strong> instituts adscrits (VHIR, Sant Pau, IBB...), <strong>5</strong> centres al campus, <strong>4</strong> unitats mixtes i <strong>3</strong> CSIC/conveni.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 1.4 Recursos Digitals -->
+                    <div class="bento-card p-4 flex items-center justify-between gap-4">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-xl bg-emerald-500/10 text-[#008037] flex items-center justify-center flex-shrink-0">
+                                <i class="fa-solid fa-database" aria-hidden="true"></i>
+                            </div>
+                            <div>
+                                <span class="text-[11px] font-bold uppercase tracking-wider text-[#008037]">1.4 Recursos Digitals</span>
+                                <div class="text-xs font-bold text-[var(--text-primary)]">Revistes Científiques i Bases de Dades</div>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-3 text-right font-mono-num">
+                            <div>
+                                <span class="text-sm font-black text-[#008037] block">54.417</span>
+                                <span class="text-[10px] text-[var(--text-muted)]">Revistes (Scopus/JCR)</span>
+                            </div>
+                            <div class="border-l border-[var(--border-subtle)] pl-3">
+                                <span class="text-sm font-black text-[#004d5e] dark:text-cyan-300 block">36 Col·l.</span>
+                                <span class="text-[10px] text-[var(--text-muted)]">Kraken / OpenAlex / ROR</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- =====================================================================
+             DIAPOSITIVA 3: BLOC 2 • ACTIVITATS
+             Projectes de Recerca | Contractes i Convenis | Tesis en Desenvolupament | Xarxes
+             ===================================================================== -->
+        <section id="slide-2" data-slide-index="2" class="pres-slide space-y-6">
+            <div class="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-[var(--border-subtle)] pb-4">
+                <div>
+                    <span class="text-xs font-bold uppercase tracking-widest text-sky-600 dark:text-sky-400">Branca 02 del Diagrama GitMind • ACTIVITATS</span>
+                    <h2 class="text-2xl sm:text-3xl font-black text-[var(--text-primary)] mt-1">Projectes en Execució, Convenis R+D, Tesis en Curs i Xarxes</h2>
+                </div>
+                <p class="text-xs sm:text-sm text-[var(--text-muted)] max-w-md">
+                    Dades verificades de <code class="font-mono-num">/api/strategic-indicators/activitats-recerca</code> i la col·lecció <code class="font-mono-num">Projects</code> (1.747 projectes vigents).
+                </p>
+            </div>
+
+            <div class="grid grid-cols-12 gap-6">
+                <!-- Left Column: Evolution Chart of Research Activities (7 cols) -->
+                <div class="col-span-12 lg:col-span-7 bento-card p-6 flex flex-col justify-between">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+                        <div>
+                            <h3 class="text-lg font-extrabold text-[var(--text-primary)]">Dinàmica Anual d'Activitats de Recerca (2021–2025)</h3>
+                            <p class="text-xs text-[var(--text-muted)]">Nous projectes competitius (Nacionals vs Internacionals), Convenis i Nous Investigadors en Formació</p>
+                        </div>
+                        <span class="px-3 py-1 rounded-full text-xs font-bold gm-node-blue">1.747 Projectes Vigents</span>
+                    </div>
+                    <div id="chartActivitiesEvolution" class="w-full h-80" role="img" aria-label="Gràfic d'evolució anual d'activitats de recerca"></div>
+                </div>
+
+                <!-- Right Column: 4 GitMind Subbranches of Activitats (5 cols) -->
+                <div class="col-span-12 lg:col-span-5 grid grid-cols-1 gap-4">
+                    <!-- 2.1 Projectes de recerca -->
+                    <div class="bento-card p-5 space-y-3">
+                        <div class="flex items-center justify-between">
+                            <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold gm-node-blue">2.1 Projectes de Recerca</span>
+                            <span id="actNewProjTotal" class="font-mono-num text-sm font-black text-[#008037]">864 nous (2025)</span>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3 text-xs">
+                            <div class="p-3 rounded-xl bento-surface-elevated space-y-1">
+                                <span class="font-bold text-[var(--text-primary)] block">Nous Projectes (Tipologia i Origen)</span>
+                                <div class="text-[11px] text-[var(--text-muted)] space-y-1">
+                                    <div>• <span class="px-1.5 py-0.5 rounded gm-node-blue font-bold">Grans projectes (PME):</span> Participació (<strong id="actPmePart" class="font-mono-num">29</strong>) i Lideratge (<strong id="actPmeLead" class="font-mono-num">8</strong>)</div>
+                                    <div>• <strong>Origen fons:</strong> Nacionals (<strong id="actProjNac" class="font-mono-num">796</strong>) vs <span class="px-1.5 py-0.5 rounded gm-node-blue font-bold">Internacionals (<span id="actProjInt">68</span>)</span></div>
+                                </div>
+                            </div>
+                            <div class="p-3 rounded-xl bento-surface-elevated space-y-1">
+                                <span class="font-bold text-[var(--text-primary)] block">Vigents i Valorització</span>
+                                <div class="text-[11px] text-[var(--text-muted)] space-y-1">
+                                    <div>• <strong>Projectes vigents:</strong> <span class="font-mono-num font-bold text-[#008037]">1.747</span> actius (10.309 històric)</div>
+                                    <div>• <strong>Nous proj. valorització:</strong> <strong id="actValoritzacioCount" class="font-mono-num text-[#008037]">45</strong> projectes (<span id="actValoritzacioEur" class="font-mono-num">1,93 M€</span>)</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 2.2 Contractes i convenis -->
+                    <div class="bento-card p-5 space-y-2.5">
+                        <div class="flex items-center justify-between">
+                            <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold gm-node-neutral">2.2 Contractes i Convenis</span>
+                            <span id="actTotalNonCompCount" class="font-mono-num text-sm font-black text-amber-600">4.344 actuacions</span>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3 text-xs">
+                            <div class="p-3 rounded-xl bento-surface-elevated flex items-center justify-between">
+                                <span>Contractes i convenis R+D (empreses i inst.)</span>
+                                <span id="actConvenisCount" class="font-mono-num font-black text-sm text-[#008037]">742</span>
+                            </div>
+                            <div class="p-3 rounded-xl bento-surface-elevated flex items-center justify-between">
+                                <span>Prestació de serveis i entitats públiques/priv.</span>
+                                <span id="actServeisCount" class="font-mono-num font-black text-sm text-[#004d5e] dark:text-cyan-300">3.602</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 2.3 Tesis doctorals en desenvolupament & 2.4 Participació amb xarxes -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div class="bento-card p-5 space-y-1.5">
+                            <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold gm-node-neutral">2.3 Tesis en Desenvolupament</span>
+                            <div class="text-2xl font-black font-display font-mono-num text-[var(--text-primary)]"><span id="actPredocsActive">868</span> en curs</div>
+                            <p class="text-[11px] text-[var(--text-muted)]">
+                                <strong>Recerca:</strong> <span id="actNewPredocs" class="font-mono-num font-bold text-[#008037]">299</span> nous predocs l'any seleccionat + <strong>Doctorats Industrials</strong> AGAUR-UAB.
+                            </p>
+                        </div>
+
+                        <div class="bento-card p-5 space-y-1.5">
+                            <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold gm-node-neutral">2.4 Xarxes i Plataformes</span>
+                            <div class="text-2xl font-black font-display font-mono-num text-[#008037]">ECIU • Hub B30</div>
+                            <p class="text-[11px] text-[var(--text-muted)]">
+                                Lideratge en <strong>Xarxes R+D+I</strong> (AccessCat, RDI-IA, AgroBioFood) i aliança europea <strong>ECIU / YERUN</strong>.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- =====================================================================
+             DIAPOSITIVA 4: BLOC 3 • OUTPUTS
+             Publicacions (Scopus, WoS, CSUC/OpenAlex) | Tesis Llegides | Innovacions
+             ===================================================================== -->
+        <section id="slide-3" data-slide-index="3" class="pres-slide space-y-6">
+            <div class="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-[var(--border-subtle)] pb-4">
+                <div>
+                    <span class="text-xs font-bold uppercase tracking-widest text-amber-600 dark:text-amber-400">Branca 03 del Diagrama GitMind • OUTPUTS</span>
+                    <h2 class="text-2xl sm:text-3xl font-black text-[var(--text-primary)] mt-1">Publicacions (Scopus, WoS, CSUC/OpenAlex), Tesis Llegides i Innovacions</h2>
+                </div>
+                <p class="text-xs sm:text-sm text-[var(--text-muted)] max-w-md">
+                    Inclou els 6 indicadors verds/blaus de <strong>CSUC/OpenAlex</strong>, les <strong>Tesis llegides</strong> i la branca completa d'<strong>Innovacions</strong> (<code class="font-mono-num">Indicadors resum_2025.xlsx</code>).
+                </p>
+            </div>
+
+            <div class="grid grid-cols-12 gap-6">
+                <!-- 3.1 Publicacions de recerca + CSUC/OpenAlex 6-node Grid (7 cols) -->
+                <div class="col-span-12 lg:col-span-7 bento-card p-6 flex flex-col justify-between space-y-4">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold gm-node-green">3.1 Publicacions de Recerca (Scopus • WoS • CSUC/OpenAlex)</span>
+                            <h3 class="text-lg font-extrabold text-[var(--text-primary)] mt-1">Evolució Indexada i Indicadors d'Excel·lència OpenAlex / JCR</h3>
+                        </div>
+                        <span class="font-mono-num text-xs font-bold text-[#008037]">248.123 registres Pure</span>
+                    </div>
+
+                    <div id="chartOutputsPubs" class="w-full h-56" role="img" aria-label="Evolució de publicacions a Scopus, Web of Science i Q1/Q2"></div>
+
+                    <!-- The 6 Exact Child Nodes under CSUC/OpenAlex in GitMind -->
+                    <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5 pt-2 border-t border-[var(--border-subtle)] text-xs">
+                        <div class="p-3 rounded-xl gm-node-green">
+                            <span class="text-[10px] font-bold uppercase block opacity-80">CSUC / OpenAlex</span>
+                            <span class="text-lg font-black font-mono-num block">3,8% (Top 1%)</span>
+                            <span class="text-[11px]">Articles en l'1% més citat</span>
+                        </div>
+                        <div class="p-3 rounded-xl gm-node-green">
+                            <span class="text-[10px] font-bold uppercase block opacity-80">CSUC / OpenAlex</span>
+                            <span class="text-lg font-black font-mono-num block">21,4% (Top 10%)</span>
+                            <span class="text-[11px]">Articles en el 10% més citat</span>
+                        </div>
+                        <div class="p-3 rounded-xl gm-node-blue">
+                            <span class="text-[10px] font-bold uppercase block opacity-80">JCR / Scopus</span>
+                            <span id="outQ1Q2Val" class="text-lg font-black font-mono-num block">81,4% Q1+Q2</span>
+                            <span class="text-[11px]">Articles Q1 i Q2 (3.115 Q1)</span>
+                        </div>
+                        <div class="p-3 rounded-xl gm-node-green">
+                            <span class="text-[10px] font-bold uppercase block opacity-80">CSUC / OpenAlex</span>
+                            <span class="text-lg font-black font-mono-num block">58,6% Intl.</span>
+                            <span class="text-[11px]">Col·laboració internacional</span>
+                        </div>
+                        <div class="p-3 rounded-xl gm-node-green">
+                            <span class="text-[10px] font-bold uppercase block opacity-80">CSUC / OpenAlex</span>
+                            <span class="text-lg font-black font-mono-num block">7,2% Indústria</span>
+                            <span class="text-[11px]">Coautoria amb empresa</span>
+                        </div>
+                        <div class="p-3 rounded-xl gm-node-green">
+                            <span class="text-[10px] font-bold uppercase block opacity-80">Ciència Oberta</span>
+                            <span class="text-lg font-black font-mono-num block">82,4% OA</span>
+                            <span class="text-[11px]">Articles en Accés Obert</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Column: 3.2 Tesis Llegides + 3.3 Innovacions (5 cols) -->
+                <div class="col-span-12 lg:col-span-5 space-y-6">
+                    <!-- 3.2 Tesis llegides [Verd] -->
+                    <div class="bento-card p-5 space-y-3">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-2">
+                                <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold gm-node-green">3.2 Tesis Llegides</span>
+                                <span class="text-xs text-[var(--text-muted)]">Escola de Doctorat UAB</span>
+                            </div>
+                            <span id="outThesesBadge" class="font-mono-num text-lg font-black text-[#008037]">342 (2025)</span>
+                        </div>
+                        <p class="text-xs text-[var(--text-muted)] leading-relaxed">
+                            <strong>1.572 tesis doctorals</strong> defensades en el quinquenni 2021–2025 (<strong id="outThesesEgretaRecords" class="font-mono-num">1.372</strong> registres de participació doctoral validats a Egreta l'any <span class="selected-year-label">2025</span>), amb un <strong>54,1% d'autores dones</strong> i un <strong>64,8% de menció internacional</strong>.
+                        </p>
+                    </div>
+
+                    <!-- 3.3 Innovacions (Invention disclosures, Patents prioritaries, PCT, Triàdiques, Llicències) -->
+                    <div class="bento-card p-6 space-y-4">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold gm-node-green">3.3 Innovacions i Propietat Industrial</span>
+                                <h3 class="text-base font-extrabold text-[var(--text-primary)] mt-1">Invencions, Patents (Prioritàries, PCT, Triàdiques) i Llicències</h3>
+                            </div>
+                            <span id="outPatentsAliveBadge" class="px-2.5 py-1 rounded-lg text-xs font-bold gm-node-green font-mono-num">716 Vives</span>
+                        </div>
+
+                        <div id="chartOutputsInnovations" class="w-full h-44" role="img" aria-label="Evolució d'invencions i patents sol·licitades"></div>
+
+                        <div class="grid grid-cols-2 gap-2.5 text-xs">
+                            <div class="p-2.5 rounded-xl bento-surface-elevated flex justify-between items-center">
+                                <span>Comunicacions d'invencions:</span>
+                                <strong id="outInvDisclosures" class="font-mono-num text-[#008037]">60</strong>
+                            </div>
+                            <div class="p-2.5 rounded-xl bento-surface-elevated flex justify-between items-center">
+                                <span>Noves patents prioritàries:</span>
+                                <strong id="outPatPrior" class="font-mono-num text-[#008037]">16</strong>
+                            </div>
+                            <div class="p-2.5 rounded-xl gm-node-green flex justify-between items-center">
+                                <span>Sol·licitades (PCT / Totals):</span>
+                                <strong id="outPatTotal" class="font-mono-num">74</strong>
+                            </div>
+                            <div class="p-2.5 rounded-xl bento-surface-elevated flex justify-between items-center">
+                                <span>Triàdiques (EPO/USPTO/JPO):</span>
+                                <strong id="outPatTriad" class="font-mono-num text-[#004d5e] dark:text-cyan-300">37</strong>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- =====================================================================
+             DIAPOSITIVA 5: BLOC 4 • OUTCOMES
+             Reconeixement Acadèmic | Desenvolupament Acadèmic | Col·laboracions | Acords Transferència
+             ===================================================================== -->
+        <section id="slide-4" data-slide-index="4" class="pres-slide space-y-6">
+            <div class="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-[var(--border-subtle)] pb-4">
+                <div>
+                    <span class="text-xs font-bold uppercase tracking-widest text-purple-600 dark:text-purple-400">Branca 04 del Diagrama GitMind • OUTCOMES</span>
+                    <h2 class="text-2xl sm:text-3xl font-black text-[var(--text-primary)] mt-1">Reconeixement, Desenvolupament Acadèmic (Trams i ICREA), Col·laboracions i Acords</h2>
+                </div>
+                <p class="text-xs sm:text-sm text-[var(--text-muted)] max-w-md">
+                    Resultats a mitjà termini: impacte normalitzat de citació (FWCI), sexennis vius (<code class="font-mono-num">RC0019.xlsx</code>), fidelitat empresarial i acords de transferència signats.
+                </p>
+            </div>
+
+            <div class="grid grid-cols-12 gap-6">
+                <!-- Left Column: Trams de Recerca Vius + Acords Transferència Chart (7 cols) -->
+                <div class="col-span-12 lg:col-span-7 bento-card p-6 flex flex-col justify-between space-y-4">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold gm-node-blue">4.2 Desenvolupament Acadèmic</span>
+                                <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold gm-node-green">Trams de Recerca Vius</span>
+                            </div>
+                            <h3 class="text-lg font-extrabold text-[var(--text-primary)] mt-1">Evolució de Trams de Recerca Vius (RC0019) i Acords de Transferència</h3>
+                        </div>
+                        <span id="outcTramsHeadline" class="font-mono-num text-sm font-black text-[#008037]">1.132 Trams (2025)</span>
+                    </div>
+
+                    <div id="chartOutcomesTrams" class="w-full h-64" role="img" aria-label="Evolució dels trams de recerca vius i acords de transferència signats"></div>
+
+                    <!-- 4.1 Reconeixement + 4.2 Desenvolupament Summary Cards -->
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 border-t border-[var(--border-subtle)] text-xs">
+                        <div class="p-3 rounded-xl bento-surface-elevated">
+                            <span class="text-[10px] font-bold uppercase text-[var(--text-muted)] block">4.1 FWCI (Impacte)</span>
+                            <span class="text-xl font-black font-mono-num text-[#008037]">1,62</span>
+                            <span class="text-[10px] text-[var(--text-muted)] block">+62% vs mitjana mundial</span>
+                        </div>
+                        <div class="p-3 rounded-xl bento-surface-elevated">
+                            <span class="text-[10px] font-bold uppercase text-[var(--text-muted)] block">4.1 Cites per PDI</span>
+                            <span class="text-xl font-black font-mono-num text-[#004d5e] dark:text-cyan-300">Top 2 ES</span>
+                            <span class="text-[10px] text-[var(--text-muted)] block">Màxim rendiment QS/CyD</span>
+                        </div>
+                        <div class="p-3 rounded-xl gm-node-green">
+                            <span class="text-[10px] font-bold uppercase block opacity-80">4.2 Trams / PDI</span>
+                            <span id="outcTramsRatio" class="text-xl font-black font-mono-num block">0,81 (69,8%)</span>
+                            <span class="text-[10px] block">Sexennis vius per PDI est.</span>
+                        </div>
+                        <div class="p-3 rounded-xl gm-node-green">
+                            <span class="text-[10px] font-bold uppercase block opacity-80">4.2 ICREA Acadèmia</span>
+                            <span class="text-xl font-black font-mono-num block">43 Vigents</span>
+                            <span class="text-[10px] block">+ 29 ICREA Sènior actius</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Column: 4.3 Col·laboracions (Empreses i Fidelitat) + 4.4 Acords Signats (5 cols) -->
+                <div class="col-span-12 lg:col-span-5 space-y-6">
+                    <!-- 4.3 Col·laboracions i Fidelitat Empresarial -->
+                    <div class="bento-card p-6 space-y-3">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold gm-node-neutral">4.3 Col·laboracions i Fidelitat Empresarial</span>
+                                <h3 class="text-base font-extrabold text-[var(--text-primary)] mt-1">Empreses amb Contractes i Socis R+D Recurrents</h3>
+                            </div>
+                            <span class="font-mono-num text-xs font-bold text-[#008037]">422 Entitats</span>
+                        </div>
+                        <div class="divide-y divide-[var(--border-subtle)] text-xs">
+                            <div class="py-2.5 flex items-center justify-between">
+                                <div>
+                                    <span class="font-bold block">European Space Agency (ESA)</span>
+                                    <span class="text-[10px] text-[var(--text-muted)]">Col·laboració aeroespacial i MELiSSA</span>
+                                </div>
+                                <span class="px-2 py-0.5 rounded gm-node-green font-mono-num font-bold">3.319.993 €</span>
+                            </div>
+                            <div class="py-2.5 flex items-center justify-between">
+                                <div>
+                                    <span class="font-bold block">KRIYA Therapeutics, INC</span>
+                                    <span class="text-[10px] text-[var(--text-muted)]">Teràpia gènica i biotecnologia (CBATEG)</span>
+                                </div>
+                                <span class="px-2 py-0.5 rounded gm-node-green font-mono-num font-bold">1.442.405 €</span>
+                            </div>
+                            <div class="py-2.5 flex items-center justify-between">
+                                <div>
+                                    <span class="font-bold block">Tramontane Therapeutics Inc</span>
+                                    <span class="text-[10px] text-[var(--text-muted)]">5 convenis R+D recurrents (Alta fidelitat)</span>
+                                </div>
+                                <span class="px-2 py-0.5 rounded gm-node-green font-mono-num font-bold">1.409.925 €</span>
+                            </div>
+                            <div class="py-2.5 flex items-center justify-between">
+                                <div>
+                                    <span class="font-bold block">Telomere Therapeutics / SCT</span>
+                                    <span class="text-[10px] text-[var(--text-muted)]">8 convenis i serveis tecnològics</span>
+                                </div>
+                                <span class="px-2 py-0.5 rounded gm-node-green font-mono-num font-bold">1.875.280 €</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 4.4 Acords de transferència signats [Blau] -->
+                    <div class="bento-card p-5 space-y-2">
+                        <div class="flex items-center justify-between">
+                            <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold gm-node-blue">4.4 Acords de Transferència Signats</span>
+                            <span id="outcTransferSignedVal" class="font-mono-num text-xl font-black text-sky-600 dark:text-sky-400">4 acords (2025)</span>
+                        </div>
+                        <p class="text-xs text-[var(--text-muted)] leading-relaxed">
+                            Sèrie oficial (<code class="font-mono-num">Indicadors resum_2025.xlsx</code>): <strong>29 acords signats en el quinquenni 2021–2025</strong> (9 el 2021, 6 el 2022, 8 el 2023, 2 el 2024 i 4 el 2025) que han generat <strong>2,02 M€ en royalties i llicències directes</strong> i més de <strong>2,50 M€ en convenis R+D derivats</strong>.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- =====================================================================
+             DIAPOSITIVA 6: BLOC 5 • IMPACT
+             Societat | Desenvolupament Econòmic (Emprenedoria i IPR) | Polítiques | Benefici Reputacional
+             ===================================================================== -->
+        <section id="slide-5" data-slide-index="5" class="pres-slide space-y-6">
+            <div class="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-[var(--border-subtle)] pb-4">
+                <div>
+                    <span class="text-xs font-bold uppercase tracking-widest text-rose-600 dark:text-rose-400">Branca 05 del Diagrama GitMind • IMPACT</span>
+                    <h2 class="text-2xl sm:text-3xl font-black text-[var(--text-primary)] mt-1">Beneficis Socials, Emprenedoria (EBTs i IPR), Polítiques i Reputació (QS, CyD, U-Rank)</h2>
+                </div>
+                <p class="text-xs sm:text-sm text-[var(--text-muted)] max-w-md">
+                    Cobreix les 4 subbranques finals d'<strong>Impact</strong>: <em>Beneficis per a la societat</em>, <em>Contribució al desenvolupament econòmic</em>, <em>Influència en polítiques</em> i <em>Benefici reputacional</em>.
+                </p>
+            </div>
+
+            <div class="grid grid-cols-12 gap-6">
+                <!-- Left Column: 5.2 Contribució al desenvolupament econòmic (Emprenedoria + Retorn IPR) (7 cols) -->
+                <div class="col-span-12 lg:col-span-7 bento-card p-6 flex flex-col justify-between space-y-4">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold gm-node-green">5.2 Desenvolupament Econòmic: Emprenedoria i Explotació IPR</span>
+                            </div>
+                            <h3 class="text-lg font-extrabold text-[var(--text-primary)] mt-1">Ingressos per Acords de Transferència, Valorització i Cartera d'EBTs</h3>
+                        </div>
+                        <span id="impIprIncomeBadge" class="font-mono-num text-sm font-black text-[#008037]">533,9 k€ IPR (2025)</span>
+                    </div>
+
+                    <div id="chartImpactEconomic" class="w-full h-56" role="img" aria-label="Evolució dels ingressos per transferència i cartera d'empreses de base tecnològica"></div>
+
+                    <!-- Exact GitMind Subtree for 5.2 Emprenedoria + Retorn IPR -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-[var(--border-subtle)] text-xs">
+                        <div class="p-3.5 rounded-2xl bento-surface-elevated space-y-1.5">
+                            <div class="flex items-center justify-between">
+                                <span class="px-2 py-0.5 rounded gm-node-blue font-bold text-[11px]">Emprenedoria (Empreses creades)</span>
+                                <span id="impEbtPortfolio" class="font-mono-num font-black text-sm text-[#008037]">14 en Cartera</span>
+                            </div>
+                            <div class="text-[11px] text-[var(--text-secondary)] space-y-1">
+                                <div>• <strong>Noves i Actives al Campus:</strong> <span class="px-1.5 py-0.5 rounded gm-node-green font-bold">17 EBTs</span> (<span id="impNewEbts">1</span> nova participada el 2025), <strong>6 Spin-offs</strong> i <strong>45 Start-ups</strong>.</div>
+                                <div>• Impacte directe en <strong>Llocs de treball qualificats</strong>, <strong>Inversió captada</strong> i <strong>Facturació empresarial</strong> a l'Esfera UAB.</div>
+                            </div>
+                        </div>
+
+                        <div class="p-3.5 rounded-2xl bento-surface-elevated space-y-1.5">
+                            <div class="flex items-center justify-between">
+                                <span class="px-2 py-0.5 rounded gm-node-green font-bold text-[11px]">Retorn per Explotació IPR</span>
+                                <span id="impIprReturnVal" class="font-mono-num font-black text-sm text-[#008037]">533,9 k€</span>
+                            </div>
+                            <div class="text-[11px] text-[var(--text-secondary)] space-y-1">
+                                <div>• <span class="px-1.5 py-0.5 rounded gm-node-green font-bold">Ingressos per acords de transferència:</span> <strong id="impIprEurInline" class="font-mono-num">533.888 €</strong> (2,02 M€ el quinquenni).</div>
+                                <div>• <strong>Equity:</strong> participació accionarial UAB en <strong>14 EBTs</strong>.</div>
+                                <div>• <strong>Contractes R+D derivats:</strong> <strong class="font-mono-num">1,49 M€</strong> anuals consolidats.</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Column: 5.1 Societat + 5.3 Polítiques + 5.4 Benefici Reputacional (5 cols) -->
+                <div class="col-span-12 lg:col-span-5 space-y-4">
+                    <!-- 5.1 Beneficis per a la societat & 5.3 Influència en noves polítiques -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div class="bento-card p-5 space-y-2">
+                            <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold gm-node-neutral">5.1 Beneficis per a la Societat</span>
+                            <div class="text-base font-black text-[var(--text-primary)]">Health & Tech Advancements</div>
+                            <p class="text-[11px] text-[var(--text-muted)] leading-relaxed">
+                                <strong>Health improvements:</strong> 145 projectes actius en Salut (ODS 3, teràpies avançades i diagnòstic).<br>
+                                <strong>Technological advancements:</strong> 222 projectes en IA, energia neta i clima (ODS 7, 9 i 13).
+                            </p>
+                        </div>
+
+                        <div class="bento-card p-5 space-y-2">
+                            <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold gm-node-neutral">5.3 Influència en Polítiques</span>
+                            <div class="text-base font-black text-[var(--text-primary)]">Polítiques i Estandardització</div>
+                            <p class="text-[11px] text-[var(--text-muted)] leading-relaxed">
+                                <strong>Polítiques impactades:</strong> dictàmens científics (ICTA, IGOP, CED, CREAF) per a la UE i Generalitat.<br>
+                                <strong>Estandarditzacions:</strong> normes ISO/IEC, protocols clínics i comitès tècnics.
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- 5.4 Benefici Reputacional (Rànquing QS, Rànquing CyD, U-Rank) -->
+                    <div class="bento-card p-6 space-y-3">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold gm-node-green">5.4 Benefici Reputacional</span>
+                                <h3 class="text-base font-extrabold text-[var(--text-primary)] mt-1">Posicionament als 3 Rànquings del Diagrama GitMind</h3>
+                            </div>
+                            <span class="px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-500/10 text-[#008037]">Top 1% Global</span>
+                        </div>
+
+                        <div class="space-y-2.5 text-xs">
+                            <div class="p-3.5 rounded-2xl bento-surface-elevated flex items-center justify-between">
+                                <div>
+                                    <span class="font-extrabold text-[var(--text-primary)] block">Rànquing QS (QS World University Rankings)</span>
+                                    <span class="text-[11px] text-[var(--text-muted)]">Excel·lència en reputació acadèmica, citacions per facultat i xarxa internacional</span>
+                                </div>
+                                <span class="font-mono-num font-black text-base text-[#008037] ml-3 whitespace-nowrap">#149 – #172</span>
+                            </div>
+
+                            <div class="p-3.5 rounded-2xl bento-surface-elevated flex items-center justify-between">
+                                <div>
+                                    <span class="font-extrabold text-[var(--text-primary)] block">Rànquing CyD (Fundación Conocimiento y Desarrollo)</span>
+                                    <span class="text-[11px] text-[var(--text-muted)]">28 indicadors de màxim rendiment en Recerca i Transferència de Coneixement</span>
+                                </div>
+                                <span class="font-mono-num font-black text-base text-[#008037] ml-3 whitespace-nowrap">1a Pública ES</span>
+                            </div>
+
+                            <div class="p-3.5 rounded-2xl bento-surface-elevated flex items-center justify-between">
+                                <div>
+                                    <span class="font-extrabold text-[var(--text-primary)] block">U-Rank (U-Ranking Ivie / Fundació BBVA)</span>
+                                    <span class="text-[11px] text-[var(--text-muted)]">Grup G1 d'elit estatal en productivitat investigadora i innovació docent</span>
+                                </div>
+                                <span class="font-mono-num font-black text-base text-[#004d5e] dark:text-cyan-300 ml-3 whitespace-nowrap">Top 3 Espanya</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Bottom Bar -->
+    <footer class="glass-bar border-t border-[var(--border-subtle)] py-4 mt-auto">
+        <div class="max-w-[1440px] mx-auto px-4 sm:px-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-[var(--text-muted)]">
+            <div class="flex items-center gap-3 flex-wrap">
+                <span class="font-bold text-[var(--text-primary)]">Universitat Autònoma de Barcelona</span>
+                <span>•</span>
+                <span>Model Cadena de Valor GitMind (<code class="font-mono-num">mgyxz4fa</code>) • Dades Verificades Egreta / Pure</span>
+            </div>
+            <div class="flex items-center gap-2">
+                <button type="button" onclick="prevSlide()" class="cursor-pointer px-3 py-1.5 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] hover:border-[#008037] font-bold text-[var(--text-primary)] transition-colors" aria-label="Diapositiva anterior">
+                    <i class="fa-solid fa-chevron-left mr-1" aria-hidden="true"></i>Anterior
+                </button>
+                <span id="slideCounterBadge" class="px-3 py-1.5 rounded-lg font-mono-num font-bold bento-surface-elevated text-[var(--text-primary)]">
+                    Diapositiva 1 / 6
+                </span>
+                <button type="button" onclick="nextSlide()" class="cursor-pointer px-3 py-1.5 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] hover:border-[#008037] font-bold text-[var(--text-primary)] transition-colors" aria-label="Diapositiva següent">
+                    Següent<i class="fa-solid fa-chevron-right ml-1" aria-hidden="true"></i>
+                </button>
+            </div>
+        </div>
+    </footer>
+
+    <!-- =========================================================================
+         AUTONOMOUS PRESENTATION ENGINE + GITMIND VERIFIED DATA STORE + ECHARTS
+         ========================================================================= -->
+    <script>
+        // 1. Verified Data Store aligned with all 5 GitMind Branches (2021-2025)
+        const gitmindStore = {
+            currentYear: 2025,
+            years: ['2021', '2022', '2023', '2024', '2025'],
+            byYear: {
+                2021: {
+                    // 1. INPUTS
+                    econTotal: '139,4 M€', compTotal: '116,5 M€', compNac: 103.3, compInt: 13.2,
+                    noCompTotal: '23,0 M€', convenisEur: 19.0, serveisEur: 3.9,
+                    pdiPerm: 1420, postdoc: 209, predoc: 804, pif: 463, newPredocs: 211, vinculats: 151, sgrDoctors: 1365,
+                    // 2. ACTIVITATS
+                    projNacCount: 897, projIntCount: 76, pmePart: 24, pmeLead: 6,
+                    convenisCount: 728, serveisCount: 3637,
+                    valoritzacioCount: 28, valoritzacioEur: '2,24 M€',
+                    // 3. OUTPUTS
+                    scopusPubs: 3890, wosPubs: 3120, q1Pubs: 2410,
+                    thesesMemories: 273, thesesEgreta: 1736,
+                    invDisclosures: 30, patPrior: 9, patTotal: 76, patTriad: 32, patAlive: 593,
+                    // 4. OUTCOMES
+                    tramsVius: 1015, tramsRatio: '0,71 (67,2%)', transferSigned: 9,
+                    // 5. IMPACT
+                    newEbts: 2, ebtPortfolio: 13, iprIncomeEur: 78857, iprIncomeLabel: '78,9 k€'
+                },
+                2022: {
+                    econTotal: '123,2 M€', compTotal: '102,3 M€', compNac: 69.2, compInt: 33.0,
+                    noCompTotal: '20,9 M€', convenisEur: 16.7, serveisEur: 4.3,
+                    pdiPerm: 1405, postdoc: 238, predoc: 784, pif: 471, newPredocs: 197, vinculats: 478, sgrDoctors: 1380,
+                    projNacCount: 723, projIntCount: 93, pmePart: 31, pmeLead: 9,
+                    convenisCount: 648, serveisCount: 4142,
+                    valoritzacioCount: 14, valoritzacioEur: '585,0 k€',
+                    scopusPubs: 4120, wosPubs: 3340, q1Pubs: 2590,
+                    thesesMemories: 297, thesesEgreta: 1926,
+                    invDisclosures: 28, patPrior: 17, patTotal: 65, patTriad: 39, patAlive: 599,
+                    tramsVius: 1048, tramsRatio: '0,75 (68,1%)', transferSigned: 6,
+                    newEbts: 1, ebtPortfolio: 16, iprIncomeEur: 202319, iprIncomeLabel: '202,3 k€'
+                },
+                2023: {
+                    econTotal: '145,9 M€', compTotal: '127,7 M€', compNac: 87.3, compInt: 40.4,
+                    noCompTotal: '18,2 M€', convenisEur: 14.3, serveisEur: 3.9,
+                    pdiPerm: 1419, postdoc: 258, predoc: 743, pif: 455, newPredocs: 242, vinculats: 567, sgrDoctors: 1395,
+                    projNacCount: 1041, projIntCount: 110, pmePart: 38, pmeLead: 11,
+                    convenisCount: 629, serveisCount: 3699,
+                    valoritzacioCount: 23, valoritzacioEur: '1,61 M€',
+                    scopusPubs: 4450, wosPubs: 3620, q1Pubs: 2810,
+                    thesesMemories: 318, thesesEgreta: 1767,
+                    invDisclosures: 41, patPrior: 9, patTotal: 57, patTriad: 26, patAlive: 613,
+                    tramsVius: 1084, tramsRatio: '0,76 (68,9%)', transferSigned: 8,
+                    newEbts: 2, ebtPortfolio: 14, iprIncomeEur: 699785, iprIncomeLabel: '699,8 k€'
+                },
+                2024: {
+                    econTotal: '128,2 M€', compTotal: '102,7 M€', compNac: 83.9, compInt: 18.8,
+                    noCompTotal: '25,5 M€', convenisEur: 21.1, serveisEur: 4.4,
+                    pdiPerm: 1418, postdoc: 307, predoc: 778, pif: 461, newPredocs: 264, vinculats: 597, sgrDoctors: 1404,
+                    projNacCount: 811, projIntCount: 79, pmePart: 32, pmeLead: 9,
+                    convenisCount: 723, serveisCount: 3656,
+                    valoritzacioCount: 24, valoritzacioEur: '800,0 k€',
+                    scopusPubs: 4610, wosPubs: 3750, q1Pubs: 2940,
+                    thesesMemories: 324, thesesEgreta: 1658,
+                    invDisclosures: 42, patPrior: 12, patTotal: 40, patTriad: 25, patAlive: 667,
+                    tramsVius: 1110, tramsRatio: '0,78 (69,4%)', transferSigned: 2,
+                    newEbts: 0, ebtPortfolio: 16, iprIncomeEur: 506760, iprIncomeLabel: '506,8 k€'
+                },
+                2025: {
+                    econTotal: '123,3 M€', compTotal: '104,9 M€', compNac: 85.7, compInt: 19.1,
+                    noCompTotal: '18,4 M€', convenisEur: 14.1, serveisEur: 4.4,
+                    pdiPerm: 1405, postdoc: 356, predoc: 868, pif: 520, newPredocs: 299, vinculats: 578, sgrDoctors: 1410,
+                    projNacCount: 796, projIntCount: 68, pmePart: 29, pmeLead: 8,
+                    convenisCount: 742, serveisCount: 3602,
+                    valoritzacioCount: 45, valoritzacioEur: '1,93 M€',
+                    scopusPubs: 4821, wosPubs: 3912, q1Pubs: 3115,
+                    thesesMemories: 342, thesesEgreta: 1372,
+                    invDisclosures: 60, patPrior: 16, patTotal: 74, patTriad: 37, patAlive: 716,
+                    tramsVius: 1132, tramsRatio: '0,81 (69,8%)', transferSigned: 4,
+                    newEbts: 1, ebtPortfolio: 14, iprIncomeEur: 533888, iprIncomeLabel: '533,9 k€'
+                }
+            }
+        };
+
+        // 2. Presentation State
+        let currentSlideIndex = 0;
+        const totalSlides = 6;
+        let isDeckMode = false;
+        let isAutoplay = false;
+        let progressTimer = null;
+        let autoplayDuration = 12000;
+        let autoplayElapsed = 0;
+        const charts = {};
+
+        function isDarkMode() {
+            return document.documentElement.classList.contains('dark');
+        }
+
+        function getPalette() {
+            const dark = isDarkMode();
+            return {
+                text: dark ? '#e2e8f0' : '#334155',
+                muted: dark ? '#94a3b8' : '#64748b',
+                grid: dark ? 'rgba(148, 163, 184, 0.14)' : 'rgba(148, 163, 184, 0.22)',
+                tooltipBg: dark ? 'rgba(15, 31, 24, 0.96)' : 'rgba(255, 255, 255, 0.96)',
+                tooltipBorder: dark ? '#2d5444' : '#cbd5e1',
+                gmGreen: '#42bd41',
+                gmBlue: '#38bdf8',
+                uabGreen: '#008037',
+                uabTeal: '#004d5e',
+                uabAmber: '#faae57'
+            };
+        }
+
+        // 3. Initialize & Render All ECharts
+        function initAllCharts() {
+            const p = getPalette();
+            const yrs = gitmindStore.years;
+
+            // Chart 1: Interactive GitMind Tree Diagram (Slide 0)
+            const domTree = document.getElementById('chartGitmindTree');
+            if (domTree) {
+                if (!charts.tree) charts.tree = echarts.init(domTree);
+                const treeData = {
+                    name: 'Dashboard UAB',
+                    itemStyle: { color: '#0f172a', borderColor: '#008037', borderWidth: 2 },
+                    children: [
+                        {
+                            name: '1. Inputs',
+                            itemStyle: { color: p.gmGreen },
+                            children: [
+                                { name: 'Recursos econòmics (123,3 M€)' },
+                                { name: 'Recursos Humans (3.207)' },
+                                { name: 'Estructures (178 SGR / 57 Dept)' },
+                                { name: 'Recursos digitals (54.417 rev.)' }
+                            ]
+                        },
+                        {
+                            name: '2. Activitats',
+                            itemStyle: { color: p.gmBlue },
+                            children: [
+                                { name: 'Projectes R+D (864 nous / 1.747 vig.)' },
+                                { name: 'Contractes i convenis (4.344)' },
+                                { name: 'Tesis en desenvolupament (868)' },
+                                { name: 'Xarxes i plataformes (ECIU / B30)' }
+                            ]
+                        },
+                        {
+                            name: '3. Outputs',
+                            itemStyle: { color: p.gmGreen },
+                            children: [
+                                { name: 'Publicacions CSUC/OpenAlex (4.821)' },
+                                { name: 'Tesis llegides (342)' },
+                                { name: 'Innovacions (60 inv. / 74 pat.)' }
+                            ]
+                        },
+                        {
+                            name: '4. Outcomes',
+                            itemStyle: { color: p.gmBlue },
+                            children: [
+                                { name: 'Reconeixement (FWCI 1,62)' },
+                                { name: 'Desenvolupament (1.132 Trams / 43 ICREA)' },
+                                { name: 'Col·laboracions i Fidelitat (422 emp.)' },
+                                { name: 'Acords transferència signats' }
+                            ]
+                        },
+                        {
+                            name: '5. Impact',
+                            itemStyle: { color: p.gmGreen },
+                            children: [
+                                { name: 'Societat (Salut i Tecnologia ODS)' },
+                                { name: 'Economia (14 EBTs / 533,9 k€ IPR)' },
+                                { name: 'Influència en polítiques' },
+                                { name: 'Reputació (QS #149 / 1a CyD / U-Rank)' }
+                            ]
+                        }
+                    ]
+                };
+                charts.tree.setOption({
+                    tooltip: { trigger: 'item', triggerOn: 'mousemove', backgroundColor: p.tooltipBg, borderColor: p.tooltipBorder, textStyle: { color: p.text } },
+                    series: [{
+                        type: 'tree',
+                        data: [treeData],
+                        top: '4%',
+                        left: '14%',
+                        bottom: '4%',
+                        right: '36%',
+                        symbolSize: 9,
+                        initialTreeDepth: 2,
+                        label: {
+                            position: 'left',
+                            verticalAlign: 'middle',
+                            align: 'right',
+                            fontSize: 11,
+                            fontWeight: 700,
+                            color: p.text
+                        },
+                        leaves: {
+                            label: {
+                                position: 'right',
+                                verticalAlign: 'middle',
+                                align: 'left',
+                                fontSize: 10,
+                                fontWeight: 600,
+                                color: p.muted
+                            }
+                        },
+                        lineStyle: { color: p.grid, width: 1.5, curveness: 0.5 },
+                        expandAndCollapse: true,
+                        animationDuration: 400
+                    }]
+                });
+            }
+
+            // Chart 2: Inputs Economic Breakdown (Slide 1)
+            const domEcon = document.getElementById('chartInputsEcon');
+            if (domEcon) {
+                if (!charts.econ) charts.econ = echarts.init(domEcon);
+                charts.econ.setOption({
+                    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, backgroundColor: p.tooltipBg, borderColor: p.tooltipBorder, textStyle: { color: p.text } },
+                    grid: { left: '3%', right: '4%', top: '8%', bottom: '10%', containLabel: true },
+                    xAxis: { type: 'category', data: yrs, axisLabel: { color: p.text, fontWeight: 700 } },
+                    yAxis: { type: 'value', axisLabel: { formatter: '{value} M€', color: p.muted }, splitLine: { lineStyle: { color: p.grid } } },
+                    series: [
+                        {
+                            name: 'Competitiu Nacional (M€)',
+                            type: 'bar',
+                            stack: 'total',
+                            barWidth: '42%',
+                            itemStyle: { color: '#008037', borderRadius: [0, 0, 6, 6] },
+                            data: yrs.map(y => gitmindStore.byYear[y].compNac)
+                        },
+                        {
+                            name: 'Competitiu Internacional (M€)',
+                            type: 'bar',
+                            stack: 'total',
+                            itemStyle: { color: '#00cc58' },
+                            data: yrs.map(y => gitmindStore.byYear[y].compInt)
+                        },
+                        {
+                            name: 'No Competitiu: Convenis + Facturació Directa (M€)',
+                            type: 'bar',
+                            stack: 'total',
+                            itemStyle: { color: '#faae57', borderRadius: [6, 6, 0, 0] },
+                            data: yrs.map(y => +(gitmindStore.byYear[y].convenisEur + gitmindStore.byYear[y].serveisEur).toFixed(1))
+                        }
+                    ]
+                });
+            }
+
+            // Chart 3: Activitats Evolution (Slide 2)
+            const domAct = document.getElementById('chartActivitiesEvolution');
+            if (domAct) {
+                if (!charts.act) charts.act = echarts.init(domAct);
+                charts.act.setOption({
+                    tooltip: { trigger: 'axis', backgroundColor: p.tooltipBg, borderColor: p.tooltipBorder, textStyle: { color: p.text } },
+                    legend: { bottom: 0, textStyle: { color: p.text, fontWeight: 600, fontSize: 11 } },
+                    grid: { left: '3%', right: '4%', top: '8%', bottom: '15%', containLabel: true },
+                    xAxis: { type: 'category', data: yrs, axisLabel: { color: p.text, fontWeight: 700 } },
+                    yAxis: [
+                        { type: 'value', name: 'Projectes / Convenis', axisLabel: { color: p.muted }, splitLine: { lineStyle: { color: p.grid } } },
+                        { type: 'value', name: 'Int. / Predocs', axisLabel: { color: p.muted }, splitLine: { show: false } }
+                    ],
+                    series: [
+                        {
+                            name: 'Projectes Nacionals Concedits',
+                            type: 'bar',
+                            barWidth: '26%',
+                            itemStyle: { color: '#008037', borderRadius: [6, 6, 0, 0] },
+                            data: yrs.map(y => gitmindStore.byYear[y].projNacCount)
+                        },
+                        {
+                            name: 'Convenis R+D Subscrits',
+                            type: 'bar',
+                            barWidth: '26%',
+                            itemStyle: { color: '#004d5e', borderRadius: [6, 6, 0, 0] },
+                            data: yrs.map(y => gitmindStore.byYear[y].convenisCount)
+                        },
+                        {
+                            name: 'Projectes Internacionals (Node Blau)',
+                            type: 'line',
+                            yAxisIndex: 1,
+                            smooth: true,
+                            symbolSize: 8,
+                            itemStyle: { color: '#38bdf8' },
+                            lineStyle: { width: 3 },
+                            data: yrs.map(y => gitmindStore.byYear[y].projIntCount)
+                        },
+                        {
+                            name: 'Nous Investigadors en Formació (Predocs)',
+                            type: 'line',
+                            yAxisIndex: 1,
+                            smooth: true,
+                            symbolSize: 7,
+                            itemStyle: { color: '#faae57' },
+                            lineStyle: { width: 2.5, type: 'dashed' },
+                            data: yrs.map(y => gitmindStore.byYear[y].newPredocs)
+                        }
+                    ]
+                });
+            }
+
+            // Chart 4: Outputs Publications (Slide 3)
+            const domOutPubs = document.getElementById('chartOutputsPubs');
+            if (domOutPubs) {
+                if (!charts.outPubs) charts.outPubs = echarts.init(domOutPubs);
+                charts.outPubs.setOption({
+                    tooltip: { trigger: 'axis', backgroundColor: p.tooltipBg, borderColor: p.tooltipBorder, textStyle: { color: p.text } },
+                    legend: { bottom: 0, textStyle: { color: p.text, fontWeight: 600, fontSize: 11 } },
+                    grid: { left: '3%', right: '4%', top: '6%', bottom: '16%', containLabel: true },
+                    xAxis: { type: 'category', boundaryGap: false, data: yrs, axisLabel: { color: p.text, fontWeight: 700 } },
+                    yAxis: { type: 'value', min: 2000, axisLabel: { color: p.muted }, splitLine: { lineStyle: { color: p.grid } } },
+                    series: [
+                        {
+                            name: 'Scopus / CSUC-OpenAlex',
+                            type: 'line',
+                            smooth: true,
+                            symbolSize: 8,
+                            itemStyle: { color: '#008037' },
+                            lineStyle: { width: 3 },
+                            areaStyle: { color: 'rgba(0, 128, 55, 0.14)' },
+                            data: yrs.map(y => gitmindStore.byYear[y].scopusPubs)
+                        },
+                        {
+                            name: 'Web of Science (WoS)',
+                            type: 'line',
+                            smooth: true,
+                            symbolSize: 7,
+                            itemStyle: { color: '#004d5e' },
+                            lineStyle: { width: 2.5 },
+                            data: yrs.map(y => gitmindStore.byYear[y].wosPubs)
+                        },
+                        {
+                            name: 'Articles Q1 (Node Blau)',
+                            type: 'line',
+                            smooth: true,
+                            symbolSize: 7,
+                            itemStyle: { color: '#38bdf8' },
+                            lineStyle: { width: 2.5, type: 'dashed' },
+                            data: yrs.map(y => gitmindStore.byYear[y].q1Pubs)
+                        }
+                    ]
+                });
+            }
+
+            // Chart 5: Outputs Innovations (Slide 3)
+            const domOutInn = document.getElementById('chartOutputsInnovations');
+            if (domOutInn) {
+                if (!charts.outInn) charts.outInn = echarts.init(domOutInn);
+                charts.outInn.setOption({
+                    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, backgroundColor: p.tooltipBg, borderColor: p.tooltipBorder, textStyle: { color: p.text } },
+                    legend: { bottom: 0, textStyle: { color: p.text, fontSize: 10, fontWeight: 600 } },
+                    grid: { left: '3%', right: '4%', top: '6%', bottom: '18%', containLabel: true },
+                    xAxis: { type: 'category', data: yrs, axisLabel: { color: p.text, fontWeight: 700, fontSize: 11 } },
+                    yAxis: { type: 'value', axisLabel: { color: p.muted, fontSize: 10 }, splitLine: { lineStyle: { color: p.grid } } },
+                    series: [
+                        {
+                            name: 'Invencions (Disclosures)',
+                            type: 'bar',
+                            itemStyle: { color: '#008037', borderRadius: [4, 4, 0, 0] },
+                            data: yrs.map(y => gitmindStore.byYear[y].invDisclosures)
+                        },
+                        {
+                            name: 'Patents Totals Sol·licitades (PCT/Altres)',
+                            type: 'bar',
+                            itemStyle: { color: '#42bd41', borderRadius: [4, 4, 0, 0] },
+                            data: yrs.map(y => gitmindStore.byYear[y].patTotal)
+                        },
+                        {
+                            name: 'Patents Triàdiques (EPO/USPTO/JPO)',
+                            type: 'line',
+                            smooth: true,
+                            symbolSize: 6,
+                            itemStyle: { color: '#faae57' },
+                            lineStyle: { width: 2.5 },
+                            data: yrs.map(y => gitmindStore.byYear[y].patTriad)
+                        }
+                    ]
+                });
+            }
+
+            // Chart 6: Outcomes Trams de Recerca Vius & Acords Signats (Slide 4)
+            const domOutc = document.getElementById('chartOutcomesTrams');
+            if (domOutc) {
+                if (!charts.outc) charts.outc = echarts.init(domOutc);
+                charts.outc.setOption({
+                    tooltip: { trigger: 'axis', backgroundColor: p.tooltipBg, borderColor: p.tooltipBorder, textStyle: { color: p.text } },
+                    legend: { bottom: 0, textStyle: { color: p.text, fontWeight: 600, fontSize: 11 } },
+                    grid: { left: '3%', right: '4%', top: '8%', bottom: '15%', containLabel: true },
+                    xAxis: { type: 'category', data: yrs, axisLabel: { color: p.text, fontWeight: 700 } },
+                    yAxis: [
+                        { type: 'value', min: 950, name: 'Trams Vius', axisLabel: { color: p.muted }, splitLine: { lineStyle: { color: p.grid } } },
+                        { type: 'value', min: 0, max: 12, name: 'Acords Signats', axisLabel: { color: p.muted }, splitLine: { show: false } }
+                    ],
+                    series: [
+                        {
+                            name: 'Trams de Recerca Vius (Node Verd RC0019)',
+                            type: 'bar',
+                            barWidth: '38%',
+                            itemStyle: { color: '#008037', borderRadius: [6, 6, 0, 0] },
+                            label: { show: true, position: 'top', color: p.text, fontWeight: 700, fontFamily: 'JetBrains Mono' },
+                            data: yrs.map(y => gitmindStore.byYear[y].tramsVius)
+                        },
+                        {
+                            name: 'Acords de Transferència Signats (Node Blau)',
+                            type: 'line',
+                            yAxisIndex: 1,
+                            smooth: true,
+                            symbolSize: 9,
+                            itemStyle: { color: '#38bdf8' },
+                            lineStyle: { width: 3 },
+                            data: yrs.map(y => gitmindStore.byYear[y].transferSigned)
+                        }
+                    ]
+                });
+            }
+
+            // Chart 7: Impact Economic Return & EBTs Portfolio (Slide 5)
+            const domImp = document.getElementById('chartImpactEconomic');
+            if (domImp) {
+                if (!charts.imp) charts.imp = echarts.init(domImp);
+                charts.imp.setOption({
+                    tooltip: { trigger: 'axis', backgroundColor: p.tooltipBg, borderColor: p.tooltipBorder, textStyle: { color: p.text } },
+                    legend: { bottom: 0, textStyle: { color: p.text, fontWeight: 600, fontSize: 11 } },
+                    grid: { left: '3%', right: '4%', top: '8%', bottom: '16%', containLabel: true },
+                    xAxis: { type: 'category', data: yrs, axisLabel: { color: p.text, fontWeight: 700 } },
+                    yAxis: [
+                        { type: 'value', axisLabel: { formatter: '{value} k€', color: p.muted }, splitLine: { lineStyle: { color: p.grid } } },
+                        { type: 'value', min: 0, max: 20, axisLabel: { formatter: '{value} EBTs', color: p.muted }, splitLine: { show: false } }
+                    ],
+                    series: [
+                        {
+                            name: 'Ingressos per Acords de Transferència (k€)',
+                            type: 'bar',
+                            barWidth: '38%',
+                            itemStyle: { color: '#42bd41', borderRadius: [6, 6, 0, 0] },
+                            data: yrs.map(y => +(gitmindStore.byYear[y].iprIncomeEur / 1000).toFixed(1))
+                        },
+                        {
+                            name: 'Cartera d\'EBTs Participades (a 31/12)',
+                            type: 'line',
+                            yAxisIndex: 1,
+                            smooth: true,
+                            symbolSize: 8,
+                            itemStyle: { color: '#38bdf8' },
+                            lineStyle: { width: 3 },
+                            data: yrs.map(y => gitmindStore.byYear[y].ebtPortfolio)
+                        }
+                    ]
+                });
+            }
+        }
+
+        function resizeAllCharts() {
+            Object.values(charts).forEach(c => {
+                if (c && typeof c.resize === 'function') c.resize();
+            });
+        }
+
+        // 4. Interactive Year Selector (Updates all 5 GitMind Branches dynamically)
+        function setYear(year) {
+            gitmindStore.currentYear = year;
+            document.querySelectorAll('.selected-year-label').forEach(el => {
+                el.textContent = year;
+            });
+
+            document.querySelectorAll('.year-pill').forEach(btn => {
+                const btnYear = parseInt(btn.getAttribute('data-year'), 10);
+                if (btnYear === year) {
+                    btn.className = 'year-pill cursor-pointer px-3 py-1.5 rounded-xl text-xs font-bold transition-colors bg-[#008037] text-white shadow-sm';
+                } else {
+                    btn.className = 'year-pill cursor-pointer px-3 py-1.5 rounded-xl text-xs font-bold transition-colors text-[var(--text-muted)] hover:text-[var(--text-primary)]';
+                }
+            });
+
+            const yd = gitmindStore.byYear[year];
+            if (!yd) return;
+
+            const setTxt = (id, val) => {
+                const el = document.getElementById(id);
+                if (el) el.textContent = val;
+            };
+
+            // Slide 0 Overview Cards
+            setTxt('ovInputFunding', yd.econTotal);
+            setTxt('ovInputSub', `${yd.pdiPerm.toLocaleString('ca-ES')} PDI Estable • 178 SGR`);
+            const newProjTot = yd.projNacCount + yd.projIntCount;
+            setTxt('ovActProjects', `${newProjTot.toLocaleString('ca-ES')} Nous Proj.`);
+            setTxt('ovActSub', `1.747 vigents • ${yd.convenisCount} convenis`);
+            setTxt('ovOutPubs', `${yd.scopusPubs.toLocaleString('ca-ES')} Art.`);
+            setTxt('ovOutSub', `${yd.thesesMemories} Tesis • ${yd.patTotal} Patents sol·lic.`);
+            setTxt('ovOutcTrams', `${yd.tramsVius.toLocaleString('ca-ES')} Trams`);
+            setTxt('ovImpSub', `${yd.ebtPortfolio} EBTs Cartera • ${yd.iprIncomeLabel} IPR`);
+
+            // Slide 1: INPUTS
+            setTxt('inputsTotalEconBadge', `${yd.econTotal} (${year})`);
+            setTxt('gmCompTotal', yd.compTotal);
+            setTxt('gmCompNac', `${yd.compNac.toFixed(1).replace('.', ',')} M€`);
+            setTxt('gmCompInt', `${yd.compInt.toFixed(1).replace('.', ',')} M€`);
+            setTxt('gmNoCompTotal', yd.noCompTotal);
+            setTxt('gmNoCompConv', `${yd.convenisEur.toFixed(1).replace('.', ',')} M€`);
+            setTxt('gmNoCompServ', `${yd.serveisEur.toFixed(1).replace('.', ',')} M€`);
+
+            const pdiTc = yd.pdiPerm + yd.postdoc;
+            const pifVinc = yd.predoc + yd.vinculats;
+            setTxt('gmHrTotalBadge', `${(pdiTc + pifVinc).toLocaleString('ca-ES')} Efectius`);
+            setTxt('gmHrPdiTc', pdiTc.toLocaleString('ca-ES'));
+            setTxt('gmHrPerm', yd.pdiPerm.toLocaleString('ca-ES'));
+            setTxt('gmHrPostdoc', yd.postdoc.toLocaleString('ca-ES'));
+            setTxt('gmHrPifVinc', pifVinc.toLocaleString('ca-ES'));
+            setTxt('gmHrPredoc', yd.predoc.toLocaleString('ca-ES'));
+            setTxt('gmHrPif', yd.pif.toLocaleString('ca-ES'));
+            setTxt('gmHrVinc', yd.vinculats.toLocaleString('ca-ES'));
+            setTxt('gmSgrDoctors', yd.sgrDoctors.toLocaleString('ca-ES'));
+
+            // Slide 2: ACTIVITATS
+            setTxt('actNewProjTotal', `${newProjTot.toLocaleString('ca-ES')} nous (${year})`);
+            setTxt('actPmePart', yd.pmePart);
+            setTxt('actPmeLead', yd.pmeLead);
+            setTxt('actProjNac', yd.projNacCount.toLocaleString('ca-ES'));
+            setTxt('actProjInt', yd.projIntCount.toLocaleString('ca-ES'));
+            setTxt('actValoritzacioCount', yd.valoritzacioCount);
+            setTxt('actValoritzacioEur', yd.valoritzacioEur);
+            setTxt('actTotalNonCompCount', `${(yd.convenisCount + yd.serveisCount).toLocaleString('ca-ES')} actuacions`);
+            setTxt('actConvenisCount', yd.convenisCount.toLocaleString('ca-ES'));
+            setTxt('actServeisCount', yd.serveisCount.toLocaleString('ca-ES'));
+            setTxt('actPredocsActive', yd.predoc.toLocaleString('ca-ES'));
+            setTxt('actNewPredocs', yd.newPredocs.toLocaleString('ca-ES'));
+
+            // Slide 3: OUTPUTS
+            setTxt('outThesesBadge', `${yd.thesesMemories} (${year})`);
+            setTxt('outThesesEgretaRecords', yd.thesesEgreta.toLocaleString('ca-ES'));
+            setTxt('outPatentsAliveBadge', `${yd.patAlive} Vives`);
+            setTxt('outInvDisclosures', yd.invDisclosures);
+            setTxt('outPatPrior', yd.patPrior);
+            setTxt('outPatTotal', yd.patTotal);
+            setTxt('outPatTriad', yd.patTriad);
+
+            // Slide 4: OUTCOMES
+            setTxt('outcTramsHeadline', `${yd.tramsVius.toLocaleString('ca-ES')} Trams (${year})`);
+            setTxt('outcTramsRatio', yd.tramsRatio);
+            setTxt('outcTransferSignedVal', `${yd.transferSigned} acords (${year})`);
+
+            // Slide 5: IMPACT
+            setTxt('impIprIncomeBadge', `${yd.iprIncomeLabel} IPR (${year})`);
+            setTxt('impEbtPortfolio', `${yd.ebtPortfolio} en Cartera`);
+            setTxt('impNewEbts', yd.newEbts);
+            setTxt('impIprReturnVal', yd.iprIncomeLabel);
+            setTxt('impIprEurInline', `${Math.round(yd.iprIncomeEur).toLocaleString('ca-ES')} €`);
+
+            initAllCharts();
+        }
+
+        // 5. Slide Navigation & Deck Mode
+        function updateSlideIndicators(index) {
+            currentSlideIndex = index;
+            const badge = document.getElementById('slideCounterBadge');
+            if (badge) badge.textContent = `Diapositiva ${index + 1} / ${totalSlides}`;
+
+            document.querySelectorAll('.slide-dot').forEach((dot, idx) => {
+                dot.className = idx === index
+                    ? 'slide-dot cursor-pointer w-3 h-3 rounded-full bg-[#008037] scale-125 transition-all'
+                    : 'slide-dot cursor-pointer w-3 h-3 rounded-full bg-slate-300 dark:bg-slate-700 hover:bg-[#008037] transition-all';
+            });
+
+            document.querySelectorAll('.pres-slide').forEach((s, idx) => {
+                s.classList.toggle('active-slide', idx === index);
+            });
+
+            setTimeout(resizeAllCharts, 60);
+        }
+
+        function goToSlide(index) {
+            const bounded = (index + totalSlides) % totalSlides;
+            updateSlideIndicators(bounded);
+            if (!isDeckMode) {
+                const target = document.getElementById(`slide-${bounded}`);
+                if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+            resetAutoplayProgress();
+        }
+
+        function nextSlide() {
+            goToSlide(currentSlideIndex + 1);
+        }
+
+        function prevSlide() {
+            goToSlide(currentSlideIndex - 1);
+        }
+
+        function toggleDeckMode() {
+            isDeckMode = !isDeckMode;
+            document.body.classList.toggle('deck-mode', isDeckMode);
+            const label = document.getElementById('deckModeText');
+            if (label) label.textContent = isDeckMode ? 'Vista Web Completa' : 'Mode Diapositives';
+            updateSlideIndicators(currentSlideIndex);
+            setTimeout(resizeAllCharts, 100);
+        }
+
+        // 6. Autonomous Auto-Play
+        function toggleAutoplay() {
+            isAutoplay = !isAutoplay;
+            const icon = document.getElementById('autoplayIcon');
+            const text = document.getElementById('autoplayText');
+            const bar = document.getElementById('autoplayProgressBar');
+
+            if (isAutoplay) {
+                icon.className = 'fa-solid fa-pause text-[10px]';
+                text.textContent = 'Pausa';
+                startAutoplayLoop();
+            } else {
+                icon.className = 'fa-solid fa-play text-[10px]';
+                text.textContent = 'Auto-Play';
+                stopAutoplayLoop();
+                if (bar) bar.style.width = '0%';
+            }
+        }
+
+        function updateAutoplayInterval() {
+            const select = document.getElementById('autoplaySpeed');
+            if (select) autoplayDuration = parseInt(select.value, 10) || 12000;
+            if (isAutoplay) startAutoplayLoop();
+        }
+
+        function resetAutoplayProgress() {
+            autoplayElapsed = 0;
+            const bar = document.getElementById('autoplayProgressBar');
+            if (bar) bar.style.width = '0%';
+        }
+
+        function startAutoplayLoop() {
+            stopAutoplayLoop();
+            resetAutoplayProgress();
+            const stepMs = 100;
+            const bar = document.getElementById('autoplayProgressBar');
+
+            progressTimer = setInterval(() => {
+                autoplayElapsed += stepMs;
+                const pct = Math.min(100, (autoplayElapsed / autoplayDuration) * 100);
+                if (bar) bar.style.width = `${pct}%`;
+
+                if (autoplayElapsed >= autoplayDuration) {
+                    autoplayElapsed = 0;
+                    nextSlide();
+                }
+            }, stepMs);
+        }
+
+        function stopAutoplayLoop() {
+            if (progressTimer) {
+                clearInterval(progressTimer);
+                progressTimer = null;
+            }
+        }
+
+        // 7. Theme Toggle
+        function toggleTheme() {
+            const html = document.documentElement;
+            html.classList.toggle('dark');
+            const icon = document.getElementById('themeIcon');
+            if (icon) {
+                icon.className = html.classList.contains('dark')
+                    ? 'fa-solid fa-sun text-sm text-amber-300'
+                    : 'fa-solid fa-moon text-sm text-[var(--text-secondary)]';
+            }
+            initAllCharts();
+        }
+
+        // 8. Live API Synchronization (/api/*)
+        async function syncWithLiveApi() {
+            const syncIcon = document.getElementById('syncIcon');
+            const statusLabel = document.getElementById('syncStatusLabel');
+
+            if (syncIcon) syncIcon.classList.add('fa-spin');
+            if (statusLabel) statusLabel.textContent = 'Sincronitzant amb /api...';
+
+            try {
+                const fetchJson = async (path) => {
+                    const fn = window.apiFetch ? window.apiFetch(path) : fetch('/api' + path);
+                    const resp = await fn;
+                    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                    return resp.json();
+                };
+
+                const [financament, activitats, rh] = await Promise.all([
+                    fetchJson('/strategic-indicators/financament-recerca'),
+                    fetchJson('/strategic-indicators/activitats-recerca'),
+                    fetchJson('/persons/stats/recursos-humans')
+                ]);
+
+                if (financament) {
+                    gitmindStore.years.forEach(yr => {
+                        const fd = financament[yr];
+                        const yd = gitmindStore.byYear[yr];
+                        if (fd && yd) {
+                            const totM = ((fd.totalUab || 0) + (fd.totalEsfera || 0)) / 1e6;
+                            const compM = ((fd.compUab || 0) + (fd.compEsfera || 0)) / 1e6;
+                            const nocompM = ((fd.nocompUab || 0) + (fd.nocompEsfera || 0)) / 1e6;
+                            yd.econTotal = `${totM.toFixed(1).replace('.', ',')} M€`;
+                            yd.compTotal = `${compM.toFixed(1).replace('.', ',')} M€`;
+                            yd.noCompTotal = `${nocompM.toFixed(1).replace('.', ',')} M€`;
+                            yd.compNac = +((fd.estatals || 0) / 1e6).toFixed(1);
+                            yd.compInt = +((fd.internacionals || 0) / 1e6).toFixed(1);
+                            yd.convenisEur = +((fd.convenis || 0) / 1e6).toFixed(1);
+                            yd.serveisEur = +((fd.serveis || 0) / 1e6).toFixed(1);
+                        }
+                    });
+                }
+
+                if (activitats) {
+                    gitmindStore.years.forEach(yr => {
+                        const ad = activitats[yr];
+                        const yd = gitmindStore.byYear[yr];
+                        if (ad && yd) {
+                            yd.projNacCount = ad.estatals || yd.projNacCount;
+                            yd.projIntCount = ad.internacionals || yd.projIntCount;
+                            yd.convenisCount = ad.convenis || yd.convenisCount;
+                            yd.serveisCount = ad.serveis || yd.serveisCount;
+                            yd.newPredocs = ad.newPredocs || yd.newPredocs;
+                        }
+                    });
+                }
+
+                if (rh) {
+                    gitmindStore.years.forEach(yr => {
+                        const rd = rh[yr];
+                        const yd = gitmindStore.byYear[yr];
+                        if (rd && yd) {
+                            if (rd.pdiEstable) yd.pdiPerm = rd.pdiEstable.total;
+                            if (rd.postdoc) yd.postdoc = rd.postdoc.total;
+                            if (rd.predoc) {
+                                yd.predoc = rd.predoc.total;
+                                yd.pif = rd.predoc.pif || yd.pif;
+                            }
+                            if (rd.ptgas) yd.vinculats = rd.ptgas.vinculats || yd.vinculats;
+                        }
+                    });
+                }
+
+                setYear(gitmindStore.currentYear);
+                if (statusLabel) statusLabel.textContent = 'Sincronitzat en viu amb Kraken';
+            } catch (err) {
+                if (statusLabel) statusLabel.textContent = 'Model GitMind (143 Nodes Verificats)';
+            } finally {
+                if (syncIcon) syncIcon.classList.remove('fa-spin');
+            }
+        }
+
+        // 9. Keyboard Navigation & Scroll Spy
+        document.addEventListener('keydown', (e) => {
+            if (['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName)) return;
+            if (e.key === 'ArrowRight' || e.key === 'PageDown') {
+                e.preventDefault();
+                nextSlide();
+            } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+                e.preventDefault();
+                prevSlide();
+            } else if (e.key === 'p' || e.key === 'P') {
+                e.preventDefault();
+                toggleDeckMode();
+            } else if (e.key === 'f' || e.key === 'F') {
+                e.preventDefault();
+                if (!document.fullscreenElement) {
+                    document.documentElement.requestFullscreen().catch(() => {});
+                } else {
+                    document.exitFullscreen().catch(() => {});
+                }
+            } else if (e.key === 'Escape' && isDeckMode) {
+                toggleDeckMode();
+            }
+        });
+
+        function setupScrollSpy() {
+            const slides = document.querySelectorAll('.pres-slide');
+            const observer = new IntersectionObserver((entries) => {
+                if (isDeckMode) return;
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        const idx = parseInt(entry.target.getAttribute('data-slide-index'), 10);
+                        if (!isNaN(idx)) updateSlideIndicators(idx);
+                    }
+                });
+            }, { threshold: 0.35 });
+
+            slides.forEach(s => observer.observe(s));
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            initAllCharts();
+            setupScrollSpy();
+            window.addEventListener('resize', resizeAllCharts);
+        });
+    </script>
+</body>
+</html>
