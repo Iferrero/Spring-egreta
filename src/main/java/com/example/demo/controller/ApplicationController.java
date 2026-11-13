@@ -301,9 +301,38 @@ public class ApplicationController {
             return List.of();
         }
 
-        List<String> resignedAppUuids = getResignedApplicationUuids();
+        String fundingCollection = resolveFundingOpportunityCollection();
 
+        // Determine filter criteria: call type vs program keyword
+        Set<String> filterCallTypes = new HashSet<>();
+        String filterProgramText = null;
+
+        if (callType != null && !callType.isBlank() && !"ALL".equalsIgnoreCase(callType)) {
+            filterCallTypes.addAll(parseProgramFilter(callType));
+        }
+
+        if (program != null && !program.isBlank() && !"ALL".equalsIgnoreCase(program)) {
+            Set<String> progTokens = parseProgramFilter(program);
+            boolean allAreCallTypes = !progTokens.isEmpty() && progTokens.stream().allMatch(t -> "PJE".equals(t) || "PEI".equals(t));
+            if (allAreCallTypes) {
+                filterCallTypes.addAll(progTokens);
+            } else {
+                filterProgramText = program.trim().toLowerCase(Locale.ROOT);
+            }
+        }
+
+        // Restrict the aggregation to the funding opportunities of the requested call type(s)
+        // instead of aggregating every application and discarding the rest afterwards.
         Document matchStage = new Document("fundingOpportunity.uuid", new Document("$ne", null));
+        if (!filterCallTypes.isEmpty()) {
+            Set<String> callTypeFundingUuids = findFundingUuidsByCallType(fundingCollection, filterCallTypes);
+            if (callTypeFundingUuids.isEmpty()) {
+                return List.of();
+            }
+            matchStage = new Document("fundingOpportunity.uuid", new Document("$in", new ArrayList<>(callTypeFundingUuids)));
+        }
+
+        List<String> resignedAppUuids = getResignedApplicationUuids();
         if (excludeResigned && !resignedAppUuids.isEmpty()) {
             matchStage.append("uuid", new Document("$nin", resignedAppUuids));
         }
@@ -338,7 +367,6 @@ public class ApplicationController {
             return List.of();
         }
 
-        String fundingCollection = resolveFundingOpportunityCollection();
         Map<String, Document> fundingByUuid = new LinkedHashMap<>();
 
         if (fundingCollection != null) {
@@ -349,6 +377,8 @@ public class ApplicationController {
                 .toList();
 
             if (!uuids.isEmpty()) {
+                // keywordGroups holds most of each document's weight; only the "programes" group is used,
+                // so let MongoDB drop the others before transferring.
                 Document proj = new Document("uuid", 1)
                     .append("title", 1)
                     .append("type", 1)
@@ -356,11 +386,14 @@ public class ApplicationController {
                     .append("submissionPeriod", 1)
                     .append("submissionYear", 1)
                     .append("pureId", 1)
-                    .append("keywordGroups", 1);
+                    .append("keywordGroups", new Document("$filter", new Document("input", "$keywordGroups")
+                        .append("as", "g")
+                        .append("cond", new Document("$eq", Arrays.asList("$$g.logicalName", PROGRAM_KEYWORD_GROUP)))));
                 try (var cursor = mongoTemplate
                     .getCollection(fundingCollection)
-                    .find(new Document("uuid", new Document("$in", uuids)))
-                    .projection(proj)
+                    .aggregate(List.of(
+                        new Document("$match", new Document("uuid", new Document("$in", uuids))),
+                        new Document("$project", proj)))
                     .cursor()) {
                     while (cursor.hasNext()) {
                         try {
@@ -380,24 +413,6 @@ public class ApplicationController {
         }
 
         Map<String, String> schemeTerms = loadProgramClassificationScheme();
-
-        // Determine filter criteria: call type vs program keyword
-        Set<String> filterCallTypes = new HashSet<>();
-        String filterProgramText = null;
-
-        if (callType != null && !callType.isBlank() && !"ALL".equalsIgnoreCase(callType)) {
-            filterCallTypes.addAll(parseProgramFilter(callType));
-        }
-
-        if (program != null && !program.isBlank() && !"ALL".equalsIgnoreCase(program)) {
-            Set<String> progTokens = parseProgramFilter(program);
-            boolean allAreCallTypes = !progTokens.isEmpty() && progTokens.stream().allMatch(t -> "PJE".equals(t) || "PEI".equals(t));
-            if (allAreCallTypes) {
-                filterCallTypes.addAll(progTokens);
-            } else {
-                filterProgramText = program.trim().toLowerCase(Locale.ROOT);
-            }
-        }
 
         Map<String, Boolean> leaderByAppUuid = getAwardLeaderByApplicationUuid();
         List<Map<String, Object>> result = new ArrayList<>();
@@ -1089,6 +1104,41 @@ public class ApplicationController {
             // Ignore query failure
         }
         return ambits;
+    }
+
+    private static final String PROGRAM_KEYWORD_GROUP = "/uab/fundingopportunities/programes";
+
+    /** UUIDs of the funding opportunities whose type resolves to one of the given call types (PJE/PEI). */
+    private Set<String> findFundingUuidsByCallType(String fundingCollection, Set<String> callTypes) {
+        Set<String> uuids = new HashSet<>();
+        if (fundingCollection == null) {
+            return uuids;
+        }
+        try (var cursor = mongoTemplate
+            .getCollection(fundingCollection)
+            .find()
+            .projection(new Document("uuid", 1).append("type", 1))
+            .cursor()) {
+            while (cursor.hasNext()) {
+                try {
+                    Document doc = cursor.next();
+                    String uuid = doc.getString("uuid");
+                    if (uuid == null || uuid.isBlank()) {
+                        continue;
+                    }
+                    Object rawType = doc.get("type");
+                    String code = resolveProgramCode(extractFundingTypeUri(rawType), extractFundingType(rawType));
+                    if (code != null && callTypes.contains(code)) {
+                        uuids.add(uuid);
+                    }
+                } catch (Exception e) {
+                    // Skip corrupted BSON document
+                }
+            }
+        } catch (Exception e) {
+            // Ignore query failure
+        }
+        return uuids;
     }
 
     private Set<String> parseProgramFilter(String program) {
