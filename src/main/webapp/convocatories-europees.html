@@ -536,14 +536,26 @@
         const select = document.getElementById('selectProgram');
         if (!select) return;
         const current = select.value;
-        const pool = selectedCallType === 'ALL'
-            ? allCalls
-            : allCalls.filter(i => (i.callTypeCode || i.programCode) === selectedCallType);
+        const pool = allCalls.filter(i => {
+            if (selectedCallType !== 'ALL') {
+                const itemCallType = i.callTypeCode || i.programCode;
+                if (itemCallType !== selectedCallType) return false;
+            }
+            if (rangoAnios && Number.isInteger(i.fundingYear)) {
+                if (i.fundingYear < rangoAnios.desde || i.fundingYear > rangoAnios.hasta) {
+                    return false;
+                }
+            }
+            return true;
+        });
 
         const counts = {};
         pool.forEach(i => {
-            const prog = i.program || 'Sense programa';
-            counts[prog] = (counts[prog] || 0) + 1;
+            const progs = (i.programs && i.programs.length > 0) ? i.programs : [i.program || 'Sense programa'];
+            progs.forEach(p => {
+                const progName = p || 'Sense programa';
+                counts[progName] = (counts[progName] || 0) + 1;
+            });
         });
 
         const sortedProgs = Object.keys(counts).sort((a, b) => a.localeCompare(b));
@@ -577,6 +589,8 @@
         if (min === max) {
             rangoAnios = { desde: min, hasta: max };
             valorRango.textContent = `${min}`;
+            populateProgramOptions();
+            applyFilters();
             return;
         }
 
@@ -594,6 +608,7 @@
         slider.noUiSlider.on('update', values => {
             rangoAnios = { desde: Number(values[0]), hasta: Number(values[1]) };
             valorRango.textContent = `${values[0]} - ${values[1]}`;
+            populateProgramOptions();
             applyFilters();
         });
     }
