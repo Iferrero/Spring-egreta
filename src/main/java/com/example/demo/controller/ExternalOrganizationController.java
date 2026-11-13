@@ -865,11 +865,19 @@ public class ExternalOrganizationController {
             ProviderQueryContext ctx = new ProviderQueryContext(associatedPerson, pubTitle, doi, modelCountries, modelTypes);
             com.example.demo.curation.model.MetadataInferenceResult engineRes = metadataEnrichmentEngine.inferMetadata(orgName, ctx);
             if (engineRes != null && engineRes.hasAnySignal()) {
-                return new MetadataInferenceResult(
-                    new InferenceResult(engineRes.country().countryLabel(), engineRes.country().confidence(), engineRes.country().reason()),
-                    new TypeInferenceResult(engineRes.type().typeLabel(), engineRes.type().confidence(), engineRes.type().reason()),
-                    new FundingInferenceResult(engineRes.funding().fundingLabel(), engineRes.funding().confidence(), engineRes.funding().reason())
-                );
+                // The providers' answer is only one candidate: the name heuristics are free and run locally, and
+                // for an obvious name ("Fundació ...") they are often more certain than a weak provider match.
+                // On a tie the provider result wins (it comes first).
+                List<InferenceResult> countryCands = new ArrayList<>();
+                List<TypeInferenceResult> typeCands = new ArrayList<>();
+                List<FundingInferenceResult> fundingCands = new ArrayList<>();
+                countryCands.add(new InferenceResult(engineRes.country().countryLabel(), engineRes.country().confidence(), engineRes.country().reason()));
+                typeCands.add(new TypeInferenceResult(engineRes.type().typeLabel(), engineRes.type().confidence(), engineRes.type().reason()));
+                fundingCands.add(new FundingInferenceResult(engineRes.funding().fundingLabel(), engineRes.funding().confidence(), engineRes.funding().reason()));
+                try { countryCands.add(inferCountryFromName(orgName, countryCatalog)); } catch (Exception ignored) {}
+                try { typeCands.add(inferTypeFromName(orgName, typeCatalog)); } catch (Exception ignored) {}
+                try { fundingCands.add(inferFundingFromName(orgName)); } catch (Exception ignored) {}
+                return new MetadataInferenceResult(pickBestCountry(countryCands), pickBestType(typeCands), pickBestFunding(fundingCands));
             }
         }
 
@@ -1060,11 +1068,23 @@ public class ExternalOrganizationController {
         }
 
         // Si tenim un nom net suggerit per vLLM / ROR / OpenAlex, utilitzem aquest nom net per inferir les metadades
-        String effectiveName = (nameProposal != null && nameProposal.suggestedName() != null && !nameProposal.suggestedName().isBlank())
-            ? nameProposal.suggestedName().trim()
-            : orgName;
+        // The proposed name is only trusted for the inference when it is practically the same organization.
+        // A weak proposal ("Fundació Pare Manel" -> "Fundación Prevent", 71%) used to replace the real name, and
+        // country/type/funding were then inferred for a different organization at ~98% confidence.
+        boolean useProposedName = nameProposal != null
+            && nameProposal.suggestedName() != null && !nameProposal.suggestedName().isBlank()
+            && nameProposal.similarity() >= 0.90;
+        String effectiveName = useProposedName ? nameProposal.suggestedName().trim() : orgName;
 
         MetadataInferenceResult best = inferBestMetadata(orgUuid, effectiveName, associatedPerson, countryCatalog, typeCatalog);
+        if (useProposedName && nameProposal.similarity() < 1.0) {
+            // Whatever was inferred for the proposed name is only as certain as the name match itself.
+            double sim = nameProposal.similarity();
+            best = new MetadataInferenceResult(
+                new InferenceResult(best.country().countryLabel(), best.country().confidence() * sim, best.country().reason()),
+                new TypeInferenceResult(best.type().typeLabel(), best.type().confidence() * sim, best.type().reason()),
+                new FundingInferenceResult(best.funding().fundingLabel(), best.funding().confidence() * sim, best.funding().reason()));
+        }
 
         InferenceResult countryResult = best.country();
         TypeInferenceResult typeResult = best.type();
@@ -1072,12 +1092,12 @@ public class ExternalOrganizationController {
 
         // Si nameProposal té país o tipus deduït amb alta confiança, prioritzar-lo
         if (nameProposal != null) {
-            if (nameProposal.country() != null && !nameProposal.country().isBlank() && (countryResult.countryLabel().isBlank() || countryResult.confidence() < 0.85)) {
+            if (nameProposal.similarity() >= 0.85 && nameProposal.country() != null && !nameProposal.country().isBlank() && (countryResult.countryLabel().isBlank() || countryResult.confidence() < 0.85)) {
                 // A 100% *name* similarity says nothing about which country is right when several organizations share
                 // the name (BASF SE, Hewlett Packard Enterprise...), so it cannot reach the auto-apply zone by itself.
                 countryResult = new InferenceResult(nameProposal.country(), Math.min(0.85, Math.max(countryResult.confidence(), nameProposal.similarity())), nameProposal.reason());
             }
-            if (nameProposal.type() != null && !nameProposal.type().isBlank() && (typeResult.typeLabel().isBlank() || typeResult.confidence() < 0.85)) {
+            if (nameProposal.similarity() >= 0.85 && nameProposal.type() != null && !nameProposal.type().isBlank() && (typeResult.typeLabel().isBlank() || typeResult.confidence() < 0.85)) {
                 typeResult = new TypeInferenceResult(nameProposal.type(), Math.min(0.85, Math.max(typeResult.confidence(), nameProposal.similarity())), nameProposal.reason());
             }
         }
@@ -4216,13 +4236,20 @@ public class ExternalOrganizationController {
             return new TypeInferenceResult("", 0.0, "no-signal");
         }
 
+        // The precise resolver knows the Egreta taxonomy and orders the rules (department before university,
+        // foundation, association...), so it goes first; a bare label match is only the fallback.
+        TypeInferenceResult precise = resolvePreciseEgretaType(orgName, "", "", catalog, 0.88, "keyword-hint");
+        if (precise != null && !precise.typeLabel().isBlank()) {
+            return precise;
+        }
+
         for (TypeAggregate t : catalog) {
             if (!t.normalizedLabel.isBlank() && containsWord(normalizedName, t.normalizedLabel)) {
                 return new TypeInferenceResult(t.label, 0.88, "direct-type-match");
             }
         }
 
-        return resolvePreciseEgretaType(orgName, "", "", catalog, 0.88, "keyword-hint");
+        return precise;
     }
 
     private FundingInferenceResult inferFundingFromName(String orgName) {
