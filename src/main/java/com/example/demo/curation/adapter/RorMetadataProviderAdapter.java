@@ -122,6 +122,10 @@ public class RorMetadataProviderAdapter implements MetadataProviderPort {
     private String fetchRorRawJson(String orgName) {
         String result = queryRorFromMongo(orgName);
         if ((result == null || !hasRorItems(result)) && rorSuggestUrl != null && !rorSuggestUrl.isBlank() && rorSuggestUrl.startsWith("http")) {
+            String chosen = executeRorAffiliation(orgName.trim());
+            if (chosen != null) {
+                return chosen;
+            }
             String cleaned = cleanQueryForRor(orgName);
             if (!cleaned.isBlank()) {
                 result = executeRorQuery(cleaned);
@@ -159,6 +163,43 @@ public class RorMetadataProviderAdapter implements MetadataProviderPort {
             }
         } catch (Exception e) {
             log.debug("ROR HTTP query failed for '{}': {}", query, e.getMessage());
+        }
+        return null;
+    }
+
+    /**
+     * ROR's affiliation matcher is designed for noisy organization strings. Unlike the free-text search it says
+     * when it is confident ("chosen"), and we only accept those records, so a nearby but wrong institution is
+     * never returned just because it ranked first.
+     */
+    private String executeRorAffiliation(String rawAffiliation) {
+        try {
+            String url = rorSuggestUrl + "?affiliation=" + URLEncoder.encode(rawAffiliation, StandardCharsets.UTF_8);
+            HttpRequest req = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .timeout(Duration.ofMillis(rorSuggestTimeoutMs))
+                    .GET()
+                    .build();
+            HttpResponse<String> resp = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
+            if (resp.statusCode() != 200) {
+                return null;
+            }
+            JsonNode items = objectMapper.readTree(resp.body()).path("items");
+            if (!items.isArray()) {
+                return null;
+            }
+            for (JsonNode it : items) {
+                if (it.path("chosen").asBoolean(false) && it.path("organization").isObject()) {
+                    com.fasterxml.jackson.databind.node.ObjectNode org = ((com.fasterxml.jackson.databind.node.ObjectNode) it.path("organization")).deepCopy();
+                    org.put("_chosen", true);
+                    com.fasterxml.jackson.databind.node.ObjectNode wrapper = objectMapper.createObjectNode();
+                    wrapper.put("number_of_results", 1);
+                    wrapper.putArray("items").add(org);
+                    return objectMapper.writeValueAsString(wrapper);
+                }
+            }
+        } catch (Exception e) {
+            log.debug("ROR affiliation query failed for '{}': {}", rawAffiliation, e.getMessage());
         }
         return null;
     }
@@ -225,10 +266,12 @@ public class RorMetadataProviderAdapter implements MetadataProviderPort {
 
             JsonNode bestItem = null;
             double bestScore = 0.0;
+            double secondScore = 0.0; // best score of a *different* organization
 
             int maxInspect = Math.min(items.size(), 5);
             for (int i = 0; i < maxInspect; i++) {
                 JsonNode item = items.get(i);
+                double itemScore = 0.0;
                 JsonNode namesNode = item.path("names");
                 if (namesNode.isArray()) {
                     for (JsonNode nameObj : namesNode) {
@@ -247,21 +290,40 @@ public class RorMetadataProviderAdapter implements MetadataProviderPort {
                         double score = CurationTextNormalizer.calculateNameMatchScore(queryNorm, CurationTextNormalizer.normalizeText(val), isAcronym);
                         double strScore = CurationTextNormalizer.calculateStringSimilarity(queryNorm, CurationTextNormalizer.normalizeText(val));
                         score = Math.max(score, strScore);
-                        if (score > bestScore) {
-                            bestScore = score;
-                            bestItem = item;
-                        }
+                        itemScore = Math.max(itemScore, score);
                     }
                 }
+                if (itemScore > bestScore) {
+                    secondScore = bestScore;
+                    bestScore = itemScore;
+                    bestItem = item;
+                } else if (itemScore > secondScore) {
+                    secondScore = itemScore;
+                }
+            }
+
+            // ROR's own affiliation matcher flagged this record as the confident match.
+            if (bestItem != null && bestItem.path("_chosen").asBoolean(false)) {
+                bestScore = Math.max(bestScore, 0.82);
             }
 
             if (bestItem == null || bestScore < 0.78) {
                 return null;
             }
 
-            String rorId = bestItem.path("id").asText("");
+            // Two different organizations match the name almost equally well (e.g. several campuses or
+            // homonymous institutions): the pick is a coin toss, so lower the confidence of everything derived from it.
+            boolean ambiguous = secondScore >= 0.78 && (bestScore - secondScore) < 0.04;
+            if (ambiguous) {
+                bestScore = bestScore * 0.90;
+            }
 
-            InferenceResult countryResult = resolveCountryFromRorItem(bestItem, countryCatalog, bestScore, rorId);
+            String rorId = bestItem.path("id").asText("");
+            if (ambiguous) {
+                rorId = rorId + "-ambiguous";
+            }
+
+            InferenceResult countryResult = resolveCountryFromRorItem(bestItem, countryCatalog, bestScore, rorId, queryOrgName);
             TypeInferenceResult typeResult = resolveTypeFromRorItem(bestItem, queryOrgName, typeCatalog, bestScore, rorId);
             FundingInferenceResult fundingResult = resolveFundingFromRorItem(bestItem, queryOrgName, bestScore, rorId);
 
@@ -276,7 +338,8 @@ public class RorMetadataProviderAdapter implements MetadataProviderPort {
             JsonNode item,
             List<CountryAggregate> countryCatalog,
             double matchScore,
-            String rorId) {
+            String rorId,
+            String queryOrgName) {
         JsonNode locations = item.path("locations");
         if (locations.isArray() && !locations.isEmpty()) {
             JsonNode loc = locations.get(0).path("geonames_details");
@@ -292,12 +355,25 @@ public class RorMetadataProviderAdapter implements MetadataProviderPort {
                         .findFirst()
                         .orElse(countryName);
             } else if (!countryCode.isBlank()) {
-                resolved = countryCode;
+                resolved = com.example.demo.curation.util.CountryCodeResolver.resolve(countryCode, countryCatalog);
             }
 
             if (!resolved.isBlank()) {
                 double confidence = Math.min(0.99, matchScore * 0.98);
                 String reason = "ror-match:" + (rorId.isBlank() ? "found" : rorId);
+
+                // Coherence: the name itself names a country other than the one ROR returned
+                // ("National Land Survey of Sweden" matched to the Finnish agency). Do not trust it.
+                java.util.Set<String> namedCountries = com.example.demo.curation.util.CountryCodeResolver.countryCodesNamedIn(queryOrgName);
+                if (!namedCountries.isEmpty() && !countryCode.isBlank() && !namedCountries.contains(countryCode.toUpperCase())) {
+                    confidence = Math.min(confidence, 0.55);
+                    reason = reason + ":name-country-conflict";
+                } else if (item.path("types").toString().contains("company")) {
+                    // ROR describes the group's headquarters; Egreta records the specific entity/branch,
+                    // which is often in another country (BASF SE, Hewlett Packard Enterprise...). Needs review.
+                    confidence = Math.min(confidence, 0.80);
+                    reason = reason + ":company-hq";
+                }
                 return new InferenceResult(resolved, confidence, reason);
             }
         }
@@ -318,41 +394,49 @@ public class RorMetadataProviderAdapter implements MetadataProviderPort {
             }
         }
 
-        String matchedType = "";
-        double baseConf = 0.90;
+        // ROR only gives a coarse type; the shared resolver maps it (plus the name) onto Egreta's own taxonomy.
+        String broadType = "";
+        for (String candidate : List.of("education", "healthcare", "company", "government", "nonprofit", "facility", "archive")) {
+            if (rorTypes.contains(candidate)) {
+                broadType = candidate;
+                break;
+            }
+        }
+
+        String canonicalName = "";
+        JsonNode namesNode = item.path("names");
+        if (namesNode.isArray()) {
+            for (JsonNode n : namesNode) {
+                JsonNode nt = n.path("types");
+                if (nt.isArray()) {
+                    for (JsonNode x : nt) {
+                        if ("ror_display".equals(x.asText())) {
+                            canonicalName = n.path("value").asText("");
+                        }
+                    }
+                }
+            }
+        }
+
         String reasonRef = "ror-type:" + (rorId.isBlank() ? "found" : rorId);
-
-        if (rorTypes.contains("education")) {
-            matchedType = "Universitat";
-            baseConf = 0.96;
-        } else if (rorTypes.contains("healthcare")) {
-            matchedType = "Hospital";
-            baseConf = 0.94;
-        } else if (rorTypes.contains("company")) {
-            matchedType = "Empresa";
-            baseConf = 0.94;
-        } else if (rorTypes.contains("government")) {
-            matchedType = "Administració pública";
-            baseConf = 0.93;
-        } else if (rorTypes.contains("nonprofit")) {
-            matchedType = "Fundació";
-            baseConf = 0.88;
-        } else if (rorTypes.contains("facility") || rorTypes.contains("archive")) {
-            matchedType = "Centre de recerca";
-            baseConf = 0.91;
+        TypeInferenceResult res = com.example.demo.curation.util.EgretaTypeResolver.resolve(
+                queryOrgName, canonicalName, broadType, typeCatalog, matchScore, reasonRef);
+        if (res.typeLabel().isBlank()) {
+            return TypeInferenceResult.noSignal();
         }
-
-        if (!matchedType.isBlank()) {
-            final String target = CurationTextNormalizer.normalizeText(matchedType);
-            String catalogLabel = typeCatalog.stream()
-                    .filter(t -> t.normalizedLabel().contains(target) || target.contains(t.normalizedLabel()))
-                    .map(TypeAggregate::label)
-                    .findFirst()
-                    .orElse(matchedType);
-            double confidence = Math.min(0.98, matchScore * baseConf);
-            return new TypeInferenceResult(catalogLabel, confidence, reasonRef);
+        // The type can never be more certain than the name match that identified the ROR record.
+        double capped = Math.min(res.confidence(), Math.min(0.98, matchScore * 0.98));
+        // If the label only exists because of ROR's coarse type (the name alone gives something else), the
+        // evidence is weak for nonprofit/facility/archive/government: they map to Associació, Centre R+D or
+        // Agència estatal far too often wrongly. Keep those below the auto-apply threshold.
+        if (!broadType.isBlank() && List.of("nonprofit", "facility", "archive", "government").contains(broadType)) {
+            TypeInferenceResult nameOnly = com.example.demo.curation.util.EgretaTypeResolver.resolve(
+                    queryOrgName, canonicalName, "", typeCatalog, matchScore, reasonRef);
+            if (!res.typeLabel().equalsIgnoreCase(nameOnly.typeLabel())) {
+                capped = Math.min(capped, 0.80);
+            }
         }
-        return TypeInferenceResult.noSignal();
+        return new TypeInferenceResult(res.typeLabel(), capped, res.reason());
     }
 
     private FundingInferenceResult resolveFundingFromRorItem(
@@ -369,21 +453,49 @@ public class RorMetadataProviderAdapter implements MetadataProviderPort {
         }
 
         String reasonSuffix = rorId.isBlank() ? "" : ":" + rorId;
+        String norm = CurationTextNormalizer.normalizeText(orgName);
+        // Funding can never be more certain than the name match that identified the ROR record.
+        double cap = Math.min(0.98, matchScore * 0.98);
 
-        if (rorTypes.contains("government") || rorTypes.contains("facility") || rorTypes.contains("archive")) {
-            return new FundingInferenceResult("Publica", Math.min(0.98, Math.max(0.92, matchScore * 0.98)), "ror-public" + reasonSuffix);
+        if (rorTypes.contains("government")) {
+            return new FundingInferenceResult("Publica", Math.min(cap, 0.96), "ror-government" + reasonSuffix);
         }
-        if (rorTypes.contains("company") || rorTypes.contains("nonprofit")) {
-            return new FundingInferenceResult("Privada", Math.min(0.98, Math.max(0.90, matchScore * 0.98)), "ror-private" + reasonSuffix);
+        if (rorTypes.contains("company")) {
+            return new FundingInferenceResult("Privada", Math.min(cap, 0.96), "ror-company" + reasonSuffix);
+        }
+        if (rorTypes.contains("nonprofit")) {
+            // Foundations/associations may belong to the public sector: keep it below the auto-apply threshold.
+            return new FundingInferenceResult("Privada", Math.min(cap, 0.85), "ror-nonprofit" + reasonSuffix);
+        }
+        if (rorTypes.contains("healthcare")) {
+            if (hasAnyWord(norm, "privat", "privada", "privado", "private", "clinica", "quiron", "dexeus", "mutua")) {
+                return new FundingInferenceResult("Privada", Math.min(cap, 0.92), "ror-healthcare-private" + reasonSuffix);
+            }
+            return new FundingInferenceResult("Publica", Math.min(cap, 0.92), "ror-healthcare-public" + reasonSuffix);
+        }
+        if (rorTypes.contains("facility") || rorTypes.contains("archive")) {
+            return new FundingInferenceResult("Publica", Math.min(cap, 0.92), "ror-facility" + reasonSuffix);
         }
         if (rorTypes.contains("education")) {
-            String norm = CurationTextNormalizer.normalizeText(orgName);
-            if (norm.contains("privada") || norm.contains("private") || norm.contains("esade") || norm.contains("uoc") || norm.contains("vic")) {
-                return new FundingInferenceResult("Privada", Math.min(0.96, matchScore * 0.96), "ror-education-private" + reasonSuffix);
+            if (hasAnyWord(norm, "privada", "private", "catholic", "catolica", "esade", "ie university", "uoc", "ramon llull")) {
+                return new FundingInferenceResult("Privada", Math.min(cap, 0.94), "ror-education-private" + reasonSuffix);
             }
-            return new FundingInferenceResult("Publica", Math.min(0.95, matchScore * 0.95), "ror-education-public" + reasonSuffix);
+            if (hasAnyWord(norm, "publica", "public", "nacional", "national", "autonoma", "estatal", "state", "politecnica", "polytechnic")) {
+                return new FundingInferenceResult("Publica", Math.min(cap, 0.95), "ror-education-public" + reasonSuffix);
+            }
+            // No cue either way: most universities are public, but that is only a prior, so it needs review.
+            return new FundingInferenceResult("Publica", Math.min(cap, 0.85), "ror-education-default" + reasonSuffix);
         }
 
         return FundingInferenceResult.noSignal();
+    }
+
+    private static boolean hasAnyWord(String normalizedText, String... terms) {
+        for (String term : terms) {
+            if (CurationTextNormalizer.containsWord(normalizedText, term)) {
+                return true;
+            }
+        }
+        return false;
     }
 }

@@ -8,6 +8,7 @@ import com.example.demo.curation.model.ProviderQueryContext;
 import com.example.demo.curation.model.TypeAggregate;
 import com.example.demo.curation.model.TypeInferenceResult;
 import com.example.demo.curation.port.MetadataProviderPort;
+import com.example.demo.curation.util.CountryCodeResolver;
 import com.example.demo.curation.util.CurationTextNormalizer;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -123,21 +124,22 @@ public class OpenAlexMetadataProviderAdapter implements MetadataProviderPort {
 
                         double score = CurationTextNormalizer.calculateNameMatchScore(orgNorm, CurationTextNormalizer.normalizeText(instName), false);
                         if (score >= 0.65) {
-                            String resolvedCountry = countryCode;
-                            if (context != null && context.countryCatalog() != null) {
-                                resolvedCountry = context.countryCatalog().stream()
-                                        .filter(c -> c.label().equalsIgnoreCase(countryCode) || c.normalizedLabel().equalsIgnoreCase(countryCode))
-                                        .map(CountryAggregate::label)
-                                        .findFirst()
-                                        .orElse(countryCode);
-                            }
+                            // OpenAlex returns an ISO code ("ES"); resolve it to the catalog label rather than
+                            // returning the bare code as if it were a country name.
+                            String resolvedCountry = CountryCodeResolver.resolve(
+                                    countryCode, context != null ? context.countryCatalog() : null);
 
-                            InferenceResult cRes = new InferenceResult(resolvedCountry, Math.min(0.95, score * 0.95), "openalex-affiliation:" + instName);
-                            TypeInferenceResult tRes = !instType.isBlank()
-                                    ? new TypeInferenceResult(instType, Math.min(0.92, score * 0.90), "openalex-type")
+                            InferenceResult cRes = !resolvedCountry.isBlank()
+                                    ? new InferenceResult(resolvedCountry, Math.min(0.95, score * 0.95), "openalex-affiliation:" + instName)
+                                    : InferenceResult.noSignal();
+                            String typeLabel = mapOpenAlexType(organizationName, instName, instType, context != null ? context.typeCatalog() : null);
+                            TypeInferenceResult tRes = !typeLabel.isBlank()
+                                    ? new TypeInferenceResult(typeLabel, Math.min(0.92, score * 0.90), "openalex-type")
                                     : TypeInferenceResult.noSignal();
+                            // "education" does not imply public funding (private universities exist), so this stays
+                            // below the default auto-apply threshold and goes to manual review.
                             FundingInferenceResult fRes = "education".equalsIgnoreCase(instType)
-                                    ? new FundingInferenceResult("Publica", 0.90, "openalex-education")
+                                    ? new FundingInferenceResult("Publica", 0.80, "openalex-education")
                                     : FundingInferenceResult.noSignal();
 
                             return Optional.of(new MetadataInferenceResult(cRes, tRes, fRes));
@@ -150,5 +152,12 @@ public class OpenAlexMetadataProviderAdapter implements MetadataProviderPort {
         }
 
         return Optional.empty();
+    }
+
+    /** Maps an OpenAlex institution type onto Egreta's own taxonomy through the shared resolver. */
+    private static String mapOpenAlexType(String orgName, String instName, String openAlexType, List<TypeAggregate> typeCatalog) {
+        TypeInferenceResult r = com.example.demo.curation.util.EgretaTypeResolver.resolve(
+                orgName, instName, openAlexType == null ? "" : openAlexType, typeCatalog, 0.88, "openalex-type");
+        return r.typeLabel();
     }
 }

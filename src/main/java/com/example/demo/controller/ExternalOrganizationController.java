@@ -1073,10 +1073,12 @@ public class ExternalOrganizationController {
         // Si nameProposal té país o tipus deduït amb alta confiança, prioritzar-lo
         if (nameProposal != null) {
             if (nameProposal.country() != null && !nameProposal.country().isBlank() && (countryResult.countryLabel().isBlank() || countryResult.confidence() < 0.85)) {
-                countryResult = new InferenceResult(nameProposal.country(), Math.max(countryResult.confidence(), nameProposal.similarity()), nameProposal.reason());
+                // A 100% *name* similarity says nothing about which country is right when several organizations share
+                // the name (BASF SE, Hewlett Packard Enterprise...), so it cannot reach the auto-apply zone by itself.
+                countryResult = new InferenceResult(nameProposal.country(), Math.min(0.85, Math.max(countryResult.confidence(), nameProposal.similarity())), nameProposal.reason());
             }
             if (nameProposal.type() != null && !nameProposal.type().isBlank() && (typeResult.typeLabel().isBlank() || typeResult.confidence() < 0.85)) {
-                typeResult = new TypeInferenceResult(nameProposal.type(), Math.max(typeResult.confidence(), nameProposal.similarity()), nameProposal.reason());
+                typeResult = new TypeInferenceResult(nameProposal.type(), Math.min(0.85, Math.max(typeResult.confidence(), nameProposal.similarity())), nameProposal.reason());
             }
         }
 
@@ -3927,8 +3929,11 @@ public class ExternalOrganizationController {
         }
 
         for (CountryAggregate c : catalog) {
-            if (!c.normalizedLabel.isBlank() && normalizedName.contains(c.normalizedLabel)) {
-                return new InferenceResult(c.label, confidenceFromCount(0.88, c.count), "direct-country-match");
+            // Whole-word match (so "niger" does not match "nigeria" nor "oman" "romania") and a flat
+            // confidence: how often a country is already used says nothing about this particular match
+            // (e.g. "University of Georgia"), so it must not push the result over the auto-apply threshold.
+            if (!c.normalizedLabel.isBlank() && containsWord(normalizedName, c.normalizedLabel)) {
+                return new InferenceResult(c.label, 0.88, "direct-country-match");
             }
         }
 
@@ -3960,7 +3965,8 @@ public class ExternalOrganizationController {
             String resolved = resolveAliasCountry(aliasEntry.getKey(), catalog);
             if (!resolved.isBlank()) {
                 int count = countryCountByLabel(resolved, catalog);
-                return new InferenceResult(resolved, confidenceFromCount(0.75, count), "alias-match:" + aliasEntry.getKey());
+                // Alias matches proved right far too rarely to be trusted: show them as a weak hint only.
+                return new InferenceResult(resolved, Math.min(0.60, confidenceFromCount(0.50, count)), "alias-match:" + aliasEntry.getKey());
             }
         }
 
@@ -4159,12 +4165,30 @@ public class ExternalOrganizationController {
         List<String> aliases = COUNTRY_ALIASES.getOrDefault(aliasKey.trim().toLowerCase(), List.of());
         String normalizedAliasKey = normalizeText(aliasKey.replace('_', ' '));
 
+        // 1. Exact label match first. The alias lists also carry legal-form abbreviations ("sa", "sl", "s a")
+        //    and city names that are useful for detecting a country in a name but must never be matched as
+        //    substrings against country labels: "sa" is inside "el salvador", "arabia saudita", etc., and
+        //    with tied counts El Salvador used to win over Spain.
+        for (CountryAggregate c : catalog) {
+            if (c.normalizedLabel.equals(normalizedAliasKey)) {
+                return c.label;
+            }
+        }
+        for (CountryAggregate c : catalog) {
+            for (String alias : aliases) {
+                if (c.normalizedLabel.equals(normalizeText(alias))) {
+                    return c.label;
+                }
+            }
+        }
+
+        // 2. Whole-word containment, only for aliases long enough to be unambiguous.
         return catalog.stream()
-            .filter(c -> c.normalizedLabel.equals(normalizedAliasKey)
-                || aliases.stream().anyMatch(alias -> {
+            .filter(c -> !c.normalizedLabel.isBlank() && c.normalizedLabel.length() >= 4
+                && aliases.stream().anyMatch(alias -> {
                     String normalizedAlias = normalizeText(alias);
-                    return c.normalizedLabel.contains(normalizedAlias)
-                        || normalizedAlias.contains(c.normalizedLabel);
+                    return normalizedAlias.length() >= 4
+                        && (containsWord(c.normalizedLabel, normalizedAlias) || containsWord(normalizedAlias, c.normalizedLabel));
                 }))
             .max(Comparator.comparingInt(CountryAggregate::count))
             .map(CountryAggregate::label)
@@ -4193,8 +4217,8 @@ public class ExternalOrganizationController {
         }
 
         for (TypeAggregate t : catalog) {
-            if (!t.normalizedLabel.isBlank() && normalizedName.contains(t.normalizedLabel)) {
-                return new TypeInferenceResult(t.label, confidenceFromCount(0.90, t.count), "direct-type-match");
+            if (!t.normalizedLabel.isBlank() && containsWord(normalizedName, t.normalizedLabel)) {
+                return new TypeInferenceResult(t.label, 0.88, "direct-type-match");
             }
         }
 
@@ -5510,139 +5534,14 @@ public class ExternalOrganizationController {
             List<TypeAggregate> typeCatalog,
             double baseConfidence,
             String reasonPrefix) {
-
-        String combined = (normalizeText(orgName) + " " + normalizeText(canonicalName)).trim();
-        if (combined.isBlank() || typeCatalog.isEmpty()) {
-            return new TypeInferenceResult("", 0.0, "no-signal");
-        }
-
-        // 1. Departament universitari
-        if (matchesAnyKeyword(combined, "department", "departament", "departamento", "dept", "seccio", "seccion", "section", "division", "catedra", "chair", "faculty", "facultat", "facultad", "scola", "school of", "college of", "escola")) {
-            String resolved = resolveTypeByHint(List.of("departament universitari", "departament", "departamento"), typeCatalog);
-            if (!resolved.isBlank()) {
-                return new TypeInferenceResult(resolved, Math.min(0.97, Math.max(0.90, baseConfidence * 0.98)), reasonPrefix + ":department-structure");
-            }
-        }
-
-        // 2. Institut Universitari d'investigació
-        if (matchesAnyKeyword(combined, "institut universitari", "instituto universitario", "university institute", "instituts universitaris de recerca")) {
-            String resolved = resolveTypeByHint(List.of("institut universitari d'investigacio", "institut universitari", "instituto universitario"), typeCatalog);
-            if (!resolved.isBlank()) {
-                return new TypeInferenceResult(resolved, Math.min(0.97, Math.max(0.90, baseConfidence * 0.98)), reasonPrefix + ":university-institute");
-            }
-        }
-
-        // 3. CIBER
-        if (matchesAnyKeyword(combined, "ciber", "ciber-bbn", "ciberehd", "ciberes", "ciberned", "ciberobn", "ciberon", "ciberer", "ciberesp", "cibermed", "cibersam")) {
-            String resolved = resolveTypeByHint(List.of("ciber"), typeCatalog);
-            if (!resolved.isBlank()) {
-                return new TypeInferenceResult(resolved, Math.min(0.99, Math.max(0.95, baseConfidence * 0.99)), reasonPrefix + ":ciber");
-            }
-        }
-
-        // 4. Entitat gestora del sistema nacional de salut
-        if (matchesAnyKeyword(combined, "catsalut", "servei catala de la salut", "servicio de salud", "sergas", "sacyl", "sescam", "osakidetza", "sms", "sas", "ib-salut", "ibsalut", "sistema nacional de salud", "servei de salut")) {
-            String resolved = resolveTypeByHint(List.of("entitat gestora del sistema nacional de salut", "gestora del sistema nacional de salut", "sistema nacional de salut"), typeCatalog);
-            if (!resolved.isBlank()) {
-                return new TypeInferenceResult(resolved, Math.min(0.97, Math.max(0.90, baseConfidence * 0.98)), reasonPrefix + ":health-system-admin");
-            }
-        }
-
-        // 5. Institucions sanitàries (Hospitals, clíniques, etc.)
-        if (matchesAnyKeyword(combined, "hospital", "clinic", "clinica", "sanitari", "sanitaria", "healthcare", "medical center", "centre medic", "assistencial", "policlinica", "hospital universitari", "nhs trust", "centre d'atencio primaria", "cap", "infirmary", "dispensari", "mutua")
-                || "healthcare".equalsIgnoreCase(broadType)) {
-            String resolved = resolveTypeByHint(List.of("institucions sanitaries", "instituciones sanitarias", "sanitari", "hospital"), typeCatalog);
-            if (!resolved.isBlank()) {
-                return new TypeInferenceResult(resolved, Math.min(0.97, Math.max(0.90, baseConfidence * 0.98)), reasonPrefix + ":healthcare");
-            }
-        }
-
-        // 6. Organisme públic d'investigació (OPI)
-        if (matchesAnyKeyword(combined, "csic", "cnrs", "max planck", "inserm", "inria", "inrae", "helmholtz", "fraunhofer", "conicet", "cnpq", "conacyt", "iisc", "organisme public d'investigacio", "organismo publico de investigacion", "national research council", "consejo superior de investigaciones cientificas", "institut nacional d'investigacio", "instituto nacional de investigacion")) {
-            String resolved = resolveTypeByHint(List.of("organisme public d'investigacio", "organismo publico de investigacion", "recerca"), typeCatalog);
-            if (!resolved.isBlank()) {
-                return new TypeInferenceResult(resolved, Math.min(0.97, Math.max(0.90, baseConfidence * 0.98)), reasonPrefix + ":opi");
-            }
-        }
-
-        // 7. Centre tecnològic / Centres d'innovació i tecnologia
-        if (matchesAnyKeyword(combined, "centre tecnologic", "centro tecnologico", "technology center", "technological centre", "eurecat", "leitat", "tecnalia", "aimen", "itene", "cidaut", "parc tecnologic", "parc cientific", "research park", "innovacio i tecnologia")) {
-            String resolved = resolveTypeByHint(List.of("centre tecnologic", "centres d'innovacio i tecnologia", "centro tecnologico"), typeCatalog);
-            if (!resolved.isBlank()) {
-                return new TypeInferenceResult(resolved, Math.min(0.96, Math.max(0.90, baseConfidence * 0.96)), reasonPrefix + ":tech-center");
-            }
-        }
-
-        // 8. Centre R+D
-        if (matchesAnyKeyword(combined, "centre de recerca", "centro de investigacion", "research centre", "research center", "centre r+d", "centro i+d", "r&d centre", "r&d center", "laboratori de recerca", "laboratorio de investigacion")
-                || "facility".equalsIgnoreCase(broadType)) {
-            String resolved = resolveTypeByHint(List.of("centre r+d", "centre de recerca", "organismes publics d'investigacio", "recerca"), typeCatalog);
-            if (!resolved.isBlank()) {
-                return new TypeInferenceResult(resolved, Math.min(0.95, Math.max(0.88, baseConfidence * 0.95)), reasonPrefix + ":rd-center");
-            }
-        }
-
-        // 9. Fundació
-        if (matchesAnyKeyword(combined, "fundacio", "fundacion", "foundation", "stiftung", "fondation", "fondazione")) {
-            String resolved = resolveTypeByHint(List.of("fundacio", "fundacion", "foundation"), typeCatalog);
-            if (!resolved.isBlank()) {
-                return new TypeInferenceResult(resolved, Math.min(0.97, Math.max(0.90, baseConfidence * 0.98)), reasonPrefix + ":foundation");
-            }
-        }
-
-        // 10. Associacions i agrupacions
-        if (matchesAnyKeyword(combined, "associacio", "asociacion", "association", "societat", "sociedad", "society", "agrupacio", "agrupacion", "col legi", "colegio oficial", "collegi oficial", "federacio", "federacion", "federation", "e.v.", "e v", "eingetragener verein", "verein", "gremi", "gremio", "guild", "consell", "council", "academy", "academia", "akademie")
-                || "nonprofit".equalsIgnoreCase(broadType)) {
-            String resolved = resolveTypeByHint(List.of("associacions i agrupacions", "associacio", "asociaciones y agrupaciones", "fundacio"), typeCatalog);
-            if (!resolved.isBlank()) {
-                return new TypeInferenceResult(resolved, Math.min(0.95, Math.max(0.88, baseConfidence * 0.95)), reasonPrefix + ":association");
-            }
-        }
-
-        // 11. Administració internacional
-        if (matchesAnyKeyword(combined, "onu", "unesco", "who", "oms", "comissio europea", "european commission", "world bank", "banc mundial", "unicef", "oecd", "ocde", "nato", "otant", "united nations", "naciones unidas", "nacions unides", "fao", "ilo", "oit")) {
-            String resolved = resolveTypeByHint(List.of("administracio internacional", "administracion internacional", "international administration"), typeCatalog);
-            if (!resolved.isBlank()) {
-                return new TypeInferenceResult(resolved, Math.min(0.98, Math.max(0.92, baseConfidence * 0.98)), reasonPrefix + ":intl-admin");
-            }
-        }
-
-        // 12. Agència estatal
-        if (matchesAnyKeyword(combined, "agencia estatal", "agencia de", "state agency", "aemet", "aemps", "aei", "agencia nacional")) {
-            String resolved = resolveTypeByHint(List.of("agencia estatal", "state agency"), typeCatalog);
-            if (!resolved.isBlank()) {
-                return new TypeInferenceResult(resolved, Math.min(0.96, Math.max(0.90, baseConfidence * 0.96)), reasonPrefix + ":state-agency");
-            }
-        }
-
-        // 13. Sector administració pública
-        if (matchesAnyKeyword(combined, "ministeri", "ministerio", "ministry", "generalitat", "govern", "gobierno", "government", "ajuntament", "ayuntamiento", "diputacio", "diputacion", "conselleria", "consejeria", "consell comarcal", "alcaldia", "secretaria d'estat", "secretaria de estado", "department of state", "departament de la generalitat")
-                || "government".equalsIgnoreCase(broadType)) {
-            String resolved = resolveTypeByHint(List.of("sector administracio publica", "administracio publica", "administracion publica"), typeCatalog);
-            if (!resolved.isBlank()) {
-                return new TypeInferenceResult(resolved, Math.min(0.96, Math.max(0.90, baseConfidence * 0.96)), reasonPrefix + ":gov-admin");
-            }
-        }
-
-        // 14. Entitat empresarial (Empreses privades)
-        if (matchesAnyKeyword(combined, "s l", "s a", "slu", "sau", "slp", "ltd", "llc", "inc", "corp", "corporation", "gmbh", "srl", "spa", "kgaa", "sas", "sarl", "bv", "nv", "plc", "company", "empresa", "pharma", "pharmaceuticals", "laboratories", "laboratorios", "therapeutics", "biotech", "consulting", "solutions", "s.l.", "s.a.")
-                || "company".equalsIgnoreCase(broadType)) {
-            String resolved = resolveTypeByHint(List.of("entitat empresarial", "empresa", "enterprise"), typeCatalog);
-            if (!resolved.isBlank()) {
-                return new TypeInferenceResult(resolved, Math.min(0.96, Math.max(0.90, baseConfidence * 0.96)), reasonPrefix + ":company");
-            }
-        }
-
-        // 15. Universitat (només si no era departament o institut universitari)
-        if (matchesAnyKeyword(combined, "universitat", "universidad", "university", "universite", "universitaet", "universita", "universitad", "college", "hochschule", "faculdade", "polytechnic", "politecnica")
-                || "education".equalsIgnoreCase(broadType)) {
-            String resolved = resolveTypeByHint(List.of("universitat", "universidad", "university"), typeCatalog);
-            if (!resolved.isBlank()) {
-                return new TypeInferenceResult(resolved, Math.min(0.96, Math.max(0.90, baseConfidence * 0.96)), reasonPrefix + ":university");
-            }
-        }
-
-        return new TypeInferenceResult("", 0.0, "no-signal");
+        // Shared with the curation provider adapters so every source maps onto the same Egreta taxonomy.
+        List<com.example.demo.curation.model.TypeAggregate> modelCatalog = typeCatalog == null ? List.of()
+            : typeCatalog.stream()
+                .map(t -> new com.example.demo.curation.model.TypeAggregate(t.label(), t.normalizedLabel(), t.count()))
+                .toList();
+        com.example.demo.curation.model.TypeInferenceResult r = com.example.demo.curation.util.EgretaTypeResolver
+            .resolve(orgName, canonicalName, broadType, modelCatalog, baseConfidence, reasonPrefix);
+        return new TypeInferenceResult(r.typeLabel(), r.confidence(), r.reason());
     }
 
     private boolean matchesAnyKeyword(String text, String... keywords) {
@@ -8065,6 +7964,23 @@ public class ExternalOrganizationController {
             .trim();
     }
 
+    /**
+     * A suggestion may only be written to Egreta automatically when it is backed by a verifiable source.
+     * Suggestions produced solely by the local LLM (whose self-reported confidence is not calibrated)
+     * always go to manual review, unless an independent source confirmed them.
+     */
+    private boolean isAutoApplyEligible(String reason) {
+        if (reason == null) return true;
+        String r = reason.toLowerCase(Locale.ROOT);
+        if (!r.contains("local-ai")) return true;
+        return r.contains("ror") || r.contains("openalex") || r.contains("crossref")
+            || r.contains("scopus") || r.contains("confirmed");
+    }
+
+    private String skipReason(double confidence, double threshold) {
+        return confidence >= threshold ? "font no verificada, cal revisio manual" : "baixa";
+    }
+
     private double confidenceFromCount(double base, int count) {
         double bonus = Math.min(0.10, Math.log10(Math.max(1, count) + 1) / 20.0);
         return Math.round(Math.min(0.98, base + bonus) * 100.0) / 100.0;
@@ -8265,7 +8181,7 @@ public class ExternalOrganizationController {
                             String suggestedCountry = countryResult.countryLabel;
                             double confidence = countryResult.confidence;
                             
-                            if (confidence >= confidenceThreshold) {
+                            if (confidence >= confidenceThreshold && isAutoApplyEligible(countryResult.reason())) {
                                 String suggestedCountryUri = resolveCountryUriByLabel(suggestedCountry);
                                 ExternalOrganization.UriTerm updatedCountry = resolveCountryUriTermFromPayload(
                                     suggestedCountryUri,
@@ -8296,7 +8212,7 @@ public class ExternalOrganizationController {
                                     }
                                 }
                             } else {
-                                logMessage("[OMES] " + name + " - Suggeriment: " + suggestedCountry + " (Font: " + countryResult.reason() + ", Confiança: " + Math.round(confidence * 100) + "% - baixa).");
+                                logMessage("[OMES] " + name + " - Suggeriment: " + suggestedCountry + " (Font: " + countryResult.reason() + ", Confiança: " + Math.round(confidence * 100) + "% - " + skipReason(confidence, confidenceThreshold) + ").");
                             }
                         } catch (Exception e) {
                             logMessage("[ERROR] " + name + " - " + e.getMessage());
@@ -8528,7 +8444,7 @@ public class ExternalOrganizationController {
                             TypeInferenceResult typeResult = null;
                             if (rorSuggestEnabled) {
                                 MetadataInferenceResult rorRes = inferMetadataWithRor(name, countryCatalog, typeCatalog);
-                                if (rorRes != null && rorRes.type() != null && !rorRes.type().typeLabel().isBlank() && rorRes.type().confidence() >= 0.85) {
+                                if (rorRes != null && rorRes.type() != null && !rorRes.type().typeLabel().isBlank() && rorRes.type().confidence() >= Math.max(0.85, confidenceThreshold)) {
                                     typeResult = rorRes.type();
                                 }
                             }
@@ -8545,7 +8461,7 @@ public class ExternalOrganizationController {
                             String suggestedType = typeResult.typeLabel;
                             double confidence = typeResult.confidence;
                             
-                            if (confidence >= confidenceThreshold) {
+                            if (confidence >= confidenceThreshold && isAutoApplyEligible(typeResult.reason())) {
                                 ExternalOrganization.UriTerm updatedType = resolveTypeUriTermFromPayload(null, suggestedType, org.getType());
                                 if (updatedType == null) {
                                     logTypeMessage("[ERROR] No s'ha pogut resoldre el tipus per a: " + name + " (Tipus suggerit: " + suggestedType + ")");
@@ -8568,7 +8484,7 @@ public class ExternalOrganizationController {
                                     }
                                 }
                             } else {
-                                logTypeMessage("[OMES] " + name + " - Suggeriment: " + suggestedType + " (Font: " + typeResult.reason() + ", Confiança: " + Math.round(confidence * 100) + "% - baixa).");
+                                logTypeMessage("[OMES] " + name + " - Suggeriment: " + suggestedType + " (Font: " + typeResult.reason() + ", Confiança: " + Math.round(confidence * 100) + "% - " + skipReason(confidence, confidenceThreshold) + ").");
                             }
                         } catch (Exception e) {
                             logTypeMessage("[ERROR] " + name + " - " + e.getMessage());
@@ -8800,7 +8716,7 @@ public class ExternalOrganizationController {
                             FundingInferenceResult fundingResult = null;
                             if (rorSuggestEnabled) {
                                 MetadataInferenceResult rorRes = inferMetadataWithRor(name, countryCatalog, typeCatalog);
-                                if (rorRes != null && rorRes.funding() != null && !rorRes.funding().fundingLabel().isBlank() && rorRes.funding().confidence() >= 0.85) {
+                                if (rorRes != null && rorRes.funding() != null && !rorRes.funding().fundingLabel().isBlank() && rorRes.funding().confidence() >= Math.max(0.85, confidenceThreshold)) {
                                     fundingResult = rorRes.funding();
                                 }
                             }
@@ -8817,7 +8733,7 @@ public class ExternalOrganizationController {
                             String suggestedFunding = fundingResult.fundingLabel;
                             double confidence = fundingResult.confidence;
                             
-                            if (confidence >= confidenceThreshold) {
+                            if (confidence >= confidenceThreshold && isAutoApplyEligible(fundingResult.reason())) {
                                 String normalizedFunding = resolveModelFundingLabel(suggestedFunding);
                                 if (normalizedFunding.isBlank()) {
                                     logFundingMessage("[ERROR] No s'ha pogut resoldre el finançament per a: " + name + " (Finançament suggerit: " + suggestedFunding + ")");
@@ -8840,7 +8756,7 @@ public class ExternalOrganizationController {
                                     }
                                 }
                             } else {
-                                logFundingMessage("[OMES] " + name + " - Suggeriment: " + suggestedFunding + " (Font: " + fundingResult.reason() + ", Confiança: " + Math.round(confidence * 100) + "% - baixa).");
+                                logFundingMessage("[OMES] " + name + " - Suggeriment: " + suggestedFunding + " (Font: " + fundingResult.reason() + ", Confiança: " + Math.round(confidence * 100) + "% - " + skipReason(confidence, confidenceThreshold) + ").");
                             }
                         } catch (Exception e) {
                             logFundingMessage("[ERROR] " + name + " - " + e.getMessage());
