@@ -87,10 +87,14 @@ public class MetadataEnrichmentEngine {
 
                 MetadataInferenceResult res = optResult.get();
 
-                // Country candidate
-                if (res.country() != null && res.country().confidence() > 0) {
-                    if (bestCountry == null || res.country().confidence() > bestCountry.confidence()) {
-                        bestCountry = res.country();
+                // Country candidate (respects provider priority: ROR -> Scopus -> OpenAlex -> Crossref -> IA)
+                if (res.country() != null && res.country().confidence() > 0 && !res.country().countryLabel().isBlank()) {
+                    if (bestCountry == null || bestCountry.countryLabel().isBlank() || bestCountry.confidence() < 0.85) {
+                        if (bestCountry == null || res.country().confidence() >= bestCountry.confidence()) {
+                            bestCountry = res.country();
+                        }
+                    } else if (bestCountry.countryLabel().equalsIgnoreCase(res.country().countryLabel())) {
+                        bestCountry = new InferenceResult(bestCountry.countryLabel(), 1.0, bestCountry.reason() + "+" + provider.providerName() + "-confirmed");
                     }
                 }
 

@@ -78,12 +78,17 @@
             <!-- Year Selector -->
             <div class="flex flex-col gap-2 w-full md:w-auto">
                 <label class="text-xs font-bold text-slate-500 uppercase tracking-wider">Any de referència</label>
-                <div class="flex items-center bg-slate-100 p-1.5 rounded-2xl border border-slate-200/60 shadow-inner w-full md:w-auto">
+                <div class="flex flex-wrap items-center bg-slate-100 p-1.5 rounded-2xl border border-slate-200/60 shadow-inner w-full md:w-auto">
                     <button class="year-btn px-4 py-2 rounded-xl text-sm font-semibold transition-all hover:bg-white/60 active:scale-95" data-year="2021">2021</button>
                     <button class="year-btn px-4 py-2 rounded-xl text-sm font-semibold transition-all hover:bg-white/60 active:scale-95" data-year="2022">2022</button>
                     <button class="year-btn px-4 py-2 rounded-xl text-sm font-semibold transition-all hover:bg-white/60 active:scale-95" data-year="2023">2023</button>
                     <button class="year-btn px-4 py-2 rounded-xl text-sm font-semibold transition-all hover:bg-white/60 active:scale-95 bg-white text-slate-900 shadow-sm border border-slate-200/40" data-year="2024">2024</button>
                     <button class="year-btn px-4 py-2 rounded-xl text-sm font-semibold transition-all hover:bg-white/60 active:scale-95" data-year="2025">2025</button>
+                    <button class="year-btn px-4 py-2 rounded-xl text-sm font-semibold transition-all hover:bg-white/60 active:scale-95" data-year="2026">2026</button>
+                    <button class="year-btn px-4 py-2 rounded-xl text-sm font-semibold transition-all hover:bg-white/60 active:scale-95 flex items-center gap-1.5 text-amber-700" data-year="2027" title="Previsió calculada a partir de l'evolució 2021–2026">
+                        <span>2027</span>
+                        <span class="text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-md border border-amber-200">Previsió</span>
+                    </button>
                 </div>
             </div>
 
@@ -181,9 +186,9 @@
             
             <!-- Left Side: Interactive Table (3/5 width) -->
             <div class="lg:col-span-3 bg-white border border-slate-200 rounded-3xl premium-shadow overflow-hidden flex flex-col">
-                <div class="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
+                <div class="px-6 py-5 border-b border-slate-100 flex items-center justify-between gap-3 flex-wrap">
                     <h2 class="text-lg font-bold text-slate-800">Taula d'indicadors clau de recerca</h2>
-                    <span class="text-xs bg-emerald-50 text-emerald-800 font-bold px-2.5 py-1 rounded-md border border-emerald-200">Dades Actualitzades</span>
+                    <span id="dataStatusBadge" class="text-xs bg-emerald-50 text-emerald-800 font-bold px-2.5 py-1 rounded-md border border-emerald-200">Dades Actualitzades</span>
                 </div>
                 <div class="overflow-x-auto">
                     <table class="w-full text-left border-collapse">
@@ -206,7 +211,7 @@
             <div class="lg:col-span-2 bg-white border border-slate-200 rounded-3xl premium-shadow p-6 flex flex-col gap-6">
                 <div>
                     <h2 class="text-lg font-bold text-slate-800">Evolució històrica</h2>
-                    <p class="text-xs text-slate-500 mt-1">Gràfica de la trajectòria del departament entre 2021 i 2025.</p>
+                    <p class="text-xs text-slate-500 mt-1">Gràfica de la trajectòria del departament entre 2021 i 2026 i previsió per a 2027.</p>
                 </div>
                 
                 <!-- Chart Selector -->
@@ -256,7 +261,7 @@
         let selectedYear = 2024;
         let selectedDept = 'all';
         let trendChart = null;
-        let historicalData = []; // Cache of 2021-2025 statistics
+        let historicalData = []; // Cache of 2021-2026 statistics
 
         const indicatorsMetadata = [
             {
@@ -419,13 +424,14 @@
 
         function updateAllData() {
             document.getElementById('chartLoader').classList.remove('hidden');
-            const years = [2021, 2022, 2023, 2024, 2025];
+            const years = [2021, 2022, 2023, 2024, 2025, 2026];
             const promises = years.map(y => 
                 fetch(`/api/strategic-indicators/stats?year=${y}&dept=${selectedDept}`).then(r => r.json())
             );
 
             Promise.all(promises).then(allData => {
-                historicalData = allData;
+                const forecast2027 = computeForecastYear(allData, 2027);
+                historicalData = [...allData, forecast2027];
                 document.getElementById('chartLoader').classList.add('hidden');
                 
                 renderActiveData();
@@ -434,6 +440,47 @@
                 console.error('Error fetching historical stats:', err);
                 document.getElementById('chartLoader').classList.add('hidden');
             });
+        }
+
+        function computeForecastYear(allData, targetYear) {
+            const forecast = {
+                year: targetYear,
+                dept: selectedDept,
+                isForecast: true
+            };
+
+            indicatorsMetadata.forEach(meta => {
+                const points = allData
+                    .map(d => ({ x: Number(d.year), y: Number(d[meta.key]) }))
+                    .filter(p => Number.isFinite(p.x) && Number.isFinite(p.y));
+
+                if (points.length === 0) {
+                    forecast[meta.key] = 0;
+                    return;
+                }
+                if (points.length === 1) {
+                    forecast[meta.key] = points[0].y;
+                    return;
+                }
+
+                // Linear regression (least squares) over historical years
+                const n = points.length;
+                const sumX = points.reduce((acc, p) => acc + p.x, 0);
+                const sumY = points.reduce((acc, p) => acc + p.y, 0);
+                const sumXY = points.reduce((acc, p) => acc + p.x * p.y, 0);
+                const sumXX = points.reduce((acc, p) => acc + p.x * p.x, 0);
+
+                const denom = n * sumXX - sumX * sumX;
+                const slope = denom !== 0 ? (n * sumXY - sumX * sumY) / denom : 0;
+                const intercept = (sumY - slope * sumX) / n;
+
+                let predicted = Math.max(0, slope * targetYear + intercept);
+                forecast[meta.key] = meta.isCurrency
+                    ? Math.round(predicted * 100) / 100
+                    : Math.round(predicted);
+            });
+
+            return forecast;
         }
 
         function renderActiveData() {
@@ -447,6 +494,18 @@
                 incubatedCompanies: 0,
                 transferAgreements: 0
             };
+
+            // Update status badge for actual vs forecast year
+            const statusBadge = document.getElementById('dataStatusBadge');
+            if (statusBadge) {
+                if (activeData.isForecast) {
+                    statusBadge.textContent = `Previsió ${selectedYear} (Tendència 2021–2026)`;
+                    statusBadge.className = 'text-xs bg-amber-50 text-amber-800 font-bold px-2.5 py-1 rounded-md border border-amber-200';
+                } else {
+                    statusBadge.textContent = 'Dades Actualitzades';
+                    statusBadge.className = 'text-xs bg-emerald-50 text-emerald-800 font-bold px-2.5 py-1 rounded-md border border-emerald-200';
+                }
+            }
 
             // Update Top 3 KPI Cards
             document.getElementById('kpiFunding').textContent = formatVal(activeData.competitiveFunding, true) + ' M€';
@@ -536,8 +595,10 @@
             const metric = document.getElementById('selectChartMetric').value;
             const meta = indicatorsMetadata.find(m => m.key === metric);
             
-            const years = historicalData.map(d => d.year);
-            const values = historicalData.map(d => d.trendVal = d[metric]);
+            const years = historicalData.map(d => d.isForecast ? `${d.year}*` : String(d.year));
+            const lastHistoricalIdx = historicalData.reduce((lastIdx, d, i) => (!d.isForecast ? i : lastIdx), -1);
+            const historicalValues = historicalData.map((d, i) => (i <= lastHistoricalIdx ? d[metric] : null));
+            const forecastValues = historicalData.map((d, i) => (i >= lastHistoricalIdx ? d[metric] : null));
 
             // Brand tailwind colors mapping
             const colorPalettes = {
@@ -557,11 +618,15 @@
                 tooltip: {
                     trigger: 'axis',
                     formatter: function(params) {
-                        const p = params[0];
+                        const valid = params.filter(p => p.value !== null && p.value !== undefined);
+                        if (valid.length === 0) return '';
+                        const p = valid[valid.length - 1];
+                        const dataItem = historicalData[p.dataIndex];
+                        const yearLabel = dataItem && dataItem.isForecast ? `${dataItem.year} (Previsió)` : p.name;
                         let valStr = formatVal(p.value, meta.isCurrency);
                         if (meta.isCurrency) valStr += ' M€';
                         return `<div class="p-1 font-sans">
-                            <span class="block text-xs font-bold text-slate-400 uppercase">${p.name}</span>
+                            <span class="block text-xs font-bold text-slate-400 uppercase">${yearLabel}</span>
                             <span class="block text-base font-black text-slate-800 mt-0.5">${valStr}</span>
                         </div>`;
                     },
@@ -597,7 +662,8 @@
                 },
                 series: [
                     {
-                        data: values,
+                        name: 'Històric',
+                        data: historicalValues,
                         type: 'line',
                         smooth: true,
                         symbolSize: 8,
@@ -616,11 +682,28 @@
                                 { offset: 1, color: activeColor + '00' }
                             ])
                         }
+                    },
+                    {
+                        name: 'Previsió',
+                        data: forecastValues,
+                        type: 'line',
+                        smooth: false,
+                        symbolSize: 8,
+                        lineStyle: {
+                            width: 3,
+                            type: 'dashed',
+                            color: activeColor
+                        },
+                        itemStyle: {
+                            color: '#f59e0b',
+                            borderWidth: 2,
+                            borderColor: '#ffffff'
+                        }
                     }
                 ]
             };
 
-            trendChart.setOption(option);
+            trendChart.setOption(option, true);
             
             // Handle resizing
             window.addEventListener('resize', () => {

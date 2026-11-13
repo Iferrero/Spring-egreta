@@ -270,6 +270,9 @@ public class ExternalOrganizationController {
     @Autowired(required = false)
     private com.example.demo.curation.service.SimilarityMatchingEngine similarityMatchingEngine;
 
+    @Autowired(required = false)
+    private com.example.demo.service.ScopusAffiliationService scopusAffiliationService;
+
     public ExternalOrganizationController(
             ExternalOrganizationRepository repository,
             ExternalOrganizationDifferentRepository differentRepository,
@@ -1119,7 +1122,46 @@ public class ExternalOrganizationController {
             out.put("nameRawAffiliation", "");
             out.put("proposals", List.of());
         }
+
         return out;
+    }
+
+    // -------------------------------------------------------------------------
+    // GET /external-organizations/stats/scopus-affiliation?name=<orgName>&uuid=<orgUuid>
+    // -------------------------------------------------------------------------
+    @GetMapping("/stats/scopus-affiliation")
+    public Map<String, Object> getScopusAffiliation(
+            @RequestParam(required = false) String name,
+            @RequestParam(required = false) String uuid) {
+        String orgName = name == null ? "" : name.trim();
+        if (orgName.isBlank() && uuid != null && !uuid.isBlank()) {
+            ExternalOrganization found = mongoTemplate.findOne(
+                new Query(Criteria.where("uuid").is(uuid.trim())), ExternalOrganization.class);
+            if (found != null) {
+                orgName = extractOrgName(found);
+            }
+        }
+
+        Map<String, Object> res = new LinkedHashMap<>();
+        if (orgName.isBlank() || scopusAffiliationService == null) {
+            return res;
+        }
+
+        try {
+            com.example.demo.service.ScopusAffiliationService.ScopusAffiliationInfo info =
+                    scopusAffiliationService.findAffiliation(orgName);
+            if (info != null && info.afid() != null) {
+                res.put("afid", info.afid());
+                res.put("affiliationName", info.affiliationName() != null ? info.affiliationName() : "");
+                res.put("city", info.city() != null ? info.city() : "");
+                res.put("country", info.country() != null ? info.country() : "");
+                res.put("documentCount", info.documentCount());
+                res.put("scopusUrl", info.scopusUrl() != null ? info.scopusUrl() : "");
+            }
+        } catch (Exception e) {
+            log.warn("Error fetching Scopus affiliation for '{}': {}", orgName, e.getMessage());
+        }
+        return res;
     }
 
     // -------------------------------------------------------------------------
@@ -1210,6 +1252,7 @@ public class ExternalOrganizationController {
             row.put("fundingConfidence", fr.confidence());
             row.put("fundingReason", fr.reason());
             row.put("associatedPerson", associatedPerson != null ? associatedPerson : "");
+
             String workflowStep = null;
             if (org.getWorkflow() != null) {
                 workflowStep = org.getWorkflow().getStep();
@@ -1244,6 +1287,9 @@ public class ExternalOrganizationController {
         cachedExternalOrgUuids.set(null);
         cachedReferencedExternalOrgUuids.set(null);
         containsWordCache.clear();
+        if (scopusAffiliationService != null) {
+            scopusAffiliationService.clearCache();
+        }
 
         log.info("Caches de ExternalOrganization netejades manualment (ROR: {}, OpenAlex: {}, Crossref: {}, Pubs: {}, País: {}, Tipus: {}, Persones: {}, Grafs: {})",
                 rorCount, openAlexCount, crossrefCount, relatedPubCount, countryCount, typeCount, personCount, graphCount);
@@ -8176,15 +8222,39 @@ public class ExternalOrganizationController {
                             }
                             
                             InferenceResult countryResult = null;
+                            // 1. ROR
                             if (rorSuggestEnabled) {
                                 MetadataInferenceResult rorRes = inferMetadataWithRor(name, countryCatalog, typeCatalog);
                                 if (rorRes != null && rorRes.country() != null && !rorRes.country().countryLabel().isBlank() && rorRes.country().confidence() >= 0.85) {
                                     countryResult = rorRes.country();
                                 }
                             }
-                            if (countryResult == null) {
+
+                            // 2. Scopus (prioritari abans d'OpenAlex i de la IA)
+                            if ((countryResult == null || countryResult.confidence() < confidenceThreshold) && scopusAffiliationService != null) {
+                                try {
+                                    com.example.demo.service.ScopusAffiliationService.ScopusAffiliationInfo scopusInfo =
+                                            scopusAffiliationService.findAffiliation(name);
+                                    if (scopusInfo != null && scopusInfo.country() != null && !scopusInfo.country().isBlank()) {
+                                        if (countryResult == null || countryResult.countryLabel().isBlank() || countryResult.confidence() < confidenceThreshold) {
+                                            countryResult = new InferenceResult(scopusInfo.country(), 0.95, "scopus-affiliation-match");
+                                        } else if (countryResult.countryLabel().equalsIgnoreCase(scopusInfo.country())) {
+                                            countryResult = new InferenceResult(countryResult.countryLabel(), 1.0, countryResult.reason() + "+scopus-confirmed");
+                                        }
+                                    }
+                                } catch (Exception e) {
+                                    log.debug("Scopus auto-apply check skipped for '{}': {}", name, e.getMessage());
+                                }
+                            }
+
+                            // 3. OpenAlex & 4. IA (a través d'inferBestMetadata només si encara cal)
+                            if (countryResult == null || countryResult.confidence() < confidenceThreshold) {
                                 MetadataInferenceResult best = inferBestMetadata(uuid, name, null, countryCatalog, typeCatalog);
-                                countryResult = best.country();
+                                if (best != null && best.country() != null && !best.country().countryLabel().isBlank()) {
+                                    if (countryResult == null || best.country().confidence() > countryResult.confidence()) {
+                                        countryResult = best.country();
+                                    }
+                                }
                             }
                             
                             if (countryResult == null || countryResult.countryLabel().isBlank()) {

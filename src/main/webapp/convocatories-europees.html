@@ -1,0 +1,1302 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Convocatòries Europees (PJE i PEI) | Pure</title>
+    <script src="config.js"></script>
+    <script src="egreta-modal.js"></script>
+    <script src="uab-brand.js" defer></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="uab-theme.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.7.1/nouislider.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.7.1/nouislider.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+    <style>
+        .tabular-nums { font-variant-numeric: tabular-nums; }
+
+        .drawer-backdrop {
+            transition: opacity 220ms ease;
+        }
+        .drawer-panel {
+            transition: transform 260ms cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .drawer-backdrop,
+            .drawer-panel {
+                transition: none !important;
+            }
+        }
+
+        #sliderAnios .noUi-connect {
+            background: #008037;
+        }
+        #sliderAnios .noUi-handle {
+            border-radius: 9999px;
+            border: 2px solid #008037;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+            cursor: pointer;
+        }
+        #sliderAnios .noUi-handle::before,
+        #sliderAnios .noUi-handle::after {
+            display: none;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen text-slate-800">
+
+    <!-- Header llegit per uab-brand.js -->
+    <header class="hidden">
+        <h1>Convocatòries Europees (PJE i PEI)</h1>
+        <p>Sol·licituds, concessions i distribució per àmbit de coneixement i departament</p>
+    </header>
+
+    <main class="w-full max-w-[1600px] mx-auto px-4 sm:px-6 py-6 space-y-5">
+
+        <!-- KPIs globals -->
+        <section aria-label="Indicadors globals" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
+            <div class="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-xs">
+                <div class="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-slate-500">
+                    <span>Sol·licituds Enviades</span>
+                    <span class="w-7 h-7 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center">
+                        <i class="fa-solid fa-paper-plane text-xs"></i>
+                    </span>
+                </div>
+                <div id="kpi-sent" class="mt-2 text-2xl sm:text-3xl font-extrabold text-slate-900 tabular-nums">-</div>
+                <div id="kpi-calls-count" class="mt-1 text-xs text-slate-500 tabular-nums">- convocatòries</div>
+            </div>
+
+            <div class="bg-white rounded-2xl border border-emerald-200/80 p-4 shadow-xs">
+                <div class="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-emerald-700">
+                    <span>Concedides</span>
+                    <span class="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center">
+                        <i class="fa-solid fa-circle-check text-xs"></i>
+                    </span>
+                </div>
+                <div id="kpi-accepted" class="mt-2 text-2xl sm:text-3xl font-extrabold text-emerald-700 tabular-nums">-</div>
+                <div id="kpi-success-rate" class="mt-1 text-xs font-semibold text-emerald-700 tabular-nums">Taxa d'èxit: -</div>
+                <div id="kpi-accepted-roles" class="mt-1 text-[11px] font-semibold text-slate-600 tabular-nums">Líder: - · Soci: -</div>
+            </div>
+
+            <div class="bg-white rounded-2xl border border-rose-200/80 p-4 shadow-xs">
+                <div class="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-rose-700">
+                    <span>Rebutjades</span>
+                    <span class="w-7 h-7 rounded-lg bg-rose-50 text-rose-700 flex items-center justify-center">
+                        <i class="fa-solid fa-circle-xmark text-xs"></i>
+                    </span>
+                </div>
+                <div id="kpi-rejected" class="mt-2 text-2xl sm:text-3xl font-extrabold text-rose-700 tabular-nums">-</div>
+                <div id="kpi-rejected-pct" class="mt-1 text-xs text-rose-700/80 tabular-nums">- del total</div>
+            </div>
+
+            <div class="bg-white rounded-2xl border border-amber-200/80 p-4 shadow-xs">
+                <div class="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-amber-700">
+                    <span>Pendents</span>
+                    <span class="w-7 h-7 rounded-lg bg-amber-50 text-amber-700 flex items-center justify-center">
+                        <i class="fa-solid fa-hourglass-half text-xs"></i>
+                    </span>
+                </div>
+                <div id="kpi-pending" class="mt-2 text-2xl sm:text-3xl font-extrabold text-amber-700 tabular-nums">-</div>
+                <div id="kpi-pending-pct" class="mt-1 text-xs text-amber-700/80 tabular-nums">- del total</div>
+            </div>
+
+            <div id="kpi-resigned-card" class="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-xs col-span-2 sm:col-span-1">
+                <div class="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-slate-600">
+                    <span>Renunciades</span>
+                    <span class="w-7 h-7 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center">
+                        <i class="fa-solid fa-ban text-xs"></i>
+                    </span>
+                </div>
+                <div id="kpi-resigned" class="mt-2 text-2xl sm:text-3xl font-extrabold text-slate-700 tabular-nums">-</div>
+                <div id="kpi-resigned-pct" class="mt-1 text-xs text-slate-500 tabular-nums">- del total</div>
+            </div>
+        </section>
+
+        <!-- Barra de filtres -->
+        <section aria-label="Filtres" class="bg-white rounded-2xl border border-slate-200/80 p-4 sm:p-5 shadow-xs">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-4 items-end">
+                <div class="lg:col-span-3">
+                    <span class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Tipus de convocatòria</span>
+                    <div class="inline-flex w-full rounded-xl bg-slate-100 p-1 gap-1" role="group" aria-label="Filtrar per tipus de convocatòria">
+                        <button type="button" data-calltype="ALL" onclick="setCallTypeFilter('ALL')"
+                                class="calltype-btn flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 bg-white text-slate-900 shadow-xs">
+                            Totes
+                        </button>
+                        <button type="button" data-calltype="PJE" onclick="setCallTypeFilter('PJE')"
+                                class="calltype-btn flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 text-slate-600 hover:text-slate-900">
+                            PJE
+                        </button>
+                        <button type="button" data-calltype="PEI" onclick="setCallTypeFilter('PEI')"
+                                class="calltype-btn flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 text-slate-600 hover:text-slate-900">
+                            PEI
+                        </button>
+                    </div>
+                </div>
+
+                <div class="lg:col-span-3">
+                    <label for="selectProgram" class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                        <i class="fa-solid fa-tag text-emerald-600 mr-1"></i>Programa
+                    </label>
+                    <select id="selectProgram" onchange="applyFilters()"
+                            class="w-full h-[38px] px-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-emerald-600/20 focus:border-emerald-600 text-xs font-semibold text-slate-700">
+                        <option value="ALL">Tots els programes</option>
+                    </select>
+                </div>
+
+                <div class="lg:col-span-2 relative">
+                    <label for="inputBuscar" class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Cercar</label>
+                    <div class="relative">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                        <input id="inputBuscar" type="text" placeholder="Títol, programa..."
+                               class="w-full h-[38px] pl-9 pr-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-emerald-600/20 focus:border-emerald-600 text-xs">
+                    </div>
+                </div>
+
+                <div class="lg:col-span-2 flex items-center h-[38px]">
+                    <label class="inline-flex items-center cursor-pointer select-none">
+                        <input type="checkbox" id="checkExcloureRenunciats" class="sr-only peer">
+                        <div class="relative w-9 h-5 bg-slate-200 peer-focus-visible:ring-2 peer-focus-visible:ring-emerald-600 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-700"></div>
+                        <span class="ms-2.5 text-xs font-bold text-slate-600 uppercase tracking-wider">Excloure renunciats</span>
+                    </label>
+                </div>
+
+                <div class="lg:col-span-2">
+                    <div class="flex items-center justify-between mb-1.5">
+                        <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Rang d'anys</span>
+                        <span id="valorRango" class="text-xs font-bold text-emerald-700 tabular-nums">-</span>
+                    </div>
+                    <div id="sliderAnios" class="mt-2 mb-1"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Taula principal de convocatòries -->
+        <section aria-label="Llistat de convocatòries" class="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+            <div class="px-5 py-3.5 border-b border-slate-100 flex flex-wrap items-center justify-between gap-2 bg-slate-50/60">
+                <div class="flex items-center gap-2">
+                    <h2 class="text-sm font-extrabold text-slate-800">Convocatòries Europees</h2>
+                    <span id="badge-count" class="px-2 py-0.5 text-xs font-bold rounded-full bg-slate-200/80 text-slate-700 tabular-nums">0</span>
+                </div>
+                <div class="flex items-center gap-4 text-[11px] font-semibold text-slate-600">
+                    <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-xs bg-emerald-600"></span>Concedides</span>
+                    <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-xs bg-rose-500"></span>Rebutjades</span>
+                    <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-xs bg-amber-400"></span>Pendents</span>
+                    <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-xs bg-slate-400"></span>Renunciades</span>
+                </div>
+            </div>
+
+            <div class="overflow-x-auto max-h-[650px] overflow-y-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-slate-50 text-slate-500 text-[11px] uppercase tracking-wider border-b border-slate-200">
+                            <th class="sticky top-0 bg-slate-50 z-10 px-5 py-3 font-bold min-w-[320px] cursor-pointer select-none hover:text-slate-800" onclick="sortBy('fundingTitle')">
+                                Convocatòria &amp; Programa <i class="fa-solid fa-sort text-[10px] ml-0.5 opacity-60"></i>
+                            </th>
+                            <th class="sticky top-0 bg-slate-50 z-10 px-3 py-3 font-bold text-center cursor-pointer select-none hover:text-slate-800" onclick="sortBy('callTypeCode')">
+                                Tipus <i class="fa-solid fa-sort text-[10px] ml-0.5 opacity-60"></i>
+                            </th>
+                            <th class="sticky top-0 bg-slate-50 z-10 px-3 py-3 font-bold text-right cursor-pointer select-none hover:text-slate-800" onclick="sortBy('fundingYear')">
+                                Any <i class="fa-solid fa-sort text-[10px] ml-0.5 opacity-60"></i>
+                            </th>
+                            <th class="sticky top-0 bg-slate-50 z-10 px-3 py-3 font-bold text-right cursor-pointer select-none hover:text-slate-800" onclick="sortBy('sent')">
+                                Enviades <i class="fa-solid fa-sort text-[10px] ml-0.5 opacity-60"></i>
+                            </th>
+                            <th class="sticky top-0 bg-slate-50 z-10 px-3 py-3 font-bold text-right text-emerald-700 cursor-pointer select-none hover:text-emerald-900" onclick="sortBy('accepted')">
+                                Concedides <i class="fa-solid fa-sort text-[10px] ml-0.5 opacity-60"></i>
+                            </th>
+                            <th class="sticky top-0 bg-slate-50 z-10 px-3 py-3 font-bold text-right text-rose-700 cursor-pointer select-none hover:text-rose-900" onclick="sortBy('rejected')">
+                                Rebutjades <i class="fa-solid fa-sort text-[10px] ml-0.5 opacity-60"></i>
+                            </th>
+                            <th class="sticky top-0 bg-slate-50 z-10 px-3 py-3 font-bold text-right text-amber-700 cursor-pointer select-none hover:text-amber-900" onclick="sortBy('pending')">
+                                Pendents <i class="fa-solid fa-sort text-[10px] ml-0.5 opacity-60"></i>
+                            </th>
+                            <th id="th-renunciades" class="sticky top-0 bg-slate-50 z-10 px-3 py-3 font-bold text-right text-slate-600 cursor-pointer select-none hover:text-slate-900" onclick="sortBy('resigned')">
+                                Renunciades <i class="fa-solid fa-sort text-[10px] ml-0.5 opacity-60"></i>
+                            </th>
+                            <th class="sticky top-0 bg-slate-50 z-10 px-4 py-3 font-bold min-w-[160px]">Distribució</th>
+                            <th class="sticky top-0 bg-slate-50 z-10 px-4 py-3 font-bold text-right cursor-pointer select-none hover:text-slate-800" onclick="sortBy('successRate')">
+                                Èxit <i class="fa-solid fa-sort text-[10px] ml-0.5 opacity-60"></i>
+                            </th>
+                            <th class="sticky top-0 bg-slate-50 z-10 px-3 py-3 w-10"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabla-body" class="divide-y divide-slate-100 text-sm">
+                        <tr>
+                            <td colspan="11" class="px-6 py-12 text-center text-slate-500 italic">
+                                <i class="fa-solid fa-spinner animate-spin mr-2"></i> Carregant convocatòries europees...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <!-- Slide-over Drawer: Detall per convocatòria -->
+    <div id="detail-drawer-root" class="fixed inset-0 z-50 hidden" role="dialog" aria-modal="true" aria-labelledby="drawer-title">
+        <div id="drawer-backdrop" onclick="closeDrawer()"
+             class="drawer-backdrop fixed inset-0 bg-slate-900/45 backdrop-blur-[2px] opacity-0"></div>
+
+        <div class="fixed inset-y-0 right-0 flex max-w-full pl-0 sm:pl-10">
+            <aside id="drawer-panel"
+                   class="drawer-panel translate-x-full w-screen max-w-4xl bg-slate-50 shadow-2xl border-l border-slate-200 flex flex-col h-full">
+
+                <div class="bg-white border-b border-slate-200 px-5 sm:px-6 py-4 flex items-start justify-between gap-4 shrink-0">
+                    <div class="min-w-0 flex-1">
+                        <div class="flex flex-wrap items-center gap-2 mb-1.5">
+                            <span id="drawer-calltype-badge" class="px-2 py-0.5 text-[11px] font-extrabold rounded-md uppercase"></span>
+                            <span id="drawer-program-badge" class="inline-flex items-center gap-1 px-2.5 py-0.5 text-[11px] font-bold rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200">
+                                <i class="fa-solid fa-tag text-[9px] text-emerald-600"></i>
+                                <span id="drawer-program-name"></span>
+                            </span>
+                            <span id="drawer-year-badge" class="px-2 py-0.5 text-[11px] font-bold rounded-md bg-slate-100 text-slate-700 tabular-nums"></span>
+                            <span id="drawer-type-label" class="text-xs text-slate-500 truncate max-w-md"></span>
+                        </div>
+                        <h2 id="drawer-title" class="text-base sm:text-lg font-extrabold text-slate-900 leading-snug"></h2>
+                        <div id="drawer-program-path-wrapper" class="mt-2.5 hidden bg-slate-50 border border-slate-200/80 rounded-xl px-3 py-2 text-xs text-slate-600 flex items-start gap-2">
+                            <i class="fa-solid fa-diagram-project text-emerald-700 mt-0.5 shrink-0 text-xs"></i>
+                            <div class="min-w-0">
+                                <span class="font-bold text-slate-700 uppercase text-[10px] tracking-wider block">Ruta del programa:</span>
+                                <span id="drawer-program-path" class="text-slate-800 font-medium break-words text-xs"></span>
+                            </div>
+                        </div>
+                        <div class="mt-2 flex flex-wrap items-center gap-3 text-xs text-slate-500">
+                            <span id="drawer-uuid" class="font-mono text-[11px]"></span>
+                            <button id="drawer-egreta-btn" type="button" class="hidden inline-flex items-center gap-1 font-semibold text-emerald-700 hover:text-emerald-900 hover:underline cursor-pointer">
+                                <i class="fa-solid fa-arrow-up-right-from-square text-[11px]"></i> Obrir a Egreta
+                            </button>
+                        </div>
+                    </div>
+                    <button type="button" onclick="closeDrawer()" aria-label="Tancar detall"
+                            class="shrink-0 w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 flex items-center justify-center transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600">
+                        <i class="fa-solid fa-xmark text-base"></i>
+                    </button>
+                </div>
+
+                <div id="drawer-body" class="flex-1 overflow-y-auto p-5 sm:p-6 space-y-6">
+                    <div id="drawer-loading" class="py-16 text-center text-slate-500">
+                        <i class="fa-solid fa-spinner animate-spin text-2xl text-emerald-700 mb-3 block"></i>
+                        <span class="text-sm font-medium">Calculant distribució per àmbit de coneixement i departament...</span>
+                    </div>
+
+                    <div id="drawer-content" class="hidden space-y-6">
+                        <div class="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-xs space-y-3">
+                            <div class="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                                <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-100">
+                                    <div class="text-[11px] font-bold uppercase text-slate-500">Enviades</div>
+                                    <div id="d-kpi-sent" class="text-xl font-extrabold text-slate-900 tabular-nums mt-0.5">0</div>
+                                </div>
+                                <div class="p-2.5 rounded-xl bg-emerald-50/70 border border-emerald-100">
+                                    <div class="text-[11px] font-bold uppercase text-emerald-700">Concedides</div>
+                                    <div id="d-kpi-accepted" class="text-xl font-extrabold text-emerald-700 tabular-nums mt-0.5">0</div>
+                                    <div id="d-kpi-accepted-roles" class="text-[10px] font-semibold text-emerald-800/80 tabular-nums mt-0.5">L: 0 · S: 0</div>
+                                </div>
+                                <div class="p-2.5 rounded-xl bg-rose-50/70 border border-rose-100">
+                                    <div class="text-[11px] font-bold uppercase text-rose-700">Rebutjades</div>
+                                    <div id="d-kpi-rejected" class="text-xl font-extrabold text-rose-700 tabular-nums mt-0.5">0</div>
+                                </div>
+                                <div class="p-2.5 rounded-xl bg-amber-50/70 border border-amber-100">
+                                    <div class="text-[11px] font-bold uppercase text-amber-700">Pendents</div>
+                                    <div id="d-kpi-pending" class="text-xl font-extrabold text-amber-700 tabular-nums mt-0.5">0</div>
+                                </div>
+                                <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 col-span-2 sm:col-span-1">
+                                    <div class="text-[11px] font-bold uppercase text-slate-600">Taxa d'èxit</div>
+                                    <div id="d-kpi-rate" class="text-xl font-extrabold text-slate-900 tabular-nums mt-0.5">0%</div>
+                                </div>
+                            </div>
+                            <div id="d-summary-bar" class="h-2.5 w-full rounded-full overflow-hidden bg-slate-100 flex"></div>
+                        </div>
+
+                        <!-- Section 1: Àmbit de Coneixement -->
+                        <section class="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs space-y-4">
+                            <div class="flex flex-wrap items-center justify-between gap-2">
+                                <div>
+                                    <h3 class="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                                        <i class="fa-solid fa-layer-group text-emerald-700"></i>
+                                        Distribució per Àmbit de Coneixement
+                                    </h3>
+                                    <p class="text-xs text-slate-500 mt-0.5">Clica un àmbit per filtrar els departaments corresponents</p>
+                                </div>
+                                <button id="btn-clear-ambit" type="button" onclick="setAmbitFilter(null)"
+                                        class="hidden px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-bold hover:bg-emerald-100 transition-colors cursor-pointer">
+                                    <i class="fa-solid fa-filter-circle-xmark mr-1"></i> Netejar filtre: <span id="clear-ambit-name"></span>
+                                </button>
+                            </div>
+
+                            <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+                                <div class="lg:col-span-7 relative min-h-[220px]">
+                                    <canvas id="chart-ambit"></canvas>
+                                </div>
+                                <div id="ambit-cards" class="lg:col-span-5 space-y-2 max-h-[280px] overflow-y-auto pr-1"></div>
+                            </div>
+                        </section>
+
+                        <!-- Section: Gènere (Sexe de l'IP) -->
+                        <section class="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs space-y-4">
+                            <div class="flex flex-wrap items-center justify-between gap-2">
+                                <div>
+                                    <h3 class="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                                        <i class="fa-solid fa-venus-mars text-indigo-600"></i>
+                                        Distribució per Sexe de l'IP
+                                    </h3>
+                                    <p class="text-xs text-slate-500 mt-0.5">Sol·licituds, resolució i taxa d'èxit segons el sexe de l'Investigador/a Principal</p>
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 items-center">
+                                <div class="lg:col-span-7 relative h-[210px]">
+                                    <canvas id="chart-gender"></canvas>
+                                </div>
+                                <div id="gender-cards" class="lg:col-span-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-2.5">
+                                    <!-- Rendered dynamically -->
+                                </div>
+                            </div>
+                        </section>
+
+                        <!-- Section 2: Departaments -->
+                        <section class="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs space-y-4">
+                            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                <div>
+                                    <h3 class="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                                        <i class="fa-solid fa-building-columns text-emerald-700"></i>
+                                        Distribució per Departament
+                                        <span id="dept-count-badge" class="px-2 py-0.5 text-[11px] font-bold rounded-full bg-slate-100 text-slate-700 tabular-nums">0</span>
+                                    </h3>
+                                    <p class="text-xs text-slate-500 mt-0.5">Clica un departament per veure els seus IPs (èxits i fracassos)</p>
+                                </div>
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <div class="relative">
+                                        <i class="fa-solid fa-magnifying-glass absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                                        <input id="dept-search" type="text" placeholder="Filtrar departament..."
+                                               class="h-8 pl-8 pr-3 bg-slate-50 border border-slate-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-emerald-600/20 focus:border-emerald-600">
+                                    </div>
+                                    <select id="dept-sort" aria-label="Ordenar departaments"
+                                            class="h-8 px-2.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-emerald-600/20 focus:border-emerald-600">
+                                        <option value="sent">Més enviades</option>
+                                        <option value="accepted">Més concedides</option>
+                                        <option value="rate">Major taxa d'èxit</option>
+                                        <option value="name">Alfabètic (A-Z)</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="relative min-h-[240px]">
+                                <canvas id="chart-dept"></canvas>
+                            </div>
+
+                            <div class="overflow-x-auto border border-slate-100 rounded-xl">
+                                <table class="w-full text-left border-collapse text-xs">
+                                    <thead>
+                                        <tr class="bg-slate-50 text-slate-500 uppercase tracking-wider border-b border-slate-200">
+                                            <th class="px-3 py-2.5 font-bold">Departament</th>
+                                            <th class="px-3 py-2.5 font-bold">Àmbit</th>
+                                            <th class="px-2.5 py-2.5 font-bold text-right">Env.</th>
+                                            <th class="px-2.5 py-2.5 font-bold text-right text-emerald-700">Conc.</th>
+                                            <th class="px-2.5 py-2.5 font-bold text-right text-rose-700">Reb.</th>
+                                            <th class="px-2.5 py-2.5 font-bold text-right text-amber-700">Pend.</th>
+                                            <th class="px-2.5 py-2.5 font-bold text-right text-slate-500">Ren.</th>
+                                            <th class="px-3 py-2.5 font-bold text-right">Èxit</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="dept-table-body" class="divide-y divide-slate-100"></tbody>
+                                </table>
+                            </div>
+                        </section>
+
+                        <!-- Section 3: IPs del Departament seleccionat -->
+                        <section id="dept-ips-section" class="hidden bg-white rounded-2xl border-2 border-emerald-200 p-5 shadow-xs space-y-4">
+                            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                <div>
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <h3 class="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                                            <i class="fa-solid fa-user-graduate text-emerald-700"></i>
+                                            Investigadors/es Principals (IP)
+                                        </h3>
+                                        <span id="ips-count-badge" class="px-2 py-0.5 text-[11px] font-bold rounded-full bg-emerald-100 text-emerald-800 tabular-nums">0</span>
+                                    </div>
+                                    <p class="text-xs text-slate-600 mt-1">
+                                        Departament: <strong id="ips-dept-name" class="text-slate-900"></strong>
+                                    </p>
+                                </div>
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <div class="relative">
+                                        <i class="fa-solid fa-magnifying-glass absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                                        <input id="ip-search" type="text" placeholder="Cercar IP..."
+                                               class="h-8 pl-8 pr-3 bg-slate-50 border border-slate-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-emerald-600/20 focus:border-emerald-600">
+                                    </div>
+                                    <select id="ip-sort" aria-label="Ordenar IPs"
+                                            class="h-8 px-2.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-emerald-600/20 focus:border-emerald-600">
+                                        <option value="sent">Més enviades</option>
+                                        <option value="accepted">Més èxits (concedides)</option>
+                                        <option value="rejected">Més fracassos (rebutjades)</option>
+                                        <option value="rate">Major taxa d'èxit</option>
+                                        <option value="name">Alfabètic (A-Z)</option>
+                                    </select>
+                                    <button type="button" onclick="clearDepartmentSelection()"
+                                            class="h-8 px-2.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors cursor-pointer">
+                                        <i class="fa-solid fa-xmark mr-1"></i>Tancar
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div id="ips-loading" class="hidden py-8 text-center text-slate-500 text-xs">
+                                <i class="fa-solid fa-spinner animate-spin mr-2 text-emerald-700"></i> Carregant IPs del departament...
+                            </div>
+
+                            <div id="ips-table-wrapper" class="overflow-x-auto border border-slate-100 rounded-xl">
+                                <table class="w-full text-left border-collapse text-xs">
+                                    <thead>
+                                        <tr class="bg-slate-50 text-slate-500 uppercase tracking-wider border-b border-slate-200">
+                                            <th class="px-3 py-2.5 font-bold">Investigador/a Principal</th>
+                                            <th class="px-2.5 py-2.5 font-bold text-right">Env.</th>
+                                            <th class="px-2.5 py-2.5 font-bold text-right text-emerald-700">Èxits (Conc.)</th>
+                                            <th class="px-2.5 py-2.5 font-bold text-right text-rose-700">Fracassos (Reb.)</th>
+                                            <th class="px-2.5 py-2.5 font-bold text-right text-amber-700">Pend.</th>
+                                            <th class="px-2.5 py-2.5 font-bold text-right text-slate-500">Ren.</th>
+                                            <th class="px-3 py-2.5 font-bold min-w-[110px]">Balanç</th>
+                                            <th class="px-3 py-2.5 font-bold text-right">Èxit</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="ips-table-body" class="divide-y divide-slate-100"></tbody>
+                                </table>
+                            </div>
+                        </section>
+                    </div>
+                </div>
+            </aside>
+        </div>
+    </div>
+
+<script>
+    const API_BASE = (typeof window.getApiBaseUrl === 'function')
+        ? window.getApiBaseUrl()
+        : '';
+
+    let allCalls = [];
+    let filteredCalls = [];
+    let selectedCallType = 'ALL';
+    let selectedProgram = 'ALL';
+    let rangoAnios = null;
+    let sortState = { key: 'sent', dir: 'desc' };
+    let selectedFundingUuid = null;
+
+    let currentBreakdown = null;
+    let selectedAmbitFilter = null;
+    let selectedDeptUuid = null;
+    let currentDeptIps = [];
+    let chartAmbitInstance = null;
+    let chartDeptInstance = null;
+    let chartGenderInstance = null;
+
+    function escapeHtml(str) {
+        if (str == null) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    function formatPct(num, den) {
+        if (!den || den <= 0) return '0%';
+        return Math.round((num / den) * 100) + '%';
+    }
+
+    function calcSuccessRate(item) {
+        const sent = item.sent || 0;
+        const accepted = item.accepted || 0;
+        return sent > 0 ? (accepted / sent) * 100 : 0;
+    }
+
+    function getEgretaUrl(pureId) {
+        if (!pureId) return '';
+        const env = (typeof window.getDefaultEnv === 'function') ? window.getDefaultEnv() : 'prod';
+        const host = (env === 'test') ? 'egretat.uab.cat' : 'egreta.uab.cat';
+        return `https://${host}/admin/editor/dk/atira/pure/modules/fundingopportunity/external/model/fundingopportunity/editor/externalfundingopportunityeditor.xhtml?scheme=&type=&id=${pureId}`;
+    }
+
+    function setCallTypeFilter(type) {
+        selectedCallType = type;
+        document.querySelectorAll('.calltype-btn').forEach(btn => {
+            const active = btn.dataset.calltype === type;
+            btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+            if (active) {
+                btn.className = 'calltype-btn flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 bg-white text-slate-900 shadow-xs';
+            } else {
+                btn.className = 'calltype-btn flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 text-slate-600 hover:text-slate-900';
+            }
+        });
+        populateProgramOptions();
+        applyFilters();
+    }
+
+    function populateProgramOptions() {
+        const select = document.getElementById('selectProgram');
+        if (!select) return;
+        const current = select.value;
+        const pool = selectedCallType === 'ALL'
+            ? allCalls
+            : allCalls.filter(i => (i.callTypeCode || i.programCode) === selectedCallType);
+
+        const counts = {};
+        pool.forEach(i => {
+            const prog = i.program || 'Sense programa';
+            counts[prog] = (counts[prog] || 0) + 1;
+        });
+
+        const sortedProgs = Object.keys(counts).sort((a, b) => a.localeCompare(b));
+        select.innerHTML = '<option value="ALL">Tots els programes</option>' +
+            sortedProgs.map(p => `<option value="${escapeHtml(p)}">${escapeHtml(p)} (${counts[p]})</option>`).join('');
+
+        select.value = sortedProgs.includes(current) ? current : 'ALL';
+        selectedProgram = select.value;
+    }
+
+    function initYearSlider(lista) {
+        const years = [...new Set((lista || []).map(i => i.fundingYear).filter(y => Number.isInteger(y)))].sort((a, b) => a - b);
+        const slider = document.getElementById('sliderAnios');
+        const valorRango = document.getElementById('valorRango');
+
+        if (!years.length) {
+            rangoAnios = null;
+            valorRango.textContent = 'Tots';
+            if (slider.noUiSlider) slider.noUiSlider.destroy();
+            return;
+        }
+
+        const min = years[0];
+        const max = years[years.length - 1];
+        const defaultStart = min <= 2015 && max >= 2015 ? 2015 : min;
+
+        if (slider.noUiSlider) {
+            slider.noUiSlider.destroy();
+        }
+
+        if (min === max) {
+            rangoAnios = { desde: min, hasta: max };
+            valorRango.textContent = `${min}`;
+            return;
+        }
+
+        noUiSlider.create(slider, {
+            start: [defaultStart, max],
+            connect: true,
+            step: 1,
+            range: { min, max },
+            format: {
+                to: v => Math.round(v),
+                from: v => Number(v)
+            }
+        });
+
+        slider.noUiSlider.on('update', values => {
+            rangoAnios = { desde: Number(values[0]), hasta: Number(values[1]) };
+            valorRango.textContent = `${values[0]} - ${values[1]}`;
+            applyFilters();
+        });
+    }
+
+    function sortBy(key) {
+        if (sortState.key === key) {
+            sortState.dir = sortState.dir === 'desc' ? 'asc' : 'desc';
+        } else {
+            sortState.key = key;
+            sortState.dir = (key === 'callTypeCode' || key === 'fundingTitle') ? 'asc' : 'desc';
+        }
+        applyFilters();
+    }
+
+    function applyFilters() {
+        const query = (document.getElementById('inputBuscar').value || '').trim().toLowerCase();
+        const selectProg = document.getElementById('selectProgram');
+        selectedProgram = selectProg ? selectProg.value : 'ALL';
+
+        filteredCalls = allCalls.filter(item => {
+            const itemCallType = item.callTypeCode || item.programCode;
+            if (selectedCallType !== 'ALL' && itemCallType !== selectedCallType) {
+                return false;
+            }
+            if (selectedProgram !== 'ALL') {
+                const itemProg = item.program || 'Sense programa';
+                if (itemProg !== selectedProgram && !(item.programs && item.programs.includes(selectedProgram))) {
+                    return false;
+                }
+            }
+            if (rangoAnios && Number.isInteger(item.fundingYear)) {
+                if (item.fundingYear < rangoAnios.desde || item.fundingYear > rangoAnios.hasta) {
+                    return false;
+                }
+            }
+            if (query) {
+                const title = (item.fundingTitle || '').toLowerCase();
+                const prog = (item.program || '').toLowerCase();
+                const path = (item.programPath || '').toLowerCase();
+                const type = (item.fundingType || '').toLowerCase();
+                const uuid = (item.fundingUuid || '').toLowerCase();
+                if (!title.includes(query) && !prog.includes(query) && !path.includes(query) && !type.includes(query) && !uuid.includes(query)) {
+                    return false;
+                }
+            }
+            return true;
+        });
+
+        filteredCalls.sort((a, b) => {
+            const mult = sortState.dir === 'asc' ? 1 : -1;
+            if (sortState.key === 'callTypeCode') {
+                return mult * String(a.callTypeCode || a.programCode || '').localeCompare(String(b.callTypeCode || b.programCode || ''));
+            }
+            if (sortState.key === 'fundingTitle') {
+                return mult * String(a.fundingTitle || '').localeCompare(String(b.fundingTitle || ''));
+            }
+            if (sortState.key === 'successRate') {
+                return mult * (calcSuccessRate(a) - calcSuccessRate(b));
+            }
+            return mult * ((a[sortState.key] ?? -1) - (b[sortState.key] ?? -1));
+        });
+
+        renderKpis(filteredCalls);
+        renderTable(filteredCalls);
+    }
+
+    function renderKpis(lista) {
+        const excl = document.getElementById('checkExcloureRenunciats').checked;
+        let sent = 0, accepted = 0, acceptedLeader = 0, acceptedPartner = 0, rejected = 0, pending = 0, resigned = 0;
+
+        for (const item of lista) {
+            sent += item.sent || 0;
+            accepted += item.accepted || 0;
+            acceptedLeader += item.acceptedLeader || 0;
+            acceptedPartner += item.acceptedPartner || 0;
+            rejected += item.rejected || 0;
+            pending += item.pending || 0;
+            resigned += item.resigned || 0;
+        }
+
+        document.getElementById('kpi-sent').textContent = sent.toLocaleString('ca-ES');
+        document.getElementById('kpi-calls-count').textContent = `${lista.length} convocatòries`;
+
+        document.getElementById('kpi-accepted').textContent = accepted.toLocaleString('ca-ES');
+        document.getElementById('kpi-success-rate').textContent = `Taxa d'èxit: ${formatPct(accepted, sent)}`;
+        document.getElementById('kpi-accepted-roles').textContent = `Líder: ${acceptedLeader.toLocaleString('ca-ES')} · Soci: ${acceptedPartner.toLocaleString('ca-ES')}`;
+
+        document.getElementById('kpi-rejected').textContent = rejected.toLocaleString('ca-ES');
+        document.getElementById('kpi-rejected-pct').textContent = `${formatPct(rejected, sent)} del total`;
+
+        document.getElementById('kpi-pending').textContent = pending.toLocaleString('ca-ES');
+        document.getElementById('kpi-pending-pct').textContent = `${formatPct(pending, sent)} del total`;
+
+        const resCard = document.getElementById('kpi-resigned-card');
+        resCard.style.display = excl ? 'none' : '';
+        document.getElementById('kpi-resigned').textContent = resigned.toLocaleString('ca-ES');
+        document.getElementById('kpi-resigned-pct').textContent = `${formatPct(resigned, sent)} del total`;
+    }
+
+    function buildStackedBarHtml(item, excl) {
+        const sent = item.sent || 0;
+        if (sent <= 0) return '<div class="h-2 w-full rounded-full bg-slate-100"></div>';
+        const acc = item.accepted || 0;
+        const rej = item.rejected || 0;
+        const pen = item.pending || 0;
+        const res = excl ? 0 : (item.resigned || 0);
+        const total = Math.max(sent, acc + rej + pen + res);
+
+        const pAcc = (acc / total) * 100;
+        const pRej = (rej / total) * 100;
+        const pPen = (pen / total) * 100;
+        const pRes = (res / total) * 100;
+
+        return `
+            <div class="h-2.5 w-full rounded-full bg-slate-100 overflow-hidden flex" title="Concedides: ${acc} | Rebutjades: ${rej} | Pendents: ${pen}${excl ? '' : ' | Renunciades: ' + res}">
+                ${pAcc > 0 ? `<div style="width:${pAcc}%" class="bg-emerald-600 h-full"></div>` : ''}
+                ${pRej > 0 ? `<div style="width:${pRej}%" class="bg-rose-500 h-full"></div>` : ''}
+                ${pPen > 0 ? `<div style="width:${pPen}%" class="bg-amber-400 h-full"></div>` : ''}
+                ${pRes > 0 ? `<div style="width:${pRes}%" class="bg-slate-400 h-full"></div>` : ''}
+            </div>
+        `;
+    }
+
+    function renderTable(lista) {
+        const body = document.getElementById('tabla-body');
+        const excl = document.getElementById('checkExcloureRenunciats').checked;
+        document.getElementById('th-renunciades').style.display = excl ? 'none' : '';
+        document.getElementById('badge-count').textContent = lista.length;
+
+        const colSpan = excl ? 10 : 11;
+        if (!lista.length) {
+            body.innerHTML = `<tr><td colspan="${colSpan}" class="px-6 py-12 text-center text-slate-400 italic">No hi ha convocatòries PJE/PEI amb els filtres seleccionats.</td></tr>`;
+            return;
+        }
+
+        body.innerHTML = lista.map(item => {
+            const isSelected = item.fundingUuid === selectedFundingUuid;
+            const typeCode = item.callTypeCode || item.programCode || '-';
+            const typeBadge = typeCode === 'PJE'
+                ? '<span class="px-2 py-0.5 text-[11px] font-extrabold rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200">PJE</span>'
+                : (typeCode === 'PEI'
+                    ? '<span class="px-2 py-0.5 text-[11px] font-extrabold rounded-md bg-cyan-50 text-cyan-800 border border-cyan-200">PEI</span>'
+                    : `<span class="px-2 py-0.5 text-[11px] font-extrabold rounded-md bg-slate-100 text-slate-700 border border-slate-200">${escapeHtml(typeCode)}</span>`);
+            const rate = Math.round(calcSuccessRate(item));
+            const rateClass = rate >= 25
+                ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                : (rate > 0 ? 'bg-slate-100 text-slate-700 border-slate-200' : 'bg-slate-50 text-slate-400 border-slate-200');
+
+            return `
+                <tr tabindex="0"
+                    role="button"
+                    aria-label="Veure detall de ${escapeHtml(item.fundingTitle)}"
+                    onclick="openCallDrawer('${escapeHtml(item.fundingUuid)}')"
+                    onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openCallDrawer('${escapeHtml(item.fundingUuid)}');}"
+                    class="cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-600 ${isSelected ? 'bg-emerald-50/70' : 'hover:bg-slate-50/90'}">
+                    <td class="px-5 py-3.5">
+                        <div class="font-bold text-slate-900 leading-snug line-clamp-2">${escapeHtml(item.fundingTitle)}</div>
+                        <div class="flex flex-wrap items-center gap-1.5 mt-1">
+                            ${item.program ? `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-bold rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200" title="${escapeHtml(item.programPath || item.program)}"><i class="fa-solid fa-tag text-[8px] text-emerald-600"></i>${escapeHtml(item.program)}</span>` : ''}
+                            <span class="text-[11px] text-slate-400 truncate max-w-xs">${escapeHtml(item.fundingType || '')}</span>
+                        </div>
+                    </td>
+                    <td class="px-3 py-3.5 text-center">${typeBadge}</td>
+                    <td class="px-3 py-3.5 text-right font-semibold text-slate-700 tabular-nums">${item.fundingYear ?? '-'}</td>
+                    <td class="px-3 py-3.5 text-right font-extrabold text-slate-900 tabular-nums">${item.sent ?? 0}</td>
+                    <td class="px-3 py-3.5 text-right tabular-nums">
+                        <div class="font-bold text-emerald-700">${item.accepted ?? 0}</div>
+                        ${(item.accepted ?? 0) > 0 ? `<div class="text-[10px] font-semibold text-slate-500 whitespace-nowrap" title="UAB Líder: ${item.acceptedLeader ?? 0} | UAB Soci: ${item.acceptedPartner ?? 0}">L:${item.acceptedLeader ?? 0} · S:${item.acceptedPartner ?? 0}</div>` : ''}
+                    </td>
+                    <td class="px-3 py-3.5 text-right font-bold text-rose-700 tabular-nums">${item.rejected ?? 0}</td>
+                    <td class="px-3 py-3.5 text-right font-bold text-amber-700 tabular-nums">${item.pending ?? 0}</td>
+                    ${excl ? '' : `<td class="px-3 py-3.5 text-right font-semibold text-slate-500 tabular-nums">${item.resigned ?? 0}</td>`}
+                    <td class="px-4 py-3.5">${buildStackedBarHtml(item, excl)}</td>
+                    <td class="px-4 py-3.5 text-right">
+                        <span class="inline-block px-2 py-0.5 text-xs font-bold rounded-md border tabular-nums ${rateClass}">${rate}%</span>
+                    </td>
+                    <td class="px-3 py-3.5 text-right text-slate-400">
+                        <i class="fa-solid fa-chevron-right text-xs"></i>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    async function openCallDrawer(fundingUuid) {
+        const callItem = allCalls.find(c => c.fundingUuid === fundingUuid);
+        if (!callItem) return;
+
+        selectedFundingUuid = fundingUuid;
+        selectedAmbitFilter = null;
+        selectedDeptUuid = null;
+        currentDeptIps = [];
+        document.getElementById('dept-search').value = '';
+        document.getElementById('ip-search').value = '';
+        document.getElementById('dept-ips-section').classList.add('hidden');
+        document.getElementById('btn-clear-ambit').classList.add('hidden');
+        renderTable(filteredCalls);
+
+        const typeBadge = document.getElementById('drawer-calltype-badge');
+        const typeCode = callItem.callTypeCode || callItem.programCode || '-';
+        typeBadge.textContent = typeCode;
+        if (typeCode === 'PJE') {
+            typeBadge.className = 'px-2 py-0.5 text-[11px] font-extrabold rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200 uppercase';
+        } else if (typeCode === 'PEI') {
+            typeBadge.className = 'px-2 py-0.5 text-[11px] font-extrabold rounded-md bg-cyan-50 text-cyan-800 border border-cyan-200 uppercase';
+        } else {
+            typeBadge.className = 'px-2 py-0.5 text-[11px] font-extrabold rounded-md bg-slate-100 text-slate-700 border border-slate-200 uppercase';
+        }
+
+        const progBadge = document.getElementById('drawer-program-badge');
+        const progName = document.getElementById('drawer-program-name');
+        if (callItem.program) {
+            progBadge.classList.remove('hidden');
+            progName.textContent = callItem.program;
+        } else {
+            progBadge.classList.add('hidden');
+        }
+
+        const pathWrapper = document.getElementById('drawer-program-path-wrapper');
+        const pathSpan = document.getElementById('drawer-program-path');
+        if (callItem.programPath) {
+            pathWrapper.classList.remove('hidden');
+            pathSpan.textContent = callItem.programPath;
+        } else {
+            pathWrapper.classList.add('hidden');
+        }
+
+        document.getElementById('drawer-year-badge').textContent = callItem.fundingYear ?? '-';
+        document.getElementById('drawer-type-label').textContent = callItem.fundingType || '';
+        document.getElementById('drawer-title').textContent = callItem.fundingTitle || 'Sense títol';
+        document.getElementById('drawer-uuid').textContent = fundingUuid;
+
+        const egretaBtn = document.getElementById('drawer-egreta-btn');
+        if (callItem.pureId && typeof window.abrirEgretaModal === 'function') {
+            egretaBtn.classList.remove('hidden');
+            egretaBtn.onclick = () => abrirEgretaModal(getEgretaUrl(callItem.pureId));
+        } else {
+            egretaBtn.classList.add('hidden');
+        }
+
+        const root = document.getElementById('detail-drawer-root');
+        const backdrop = document.getElementById('drawer-backdrop');
+        const panel = document.getElementById('drawer-panel');
+        root.classList.remove('hidden');
+        requestAnimationFrame(() => {
+            backdrop.classList.remove('opacity-0');
+            panel.classList.remove('translate-x-full');
+        });
+
+        document.getElementById('drawer-loading').classList.remove('hidden');
+        document.getElementById('drawer-content').classList.add('hidden');
+
+        try {
+            const excl = document.getElementById('checkExcloureRenunciats').checked;
+            const url = `${API_BASE}/api/applications/stats/by-funding-opportunity/${encodeURIComponent(fundingUuid)}/breakdown?excludeResigned=${excl}`;
+            const res = await fetch(url);
+            if (!res.ok) throw new Error('Error carregant el desglossament');
+            currentBreakdown = await res.json();
+            renderDrawerContent();
+        } catch (err) {
+            document.getElementById('drawer-loading').innerHTML = `
+                <div class="text-rose-600 text-sm font-semibold">
+                    <i class="fa-solid fa-triangle-exclamation mr-2"></i>Error carregant les dades de detall.
+                </div>
+            `;
+        }
+    }
+
+    function closeDrawer() {
+        const root = document.getElementById('detail-drawer-root');
+        const backdrop = document.getElementById('drawer-backdrop');
+        const panel = document.getElementById('drawer-panel');
+        backdrop.classList.add('opacity-0');
+        panel.classList.add('translate-x-full');
+        setTimeout(() => {
+            root.classList.add('hidden');
+        }, 230);
+    }
+
+    function setAmbitFilter(ambit) {
+        selectedAmbitFilter = (selectedAmbitFilter === ambit) ? null : ambit;
+        const btnClear = document.getElementById('btn-clear-ambit');
+        if (selectedAmbitFilter) {
+            btnClear.classList.remove('hidden');
+            document.getElementById('clear-ambit-name').textContent = selectedAmbitFilter;
+        } else {
+            btnClear.classList.add('hidden');
+        }
+        renderAmbitCards();
+        renderDepartmentSection();
+    }
+
+    function renderDrawerContent() {
+        if (!currentBreakdown) return;
+        document.getElementById('drawer-loading').classList.add('hidden');
+        document.getElementById('drawer-content').classList.remove('hidden');
+
+        const excl = document.getElementById('checkExcloureRenunciats').checked;
+        const t = currentBreakdown.total || {};
+        const sent = t.sent || 0;
+        const accepted = t.accepted || 0;
+        const rejected = t.rejected || 0;
+        const pending = t.pending || 0;
+
+        document.getElementById('d-kpi-sent').textContent = sent;
+        document.getElementById('d-kpi-accepted').textContent = accepted;
+        document.getElementById('d-kpi-accepted-roles').textContent = `Líder: ${t.acceptedLeader || 0} · Soci: ${t.acceptedPartner || 0}`;
+        document.getElementById('d-kpi-rejected').textContent = rejected;
+        document.getElementById('d-kpi-pending').textContent = pending;
+        document.getElementById('d-kpi-rate').textContent = formatPct(accepted, sent);
+        document.getElementById('d-summary-bar').innerHTML = buildStackedBarHtml(t, excl);
+
+        renderAmbitChart();
+        renderAmbitCards();
+        renderGenderSection();
+        renderDepartmentSection();
+    }
+
+    function renderAmbitChart() {
+        const ambits = currentBreakdown.byAmbit || [];
+        const canvas = document.getElementById('chart-ambit');
+        canvas.parentElement.style.height = Math.max(190, ambits.length * 32 + 55) + 'px';
+        const ctx = canvas.getContext('2d');
+        if (chartAmbitInstance) chartAmbitInstance.destroy();
+
+        const labels = ambits.map(a => a.ambit);
+        chartAmbitInstance = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels,
+                datasets: [
+                    { label: 'Concedides', data: ambits.map(a => a.accepted), backgroundColor: '#059669', borderRadius: 3 },
+                    { label: 'Rebutjades', data: ambits.map(a => a.rejected), backgroundColor: '#f43f5e', borderRadius: 3 },
+                    { label: 'Pendents', data: ambits.map(a => a.pending), backgroundColor: '#fbbf24', borderRadius: 3 }
+                ]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                onClick: (_, elements) => {
+                    if (elements.length > 0) {
+                        const idx = elements[0].index;
+                        setAmbitFilter(labels[idx]);
+                    }
+                },
+                plugins: {
+                    legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11 } } },
+                    tooltip: { mode: 'index', intersect: false }
+                },
+                scales: {
+                    x: { stacked: true, beginAtZero: true, ticks: { precision: 0, font: { size: 11 } }, grid: { color: '#f1f5f9' } },
+                    y: { stacked: true, ticks: { font: { size: 11, weight: '600' } }, grid: { display: false } }
+                }
+            }
+        });
+    }
+
+    function renderGenderSection() {
+        const bg = currentBreakdown.byGender || {};
+        const female = bg.female || { sent: 0, accepted: 0, rejected: 0, pending: 0 };
+        const male = bg.male || { sent: 0, accepted: 0, rejected: 0, pending: 0 };
+        const unknown = bg.unknown || { sent: 0, accepted: 0, rejected: 0, pending: 0 };
+
+        const labels = ['Dones', 'Homes'];
+        const datasets = [
+            { label: 'Concedides', data: [female.accepted || 0, male.accepted || 0], backgroundColor: '#059669', borderRadius: 4 },
+            { label: 'Rebutjades', data: [female.rejected || 0, male.rejected || 0], backgroundColor: '#f43f5e', borderRadius: 4 },
+            { label: 'Pendents', data: [female.pending || 0, male.pending || 0], backgroundColor: '#fbbf24', borderRadius: 4 }
+        ];
+
+        if ((unknown.sent || 0) > 0) {
+            labels.push('No informat');
+            datasets[0].data.push(unknown.accepted || 0);
+            datasets[1].data.push(unknown.rejected || 0);
+            datasets[2].data.push(unknown.pending || 0);
+        }
+
+        const ctx = document.getElementById('chart-gender').getContext('2d');
+        if (chartGenderInstance) chartGenderInstance.destroy();
+
+        chartGenderInstance = new Chart(ctx, {
+            type: 'bar',
+            data: { labels, datasets },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11 } } },
+                    tooltip: { mode: 'index', intersect: false }
+                },
+                scales: {
+                    x: { stacked: true, ticks: { font: { size: 11, weight: '700' } }, grid: { display: false } },
+                    y: { stacked: true, beginAtZero: true, ticks: { precision: 0, font: { size: 11 } }, grid: { color: '#f1f5f9' } }
+                }
+            }
+        });
+
+        // Cards summary
+        const container = document.getElementById('gender-cards');
+        const items = [
+            { title: 'Investigadores (Dones)', icon: 'fa-venus', color: 'indigo', data: female },
+            { title: 'Investigadors (Homes)', icon: 'fa-mars', color: 'sky', data: male }
+        ];
+        if ((unknown.sent || 0) > 0) {
+            items.push({ title: 'Sexe no informat', icon: 'fa-genderless', color: 'slate', data: unknown });
+        }
+
+        container.innerHTML = items.map(it => {
+            const d = it.data;
+            const rate = formatPct(d.accepted, d.sent);
+            return `
+                <div class="p-3 rounded-xl border border-slate-200/80 bg-slate-50/60">
+                    <div class="flex items-center justify-between gap-2">
+                        <span class="text-xs font-extrabold text-slate-800 flex items-center gap-1.5">
+                            <i class="fa-solid ${it.icon} text-${it.color}-600"></i>
+                            ${it.title}
+                        </span>
+                        <span class="text-xs font-black text-emerald-700 tabular-nums">${rate} èxit</span>
+                    </div>
+                    <div class="mt-2 grid grid-cols-4 gap-1.5 text-center text-[11px] tabular-nums">
+                        <div class="bg-white p-1 rounded-lg border border-slate-100">
+                            <span class="text-[9px] font-bold text-slate-400 block uppercase">Env.</span>
+                            <span class="font-bold text-slate-800">${d.sent || 0}</span>
+                        </div>
+                        <div class="bg-emerald-50/70 p-1 rounded-lg border border-emerald-100">
+                            <span class="text-[9px] font-bold text-emerald-700 block uppercase">Conc.</span>
+                            <span class="font-bold text-emerald-700">${d.accepted || 0}</span>
+                        </div>
+                        <div class="bg-rose-50/70 p-1 rounded-lg border border-rose-100">
+                            <span class="text-[9px] font-bold text-rose-700 block uppercase">Reb.</span>
+                            <span class="font-bold text-rose-700">${d.rejected || 0}</span>
+                        </div>
+                        <div class="bg-amber-50/70 p-1 rounded-lg border border-amber-100">
+                            <span class="text-[9px] font-bold text-amber-700 block uppercase">Pend.</span>
+                            <span class="font-bold text-amber-700">${d.pending || 0}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    function renderAmbitCards() {
+        const ambits = currentBreakdown.byAmbit || [];
+        const container = document.getElementById('ambit-cards');
+        if (!ambits.length) {
+            container.innerHTML = '<div class="text-xs text-slate-400 italic">Sense dades d\'àmbit.</div>';
+            return;
+        }
+        container.innerHTML = ambits.map(a => {
+            const active = selectedAmbitFilter === a.ambit;
+            return `
+                <button type="button" onclick="setAmbitFilter('${escapeHtml(a.ambit)}')"
+                        class="w-full text-left p-2.5 rounded-xl border transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 ${active ? 'bg-emerald-50 border-emerald-400 shadow-xs' : 'bg-slate-50/70 border-slate-200/80 hover:bg-slate-100/80'}">
+                    <div class="flex items-center justify-between gap-2">
+                        <span class="text-xs font-bold text-slate-800 truncate">${escapeHtml(a.ambit)}</span>
+                        <span class="text-[11px] font-extrabold text-emerald-700 tabular-nums">${formatPct(a.accepted, a.sent)} èxit</span>
+                    </div>
+                    <div class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-slate-600 tabular-nums">
+                        <span><strong>${a.sent}</strong> env.</span>
+                        <span class="text-emerald-700"><strong>${a.accepted}</strong> conc.${a.accepted > 0 ? ` <span class="text-[10px] text-slate-500">(L:${a.acceptedLeader ?? 0}·S:${a.acceptedPartner ?? 0})</span>` : ''}</span>
+                        <span class="text-rose-700"><strong>${a.rejected}</strong> reb.</span>
+                        <span class="text-amber-700"><strong>${a.pending}</strong> pend.</span>
+                    </div>
+                </button>
+            `;
+        }).join('');
+    }
+
+    function renderDepartmentSection() {
+        const search = (document.getElementById('dept-search').value || '').trim().toLowerCase();
+        const sortKey = document.getElementById('dept-sort').value;
+        let depts = [...(currentBreakdown.byDepartment || [])];
+
+        if (selectedAmbitFilter) {
+            depts = depts.filter(d => d.ambit === selectedAmbitFilter);
+        }
+        if (search) {
+            depts = depts.filter(d =>
+                (d.departmentName || '').toLowerCase().includes(search) ||
+                (d.ambit || '').toLowerCase().includes(search)
+            );
+        }
+
+        depts.sort((a, b) => {
+            if (sortKey === 'name') return (a.departmentName || '').localeCompare(b.departmentName || '');
+            if (sortKey === 'rate') return calcSuccessRate(b) - calcSuccessRate(a);
+            return (b[sortKey] || 0) - (a[sortKey] || 0);
+        });
+
+        document.getElementById('dept-count-badge').textContent = depts.length;
+
+        const topDepts = depts.slice(0, 12);
+        const canvas = document.getElementById('chart-dept');
+        canvas.parentElement.style.height = Math.max(180, topDepts.length * 28 + 50) + 'px';
+
+        if (chartDeptInstance) chartDeptInstance.destroy();
+        chartDeptInstance = new Chart(canvas.getContext('2d'), {
+            type: 'bar',
+            data: {
+                labels: topDepts.map(d => d.departmentName.length > 38 ? d.departmentName.slice(0, 35) + '…' : d.departmentName),
+                datasets: [
+                    { label: 'Concedides', data: topDepts.map(d => d.accepted), backgroundColor: '#059669', borderRadius: 3 },
+                    { label: 'Rebutjades', data: topDepts.map(d => d.rejected), backgroundColor: '#f43f5e', borderRadius: 3 },
+                    { label: 'Pendents', data: topDepts.map(d => d.pending), backgroundColor: '#fbbf24', borderRadius: 3 }
+                ]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                onClick: (_, elements) => {
+                    if (elements.length > 0) {
+                        const dept = topDepts[elements[0].index];
+                        if (dept) selectDepartment(dept.orgUuid, dept.departmentName);
+                    }
+                },
+                plugins: {
+                    legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11 } } },
+                    tooltip: { mode: 'index', intersect: false }
+                },
+                scales: {
+                    x: { stacked: true, beginAtZero: true, ticks: { precision: 0, font: { size: 11 } }, grid: { color: '#f1f5f9' } },
+                    y: { stacked: true, ticks: { font: { size: 11 } }, grid: { display: false } }
+                }
+            }
+        });
+
+        const tbody = document.getElementById('dept-table-body');
+        if (!depts.length) {
+            tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-slate-400 italic">Cap departament coincideix amb el filtre.</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = depts.map(d => {
+            const isSelected = d.orgUuid === selectedDeptUuid;
+            return `
+            <tr tabindex="0"
+                role="button"
+                aria-label="Veure IPs de ${escapeHtml(d.departmentName)}"
+                onclick="selectDepartment('${escapeHtml(d.orgUuid)}', '${escapeHtml(d.departmentName)}')"
+                onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();selectDepartment('${escapeHtml(d.orgUuid)}', '${escapeHtml(d.departmentName)}');}"
+                class="cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-600 ${isSelected ? 'bg-emerald-50/80' : 'hover:bg-slate-50/80'}">
+                <td class="px-3 py-2.5 font-semibold text-slate-800">${escapeHtml(d.departmentName)}</td>
+                <td class="px-3 py-2.5">
+                    <span class="px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 text-[11px] font-medium">${escapeHtml(d.ambit)}</span>
+                </td>
+                <td class="px-2.5 py-2.5 text-right font-bold text-slate-900 tabular-nums">${d.sent}</td>
+                <td class="px-2.5 py-2.5 text-right tabular-nums">
+                    <div class="font-bold text-emerald-700">${d.accepted}</div>
+                    ${d.accepted > 0 ? `<div class="text-[10px] font-semibold text-slate-500 whitespace-nowrap">L:${d.acceptedLeader ?? 0}·S:${d.acceptedPartner ?? 0}</div>` : ''}
+                </td>
+                <td class="px-2.5 py-2.5 text-right font-bold text-rose-700 tabular-nums">${d.rejected}</td>
+                <td class="px-2.5 py-2.5 text-right font-bold text-amber-700 tabular-nums">${d.pending}</td>
+                <td class="px-2.5 py-2.5 text-right text-slate-500 tabular-nums">${d.resigned}</td>
+                <td class="px-3 py-2.5 text-right font-bold text-slate-700 tabular-nums">${formatPct(d.accepted, d.sent)}</td>
+            </tr>
+        `;}).join('');
+    }
+
+    function clearDepartmentSelection() {
+        selectedDeptUuid = null;
+        currentDeptIps = [];
+        document.getElementById('dept-ips-section').classList.add('hidden');
+        renderDepartmentSection();
+    }
+
+    async function selectDepartment(orgUuid, departmentName) {
+        if (!selectedFundingUuid || !orgUuid) return;
+        selectedDeptUuid = orgUuid;
+        renderDepartmentSection();
+
+        const section = document.getElementById('dept-ips-section');
+        const loading = document.getElementById('ips-loading');
+        const wrapper = document.getElementById('ips-table-wrapper');
+        document.getElementById('ips-dept-name').textContent = departmentName || orgUuid;
+        document.getElementById('ip-search').value = '';
+
+        section.classList.remove('hidden');
+        loading.classList.remove('hidden');
+        wrapper.classList.add('hidden');
+        section.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+        try {
+            const excl = document.getElementById('checkExcloureRenunciats').checked;
+            const url = `${API_BASE}/api/applications/stats/by-funding-opportunity/${encodeURIComponent(selectedFundingUuid)}/department/${encodeURIComponent(orgUuid)}/ips?excludeResigned=${excl}`;
+            const res = await fetch(url);
+            if (!res.ok) throw new Error('Error carregant IPs');
+            currentDeptIps = await res.json();
+            loading.classList.add('hidden');
+            wrapper.classList.remove('hidden');
+            renderDeptIps();
+        } catch (err) {
+            loading.innerHTML = `<span class="text-rose-600 font-semibold"><i class="fa-solid fa-triangle-exclamation mr-1"></i>Error carregant els IPs.</span>`;
+        }
+    }
+
+    function renderDeptIps() {
+        const search = (document.getElementById('ip-search').value || '').trim().toLowerCase();
+        const sortKey = document.getElementById('ip-sort').value;
+        const excl = document.getElementById('checkExcloureRenunciats').checked;
+
+        let ips = [...(currentDeptIps || [])];
+        if (search) {
+            ips = ips.filter(p =>
+                (p.fullName || '').toLowerCase().includes(search) ||
+                (p.orcid || '').toLowerCase().includes(search)
+            );
+        }
+
+        ips.sort((a, b) => {
+            if (sortKey === 'name') return (a.fullName || '').localeCompare(b.fullName || '');
+            if (sortKey === 'rate') return calcSuccessRate(b) - calcSuccessRate(a);
+            return (b[sortKey] || 0) - (a[sortKey] || 0);
+        });
+
+        document.getElementById('ips-count-badge').textContent = ips.length;
+
+        const tbody = document.getElementById('ips-table-body');
+        if (!ips.length) {
+            tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-6 text-center text-slate-400 italic">Cap IP trobat amb aquest filtre.</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = ips.map(p => {
+            const rate = Math.round(calcSuccessRate(p));
+            const rateClass = rate >= 25
+                ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                : (rate > 0 ? 'bg-slate-100 text-slate-700 border-slate-200' : 'bg-rose-50/70 text-rose-700 border-rose-200');
+
+            const gBadge = p.gender === 'F'
+                ? '<span class="inline-flex items-center gap-1 text-[10px] font-bold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200" title="Dona"><i class="fa-solid fa-venus"></i> Dona</span>'
+                : (p.gender === 'M'
+                    ? '<span class="inline-flex items-center gap-1 text-[10px] font-bold text-sky-700 bg-sky-50 px-1.5 py-0.5 rounded border border-sky-200" title="Home"><i class="fa-solid fa-mars"></i> Home</span>'
+                    : '<span class="inline-flex items-center gap-1 text-[10px] font-medium text-slate-400 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200" title="No informat">-</span>');
+
+            return `
+                <tr class="hover:bg-slate-50/80">
+                    <td class="px-3 py-2.5">
+                        <div class="flex items-center gap-2">
+                            <span class="font-semibold text-slate-900">${escapeHtml(p.fullName)}</span>
+                            ${gBadge}
+                        </div>
+                        ${p.orcid ? `<div class="text-[10px] font-mono text-slate-400 mt-0.5">ORCID: ${escapeHtml(p.orcid)}</div>` : ''}
+                    </td>
+                    <td class="px-2.5 py-2.5 text-right font-bold text-slate-900 tabular-nums">${p.sent}</td>
+                    <td class="px-2.5 py-2.5 text-right tabular-nums">
+                        <div class="font-bold text-emerald-700">${p.accepted}</div>
+                        ${p.accepted > 0 ? `<div class="text-[10px] font-semibold text-slate-500 whitespace-nowrap">L:${p.acceptedLeader ?? 0}·S:${p.acceptedPartner ?? 0}</div>` : ''}
+                    </td>
+                    <td class="px-2.5 py-2.5 text-right font-bold text-rose-700 tabular-nums">${p.rejected}</td>
+                    <td class="px-2.5 py-2.5 text-right font-bold text-amber-700 tabular-nums">${p.pending}</td>
+                    <td class="px-2.5 py-2.5 text-right text-slate-500 tabular-nums">${p.resigned}</td>
+                    <td class="px-3 py-2.5">${buildStackedBarHtml(p, excl)}</td>
+                    <td class="px-3 py-2.5 text-right">
+                        <span class="inline-block px-2 py-0.5 text-[11px] font-bold rounded-md border tabular-nums ${rateClass}">${rate}%</span>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    async function loadData(preserveFilters = false) {
+        const excl = document.getElementById('checkExcloureRenunciats').checked;
+        try {
+            const res = await fetch(`${API_BASE}/api/applications/stats/by-funding-opportunity?program=PJE,PEI&excludeResigned=${excl}`);
+            if (!res.ok) throw new Error('Error carregant convocatòries');
+            allCalls = await res.json();
+            if (!preserveFilters) {
+                initYearSlider(allCalls);
+            }
+            populateProgramOptions();
+            applyFilters();
+        } catch (err) {
+            document.getElementById('tabla-body').innerHTML = `
+                <tr><td colspan="11" class="px-6 py-12 text-center text-rose-600 font-semibold">
+                    <i class="fa-solid fa-triangle-exclamation mr-2"></i>No s'han pogut carregar les dades: ${escapeHtml(err.message)}
+                </td></tr>
+            `;
+        }
+    }
+
+    document.getElementById('inputBuscar').addEventListener('input', applyFilters);
+    const selProg = document.getElementById('selectProgram');
+    if (selProg) selProg.addEventListener('change', applyFilters);
+    document.getElementById('checkExcloureRenunciats').addEventListener('change', () => {
+        loadData(true);
+        if (selectedFundingUuid && !document.getElementById('detail-drawer-root').classList.contains('hidden')) {
+            openCallDrawer(selectedFundingUuid);
+        }
+    });
+    document.getElementById('dept-search').addEventListener('input', renderDepartmentSection);
+    document.getElementById('dept-sort').addEventListener('change', renderDepartmentSection);
+    document.getElementById('ip-search').addEventListener('input', renderDeptIps);
+    document.getElementById('ip-sort').addEventListener('change', renderDeptIps);
+    document.addEventListener('keydown', e => {
+        if (e.key === 'Escape' && !document.getElementById('detail-drawer-root').classList.contains('hidden')) {
+            closeDrawer();
+        }
+    });
+
+    loadData(false);
+</script>
+</body>
+</html>
