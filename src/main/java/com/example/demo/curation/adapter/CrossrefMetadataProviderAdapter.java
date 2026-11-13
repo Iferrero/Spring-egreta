@@ -120,12 +120,11 @@ public class CrossrefMetadataProviderAdapter implements MetadataProviderPort {
                     for (JsonNode aff : affils) {
                         String name = aff.path("name").asText("");
                         double score = CurationTextNormalizer.calculateNameMatchScore(orgNorm, CurationTextNormalizer.normalizeText(name), false);
+                        // A matching affiliation string does not reveal the organization type, and Crossref
+                        // carries no country, so there is nothing reliable to infer here. (It used to emit
+                        // "Centre de recerca" for every match, which mislabelled universities and companies.)
                         if (score >= 0.70) {
-                            return Optional.of(new MetadataInferenceResult(
-                                    InferenceResult.noSignal(),
-                                    new TypeInferenceResult("Centre de recerca", score * 0.85, "crossref-affiliation"),
-                                    FundingInferenceResult.noSignal()
-                            ));
+                            log.debug("Crossref affiliation matched '{}' but carries no usable metadata", organizationName);
                         }
                     }
                 }
