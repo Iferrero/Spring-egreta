@@ -4925,6 +4925,9 @@ public class ExternalOrganizationController {
             List<CountryAggregate> countryCatalog,
             List<TypeAggregate> typeCatalog) {
         if (!rorSuggestEnabled || orgName == null || orgName.isBlank()) return null;
+        if (rorProviderAdapter != null) {
+            return executeRorNameProposalViaAdapter(orgUuid, pureId, orgName, countryCatalog, typeCatalog);
+        }
         String rawJson = fetchRorRawJson(orgName);
         if (rawJson == null || rawJson.isBlank()) {
             return null;
@@ -5060,6 +5063,80 @@ public class ExternalOrganizationController {
                 bestType,
                 "ror-name-similarity (" + Math.round(roundedSim * 100) + "%)"
             );
+        } catch (Exception e) {
+            log.debug("Error generating ROR name proposal for '{}': {}", orgName, e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * The ROR name proposal, built on the same candidate search as the metadata inference. It used to carry its own copy
+     * with a looser similarity (the maximum of three measures, one of them character-level, so "Fundació Pare Manel"
+     * scored 71% against the unrelated "Fundació Prevent"), a 0.70 threshold, and no use of the country Egreta already
+     * has, which let a homonym abroad be proposed (and its ROR id and country written by the auto-apply).
+     */
+    private RorNameProposal executeRorNameProposalViaAdapter(
+            String orgUuid,
+            Long pureId,
+            String orgName,
+            List<CountryAggregate> countryCatalog,
+            List<TypeAggregate> typeCatalog) {
+        try {
+            ProviderQueryContext ctx = ProviderQueryContext.empty().withKnownCountry(knownCountryIso(orgUuid));
+            com.example.demo.curation.adapter.RorMetadataProviderAdapter.Ranking ranking =
+                rorProviderAdapter.rank(orgName, ctx).orElse(null);
+            if (ranking == null || ranking.candidates().isEmpty()) {
+                return null;
+            }
+            com.example.demo.curation.adapter.RorMetadataProviderAdapter.RankedCandidate best = ranking.candidates().get(0);
+            if (best.displayName().isBlank()) {
+                return null;
+            }
+
+            // The country of the record, unless the same name exists in several countries and nothing says which is meant:
+            // then the country must not be proposed (the auto-apply would write it).
+            String country = "";
+            boolean homonyms = !ranking.homonymCountries().isEmpty();
+            if (!homonyms) {
+                JsonNode locs = best.item().path("locations");
+                if (locs.isArray() && !locs.isEmpty()) {
+                    String rawCountryName = locs.get(0).path("geonames_details").path("country_name").asText("");
+                    String rawCountryCode = locs.get(0).path("geonames_details").path("country_code").asText("");
+                    String candidateCountry = !rawCountryName.isBlank() ? rawCountryName : rawCountryCode;
+                    if (!candidateCountry.isBlank() && countryCatalog != null) {
+                        String catalogCountry = resolveModelCountryToCatalog(candidateCountry, countryCatalog);
+                        if (catalogCountry.isBlank() && !rawCountryCode.isBlank()) {
+                            catalogCountry = resolveAliasCountry(rawCountryCode, countryCatalog);
+                        }
+                        country = !catalogCountry.isBlank() ? catalogCountry : candidateCountry;
+                    }
+                }
+            }
+
+            String rawRorType = "";
+            JsonNode types = best.item().path("types");
+            if (types.isArray() && !types.isEmpty()) {
+                rawRorType = types.get(0).asText("");
+            }
+            String type = "";
+            if (typeCatalog != null) {
+                TypeInferenceResult typeRes = resolvePreciseEgretaType(orgName, best.displayName(), rawRorType, typeCatalog, best.score(), "ror-type:" + best.rorId());
+                if (typeRes != null && !typeRes.typeLabel().isBlank()) {
+                    type = typeRes.typeLabel();
+                }
+            }
+            if (type.isBlank() && !rawRorType.isBlank()) {
+                type = rawRorType;
+            }
+
+            double similarity = Math.round(best.score() * 100.0) / 100.0;
+            String reason = "ror-name-similarity (" + Math.round(similarity * 100) + "%)";
+            if (homonyms) {
+                reason += " homonym-countries=" + String.join(",", ranking.homonymCountries());
+            } else if (ranking.ambiguous()) {
+                reason += " ambiguous";
+            }
+            return new RorNameProposal(orgUuid, pureId, orgName, best.displayName(), similarity, best.rorId(), country, type, reason);
         } catch (Exception e) {
             log.debug("Error generating ROR name proposal for '{}': {}", orgName, e.getMessage());
             return null;
@@ -9315,6 +9392,11 @@ public class ExternalOrganizationController {
                                 return;
                             }
                             
+                            if (proposal.reason() != null && (proposal.reason().contains("homonym-countries") || proposal.reason().contains("ambiguous"))) {
+                                logNameMessage("[OMES] \"" + name + "\" - Hi ha diversos registres ROR igual de bons (" + proposal.reason() + "): cal revisio manual.");
+                                return;
+                            }
+
                             if (proposal.similarity() >= similarityThreshold) {
                                 ExternalOrganization.UriTerm updatedCountry = null;
                                 if (isMissingCountry(org) && proposal.country() != null && !proposal.country().isBlank()) {

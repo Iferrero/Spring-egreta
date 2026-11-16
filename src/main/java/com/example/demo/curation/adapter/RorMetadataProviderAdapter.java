@@ -423,22 +423,68 @@ public class RorMetadataProviderAdapter implements MetadataProviderPort {
 
     private record Candidate(JsonNode item, double score, String countryCode) {}
 
-    private MetadataInferenceResult parseRorResponse(
-            String queryOrgName,
-            String jsonBody,
-            List<CountryAggregate> countryCatalog,
-            List<TypeAggregate> typeCatalog,
-            Set<String> countryHints,
-            boolean hintIsAuthoritative) {
-        if (jsonBody == null || jsonBody.isBlank()) return null;
+    /** A ROR record that matches the name, with the score of its best-matching name. */
+    public record RankedCandidate(JsonNode item, String rorId, String displayName, String countryCode, double score) {}
 
+    /**
+     * The candidates for an organization name, best first, after the country has been taken into account.
+     *
+     * @param homonymCountries countries of the equally good candidates when the same name exists in several of them and
+     *                         nothing says which is meant; empty when the country is not in doubt
+     * @param ambiguous        two different records match the name almost equally well
+     * @param secondScore      score of the best candidate that is a different record from the first
+     */
+    public record Ranking(List<RankedCandidate> candidates, List<String> homonymCountries, boolean ambiguous, double secondScore) {}
+
+    /**
+     * Ranks the ROR records for an organization name. This is the one place that decides which record a name refers to
+     * (country hints, homonyms, rate limiting), shared by the metadata inference and the suggested-name proposals.
+     * Returns empty when nothing matches well enough, or when Egreta's own country rules every candidate out.
+     */
+    public Optional<Ranking> rank(String organizationName, ProviderQueryContext context) {
+        if (!rorSuggestEnabled || organizationName == null || organizationName.isBlank()) {
+            return Optional.empty();
+        }
+        String known = normalizeIso(context != null ? context.knownCountryIso() : null);
+        boolean authoritative = !known.isEmpty();
+        Set<String> hints = authoritative
+                ? Set.of(known)
+                : new LinkedHashSet<>(com.example.demo.curation.util.CountryCodeResolver.countryCodesNamedIn(organizationName));
+        String rawJson = fetchRorRawJson(organizationName, hints);
+        if (rawJson == null || rawJson.isBlank()) {
+            return Optional.empty();
+        }
+        return Optional.ofNullable(rankFromJson(organizationName, rawJson, hints, authoritative));
+    }
+
+    private static String displayNameOf(JsonNode item) {
+        JsonNode names = item.path("names");
+        String fallback = "";
+        if (names.isArray()) {
+            for (JsonNode n : names) {
+                String v = n.path("value").asText("").trim();
+                if (v.isEmpty()) continue;
+                for (JsonNode t : n.path("types")) {
+                    if ("ror_display".equalsIgnoreCase(t.asText())) return v;
+                }
+                if (fallback.isEmpty()) fallback = v;
+            }
+        }
+        return fallback;
+    }
+
+    private Ranking rankFromJson(String queryOrgName, String jsonBody, Set<String> countryHints, boolean hintIsAuthoritative) {
         try {
-            JsonNode root = objectMapper.readTree(jsonBody);
-            JsonNode items = root.path("items");
+            JsonNode items = objectMapper.readTree(jsonBody).path("items");
             if (!items.isArray() || items.isEmpty()) return null;
 
             String queryNorm = CurationTextNormalizer.normalizeText(queryOrgName);
             if (queryNorm.isBlank()) return null;
+            // What is in brackets in an Egreta name is an annotation (an acronym, a country: "Shanghai University (SHU)"),
+            // not part of the registered name, so the name is also compared without it.
+            String queryNoBrackets = CurationTextNormalizer.normalizeText(queryOrgName.replaceAll("\\s*\\([^)]*\\)\\s*", " "));
+            List<String> queryVariants = (queryNoBrackets.isBlank() || queryNoBrackets.equals(queryNorm))
+                    ? List.of(queryNorm) : List.of(queryNorm, queryNoBrackets);
 
             // Score every candidate returned (it used to look only at the first five, so the right homonym could
             // simply never be seen).
@@ -462,10 +508,12 @@ public class RorMetadataProviderAdapter implements MetadataProviderPort {
                                 }
                             }
                         }
-                        double score = CurationTextNormalizer.calculateNameMatchScore(queryNorm, CurationTextNormalizer.normalizeText(val), isAcronym);
-                        double strScore = CurationTextNormalizer.calculateStringSimilarity(queryNorm, CurationTextNormalizer.normalizeText(val));
-                        score = Math.max(score, strScore);
-                        itemScore = Math.max(itemScore, score);
+                        String candidateNorm = CurationTextNormalizer.normalizeText(val);
+                        for (String variant : queryVariants) {
+                            double score = CurationTextNormalizer.calculateNameMatchScore(variant, candidateNorm, isAcronym);
+                            double strScore = CurationTextNormalizer.calculateStringSimilarity(variant, candidateNorm);
+                            itemScore = Math.max(itemScore, Math.max(score, strScore));
+                        }
                     }
                 }
                 // ROR's affiliation matcher flagged this record as the match. That is trustworthy for noisy strings that
@@ -475,7 +523,7 @@ public class RorMetadataProviderAdapter implements MetadataProviderPort {
                 if (item.path("_chosen").asBoolean(false) && registeredNameContainedIn(queryNorm, namesNode)) {
                     itemScore = Math.max(itemScore, 0.82);
                 }
-                if (itemScore >= 0.78) {
+                if (itemScore >= MIN_MATCH_SCORE) {
                     candidates.add(new Candidate(item, itemScore, countryCodeOf(item)));
                 }
             }
@@ -497,18 +545,11 @@ public class RorMetadataProviderAdapter implements MetadataProviderPort {
             candidates.sort((a, b) -> Double.compare(b.score(), a.score())); // stable: ROR's own order breaks ties
 
             Candidate best = candidates.get(0);
-            JsonNode bestItem = best.item();
-            double bestScore = best.score();
+            String bestId = best.item().path("id").asText("");
             double secondScore = candidates.stream()
-                    .filter(c -> !c.item().path("id").asText("").equals(bestItem.path("id").asText("")))
+                    .filter(c -> !c.item().path("id").asText("").equals(bestId))
                     .mapToDouble(Candidate::score).findFirst().orElse(0.0);
-
-            // Two different organizations match the name almost equally well (e.g. several campuses or
-            // homonymous institutions): the pick is a coin toss, so lower the confidence of everything derived from it.
-            boolean ambiguous = secondScore >= 0.78 && (bestScore - secondScore) < 0.04;
-            if (ambiguous) {
-                bestScore = bestScore * 0.90;
-            }
+            boolean ambiguous = secondScore >= MIN_MATCH_SCORE && (best.score() - secondScore) < 0.04;
 
             // The same name in several countries and nothing to tell them apart: whichever country comes first is a
             // guess, so no country may be offered with confidence. (Type and funding rarely differ between homonyms.)
@@ -522,12 +563,49 @@ public class RorMetadataProviderAdapter implements MetadataProviderPort {
                 homonymCountries = List.of();
             }
 
+            List<RankedCandidate> ranked = candidates.stream()
+                    .map(c -> new RankedCandidate(c.item(), c.item().path("id").asText(""), displayNameOf(c.item()), c.countryCode(), c.score()))
+                    .toList();
+            return new Ranking(ranked, homonymCountries, ambiguous, secondScore);
+        } catch (Exception e) {
+            log.warn("Error ranking ROR candidates for '{}': {}", queryOrgName, e.getMessage());
+            return null;
+        }
+    }
+
+    /** Minimum name score for a ROR record to count as a candidate at all. */
+    public static final double MIN_MATCH_SCORE = 0.78;
+
+    private MetadataInferenceResult parseRorResponse(
+            String queryOrgName,
+            String jsonBody,
+            List<CountryAggregate> countryCatalog,
+            List<TypeAggregate> typeCatalog,
+            Set<String> countryHints,
+            boolean hintIsAuthoritative) {
+        if (jsonBody == null || jsonBody.isBlank()) return null;
+
+        Ranking ranking = rankFromJson(queryOrgName, jsonBody, countryHints, hintIsAuthoritative);
+        if (ranking == null) {
+            return null;
+        }
+        try {
+            RankedCandidate best = ranking.candidates().get(0);
+            JsonNode bestItem = best.item();
+            double bestScore = best.score();
+
+            // Two different organizations match the name almost equally well (e.g. several campuses or
+            // homonymous institutions): the pick is a coin toss, so lower the confidence of everything derived from it.
+            if (ranking.ambiguous()) {
+                bestScore = bestScore * 0.90;
+            }
+
             String rorId = bestItem.path("id").asText("");
-            if (ambiguous) {
+            if (ranking.ambiguous()) {
                 rorId = rorId + "-ambiguous";
             }
 
-            InferenceResult countryResult = resolveCountryFromRorItem(bestItem, countryCatalog, bestScore, rorId, queryOrgName, homonymCountries);
+            InferenceResult countryResult = resolveCountryFromRorItem(bestItem, countryCatalog, bestScore, rorId, queryOrgName, ranking.homonymCountries());
             TypeInferenceResult typeResult = resolveTypeFromRorItem(bestItem, queryOrgName, typeCatalog, bestScore, rorId);
             FundingInferenceResult fundingResult = resolveFundingFromRorItem(bestItem, queryOrgName, bestScore, rorId);
 
