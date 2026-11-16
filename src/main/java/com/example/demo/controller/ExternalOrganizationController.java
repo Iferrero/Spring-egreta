@@ -612,16 +612,25 @@ public class ExternalOrganizationController {
                 .append("count", new Document("$sum", 1))),
             new Document("$sort", new Document("count", -1))
         );
-        List<Map<String, Object>> result = new ArrayList<>();
+        // Only the existing categories are listed. Organizations whose type is missing or is not one of them
+        // (stray labels, Pure defaults that are not offered) are counted together as "(desconegut)", so the
+        // listing never shows a category that does not exist.
+        Set<String> validLabels = new HashSet<>();
+        for (Map<String, String> t : typeCatalog()) {
+            validLabels.add(normalizeText(t.get("label")));
+        }
+        Map<String, Integer> counts = new LinkedHashMap<>();
         mongoTemplate.getDb().getCollection(externalOrganizationCollection)
             .aggregate(pipeline)
             .forEach(doc -> {
                 String label = doc.getString("_id");
-                result.add(Map.of(
-                    "label", label != null ? label : "(desconegut)",
-                    "count", doc.getInteger("count", 0)
-                ));
+                String key = (label != null && validLabels.contains(normalizeText(label))) ? label : "(desconegut)";
+                counts.merge(key, doc.getInteger("count", 0), Integer::sum);
             });
+        List<Map<String, Object>> result = new ArrayList<>();
+        counts.entrySet().stream()
+            .sorted((a, b) -> Integer.compare(b.getValue(), a.getValue()))
+            .forEach(e -> result.add(Map.of("label", e.getKey(), "count", e.getValue())));
         return result;
     }
 
@@ -833,6 +842,19 @@ public class ExternalOrganizationController {
     }
 
     public MetadataInferenceResult inferBestMetadata(
+            String orgUuid,
+            String orgName,
+            String explicitAssociatedPerson,
+            List<CountryAggregate> countryCatalog,
+            List<TypeAggregate> typeCatalog) {
+        MetadataInferenceResult raw = inferBestMetadataUnchecked(orgUuid, orgName, explicitAssociatedPerson, countryCatalog, typeCatalog);
+        if (raw == null) {
+            return null;
+        }
+        return new MetadataInferenceResult(raw.country(), onlyCatalogType(raw.type(), typeCatalog), raw.funding());
+    }
+
+    private MetadataInferenceResult inferBestMetadataUnchecked(
             String orgUuid,
             String orgName,
             String explicitAssociatedPerson,
@@ -1101,6 +1123,8 @@ public class ExternalOrganizationController {
                 typeResult = new TypeInferenceResult(nameProposal.type(), Math.min(0.85, Math.max(typeResult.confidence(), nameProposal.similarity())), nameProposal.reason());
             }
         }
+
+        typeResult = onlyCatalogType(typeResult, typeCatalog);
 
         // Si cal millorar la inferència de finançament a partir del nom net o del tipus
         if (fundingResult == null || fundingResult.fundingLabel().isBlank() || fundingResult.confidence() < 0.85) {
@@ -1678,6 +1702,37 @@ public class ExternalOrganizationController {
         }
     }
 
+    /** URIs of the organization-type categories that may be assigned: exactly the list typeCatalog() offers. */
+    private Set<String> assignableTypeUris() {
+        Set<String> uris = new HashSet<>();
+        for (Map<String, String> t : typeCatalog()) {
+            String uri = t.get("uri");
+            if (uri != null && !uri.isBlank()) {
+                uris.add(uri.trim());
+            }
+        }
+        return uris;
+    }
+
+    /**
+     * A suggested type is only valid when it is one of the existing categories. Free text coming from a provider or
+     * the LLM ("Hospital", "Centre de recerca"...) is dropped, never offered as a new category.
+     */
+    private TypeInferenceResult onlyCatalogType(TypeInferenceResult result, List<TypeAggregate> typeCatalog) {
+        if (result == null || result.typeLabel() == null || result.typeLabel().isBlank()) {
+            return result;
+        }
+        String wanted = normalizeText(result.typeLabel());
+        if (typeCatalog != null) {
+            for (TypeAggregate t : typeCatalog) {
+                if (t.normalizedLabel.equals(wanted)) {
+                    return new TypeInferenceResult(t.label, result.confidence(), result.reason());
+                }
+            }
+        }
+        return new TypeInferenceResult("", 0.0, "not-in-catalog:" + result.typeLabel());
+    }
+
     private ExternalOrganization.UriTerm resolveTypeUriTermFromPayload(
             String typeUri,
             String typeLabel,
@@ -1698,6 +1753,10 @@ public class ExternalOrganizationController {
         String safeUri = uri == null ? "" : uri.trim();
         if (safeUri.isBlank()) {
             return current;
+        }
+        // A type can only be linked to a category that already exists in Egreta's list.
+        if (!assignableTypeUris().contains(safeUri)) {
+            return null;
         }
 
         // 1. Intentar resolver desde Classificationschemes de Egreta
@@ -1746,17 +1805,8 @@ public class ExternalOrganizationController {
             return cloneUriTerm(matched.getType());
         }
 
-        ExternalOrganization.UriTerm term = cloneUriTerm(current);
-        if (term == null) term = new ExternalOrganization.UriTerm();
-        term.setUri(safeUri);
-        if (term.getTerm() == null || term.getTerm().isEmpty()) {
-            Map<String, String> localized = new LinkedHashMap<>();
-            localized.put("ca_ES", "");
-            localized.put("es_ES", "");
-            localized.put("en_GB", "");
-            term.setTerm(localized);
-        }
-        return term;
+        // The URI is in the list but its term could not be read: do not invent an empty-labelled category.
+        return null;
     }
 
     private Map<String, Object> syncExternalOrganizationTypeToEgreta(
@@ -3561,7 +3611,8 @@ public class ExternalOrganizationController {
             return current;
         }
 
-        // 1. Intentar resolver desde Classificationschemes de Egreta por coincidencia de texto
+        // 1. Resolve only against the categories that exist in Egreta's list (same ones typeCatalog() offers).
+        Set<String> assignableUris = assignableTypeUris();
         Query query = new Query(Criteria.where("baseUri").is("/dk/atira/pure/ueoexternalorganisation/ueoexternalorganisationtypes"));
         Document schemeDoc = mongoTemplate.findOne(query, Document.class, "Classificationschemes");
         if (schemeDoc != null) {
@@ -3569,6 +3620,9 @@ public class ExternalOrganizationController {
             List<Document> contained = (List<Document>) schemeDoc.get("containedClassifications");
             if (contained != null) {
                 for (Document c : contained) {
+                    if (!assignableUris.contains(Objects.toString(c.getString("uri"), "").trim())) {
+                        continue;
+                    }
                     Document termDoc = (Document) c.get("term");
                     if (termDoc != null) {
                         @SuppressWarnings("unchecked")
@@ -3606,19 +3660,10 @@ public class ExternalOrganizationController {
             }
         }
 
-        Query typeQuery = new Query(new Criteria().orOperator(
-            Criteria.where("type.term.ca_ES").regex("^" + Pattern.quote(label.trim()) + "$", "i"),
-            Criteria.where("type.term.es_ES").regex("^" + Pattern.quote(label.trim()) + "$", "i"),
-            Criteria.where("type.term.en_GB").regex("^" + Pattern.quote(label.trim()) + "$", "i")
-        ));
-        typeQuery.limit(1);
-
-        ExternalOrganization matched = mongoTemplate.findOne(typeQuery, ExternalOrganization.class);
-        if (matched != null && matched.getType() != null) {
-            return cloneUriTerm(matched.getType());
-        }
-
-        return fallbackUriTerm(label, current);
+        // Not one of the existing categories: refuse instead of creating a new one. The old fallback copied the type
+        // of any organization carrying that label, or invented a term, which is how "Hospital" and
+        // "Administració pública" ended up in the list.
+        return null;
     }
 
     private ExternalOrganization.UriTerm resolveCountryUriTerm(String label, ExternalOrganization.UriTerm current) {
