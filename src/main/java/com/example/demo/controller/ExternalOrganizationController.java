@@ -267,6 +267,14 @@ public class ExternalOrganizationController {
     @Autowired(required = false)
     private ReconciliationJobRegistry reconciliationJobRegistry;
 
+    /** The single ROR search implementation: the auto-apply flows used to carry their own, older copy of it. */
+    @Autowired(required = false)
+    private com.example.demo.curation.adapter.RorMetadataProviderAdapter rorProviderAdapter;
+
+    /** Ranks the existing type categories for a name; feeds the "3 options" shown next to the single suggestion. */
+    @Autowired(required = false)
+    private com.example.demo.curation.service.OrgTypeModel orgTypeModel;
+
     @Autowired(required = false)
     private com.example.demo.curation.service.SimilarityMatchingEngine similarityMatchingEngine;
 
@@ -884,7 +892,8 @@ public class ExternalOrganizationController {
                 ? typeCatalog.stream().map(t -> new com.example.demo.curation.model.TypeAggregate(t.label, t.normalizedLabel, t.count)).toList()
                 : List.of();
 
-            ProviderQueryContext ctx = new ProviderQueryContext(associatedPerson, pubTitle, doi, modelCountries, modelTypes);
+            ProviderQueryContext ctx = new ProviderQueryContext(associatedPerson, pubTitle, doi, modelCountries, modelTypes)
+                .withKnownCountry(knownCountryIso(orgUuid));
             com.example.demo.curation.model.MetadataInferenceResult engineRes = metadataEnrichmentEngine.inferMetadata(orgName, ctx);
             if (engineRes != null && engineRes.hasAnySignal()) {
                 // The providers' answer is only one candidate: the name heuristics are free and run locally, and
@@ -910,7 +919,7 @@ public class ExternalOrganizationController {
         // 1. Fast-path: ROR (Instantani, d'alta precisió i sense cost)
         MetadataInferenceResult rorResult = null;
         if (rorSuggestEnabled) {
-            rorResult = inferMetadataWithRor(orgName, countryCatalog, typeCatalog);
+            rorResult = inferMetadataWithRor(orgUuid, orgName, countryCatalog, typeCatalog);
             if (rorResult != null) {
                 if (rorResult.country() != null && !rorResult.country().countryLabel().isBlank()) {
                     countryCandidates.add(rorResult.country());
@@ -1148,6 +1157,8 @@ public class ExternalOrganizationController {
         out.put("suggestedType", typeResult.typeLabel());
         out.put("typeConfidence", typeResult.confidence());
         out.put("typeReason", typeResult.reason());
+        out.put("typeOptions", buildTypeOptions(orgName, orgUuid));
+        out.put("sources", buildSourceTrace(effectiveName));
         out.put("suggestedFunding", fundingResult != null ? fundingResult.fundingLabel() : "");
         out.put("suggestedFundingUri", resolveFundingUri(fundingResult != null ? fundingResult.fundingLabel() : ""));
         out.put("fundingConfidence", fundingResult != null ? fundingResult.confidence() : 0.0);
@@ -1718,6 +1729,85 @@ public class ExternalOrganizationController {
             }
         }
         return out;
+    }
+
+    /**
+     * ISO code of the country the organization already has in Egreta (it comes from Pure, so it is reliable), or null.
+     * It is what tells apart homonymous institutions in different countries.
+     */
+    private String knownCountryIso(String orgUuid) {
+        if (orgUuid == null || orgUuid.isBlank()) {
+            return null;
+        }
+        try {
+            ExternalOrganization org = mongoTemplate.findOne(new Query(Criteria.where("uuid").is(orgUuid.trim())), ExternalOrganization.class);
+            if (org == null || org.getAddress() == null || org.getAddress().getCountry() == null) {
+                return null;
+            }
+            String uri = Objects.toString(org.getAddress().getCountry().getUri(), "");
+            String tail = uri.substring(uri.lastIndexOf('/') + 1).trim().toUpperCase(Locale.ROOT);
+            return tail.matches("[A-Z]{2}") ? tail : null;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /** What each external source did for this organization (found / no-match / unavailable / error / skipped / disabled). */
+    private List<Map<String, Object>> buildSourceTrace(String name) {
+        List<Map<String, Object>> rows = new ArrayList<>();
+        if (metadataEnrichmentEngine == null) {
+            return rows;
+        }
+        for (MetadataEnrichmentEngine.SourceTrace t : metadataEnrichmentEngine.traceFor(name)) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("provider", t.provider());
+            row.put("status", t.status());
+            row.put("detail", t.detail());
+            rows.add(row);
+        }
+        return rows;
+    }
+
+    /**
+     * The three most likely type categories for this organization (best first), each with its URI and probability.
+     * Only categories that exist in Egreta's list are returned, so every option can be applied as is.
+     */
+    private List<Map<String, Object>> buildTypeOptions(String orgName, String orgUuid) {
+        List<Map<String, Object>> options = new ArrayList<>();
+        if (orgTypeModel == null || orgName == null || orgName.isBlank()) {
+            return options;
+        }
+        try {
+            String country = "";
+            if (orgUuid != null && !orgUuid.isBlank()) {
+                ExternalOrganization org = mongoTemplate.findOne(new Query(Criteria.where("uuid").is(orgUuid)), ExternalOrganization.class);
+                if (org != null && org.getAddress() != null && org.getAddress().getCountry() != null
+                        && org.getAddress().getCountry().getTerm() != null) {
+                    country = Objects.toString(org.getAddress().getCountry().getTerm().get("en_GB"), "");
+                }
+            }
+            Map<String, Map<String, String>> byLabel = new HashMap<>();
+            for (Map<String, String> t : typeCatalog()) {
+                byLabel.put(normalizeText(t.get("label")), t);
+            }
+            for (com.example.demo.curation.service.OrgTypeModel.Option o : orgTypeModel.topOptions(orgName, country, 8)) {
+                Map<String, String> category = byLabel.get(normalizeText(o.label()));
+                if (category == null) {
+                    continue; // never offer something that is not an existing category
+                }
+                Map<String, Object> row = new LinkedHashMap<>();
+                row.put("label", category.get("label"));
+                row.put("uri", category.get("uri"));
+                row.put("probability", Math.round(o.probability() * 1000.0) / 1000.0);
+                options.add(row);
+                if (options.size() == 3) {
+                    break;
+                }
+            }
+        } catch (Exception e) {
+            log.debug("Type options unavailable for '{}': {}", orgName, e.getMessage());
+        }
+        return options;
     }
 
     /** URIs of the organization-type categories that may be assigned: exactly the list typeCatalog() offers. */
@@ -5384,7 +5474,39 @@ public class ExternalOrganizationController {
             String orgName,
             List<CountryAggregate> countryCatalog,
             List<TypeAggregate> typeCatalog) {
+        return inferMetadataWithRor(null, orgName, countryCatalog, typeCatalog);
+    }
+
+    /**
+     * ROR lookup for an organization. Goes through {@link com.example.demo.curation.adapter.RorMetadataProviderAdapter},
+     * the one implementation that handles homonyms, uses the country Egreta already has for the organization and
+     * respects ROR's rate limit. The older copy below is only a fallback when the adapter is not available.
+     */
+    public MetadataInferenceResult inferMetadataWithRor(
+            String orgUuid,
+            String orgName,
+            List<CountryAggregate> countryCatalog,
+            List<TypeAggregate> typeCatalog) {
         if (!rorSuggestEnabled || orgName == null || orgName.isBlank()) return null;
+        if (rorProviderAdapter != null) {
+            try {
+                List<com.example.demo.curation.model.CountryAggregate> modelCountries = countryCatalog == null ? List.of()
+                    : countryCatalog.stream().map(c -> new com.example.demo.curation.model.CountryAggregate(c.label, c.normalizedLabel, c.count)).toList();
+                List<com.example.demo.curation.model.TypeAggregate> modelTypes = typeCatalog == null ? List.of()
+                    : typeCatalog.stream().map(t -> new com.example.demo.curation.model.TypeAggregate(t.label, t.normalizedLabel, t.count)).toList();
+                ProviderQueryContext ctx = ProviderQueryContext.withCatalogs(modelCountries, modelTypes)
+                    .withKnownCountry(knownCountryIso(orgUuid));
+                return rorProviderAdapter.inferMetadata(orgName, ctx)
+                    .map(r -> new MetadataInferenceResult(
+                        new InferenceResult(r.country().countryLabel(), r.country().confidence(), r.country().reason()),
+                        new TypeInferenceResult(r.type().typeLabel(), r.type().confidence(), r.type().reason()),
+                        new FundingInferenceResult(r.funding().fundingLabel(), r.funding().confidence(), r.funding().reason())))
+                    .orElse(null);
+            } catch (Exception e) {
+                log.debug("ROR lookup through the adapter failed for '{}': {}", orgName, e.getMessage());
+                return null;
+            }
+        }
         try {
             return inferMetadataWithRorAsync(orgName, countryCatalog, typeCatalog)
                     .get(rorSuggestTimeoutMs + AI_TIMEOUT_BUFFER_MS, TimeUnit.MILLISECONDS);
@@ -8187,7 +8309,7 @@ public class ExternalOrganizationController {
                             InferenceResult countryResult = null;
                             // 1. ROR
                             if (rorSuggestEnabled) {
-                                MetadataInferenceResult rorRes = inferMetadataWithRor(name, countryCatalog, typeCatalog);
+                                MetadataInferenceResult rorRes = inferMetadataWithRor(uuid, name, countryCatalog, typeCatalog);
                                 if (rorRes != null && rorRes.country() != null && !rorRes.country().countryLabel().isBlank() && rorRes.country().confidence() >= 0.85) {
                                     countryResult = rorRes.country();
                                 }
@@ -8490,7 +8612,7 @@ public class ExternalOrganizationController {
                             
                             TypeInferenceResult typeResult = null;
                             if (rorSuggestEnabled) {
-                                MetadataInferenceResult rorRes = inferMetadataWithRor(name, countryCatalog, typeCatalog);
+                                MetadataInferenceResult rorRes = inferMetadataWithRor(uuid, name, countryCatalog, typeCatalog);
                                 if (rorRes != null && rorRes.type() != null && !rorRes.type().typeLabel().isBlank() && rorRes.type().confidence() >= Math.max(0.85, confidenceThreshold)) {
                                     typeResult = rorRes.type();
                                 }
@@ -8762,7 +8884,7 @@ public class ExternalOrganizationController {
                             
                             FundingInferenceResult fundingResult = null;
                             if (rorSuggestEnabled) {
-                                MetadataInferenceResult rorRes = inferMetadataWithRor(name, countryCatalog, typeCatalog);
+                                MetadataInferenceResult rorRes = inferMetadataWithRor(uuid, name, countryCatalog, typeCatalog);
                                 if (rorRes != null && rorRes.funding() != null && !rorRes.funding().fundingLabel().isBlank() && rorRes.funding().confidence() >= Math.max(0.85, confidenceThreshold)) {
                                     fundingResult = rorRes.funding();
                                 }

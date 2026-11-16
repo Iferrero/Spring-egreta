@@ -29,6 +29,23 @@ public interface MetadataProviderPort {
     boolean isEnabled();
 
     /**
+     * Whether this provider must be queried for every organization even when the providers before it already gave a
+     * confident answer. The authoritative sources (ROR, Wikidata) return true so that they can confirm or contradict it;
+     * the others are skipped once every field is confident, to save time and external calls.
+     */
+    default boolean alwaysConsulted() {
+        return false;
+    }
+
+    /**
+     * True when the provider could not be reached right now (for example it is paused after being rate limited), as
+     * opposed to having been queried and found nothing. Only used to report the difference to the user.
+     */
+    default boolean isUnavailable() {
+        return false;
+    }
+
+    /**
      * Synchronously queries this provider for metadata suggestions on an organization name.
      */
     Optional<MetadataInferenceResult> inferMetadata(String organizationName, ProviderQueryContext context);

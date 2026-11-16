@@ -1,0 +1,1822 @@
+[
+ {
+  "name": "Oslo College",
+  "country": "Norway",
+  "top": [
+   {
+    "label": "Universitat",
+    "p": 0.922115
+   },
+   {
+    "label": "Centres i estructures universitaris i assimilats",
+    "p": 0.066017
+   },
+   {
+    "label": "Organisme, altres",
+    "p": 0.003321
+   },
+   {
+    "label": "Departament universitari",
+    "p": 0.002517
+   },
+   {
+    "label": "Fundació",
+    "p": 0.002472
+   }
+  ]
+ },
+ {
+  "name": "The Work Foundation",
+  "country": "United Kingdom",
+  "top": [
+   {
+    "label": "Fundació",
+    "p": 0.999769
+   },
+   {
+    "label": "Organisme, altres",
+    "p": 8.5e-05
+   },
+   {
+    "label": "Universitat",
+    "p": 6.5e-05
+   },
+   {
+    "label": "Agència estatal",
+    "p": 3.6e-05
+   },
+   {
+    "label": "Entitat empresarial",
+    "p": 3.3e-05
+   }
+  ]
+ },
+ {
+  "name": "ESSA",
+  "country": "Portugal",
+  "top": [
+   {
+    "label": "Universitat",
+    "p": 0.774301
+   },
+   {
+    "label": "Entitat empresarial",
+    "p": 0.150424
+   },
+   {
+    "label": "Associacions i agrupacions",
+    "p": 0.027558
+   },
+   {
+    "label": "Organisme, altres",
+    "p": 0.021599
+   },
+   {
+    "label": "Agència estatal",
+    "p": 0.00485
+   }
+  ]
+ },
+ {
+  "name": "Polymer Institute of Slovak Academy of Sciences",
+  "country": "Slovakia",
+  "top": [
+   {
+    "label": "Organisme públic d'investigació",
+    "p": 0.936915
+   },
+   {
+    "label": "Centre R+D",
+    "p": 0.038627
+   },
+   {
+    "label": "Universitat",
+    "p": 0.007778
+   },
+   {
+    "label": "Organisme, altres",
+    "p": 0.007074
+   },
+   {
+    "label": "Associacions i agrupacions",
+    "p": 0.004034
+   }
+  ]
+ },
+ {
+  "name": "Conservatoire botanique national de Franche-Comté – Observatoire régional des Invertébrés (CBNFC-ORI)",
+  "country": "France",
+  "top": [
+   {
+    "label": "Associacions i agrupacions",
+    "p": 0.701938
+   },
+   {
+    "label": "Organisme públic d'investigació",
+    "p": 0.16033
+   },
+   {
+    "label": "Centre R+D",
+    "p": 0.048192
+   },
+   {
+    "label": "Universitat",
+    "p": 0.034154
+   },
+   {
+    "label": "Organisme, altres",
+    "p": 0.018899
+   }
+  ]
+ },
+ {
+  "name": "Sentinel Node Society ",
+  "country": "",
+  "top": [
+   {
+    "label": "Associacions i agrupacions",
+    "p": 0.987702
+   },
+   {
+    "label": "Organisme, altres",
+    "p": 0.005902
+   },
+   {
+    "label": "Entitat empresarial",
+    "p": 0.004064
+   },
+   {
+    "label": "Universitat",
+    "p": 0.001594
+   },
+   {
+    "label": "Fundació",
+    "p": 0.000429
+   }
+  ]
+ },
+ {
+  "name": "Grupo Español Multidisciplinar en Cáncer Digestivo (GEMCAD)",
+  "country": "Spain",
+  "top": [
+   {
+    "label": "Entitat empresarial",
+    "p": 0.747229
+   },
+   {
+    "label": "Departament universitari",
+    "p": 0.074232
+   },
+   {
+    "label": "Associacions i agrupacions",
+    "p": 0.047653
+   },
+   {
+    "label": "Institucions sanitàries",
+    "p": 0.043523
+   },
+   {
+    "label": "Organisme públic d'investigació",
+    "p": 0.04305
+   }
+  ]
+ },
+ {
+  "name": "Universitat de Minnesota/Apple Computers",
+  "country": "United States",
+  "top": [
+   {
+    "label": "Universitat",
+    "p": 0.932365
+   },
+   {
+    "label": "Centres i estructures universitaris i assimilats",
+    "p": 0.031869
+   },
+   {
+    "label": "Departament universitari",
+    "p": 0.019893
+   },
+   {
+    "label": "Entitat empresarial",
+    "p": 0.009076
+   },
+   {
+    "label": "Centre R+D",
+    "p": 0.003278
+   }
+  ]
+ },
+ {
+  "name": "De Montfort University (DMU)",
+  "country": "United Kingdom",
+  "top": [
+   {
+    "label": "Universitat",
+    "p": 0.962952
+   },
+   {
+    "label": "Centres i estructures universitaris i assimilats",
+    "p": 0.015355
+   },
+   {
+    "label": "Institut Universitari d'investigació",
+    "p": 0.011692
+   },
+   {
+    "label": "Departament universitari",
+    "p": 0.006927
+   },
+   {
+    "label": "Organisme, altres",
+    "p": 0.000926
+   }
+  ]
+ },
+ {
+  "name": "UNED Dep. Psicología Básica",
+  "country": "Spain",
+  "top": [
+   {
+    "label": "Departament universitari",
+    "p": 0.998186
+   },
+   {
+    "label": "Centres i estructures universitaris i assimilats",
+    "p": 0.000748
+   },
+   {
+    "label": "Universitat",
+    "p": 0.000374
+   },
+   {
+    "label": "Entitat empresarial",
+    "p": 0.000268
+   },
+   {
+    "label": "Organisme públic d'investigació",
+    "p": 0.000125
+   }
+  ]
+ },
+ {
+  "name": "SEMERGEN.Diario Médico formación ",
+  "country": "El Salvador",
+  "top": [
+   {
+    "label": "Associacions i agrupacions",
+    "p": 0.847629
+   },
+   {
+    "label": "Entitat empresarial",
+    "p": 0.122642
+   },
+   {
+    "label": "Institucions sanitàries",
+    "p": 0.010712
+   },
+   {
+    "label": "Agència estatal",
+    "p": 0.005389
+   },
+   {
+    "label": "Fundació",
+    "p": 0.003906
+   }
+  ]
+ },
+ {
+  "name": "Athens Medical Center",
+  "country": "Greece",
+  "top": [
+   {
+    "label": "Institucions sanitàries",
+    "p": 0.997837
+   },
+   {
+    "label": "Universitat",
+    "p": 0.000932
+   },
+   {
+    "label": "Organisme públic d'investigació",
+    "p": 0.000428
+   },
+   {
+    "label": "Organisme, altres",
+    "p": 0.000297
+   },
+   {
+    "label": "Entitat empresarial",
+    "p": 0.000166
+   }
+  ]
+ },
+ {
+  "name": "Cognicor Technologies SL",
+  "country": "Spain",
+  "top": [
+   {
+    "label": "Entitat empresarial",
+    "p": 0.999616
+   },
+   {
+    "label": "Centres d'innovació i tecnologia",
+    "p": 0.00029
+   },
+   {
+    "label": "Organisme, altres",
+    "p": 3.8e-05
+   },
+   {
+    "label": "Universitat",
+    "p": 1.6e-05
+   },
+   {
+    "label": "Centre R+D",
+    "p": 8e-06
+   }
+  ]
+ },
+ {
+  "name": "G.I.S.T.A.L.",
+  "country": "Netherlands",
+  "top": [
+   {
+    "label": "Entitat empresarial",
+    "p": 0.991882
+   },
+   {
+    "label": "Associacions i agrupacions",
+    "p": 0.003467
+   },
+   {
+    "label": "Centre R+D",
+    "p": 0.001964
+   },
+   {
+    "label": "Fundació",
+    "p": 0.000452
+   },
+   {
+    "label": "Centres i estructures universitaris i assimilats",
+    "p": 0.000391
+   }
+  ]
+ },
+ {
+  "name": "McGill University Health Centre (MUHC)",
+  "country": "Canada",
+  "top": [
+   {
+    "label": "Institucions sanitàries",
+    "p": 0.907512
+   },
+   {
+    "label": "Centres i estructures universitaris i assimilats",
+    "p": 0.055453
+   },
+   {
+    "label": "Universitat",
+    "p": 0.022964
+   },
+   {
+    "label": "Institut Universitari d'investigació",
+    "p": 0.009284
+   },
+   {
+    "label": "Departament universitari",
+    "p": 0.003357
+   }
+  ]
+ },
+ {
+  "name": "Centro  de  Investigação  e  Estudos  de  Sociologia.  Universidade  de  Lisboa, Lisboa, Portugal.",
+  "country": "Portugal",
+  "top": [
+   {
+    "label": "Centres i estructures universitaris i assimilats",
+    "p": 0.72543
+   },
+   {
+    "label": "Institut Universitari d'investigació",
+    "p": 0.200106
+   },
+   {
+    "label": "Universitat",
+    "p": 0.058737
+   },
+   {
+    "label": "Departament universitari",
+    "p": 0.010332
+   },
+   {
+    "label": "Centre R+D",
+    "p": 0.002587
+   }
+  ]
+ },
+ {
+  "name": "Grup de Recerca  \"Treballs, institucions i gènere\" de la Universitat de Barcelona",
+  "country": "Spain",
+  "top": [
+   {
+    "label": "Centres i estructures universitaris i assimilats",
+    "p": 0.903276
+   },
+   {
+    "label": "Universitat",
+    "p": 0.089465
+   },
+   {
+    "label": "Organisme públic d'investigació",
+    "p": 0.003427
+   },
+   {
+    "label": "Fundació",
+    "p": 0.001677
+   },
+   {
+    "label": "Centre R+D",
+    "p": 0.001421
+   }
+  ]
+ },
+ {
+  "name": "Parc Hospitalari Martí i Julià",
+  "country": "Spain",
+  "top": [
+   {
+    "label": "Institucions sanitàries",
+    "p": 0.938044
+   },
+   {
+    "label": "Organisme, altres",
+    "p": 0.047123
+   },
+   {
+    "label": "Entitat empresarial",
+    "p": 0.005485
+   },
+   {
+    "label": "Institut Universitari d'investigació",
+    "p": 0.003824
+   },
+   {
+    "label": "Fundació",
+    "p": 0.00211
+   }
+  ]
+ },
+ {
+  "name": "XXI Reunión Nac. de la Sección de Ginec. Onc. y Pat. Mamaria.",
+  "country": "El Salvador",
+  "top": [
+   {
+    "label": "Departament universitari",
+    "p": 0.902789
+   },
+   {
+    "label": "Associacions i agrupacions",
+    "p": 0.053649
+   },
+   {
+    "label": "Organisme, altres",
+    "p": 0.01705
+   },
+   {
+    "label": "Institucions sanitàries",
+    "p": 0.008159
+   },
+   {
+    "label": "Fundació",
+    "p": 0.004689
+   }
+  ]
+ },
+ {
+  "name": "Institut svazu prumyslu Ceské republiky Sdruzen",
+  "country": "Czech Republic",
+  "top": [
+   {
+    "label": "Associacions i agrupacions",
+    "p": 0.871154
+   },
+   {
+    "label": "Fundació",
+    "p": 0.035939
+   },
+   {
+    "label": "Universitat",
+    "p": 0.026877
+   },
+   {
+    "label": "Entitat empresarial",
+    "p": 0.020871
+   },
+   {
+    "label": "Organisme, altres",
+    "p": 0.016716
+   }
+  ]
+ },
+ {
+  "name": "La Salle – Universitat Ramon Llull (La Salle–URL)",
+  "country": "Spain",
+  "top": [
+   {
+    "label": "Universitat",
+    "p": 0.619443
+   },
+   {
+    "label": "Centres i estructures universitaris i assimilats",
+    "p": 0.365641
+   },
+   {
+    "label": "Organisme, altres",
+    "p": 0.006352
+   },
+   {
+    "label": "Departament universitari",
+    "p": 0.005128
+   },
+   {
+    "label": "Institut Universitari d'investigació",
+    "p": 0.001236
+   }
+  ]
+ },
+ {
+  "name": "ESCUELA DE PRÁCTICA PSICOLÓGICA- UNIVERSIDAD DE MURCIA",
+  "country": "Spain",
+  "top": [
+   {
+    "label": "Centres i estructures universitaris i assimilats",
+    "p": 0.832531
+   },
+   {
+    "label": "Departament universitari",
+    "p": 0.111969
+   },
+   {
+    "label": "Universitat",
+    "p": 0.055068
+   },
+   {
+    "label": "Organisme públic d'investigació",
+    "p": 0.000149
+   },
+   {
+    "label": "Fundació",
+    "p": 7e-05
+   }
+  ]
+ },
+ {
+  "name": "SCHOOL OF MEDIA AND COMMUNICATIONS - UNIVERSITY OF HUMBERSIDE",
+  "country": "United Kingdom",
+  "top": [
+   {
+    "label": "Centres i estructures universitaris i assimilats",
+    "p": 0.8528
+   },
+   {
+    "label": "Universitat",
+    "p": 0.119951
+   },
+   {
+    "label": "Departament universitari",
+    "p": 0.02628
+   },
+   {
+    "label": "Institut Universitari d'investigació",
+    "p": 0.000734
+   },
+   {
+    "label": "Fundació",
+    "p": 0.000187
+   }
+  ]
+ },
+ {
+  "name": "The Stanley Medical Research Institute",
+  "country": "United States",
+  "top": [
+   {
+    "label": "Institucions sanitàries",
+    "p": 0.737738
+   },
+   {
+    "label": "Associacions i agrupacions",
+    "p": 0.076366
+   },
+   {
+    "label": "Centre R+D",
+    "p": 0.060569
+   },
+   {
+    "label": "Fundació",
+    "p": 0.035702
+   },
+   {
+    "label": "Organisme públic d'investigació",
+    "p": 0.035488
+   }
+  ]
+ },
+ {
+  "name": "Ministerio de Auntos Exteriores de Nicaragua",
+  "country": "Nicaragua",
+  "top": [
+   {
+    "label": "Agència estatal",
+    "p": 0.781526
+   },
+   {
+    "label": "Organisme, altres",
+    "p": 0.20275
+   },
+   {
+    "label": "Fundació",
+    "p": 0.012713
+   },
+   {
+    "label": "Universitat",
+    "p": 0.001569
+   },
+   {
+    "label": "Organisme públic d'investigació",
+    "p": 0.000589
+   }
+  ]
+ },
+ {
+  "name": "Perelman School of Medicine at the University of Pennsylvania",
+  "country": "United States",
+  "top": [
+   {
+    "label": "Centres i estructures universitaris i assimilats",
+    "p": 0.973885
+   },
+   {
+    "label": "Departament universitari",
+    "p": 0.016661
+   },
+   {
+    "label": "Universitat",
+    "p": 0.007426
+   },
+   {
+    "label": "Institut Universitari d'investigació",
+    "p": 0.001796
+   },
+   {
+    "label": "Entitat empresarial",
+    "p": 7.3e-05
+   }
+  ]
+ },
+ {
+  "name": "AG Erasmus - Agenția Națională pentru Programe Comunitare în Domeniul Educației și Formării Profesionale",
+  "country": "Romania",
+  "top": [
+   {
+    "label": "Agència estatal",
+    "p": 0.938237
+   },
+   {
+    "label": "Organisme, altres",
+    "p": 0.047853
+   },
+   {
+    "label": "Fundació",
+    "p": 0.003164
+   },
+   {
+    "label": "Universitat",
+    "p": 0.002877
+   },
+   {
+    "label": "Institucions sanitàries",
+    "p": 0.00269
+   }
+  ]
+ },
+ {
+  "name": "Secretary of State for Tourism (SETUR",
+  "country": "Spain",
+  "top": [
+   {
+    "label": "Organisme, altres",
+    "p": 0.78826
+   },
+   {
+    "label": "Agència estatal",
+    "p": 0.172019
+   },
+   {
+    "label": "Associacions i agrupacions",
+    "p": 0.021003
+   },
+   {
+    "label": "Organisme públic d'investigació",
+    "p": 0.00602
+   },
+   {
+    "label": "Universitat",
+    "p": 0.005806
+   }
+  ]
+ },
+ {
+  "name": "BIOS.CV– Environmental Conservation and Sustainable Development Association",
+  "country": "Cape Verde",
+  "top": [
+   {
+    "label": "Associacions i agrupacions",
+    "p": 0.986341
+   },
+   {
+    "label": "Organisme, altres",
+    "p": 0.004968
+   },
+   {
+    "label": "Universitat",
+    "p": 0.003295
+   },
+   {
+    "label": "Fundació",
+    "p": 0.002023
+   },
+   {
+    "label": "Centres i estructures universitaris i assimilats",
+    "p": 0.000986
+   }
+  ]
+ },
+ {
+  "name": "INoCs SaRL",
+  "country": "Switzerland",
+  "top": [
+   {
+    "label": "Entitat empresarial",
+    "p": 0.975415
+   },
+   {
+    "label": "Organisme, altres",
+    "p": 0.019587
+   },
+   {
+    "label": "Universitat",
+    "p": 0.001143
+   },
+   {
+    "label": "Fundació",
+    "p": 0.000926
+   },
+   {
+    "label": "Centre R+D",
+    "p": 0.000789
+   }
+  ]
+ },
+ {
+  "name": "Institut Català d'Oncologia, Departament de salut, Generalitat de Catalunya/Universitat de Barcelona",
+  "country": "Spain",
+  "top": [
+   {
+    "label": "Universitat",
+    "p": 0.779476
+   },
+   {
+    "label": "Institucions sanitàries",
+    "p": 0.060403
+   },
+   {
+    "label": "Organisme, altres",
+    "p": 0.04519
+   },
+   {
+    "label": "Departament universitari",
+    "p": 0.042493
+   },
+   {
+    "label": "Entitat gestora del sistema nacional de salut",
+    "p": 0.032813
+   }
+  ]
+ },
+ {
+  "name": "Centrum Wiskunde & Informatica (CWI)",
+  "country": "Netherlands",
+  "top": [
+   {
+    "label": "Organisme públic d'investigació",
+    "p": 0.684978
+   },
+   {
+    "label": "Centre R+D",
+    "p": 0.116572
+   },
+   {
+    "label": "Universitat",
+    "p": 0.052673
+   },
+   {
+    "label": "Centres i estructures universitaris i assimilats",
+    "p": 0.03078
+   },
+   {
+    "label": "Entitat empresarial",
+    "p": 0.0291
+   }
+  ]
+ },
+ {
+  "name": "Red de Desarrollo Urbano Sustentable de Latinoamérica y el Caribe (REDEUS_LAC)",
+  "country": "Chile",
+  "top": [
+   {
+    "label": "Associacions i agrupacions",
+    "p": 0.959484
+   },
+   {
+    "label": "Centres i estructures universitaris i assimilats",
+    "p": 0.01016
+   },
+   {
+    "label": "Organisme públic d'investigació",
+    "p": 0.008637
+   },
+   {
+    "label": "Organisme, altres",
+    "p": 0.006465
+   },
+   {
+    "label": "Agència estatal",
+    "p": 0.006365
+   }
+  ]
+ },
+ {
+  "name": "International Geographical Union",
+  "country": "Italy",
+  "top": [
+   {
+    "label": "Associacions i agrupacions",
+    "p": 0.904445
+   },
+   {
+    "label": "Organisme, altres",
+    "p": 0.07897
+   },
+   {
+    "label": "Entitat empresarial",
+    "p": 0.006912
+   },
+   {
+    "label": "Universitat",
+    "p": 0.002996
+   },
+   {
+    "label": "Organisme públic d'investigació",
+    "p": 0.001999
+   }
+  ]
+ },
+ {
+  "name": "NILU-Norwegian Institute for Air Research",
+  "country": "Norway",
+  "top": [
+   {
+    "label": "Organisme públic d'investigació",
+    "p": 0.886594
+   },
+   {
+    "label": "Centre R+D",
+    "p": 0.066327
+   },
+   {
+    "label": "Agència estatal",
+    "p": 0.016839
+   },
+   {
+    "label": "Institut Universitari d'investigació",
+    "p": 0.00751
+   },
+   {
+    "label": "Organisme, altres",
+    "p": 0.006381
+   }
+  ]
+ },
+ {
+  "name": "European Union (EU)",
+  "country": "Belgium",
+  "top": [
+   {
+    "label": "Organisme, altres",
+    "p": 0.957773
+   },
+   {
+    "label": "Associacions i agrupacions",
+    "p": 0.02994
+   },
+   {
+    "label": "Universitat",
+    "p": 0.00475
+   },
+   {
+    "label": "Entitat empresarial",
+    "p": 0.002019
+   },
+   {
+    "label": "Fundació",
+    "p": 0.001841
+   }
+  ]
+ },
+ {
+  "name": "Africa Society for Blood Transfusion (AfSBT)",
+  "country": "South Africa",
+  "top": [
+   {
+    "label": "Associacions i agrupacions",
+    "p": 0.958365
+   },
+   {
+    "label": "Organisme, altres",
+    "p": 0.028707
+   },
+   {
+    "label": "Entitat empresarial",
+    "p": 0.007775
+   },
+   {
+    "label": "Fundació",
+    "p": 0.002492
+   },
+   {
+    "label": "Universitat",
+    "p": 0.00095
+   }
+  ]
+ },
+ {
+  "name": "Unitat de Formació de l'Àrea de Desenvolupament de Persones de la UAB",
+  "country": "Spain",
+  "top": [
+   {
+    "label": "Centres i estructures universitaris i assimilats",
+    "p": 0.857757
+   },
+   {
+    "label": "Departament universitari",
+    "p": 0.105763
+   },
+   {
+    "label": "Organisme, altres",
+    "p": 0.016184
+   },
+   {
+    "label": "Universitat",
+    "p": 0.00999
+   },
+   {
+    "label": "Institut Universitari d'investigació",
+    "p": 0.003941
+   }
+  ]
+ },
+ {
+  "name": "Dipartimento d'italianistica Università di Bologna",
+  "country": "Italy",
+  "top": [
+   {
+    "label": "Departament universitari",
+    "p": 0.976623
+   },
+   {
+    "label": "Centres i estructures universitaris i assimilats",
+    "p": 0.011451
+   },
+   {
+    "label": "Universitat",
+    "p": 0.008805
+   },
+   {
+    "label": "Institut Universitari d'investigació",
+    "p": 0.002408
+   },
+   {
+    "label": "Agència estatal",
+    "p": 0.000241
+   }
+  ]
+ },
+ {
+  "name": "Departamento de Enseñanza de la Generalitat de Catalunya y Grupo de Relaciones Interculturales y de Marginación Social (GRIM) del Departamento de Antropología Social y Cultural de la UAB",
+  "country": "Spain",
+  "top": [
+   {
+    "label": "Departament universitari",
+    "p": 0.833134
+   },
+   {
+    "label": "Centres i estructures universitaris i assimilats",
+    "p": 0.116816
+   },
+   {
+    "label": "Organisme, altres",
+    "p": 0.016445
+   },
+   {
+    "label": "Universitat",
+    "p": 0.015528
+   },
+   {
+    "label": "Agència estatal",
+    "p": 0.012388
+   }
+  ]
+ },
+ {
+  "name": "Ajuntament de Sentmenat & Biblioteca Frederic Alfonso i Orfila",
+  "country": "Spain",
+  "top": [
+   {
+    "label": "Organisme, altres",
+    "p": 0.996997
+   },
+   {
+    "label": "Agència estatal",
+    "p": 0.002433
+   },
+   {
+    "label": "Entitat empresarial",
+    "p": 0.000215
+   },
+   {
+    "label": "Universitat",
+    "p": 0.000106
+   },
+   {
+    "label": "Institucions sanitàries",
+    "p": 7.8e-05
+   }
+  ]
+ },
+ {
+  "name": "Center for International Studies ",
+  "country": "France",
+  "top": [
+   {
+    "label": "Organisme públic d'investigació",
+    "p": 0.604275
+   },
+   {
+    "label": "Centre R+D",
+    "p": 0.111473
+   },
+   {
+    "label": "Centres i estructures universitaris i assimilats",
+    "p": 0.082828
+   },
+   {
+    "label": "Universitat",
+    "p": 0.082162
+   },
+   {
+    "label": "Organisme, altres",
+    "p": 0.064837
+   }
+  ]
+ },
+ {
+  "name": "Centro de Química-Física Molecular (CQFM), Instituto Superior Técnico, Universidade de Lisboa",
+  "country": "Portugal",
+  "top": [
+   {
+    "label": "Centres i estructures universitaris i assimilats",
+    "p": 0.967712
+   },
+   {
+    "label": "Institut Universitari d'investigació",
+    "p": 0.021618
+   },
+   {
+    "label": "Universitat",
+    "p": 0.0096
+   },
+   {
+    "label": "Departament universitari",
+    "p": 0.000544
+   },
+   {
+    "label": "Centres d'innovació i tecnologia",
+    "p": 0.000236
+   }
+  ]
+ },
+ {
+  "name": "Asociación de Historia Social i la Unitat Departamental d¿Història Social de la Universitat de Lleida",
+  "country": "Spain",
+  "top": [
+   {
+    "label": "Departament universitari",
+    "p": 0.807307
+   },
+   {
+    "label": "Universitat",
+    "p": 0.172526
+   },
+   {
+    "label": "Centres i estructures universitaris i assimilats",
+    "p": 0.014582
+   },
+   {
+    "label": "Associacions i agrupacions",
+    "p": 0.00421
+   },
+   {
+    "label": "Institut Universitari d'investigació",
+    "p": 0.00077
+   }
+  ]
+ },
+ {
+  "name": "University of Agriculture in Szcezin",
+  "country": "Poland",
+  "top": [
+   {
+    "label": "Universitat",
+    "p": 0.982197
+   },
+   {
+    "label": "Centres i estructures universitaris i assimilats",
+    "p": 0.011049
+   },
+   {
+    "label": "Fundació",
+    "p": 0.006519
+   },
+   {
+    "label": "Organisme públic d'investigació",
+    "p": 9.5e-05
+   },
+   {
+    "label": "Associacions i agrupacions",
+    "p": 4.3e-05
+   }
+  ]
+ },
+ {
+  "name": "Virtual Reality Ireland Media Ltd",
+  "country": "Ireland",
+  "top": [
+   {
+    "label": "Entitat empresarial",
+    "p": 0.996891
+   },
+   {
+    "label": "Associacions i agrupacions",
+    "p": 0.001332
+   },
+   {
+    "label": "Universitat",
+    "p": 0.000561
+   },
+   {
+    "label": "Organisme, altres",
+    "p": 0.000392
+   },
+   {
+    "label": "Agència estatal",
+    "p": 0.00024
+   }
+  ]
+ },
+ {
+  "name": "Khoo Teck Puat Hospital",
+  "country": "Singapore",
+  "top": [
+   {
+    "label": "Institucions sanitàries",
+    "p": 0.998674
+   },
+   {
+    "label": "Entitat empresarial",
+    "p": 0.000379
+   },
+   {
+    "label": "Universitat",
+    "p": 0.000312
+   },
+   {
+    "label": "Centre R+D",
+    "p": 0.000265
+   },
+   {
+    "label": "Organisme, altres",
+    "p": 0.000207
+   }
+  ]
+ },
+ {
+  "name": "Ajuntament d'Esplugues de Llobregat",
+  "country": "Spain",
+  "top": [
+   {
+    "label": "Agència estatal",
+    "p": 0.859577
+   },
+   {
+    "label": "Organisme, altres",
+    "p": 0.124379
+   },
+   {
+    "label": "Organisme públic d'investigació",
+    "p": 0.006856
+   },
+   {
+    "label": "Associacions i agrupacions",
+    "p": 0.006141
+   },
+   {
+    "label": "Centre R+D",
+    "p": 0.002146
+   }
+  ]
+ },
+ {
+  "name": "Max Planck Society",
+  "country": "Germany",
+  "top": [
+   {
+    "label": "Associacions i agrupacions",
+    "p": 0.947773
+   },
+   {
+    "label": "Organisme públic d'investigació",
+    "p": 0.03208
+   },
+   {
+    "label": "Centre R+D",
+    "p": 0.015744
+   },
+   {
+    "label": "Organisme, altres",
+    "p": 0.003219
+   },
+   {
+    "label": "Entitat empresarial",
+    "p": 0.000586
+   }
+  ]
+ },
+ {
+  "name": "Basque Country University Social Science",
+  "country": "Spain",
+  "top": [
+   {
+    "label": "Universitat",
+    "p": 0.917756
+   },
+   {
+    "label": "Departament universitari",
+    "p": 0.043247
+   },
+   {
+    "label": "Centre R+D",
+    "p": 0.012099
+   },
+   {
+    "label": "Fundació",
+    "p": 0.008337
+   },
+   {
+    "label": "Organisme, altres",
+    "p": 0.008113
+   }
+  ]
+ },
+ {
+  "name": "Laboratori de Conducta. Universitat Autònoma de Barcelona",
+  "country": "Spain",
+  "top": [
+   {
+    "label": "Institut Universitari d'investigació",
+    "p": 0.528761
+   },
+   {
+    "label": "Centres i estructures universitaris i assimilats",
+    "p": 0.249378
+   },
+   {
+    "label": "Universitat",
+    "p": 0.138804
+   },
+   {
+    "label": "Departament universitari",
+    "p": 0.072664
+   },
+   {
+    "label": "Centre R+D",
+    "p": 0.00708
+   }
+  ]
+ },
+ {
+  "name": "Lab Microbiol & Technol Marine Prod MICROTEC",
+  "country": "Spain",
+  "top": [
+   {
+    "label": "Departament universitari",
+    "p": 0.761521
+   },
+   {
+    "label": "Centres i estructures universitaris i assimilats",
+    "p": 0.098297
+   },
+   {
+    "label": "Entitat empresarial",
+    "p": 0.066663
+   },
+   {
+    "label": "Centre R+D",
+    "p": 0.027023
+   },
+   {
+    "label": "Associacions i agrupacions",
+    "p": 0.01581
+   }
+  ]
+ },
+ {
+  "name": "Societat Catalano-Balear de Cures Pa.liatives",
+  "country": "Spain",
+  "top": [
+   {
+    "label": "Associacions i agrupacions",
+    "p": 0.993925
+   },
+   {
+    "label": "Organisme, altres",
+    "p": 0.003622
+   },
+   {
+    "label": "Fundació",
+    "p": 0.001143
+   },
+   {
+    "label": "Entitat empresarial",
+    "p": 0.000651
+   },
+   {
+    "label": "Organisme públic d'investigació",
+    "p": 0.000274
+   }
+  ]
+ },
+ {
+  "name": "Faculty of Science, Sohag University",
+  "country": "Egypt",
+  "top": [
+   {
+    "label": "Centres i estructures universitaris i assimilats",
+    "p": 0.896443
+   },
+   {
+    "label": "Universitat",
+    "p": 0.072565
+   },
+   {
+    "label": "Departament universitari",
+    "p": 0.030856
+   },
+   {
+    "label": "Fundació",
+    "p": 4.4e-05
+   },
+   {
+    "label": "Institut Universitari d'investigació",
+    "p": 3.3e-05
+   }
+  ]
+ },
+ {
+  "name": "Fundació Societat i Cultura (FUSIC)",
+  "country": "Spain",
+  "top": [
+   {
+    "label": "Fundació",
+    "p": 0.997031
+   },
+   {
+    "label": "Entitat empresarial",
+    "p": 0.001496
+   },
+   {
+    "label": "Associacions i agrupacions",
+    "p": 0.001178
+   },
+   {
+    "label": "Universitat",
+    "p": 0.000192
+   },
+   {
+    "label": "Centre R+D",
+    "p": 5.5e-05
+   }
+  ]
+ },
+ {
+  "name": "Institute of Earth Surface Dynamics (IDYST), University of Lausanne",
+  "country": "Switzerland",
+  "top": [
+   {
+    "label": "Institut Universitari d'investigació",
+    "p": 0.90446
+   },
+   {
+    "label": "Universitat",
+    "p": 0.083474
+   },
+   {
+    "label": "Centres i estructures universitaris i assimilats",
+    "p": 0.006251
+   },
+   {
+    "label": "Centre R+D",
+    "p": 0.002529
+   },
+   {
+    "label": "Organisme públic d'investigació",
+    "p": 0.001142
+   }
+  ]
+ },
+ {
+  "name": "The Beckley Foundation",
+  "country": "United Kingdom",
+  "top": [
+   {
+    "label": "Fundació",
+    "p": 0.998593
+   },
+   {
+    "label": "Organisme, altres",
+    "p": 0.00096
+   },
+   {
+    "label": "Associacions i agrupacions",
+    "p": 0.000261
+   },
+   {
+    "label": "Entitat empresarial",
+    "p": 0.000115
+   },
+   {
+    "label": "Universitat",
+    "p": 1.9e-05
+   }
+  ]
+ },
+ {
+  "name": "Latin American Studies Association (LASA)",
+  "country": "United States",
+  "top": [
+   {
+    "label": "Associacions i agrupacions",
+    "p": 0.998918
+   },
+   {
+    "label": "Fundació",
+    "p": 0.000347
+   },
+   {
+    "label": "Entitat empresarial",
+    "p": 0.000323
+   },
+   {
+    "label": "Organisme, altres",
+    "p": 0.000151
+   },
+   {
+    "label": "Universitat",
+    "p": 0.000125
+   }
+  ]
+ },
+ {
+  "name": "Beijing Normal University – Hong Kong Baptist University United International College (BNU-HKBU, UIC)",
+  "country": "China",
+  "top": [
+   {
+    "label": "Universitat",
+    "p": 0.990364
+   },
+   {
+    "label": "Centres i estructures universitaris i assimilats",
+    "p": 0.008192
+   },
+   {
+    "label": "Institut Universitari d'investigació",
+    "p": 0.000573
+   },
+   {
+    "label": "Departament universitari",
+    "p": 0.000225
+   },
+   {
+    "label": "Associacions i agrupacions",
+    "p": 0.000212
+   }
+  ]
+ },
+ {
+  "name": "Nomen Food",
+  "country": "Spain",
+  "top": [
+   {
+    "label": "Entitat empresarial",
+    "p": 0.896782
+   },
+   {
+    "label": "Organisme, altres",
+    "p": 0.034729
+   },
+   {
+    "label": "Associacions i agrupacions",
+    "p": 0.031047
+   },
+   {
+    "label": "Fundació",
+    "p": 0.018588
+   },
+   {
+    "label": "Agència estatal",
+    "p": 0.013535
+   }
+  ]
+ },
+ {
+  "name": "Fundació Pare Manel",
+  "country": "",
+  "top": [
+   {
+    "label": "Fundació",
+    "p": 0.99934
+   },
+   {
+    "label": "Entitat empresarial",
+    "p": 0.000445
+   },
+   {
+    "label": "Organisme, altres",
+    "p": 8.8e-05
+   },
+   {
+    "label": "Universitat",
+    "p": 5.8e-05
+   },
+   {
+    "label": "Centre R+D",
+    "p": 1.8e-05
+   }
+  ]
+ },
+ {
+  "name": "Fundació Privada Pare Manel",
+  "country": "Spain",
+  "top": [
+   {
+    "label": "Fundació",
+    "p": 0.996973
+   },
+   {
+    "label": "Entitat empresarial",
+    "p": 0.002602
+   },
+   {
+    "label": "Organisme, altres",
+    "p": 0.000247
+   },
+   {
+    "label": "Associacions i agrupacions",
+    "p": 0.000108
+   },
+   {
+    "label": "Universitat",
+    "p": 2.9e-05
+   }
+  ]
+ },
+ {
+  "name": "Universitat Autònoma de Barcelona",
+  "country": "Spain",
+  "top": [
+   {
+    "label": "Universitat",
+    "p": 0.994873
+   },
+   {
+    "label": "Centres i estructures universitaris i assimilats",
+    "p": 0.004744
+   },
+   {
+    "label": "Departament universitari",
+    "p": 0.000333
+   },
+   {
+    "label": "Centre R+D",
+    "p": 3.1e-05
+   },
+   {
+    "label": "Institut Universitari d'investigació",
+    "p": 1.6e-05
+   }
+  ]
+ },
+ {
+  "name": "Hospital Clínic de Barcelona",
+  "country": "",
+  "top": [
+   {
+    "label": "Institucions sanitàries",
+    "p": 0.999999
+   },
+   {
+    "label": "Entitat empresarial",
+    "p": 0.0
+   },
+   {
+    "label": "Centre R+D",
+    "p": 0.0
+   },
+   {
+    "label": "Entitat gestora del sistema nacional de salut",
+    "p": 0.0
+   },
+   {
+    "label": "Centres i estructures universitaris i assimilats",
+    "p": 0.0
+   }
+  ]
+ },
+ {
+  "name": "Société Générale — Laboratoire d'Études",
+  "country": "France",
+  "top": [
+   {
+    "label": "Centre R+D",
+    "p": 0.321945
+   },
+   {
+    "label": "Universitat",
+    "p": 0.226442
+   },
+   {
+    "label": "Organisme públic d'investigació",
+    "p": 0.201488
+   },
+   {
+    "label": "Centres i estructures universitaris i assimilats",
+    "p": 0.185647
+   },
+   {
+    "label": "Entitat empresarial",
+    "p": 0.022271
+   }
+  ]
+ },
+ {
+  "name": "Straße der Wissenschaften GmbH",
+  "country": "Germany",
+  "top": [
+   {
+    "label": "Entitat empresarial",
+    "p": 0.632928
+   },
+   {
+    "label": "Universitat",
+    "p": 0.157724
+   },
+   {
+    "label": "Organisme, altres",
+    "p": 0.135888
+   },
+   {
+    "label": "Fundació",
+    "p": 0.027636
+   },
+   {
+    "label": "Centre R+D",
+    "p": 0.023606
+   }
+  ]
+ },
+ {
+  "name": "",
+  "country": "",
+  "top": [
+   {
+    "label": "Entitat empresarial",
+    "p": 0.723611
+   },
+   {
+    "label": "Universitat",
+    "p": 0.086058
+   },
+   {
+    "label": "Associacions i agrupacions",
+    "p": 0.073561
+   },
+   {
+    "label": "Organisme, altres",
+    "p": 0.058258
+   },
+   {
+    "label": "Organisme públic d'investigació",
+    "p": 0.017446
+   }
+  ]
+ },
+ {
+  "name": "X",
+  "country": "none",
+  "top": [
+   {
+    "label": "Entitat empresarial",
+    "p": 0.974149
+   },
+   {
+    "label": "Organisme, altres",
+    "p": 0.010671
+   },
+   {
+    "label": "Associacions i agrupacions",
+    "p": 0.006016
+   },
+   {
+    "label": "Universitat",
+    "p": 0.003685
+   },
+   {
+    "label": "Organisme públic d'investigació",
+    "p": 0.003094
+   }
+  ]
+ },
+ {
+  "name": "Ústav polymerů Slovenskej akadémie vied",
+  "country": "Slovakia",
+  "top": [
+   {
+    "label": "Organisme públic d'investigació",
+    "p": 0.44087
+   },
+   {
+    "label": "Organisme, altres",
+    "p": 0.210288
+   },
+   {
+    "label": "Institut Universitari d'investigació",
+    "p": 0.198062
+   },
+   {
+    "label": "Universitat",
+    "p": 0.055109
+   },
+   {
+    "label": "Centre R+D",
+    "p": 0.040225
+   }
+  ]
+ },
+ {
+  "name": "ESADE Business School",
+  "country": "",
+  "top": [
+   {
+    "label": "Centres i estructures universitaris i assimilats",
+    "p": 0.99353
+   },
+   {
+    "label": "Universitat",
+    "p": 0.004922
+   },
+   {
+    "label": "Departament universitari",
+    "p": 0.000571
+   },
+   {
+    "label": "Centre R+D",
+    "p": 0.00034
+   },
+   {
+    "label": "Centres d'innovació i tecnologia",
+    "p": 0.000176
+   }
+  ]
+ }
+]

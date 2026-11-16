@@ -36,6 +36,17 @@ public class InMemoryMetadataAdapter implements MetadataProviderPort {
         this.enabled = enabled;
     }
 
+    private boolean alwaysConsulted = false;
+
+    public void setAlwaysConsulted(boolean alwaysConsulted) {
+        this.alwaysConsulted = alwaysConsulted;
+    }
+
+    @Override
+    public boolean alwaysConsulted() {
+        return alwaysConsulted;
+    }
+
     @Override
     public String providerName() {
         return name;

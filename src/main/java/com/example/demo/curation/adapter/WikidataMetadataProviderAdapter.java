@@ -102,6 +102,14 @@ public class WikidataMetadataProviderAdapter implements MetadataProviderPort {
     @Value("${app.wikidata.suggest.user-agent:Spring-egreta/1.0 (research metadata enrichment; contact: egreta@uab.cat)}")
     private String userAgent = "Spring-egreta/1.0 (research metadata enrichment; contact: egreta@uab.cat)";
 
+    /** Minimum time between two requests to Wikidata, across all threads. */
+    @Value("${app.wikidata.suggest.min-interval-ms:250}")
+    private long minIntervalMs = 250;
+
+    private static final long MAX_QUEUE_WAIT_MS = 4000;
+    private final Object spacingLock = new Object();
+    private long nextSlotNanos = 0L;
+
     /** System.nanoTime() until which calls are skipped after a 429/503 (0 = not blocked). */
     private volatile long blockedUntilNanos = 0L;
     private volatile long lastWarnNanos = 0L;
@@ -137,6 +145,18 @@ public class WikidataMetadataProviderAdapter implements MetadataProviderPort {
     @Override
     public boolean isEnabled() {
         return enabled;
+    }
+
+    /** Wikidata is consulted for every organization so it can confirm or contradict the other sources. */
+    @Override
+    public boolean alwaysConsulted() {
+        return true;
+    }
+
+    /** Paused after a 429/503: the engine reports "unavailable" instead of "no match". */
+    @Override
+    public boolean isUnavailable() {
+        return isThrottled();
     }
 
     @Override
@@ -451,6 +471,8 @@ public class WikidataMetadataProviderAdapter implements MetadataProviderPort {
             throw new IllegalStateException("Wikidata paused after being rate limited (" + remainingMs / 1000 + "s left)");
         }
 
+        awaitTurn();
+
         HttpRequest req = HttpRequest.newBuilder()
                 .uri(URI.create(url))
                 .timeout(Duration.ofMillis(timeoutMs))
@@ -471,6 +493,27 @@ public class WikidataMetadataProviderAdapter implements MetadataProviderPort {
             throw new IllegalStateException("Wikidata HTTP " + status);
         }
         return objectMapper.readTree(resp.body());
+    }
+
+    /**
+     * Spaces the requests out: since Wikidata is consulted for every organization, bulk runs (the auto-apply uses 16
+     * threads) would otherwise send bursts, which is what gets a client rate limited. Callers queue for a slot; if the
+     * queue is longer than a few seconds the lookup is abandoned for that organization rather than piling up.
+     */
+    private void awaitTurn() throws InterruptedException {
+        long waitMs;
+        synchronized (spacingLock) {
+            long now = System.nanoTime();
+            long start = Math.max(now, nextSlotNanos);
+            waitMs = (start - now) / 1_000_000L;
+            if (waitMs > MAX_QUEUE_WAIT_MS) {
+                throw new IllegalStateException("Wikidata request queue is full (" + waitMs + " ms of backlog)");
+            }
+            nextSlotNanos = start + minIntervalMs * 1_000_000L;
+        }
+        if (waitMs > 0) {
+            Thread.sleep(waitMs);
+        }
     }
 
     /** Overridable so tests can simulate a throttled server. */
