@@ -167,4 +167,45 @@ public class WikidataMetadataProviderAdapterTest {
     public void testPriorityOrderingAgainstCrossref() {
         assertTrue(new WikidataMetadataProviderAdapter(MAPPER).priority() < new CrossrefMetadataProviderAdapter(MAPPER).priority());
     }
+
+    /** A server that always answers 429 with a Retry-After, counting how many requests actually reach it. */
+    private static class ThrottledWikidata extends WikidataMetadataProviderAdapter {
+        int sent = 0;
+
+        ThrottledWikidata() {
+            super(MAPPER);
+        }
+
+        @Override
+        protected java.net.http.HttpResponse<String> send(java.net.http.HttpRequest request) {
+            sent++;
+            java.net.http.HttpHeaders headers = java.net.http.HttpHeaders.of(Map.of("Retry-After", List.of("120")), (a, b) -> true);
+            return new java.net.http.HttpResponse<>() {
+                public int statusCode() { return 429; }
+                public java.net.http.HttpRequest request() { return request; }
+                public Optional<java.net.http.HttpResponse<String>> previousResponse() { return Optional.empty(); }
+                public java.net.http.HttpHeaders headers() { return headers; }
+                public String body() { return ""; }
+                public Optional<javax.net.ssl.SSLSession> sslSession() { return Optional.empty(); }
+                public java.net.URI uri() { return request.uri(); }
+                public java.net.http.HttpClient.Version version() { return java.net.http.HttpClient.Version.HTTP_1_1; }
+            };
+        }
+    }
+
+    @Test
+    public void testRateLimitingIsRespectedAndNotHammered() {
+        ThrottledWikidata adapter = new ThrottledWikidata();
+        assertFalse(adapter.isThrottled());
+
+        assertTrue(adapter.inferMetadata("Fundació Pare Manel", catalogs()).isEmpty());
+        assertEquals(1, adapter.sent, "the first request is the one that learns about the limit");
+        assertTrue(adapter.isThrottled());
+
+        // While paused no further request may reach Wikidata, however many organizations are asked about.
+        for (int i = 0; i < 25; i++) {
+            assertTrue(adapter.inferMetadata("Organització " + i, catalogs()).isEmpty());
+        }
+        assertEquals(1, adapter.sent, "requests kept going out while the provider was supposed to be paused");
+    }
 }

@@ -99,6 +99,13 @@ public class WikidataMetadataProviderAdapter implements MetadataProviderPort {
     @Value("${app.wikidata.suggest.deadline-ms:7000}")
     private long deadlineMs = 7000;
 
+    @Value("${app.wikidata.suggest.user-agent:Spring-egreta/1.0 (research metadata enrichment; contact: egreta@uab.cat)}")
+    private String userAgent = "Spring-egreta/1.0 (research metadata enrichment; contact: egreta@uab.cat)";
+
+    /** System.nanoTime() until which calls are skipped after a 429/503 (0 = not blocked). */
+    private volatile long blockedUntilNanos = 0L;
+    private volatile long lastWarnNanos = 0L;
+
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
 
@@ -157,7 +164,7 @@ public class WikidataMetadataProviderAdapter implements MetadataProviderPort {
                 }
             }
         } catch (Exception e) {
-            log.debug("Wikidata inference failed for '{}': {}", organizationName, e.getMessage());
+            warnOncePerMinute(organizationName, e);
         }
         return Optional.empty();
     }
@@ -437,17 +444,66 @@ public class WikidataMetadataProviderAdapter implements MetadataProviderPort {
 
     /** Overridable so tests can feed canned responses without network access. */
     protected JsonNode fetchJson(String url) throws Exception {
+        // Wikimedia answers 429/503 when a client is too aggressive. Respect it: stop calling until Retry-After has
+        // passed instead of firing the remaining requests (which only prolongs the throttling and slows every suggestion).
+        long remainingMs = (blockedUntilNanos - System.nanoTime()) / 1_000_000L;
+        if (blockedUntilNanos != 0 && remainingMs > 0) {
+            throw new IllegalStateException("Wikidata paused after being rate limited (" + remainingMs / 1000 + "s left)");
+        }
+
         HttpRequest req = HttpRequest.newBuilder()
                 .uri(URI.create(url))
                 .timeout(Duration.ofMillis(timeoutMs))
-                .header("User-Agent", "Spring-egreta/1.0 (research metadata enrichment)")
+                // Wikimedia asks API clients to identify themselves; anonymous generic agents are throttled first.
+                // Configure app.wikidata.suggest.user-agent with a contact (an address or a URL of the service owner).
+                .header("User-Agent", userAgent)
                 .header("Accept", "application/json")
                 .GET()
                 .build();
-        HttpResponse<String> resp = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
-        if (resp.statusCode() != 200 || resp.body() == null || resp.body().isBlank()) {
-            throw new IllegalStateException("Wikidata HTTP " + resp.statusCode());
+        HttpResponse<String> resp = send(req);
+        int status = resp.statusCode();
+        if (status == 429 || status == 503) {
+            long retryAfterSeconds = parseRetryAfterSeconds(resp.headers().firstValue("Retry-After").orElse(""));
+            blockedUntilNanos = System.nanoTime() + retryAfterSeconds * 1_000_000_000L;
+            throw new IllegalStateException("Wikidata HTTP " + status + " (rate limited, pausing " + retryAfterSeconds + "s)");
+        }
+        if (status != 200 || resp.body() == null || resp.body().isBlank()) {
+            throw new IllegalStateException("Wikidata HTTP " + status);
         }
         return objectMapper.readTree(resp.body());
+    }
+
+    /** Overridable so tests can simulate a throttled server. */
+    protected HttpResponse<String> send(HttpRequest request) throws Exception {
+        return httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
+    /** Seconds to wait from a Retry-After header (seconds form); a sane default when absent, capped at 10 minutes. */
+    static long parseRetryAfterSeconds(String header) {
+        long seconds = 60;
+        try {
+            if (header != null && !header.isBlank()) {
+                seconds = Long.parseLong(header.trim());
+            }
+        } catch (NumberFormatException ignored) {
+            // HTTP-date form: not worth parsing, keep the default
+        }
+        return Math.max(5, Math.min(seconds, 600));
+    }
+
+    /** True while the provider is paused because Wikidata rate limited us. */
+    public boolean isThrottled() {
+        return blockedUntilNanos != 0 && blockedUntilNanos - System.nanoTime() > 0;
+    }
+
+    /** One visible warning per minute: failures used to be logged at debug level, so a blocked provider looked healthy. */
+    private void warnOncePerMinute(String organizationName, Exception e) {
+        long now = System.nanoTime();
+        if (lastWarnNanos == 0 || now - lastWarnNanos > 60_000_000_000L) {
+            lastWarnNanos = now;
+            log.warn("Wikidata lookup failed (first of possibly many in this minute) for '{}': {}", organizationName, e.getMessage());
+        } else {
+            log.debug("Wikidata inference failed for '{}': {}", organizationName, e.getMessage());
+        }
     }
 }

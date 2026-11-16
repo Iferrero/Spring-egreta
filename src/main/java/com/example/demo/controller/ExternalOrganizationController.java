@@ -1432,34 +1432,23 @@ public class ExternalOrganizationController {
                     }
                     if (uri.isBlank()) continue;
 
-                    // Excluir los tipos estándar de Pure
+                    // Excluir los tipos estándar de Pure y el nodo raíz del esquema
                     String lowerUri = uri.toLowerCase();
-                    if (lowerUri.endsWith("/academic") 
-                            || lowerUri.endsWith("/corporate") 
-                            || lowerUri.endsWith("/government") 
-                            || lowerUri.endsWith("/medical") 
-                            || lowerUri.endsWith("/oth") 
-                            || lowerUri.endsWith("/unknown")) {
+                    if (lowerUri.endsWith("/academic")
+                            || lowerUri.endsWith("/corporate")
+                            || lowerUri.endsWith("/government")
+                            || lowerUri.endsWith("/medical")
+                            || lowerUri.endsWith("/oth")
+                            || lowerUri.endsWith("/unknown")
+                            || lowerUri.endsWith("/ueoexternalorganisation")) {
                         continue;
                     }
 
-                    String label = "";
-                    Document termDoc = (Document) c.get("term");
-                    if (termDoc != null) {
-                        @SuppressWarnings("unchecked")
-                        List<Document> textList = (List<Document>) termDoc.get("text");
-                        if (textList != null) {
-                            String ca = null, es = null, en = null;
-                            for (Document t : textList) {
-                                String locale = t.getString("locale");
-                                String val = t.getString("value");
-                                if ("ca_ES".equals(locale)) ca = val;
-                                else if ("es_ES".equals(locale)) es = val;
-                                else if ("en_GB".equals(locale)) en = val;
-                            }
-                            label = ca != null ? ca : (es != null ? es : (en != null ? en : ""));
-                        }
-                    }
+                    // The scheme stores term as {ca_ES, es_ES, en_GB}. It used to be read as term.text[], which does
+                    // not exist, so this list silently fell back to "whatever types organizations currently carry".
+                    Map<String, String> localized = localizedTermLabels(c.get("term"));
+                    String label = !localized.get("ca_ES").isBlank() ? localized.get("ca_ES")
+                        : (!localized.get("es_ES").isBlank() ? localized.get("es_ES") : localized.get("en_GB"));
                     label = label.trim();
                     if (!label.isBlank()) {
                         types.add(Map.of("uri", uri, "label", label));
@@ -1702,6 +1691,35 @@ public class ExternalOrganizationController {
         }
     }
 
+    /** Labels of a classification-scheme term in ca/es/en, whether stored as {ca_ES,...} or as text[{locale,value}]. */
+    private Map<String, String> localizedTermLabels(Object termObj) {
+        Map<String, String> out = new LinkedHashMap<>();
+        out.put("ca_ES", "");
+        out.put("es_ES", "");
+        out.put("en_GB", "");
+        if (!(termObj instanceof Document termDoc)) {
+            return out;
+        }
+        for (String locale : List.of("ca_ES", "es_ES", "en_GB")) {
+            Object v = termDoc.get(locale);
+            if (v instanceof String str && !str.isBlank()) {
+                out.put(locale, str.trim());
+            }
+        }
+        if (termDoc.get("text") instanceof List<?> list) {
+            for (Object o : list) {
+                if (o instanceof Document t) {
+                    String locale = t.getString("locale");
+                    String val = t.getString("value");
+                    if (locale != null && val != null && out.containsKey(locale) && out.get(locale).isBlank()) {
+                        out.put(locale, val.trim());
+                    }
+                }
+            }
+        }
+        return out;
+    }
+
     /** URIs of the organization-type categories that may be assigned: exactly the list typeCatalog() offers. */
     private Set<String> assignableTypeUris() {
         Set<String> uris = new HashSet<>();
@@ -1771,26 +1789,7 @@ public class ExternalOrganizationController {
                     if (curi.equals(safeUri)) {
                         ExternalOrganization.UriTerm term = new ExternalOrganization.UriTerm();
                         term.setUri(safeUri);
-                        Map<String, String> localized = new LinkedHashMap<>();
-                        String ca = "", es = "", en = "";
-                        Document termDoc = (Document) c.get("term");
-                        if (termDoc != null) {
-                            @SuppressWarnings("unchecked")
-                            List<Document> textList = (List<Document>) termDoc.get("text");
-                            if (textList != null) {
-                                for (Document t : textList) {
-                                    String locale = t.getString("locale");
-                                    String val = t.getString("value");
-                                    if ("ca_ES".equals(locale)) ca = val;
-                                    else if ("es_ES".equals(locale)) es = val;
-                                    else if ("en_GB".equals(locale)) en = val;
-                                }
-                            }
-                        }
-                        localized.put("ca_ES", ca != null ? ca.trim() : "");
-                        localized.put("es_ES", es != null ? es.trim() : "");
-                        localized.put("en_GB", en != null ? en.trim() : "");
-                        term.setTerm(localized);
+                        term.setTerm(localizedTermLabels(c.get("term")));
                         return term;
                     }
                 }
@@ -3623,38 +3622,14 @@ public class ExternalOrganizationController {
                     if (!assignableUris.contains(Objects.toString(c.getString("uri"), "").trim())) {
                         continue;
                     }
-                    Document termDoc = (Document) c.get("term");
-                    if (termDoc != null) {
-                        @SuppressWarnings("unchecked")
-                        List<Document> textList = (List<Document>) termDoc.get("text");
-                        if (textList != null) {
-                            String ca = "", es = "", en = "";
-                            boolean matched = false;
-                            for (Document t : textList) {
-                                String locale = t.getString("locale");
-                                String val = t.getString("value");
-                                if ("ca_ES".equals(locale)) {
-                                    ca = val;
-                                    if (normalizeText(val).equals(normalizedLabel)) matched = true;
-                                } else if ("es_ES".equals(locale)) {
-                                    es = val;
-                                    if (normalizeText(val).equals(normalizedLabel)) matched = true;
-                                } else if ("en_GB".equals(locale)) {
-                                    en = val;
-                                    if (normalizeText(val).equals(normalizedLabel)) matched = true;
-                                }
-                            }
-                            if (matched) {
-                                ExternalOrganization.UriTerm term = new ExternalOrganization.UriTerm();
-                                term.setUri(Objects.toString(c.getString("uri"), "").trim());
-                                Map<String, String> localized = new LinkedHashMap<>();
-                                localized.put("ca_ES", ca != null ? ca.trim() : "");
-                                localized.put("es_ES", es != null ? es.trim() : "");
-                                localized.put("en_GB", en != null ? en.trim() : "");
-                                term.setTerm(localized);
-                                return term;
-                            }
-                        }
+                    Map<String, String> localized = localizedTermLabels(c.get("term"));
+                    boolean matched = localized.values().stream()
+                        .anyMatch(v -> !v.isBlank() && normalizeText(v).equals(normalizedLabel));
+                    if (matched) {
+                        ExternalOrganization.UriTerm term = new ExternalOrganization.UriTerm();
+                        term.setUri(Objects.toString(c.getString("uri"), "").trim());
+                        term.setTerm(localized);
+                        return term;
                     }
                 }
             }
