@@ -394,6 +394,22 @@ function safeHtml(value) {
         .replace(/'/g, '&#39;');
 }
 
+// Enllaç a l'editor d'Egreta per pureId, obert en una finestra flotant.
+const EGRETA_EXTERNAL_ORG_BASE = 'https://egreta.uab.cat/admin/editor/dk/atira/pure/api/shared/model/ueo/externalorganisation/editor/ueoexternalorganisationeditor.xhtml?scheme=&type=&id=';
+function egretaOrgUrl(pureId) {
+    return pureId ? EGRETA_EXTERNAL_ORG_BASE + encodeURIComponent(pureId) : '#';
+}
+
+function openEgretaWindow(url) {
+    if (!url || url.endsWith('#')) return false;
+    const w = 1000, h = 750;
+    const left = Math.max(0, Math.round((screen.width - w) / 2));
+    const top = Math.max(0, Math.round((screen.height - h) / 2));
+    const win = window.open(url, 'egreta', `width=${w},height=${h},left=${left},top=${top},resizable=yes,scrollbars=yes`);
+    if (win) { win.focus(); return false; }
+    return true; // popup bloquejat: deixa que l'enllaç s'obri en una pestanya
+}
+
 function formatNameWithPureId(name, pureId) {
     const base = String(name || '').trim();
     const pid  = String(pureId || '').trim();
@@ -432,8 +448,43 @@ function getCachedQueryResult(key) {
     return entry.payload;
 }
 
-function setCachedQueryResult(key, payload) {
-    queryCache.set(key, { timestamp: Date.now(), payload });
+// Un resultat calculat per a un llindar baix conté el d'un llindar més alt: si no està truncat,
+// o si el llindar nou supera el valor més baix conservat, filtrar-lo dóna exactament el mateix
+// que tornar a calcular-lo al servidor.
+function findReusableResult(similarity) {
+    const suffix = '|' + graphLimit + '|' + maxPairs;
+    const now = Date.now();
+    let best = null;
+    for (const [key, entry] of queryCache) {
+        if (!key.endsWith(suffix) || typeof entry.similarity !== 'number') continue;
+        if ((now - entry.timestamp) > queryCacheTtlMs) continue;
+        if (entry.similarity > similarity + 1e-9) continue;
+        const payload = entry.payload;
+        if (!payload || !Array.isArray(payload.pairs)) continue;
+        if (payload.truncated) {
+            const minKept = payload.pairs.reduce((m, p) => Math.min(m, p.value), Infinity);
+            if (!(similarity > minKept + 1e-9)) continue;
+        }
+        if (!best || entry.similarity > best.similarity) best = entry;
+    }
+    return best;
+}
+
+function deriveResultForThreshold(base, similarity) {
+    const pairs = base.pairs.filter(p => p.value >= similarity - 1e-9);
+    const connected = new Set();
+    pairs.forEach(p => { connected.add(p.from); connected.add(p.to); });
+    return Object.assign({}, base, {
+        pairs,
+        threshold: similarity,
+        truncated: false,
+        totalPairs: pairs.length,
+        totalConnectedOrgs: connected.size
+    });
+}
+
+function setCachedQueryResult(key, payload, similarity) {
+    queryCache.set(key, { timestamp: Date.now(), payload, similarity });
     // LRU: eliminar l'entrada més antiga si superem el límit
     if (queryCache.size > queryCacheMaxEntries) {
         queryCache.delete(queryCache.keys().next().value);
@@ -624,11 +675,10 @@ function renderTable() {
         const rightBase = (p.rightLabel || '').split(' (')[0];
         const leftPureId = p.leftPureId ? ` (${safeHtml(p.leftPureId)})` : '';
         const rightPureId = p.rightPureId ? ` (${safeHtml(p.rightPureId)})` : '';
-        const EGRETA_EXTERNAL_ORG_BASE = 'https://egreta.uab.cat/admin/editor/dk/atira/pure/api/shared/model/ueo/externalorganisation/editor/ueoexternalorganisationeditor.xhtml?scheme=&type=&id=';
-        const leftUrl = p.leftPureId ? EGRETA_EXTERNAL_ORG_BASE + encodeURIComponent(p.leftPureId) : '#';
-        const rightUrl = p.rightPureId ? EGRETA_EXTERNAL_ORG_BASE + encodeURIComponent(p.rightPureId) : '#';
-        const leftChip  = `<a href="${leftUrl}" class="sim-chip" style="background:${leftGreen ? '#4ade80' : '#e0f2fe'};color:${leftGreen ? '#14532d' : '#0c4a6e'};text-decoration:none;" target="_blank" onclick="window.open('${leftUrl}','egreta','width=900,height=700,scrollbars=yes');return false;">${safeHtml(leftBase)}${leftPureId}</a>`;
-        const rightChip = `<a href="${rightUrl}" class="sim-chip" style="background:${rightGreen ? '#4ade80' : '#e0f2fe'};color:${rightGreen ? '#14532d' : '#0c4a6e'};text-decoration:none;" target="_blank" onclick="window.open('${rightUrl}','egreta','width=900,height=700,scrollbars=yes');return false;">${safeHtml(rightBase)}${rightPureId}</a>`;
+        const leftUrl = egretaOrgUrl(p.leftPureId);
+        const rightUrl = egretaOrgUrl(p.rightPureId);
+        const leftChip  = `<a href="${leftUrl}" class="sim-chip" style="background:${leftGreen ? '#4ade80' : '#e0f2fe'};color:${leftGreen ? '#14532d' : '#0c4a6e'};text-decoration:none;" target="_blank" onclick="return openEgretaWindow(this.href);">${safeHtml(leftBase)}${leftPureId}</a>`;
+        const rightChip = `<a href="${rightUrl}" class="sim-chip" style="background:${rightGreen ? '#4ade80' : '#e0f2fe'};color:${rightGreen ? '#14532d' : '#0c4a6e'};text-decoration:none;" target="_blank" onclick="return openEgretaWindow(this.href);">${safeHtml(rightBase)}${rightPureId}</a>`;
         const fromEnc = encodeURIComponent(p.from || '');
         const toEnc = encodeURIComponent(p.to || '');
         const leftEnc = encodeURIComponent(leftBase || '');
@@ -691,9 +741,8 @@ function renderClusters() {
             const workflow = (info.workflow || '').toLowerCase();
             const pureId = info.pureId ? ` (${safeHtml(info.pureId)})` : '';
             const isGreen = workflow === 'approved' || workflow === 'validated';
-            const EGRETA_EXTERNAL_ORG_BASE = 'https://egreta.uab.cat/admin/editor/dk/atira/pure/api/shared/model/ueo/externalorganisation/editor/ueoexternalorganisationeditor.xhtml?scheme=&type=&id=';
-            const url = info.pureId ? EGRETA_EXTERNAL_ORG_BASE + encodeURIComponent(info.pureId) : '#';
-            return `<a href=\"${url}\" class=\"sim-chip\" style=\"background:${isGreen ? '#4ade80' : '#e0f2fe'};color:${isGreen ? '#14532d' : '#0c4a6e'};margin-bottom:2px;display:inline-block;text-decoration:none;\" target=\"_blank\" onclick=\"window.open('${url}','egreta','width=900,height=700,scrollbars=yes');return false;\">${safeHtml((info.label || '').split(' (')[0])}${pureId}</a>`;
+            const url = egretaOrgUrl(info.pureId);
+            return `<a href=\"${url}\" class=\"sim-chip\" style=\"background:${isGreen ? '#4ade80' : '#e0f2fe'};color:${isGreen ? '#14532d' : '#0c4a6e'};margin-bottom:2px;display:inline-block;text-decoration:none;\" target=\"_blank\" onclick=\"return openEgretaWindow(this.href);\">${safeHtml((info.label || '').split(' (')[0])}${pureId}</a>`;
         }).join(' ');
         const extra   = c.sorted.length > 12 ? '<div class="text-slate-400">... +' + (c.sorted.length - 12) + ' més</div>' : '';
         // Botón para ir a merge
@@ -895,7 +944,15 @@ async function loadGraph() {
     const requestId  = ++activeRequestId;
     const similarity = parseFloat(document.getElementById('similaritySlider').value);
     const cacheKey   = makeQueryCacheKey(similarity);
-    const cached     = getCachedQueryResult(cacheKey);
+    let cached       = getCachedQueryResult(cacheKey);
+
+    if (!cached) {
+        const base = findReusableResult(similarity);
+        if (base) {
+            cached = deriveResultForThreshold(base.payload, similarity);
+            setCachedQueryResult(cacheKey, cached, similarity);
+        }
+    }
 
     if (cached) {
         currentData = cached;
@@ -914,7 +971,7 @@ async function loadGraph() {
         if (requestId !== activeRequestId || !data) return;
 
         currentData = data;
-        setCachedQueryResult(cacheKey, data);
+        setCachedQueryResult(cacheKey, data, similarity);
         updateStats(); buildPairs(); buildClusters();
         if (currentMode === 'table') renderTable(); else renderClusters();
     } catch (e) {
@@ -962,8 +1019,14 @@ document.getElementById('btnExport').addEventListener('click', () => {
 
     const clusterRows = [];
     (currentClusters || []).forEach((cluster, index) => {
-        (cluster.names || []).forEach((name, memberIndex) => {
-            clusterRows.push({ Cluster: index + 1, Mida_Cluster: cluster.size, Posicio: memberIndex + 1, Nom: name });
+        (cluster.sorted || []).forEach((info, memberIndex) => {
+            clusterRows.push({
+                Cluster: index + 1,
+                Mida_Cluster: cluster.size,
+                Posicio: memberIndex + 1,
+                Nom: info.label || '',
+                PureId: info.pureId || ''
+            });
         });
     });
 
