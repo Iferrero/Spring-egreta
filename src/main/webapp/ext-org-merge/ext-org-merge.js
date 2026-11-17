@@ -202,9 +202,10 @@ function updateMergeBtn() {
 
 
 // Permitir elegir si se usa Egreta o MongoDB local
-let useEgreta = false;
+let useEgreta = true;
 const egretaCheckbox = document.getElementById('egretaCheckbox');
 if (egretaCheckbox) {
+  useEgreta = !!egretaCheckbox.checked;
   egretaCheckbox.onchange = (e) => {
     useEgreta = !!e.target.checked;
   };
