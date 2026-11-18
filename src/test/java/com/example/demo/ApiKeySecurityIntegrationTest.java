@@ -125,7 +125,7 @@ public class ApiKeySecurityIntegrationTest {
                     assertNotEquals(403, status);
                 });
 
-        mockMvc.perform(get("/mapa-territori-data.js")
+        mockMvc.perform(get("/api/mapa-territori/status")
                 .with(httpBasic("territori", "UAB")))
                 .andExpect(result -> {
                     int status = result.getResponse().getStatus();
