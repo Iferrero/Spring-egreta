@@ -1,0 +1,2702 @@
+{
+"placeholderOrgNames": [
+"",
+"-",
+"--",
+"altres",
+"clientes varios",
+"clients varis",
+"desconegut",
+"desconocido",
+"empresa privada",
+"n a",
+"no aplica",
+"otros",
+"remesa micromecenatge",
+"sense definir",
+"sense entitat",
+"sin definir",
+"sin entidad",
+"unknown",
+"varios",
+"varis"
+],
+"nonCatCities": [
+"alacant",
+"albacete",
+"alcala de henares",
+"alcobendas",
+"alcoi",
+"alcorcon",
+"alcoy",
+"algeciras",
+"alicante",
+"almeria",
+"amsterdam",
+"aranda de duero",
+"arganda del rey",
+"arrasate",
+"arrecife",
+"arrigorriaga",
+"avila",
+"aviles",
+"badajoz",
+"barajas",
+"barakaldo",
+"beijing",
+"benidorm",
+"berlin",
+"bilbao",
+"boadilla del monte",
+"boston",
+"brussels",
+"bruxelles",
+"burgos",
+"caceres",
+"cadiz",
+"cambridge",
+"cartagena",
+"castello de la plana",
+"castellon",
+"ceuta",
+"ciudad real",
+"colmenar viejo",
+"cordoba",
+"coslada",
+"cuenca",
+"derio",
+"donostia",
+"dos hermanas",
+"durango",
+"eibar",
+"eivissa",
+"elche",
+"elda",
+"elx",
+"erandio",
+"ferrol",
+"fuengirola",
+"fuenlabrada",
+"gandia",
+"gasteiz",
+"geneva",
+"getafe",
+"getxo",
+"gijon",
+"granada",
+"guadalajara",
+"hernani",
+"huelva",
+"huesca",
+"ibiza",
+"inca",
+"irun",
+"iruna",
+"jaen",
+"jerez",
+"la laguna",
+"las palmas",
+"las rozas",
+"leganes",
+"leioa",
+"leon",
+"linares",
+"lisboa",
+"lisbon",
+"logrono",
+"london",
+"lorca",
+"lugo",
+"madrid",
+"mahon",
+"majadahonda",
+"malaga",
+"manacor",
+"mao",
+"marbella",
+"melilla",
+"merida",
+"milan",
+"milano",
+"miranda de ebro",
+"molina de segura",
+"mondragon",
+"mostoles",
+"motril",
+"munich",
+"murcia",
+"new york",
+"orihuela",
+"ourense",
+"oviedo",
+"oxford",
+"palencia",
+"palma",
+"palma de mallorca",
+"pamplona",
+"paris",
+"parla",
+"paterna",
+"pinto",
+"plasencia",
+"ponferrada",
+"pontevedra",
+"porto",
+"pozuelo",
+"pozuelo de alarcon",
+"puertollano",
+"rivas vaciamadrid",
+"roma",
+"rome",
+"roquetas de mar",
+"sagunt",
+"sagunto",
+"salamanca",
+"san sebastian",
+"san sebastian de los reyes",
+"san vicente del raspeig",
+"santa cruz de tenerife",
+"santander",
+"santiago de compostela",
+"segovia",
+"sevilla",
+"shanghai",
+"soria",
+"talavera de la reina",
+"telde",
+"teruel",
+"tokyo",
+"toledo",
+"torrejon de ardoz",
+"torrelavega",
+"torrent",
+"torrevieja",
+"tres cantos",
+"tudela",
+"valdemoro",
+"valencia",
+"valladolid",
+"vigo",
+"vitoria",
+"zamora",
+"zamudio",
+"zaragoza",
+"zurich"
+],
+"nonCatRegions": [
+"andalucia",
+"anzoategui",
+"aragon",
+"argentina",
+"asturias",
+"belgium",
+"brasil",
+"brazil",
+"canada",
+"canarias",
+"cantabria",
+"castilla la mancha",
+"castilla y leon",
+"chile",
+"china",
+"colombia",
+"comunidad de madrid",
+"comunidad valenciana",
+"comunitat valenciana",
+"deutschland",
+"euskadi",
+"extremadura",
+"france",
+"francia",
+"galicia",
+"generalitat valenciana",
+"germany",
+"gobierno balear",
+"gobierno de aragon",
+"gobierno de canarias",
+"gobierno vasco",
+"govern balear",
+"govern de les illes balears",
+"gran canaria",
+"illes balears",
+"islas baleares",
+"italia",
+"italy",
+"japan",
+"junta de andalucia",
+"la rioja",
+"madrid",
+"mexico",
+"navarra",
+"netherlands",
+"pais vasco",
+"peru",
+"portugal",
+"principado de asturias",
+"region de murcia",
+"switzerland",
+"tenerife",
+"united kingdom",
+"united states",
+"usa",
+"venezuela",
+"xunta de galicia"
+],
+"catMunicipisProv": [
+[
+"barcelona",
+"Barcelona"
+],
+[
+"hospitalet",
+"Barcelona"
+],
+[
+"l hospitalet de llobregat",
+"Barcelona"
+],
+[
+"hospitalet de llobregat",
+"Barcelona"
+],
+[
+"badalona",
+"Barcelona"
+],
+[
+"terrassa",
+"Barcelona"
+],
+[
+"sabadell",
+"Barcelona"
+],
+[
+"mataro",
+"Barcelona"
+],
+[
+"santa coloma de gramenet",
+"Barcelona"
+],
+[
+"cornella",
+"Barcelona"
+],
+[
+"cornella de llobregat",
+"Barcelona"
+],
+[
+"sant boi",
+"Barcelona"
+],
+[
+"sant boi de llobregat",
+"Barcelona"
+],
+[
+"sant cugat",
+"Barcelona"
+],
+[
+"sant cugat del valles",
+"Barcelona"
+],
+[
+"rubi",
+"Barcelona"
+],
+[
+"manresa",
+"Barcelona"
+],
+[
+"vilanova i la geltru",
+"Barcelona"
+],
+[
+"viladecans",
+"Barcelona"
+],
+[
+"castelldefels",
+"Barcelona"
+],
+[
+"el prat",
+"Barcelona"
+],
+[
+"el prat de llobregat",
+"Barcelona"
+],
+[
+"granollers",
+"Barcelona"
+],
+[
+"cerdanyola",
+"Barcelona"
+],
+[
+"cerdanyola del valles",
+"Barcelona"
+],
+[
+"bellaterra",
+"Barcelona"
+],
+[
+"mollet",
+"Barcelona"
+],
+[
+"mollet del valles",
+"Barcelona"
+],
+[
+"esplugues",
+"Barcelona"
+],
+[
+"esplugues de llobregat",
+"Barcelona"
+],
+[
+"gava",
+"Barcelona"
+],
+[
+"vic",
+"Barcelona"
+],
+[
+"sant feliu de llobregat",
+"Barcelona"
+],
+[
+"igualada",
+"Barcelona"
+],
+[
+"vilafranca del penedes",
+"Barcelona"
+],
+[
+"ripollet",
+"Barcelona"
+],
+[
+"sant adria de besos",
+"Barcelona"
+],
+[
+"montcada i reixac",
+"Barcelona"
+],
+[
+"sant joan despi",
+"Barcelona"
+],
+[
+"barbera del valles",
+"Barcelona"
+],
+[
+"premia de mar",
+"Barcelona"
+],
+[
+"sant vicenc dels horts",
+"Barcelona"
+],
+[
+"sitges",
+"Barcelona"
+],
+[
+"martorell",
+"Barcelona"
+],
+[
+"pineda de mar",
+"Barcelona"
+],
+[
+"santa perpetua de mogoda",
+"Barcelona"
+],
+[
+"molins de rei",
+"Barcelona"
+],
+[
+"calella",
+"Barcelona"
+],
+[
+"castellar del valles",
+"Barcelona"
+],
+[
+"parets del valles",
+"Barcelona"
+],
+[
+"caldes de montbui",
+"Barcelona"
+],
+[
+"berga",
+"Barcelona"
+],
+[
+"cardedeu",
+"Barcelona"
+],
+[
+"les franqueses del valles",
+"Barcelona"
+],
+[
+"canovelles",
+"Barcelona"
+],
+[
+"malgrat de mar",
+"Barcelona"
+],
+[
+"espai barcelona",
+"Barcelona"
+],
+[
+"sant just desvern",
+"Barcelona"
+],
+[
+"tiana",
+"Barcelona"
+],
+[
+"montgat",
+"Barcelona"
+],
+[
+"el masnou",
+"Barcelona"
+],
+[
+"arenys de mar",
+"Barcelona"
+],
+[
+"sant celoni",
+"Barcelona"
+],
+[
+"la garriga",
+"Barcelona"
+],
+[
+"manlleu",
+"Barcelona"
+],
+[
+"torello",
+"Barcelona"
+],
+[
+"sant quirze del valles",
+"Barcelona"
+],
+[
+"polinya",
+"Barcelona"
+],
+[
+"palau solita i plegamans",
+"Barcelona"
+],
+[
+"abrera",
+"Barcelona"
+],
+[
+"esparreguera",
+"Barcelona"
+],
+[
+"olesa de montserrat",
+"Barcelona"
+],
+[
+"sant andreu de la barca",
+"Barcelona"
+],
+[
+"cubelles",
+"Barcelona"
+],
+[
+"sant pere de ribes",
+"Barcelona"
+],
+[
+"vilanova del cami",
+"Barcelona"
+],
+[
+"masquefa",
+"Barcelona"
+],
+[
+"cabrils",
+"Barcelona"
+],
+[
+"vilassar de mar",
+"Barcelona"
+],
+[
+"sant pol de mar",
+"Barcelona"
+],
+[
+"matadepera",
+"Barcelona"
+],
+[
+"vacarisses",
+"Barcelona"
+],
+[
+"llicia",
+"Barcelona"
+],
+[
+"llica d amunt",
+"Barcelona"
+],
+[
+"vallromanes",
+"Barcelona"
+],
+[
+"cabrera de mar",
+"Barcelona"
+],
+[
+"alella",
+"Barcelona"
+],
+[
+"girona",
+"Girona"
+],
+[
+"figueres",
+"Girona"
+],
+[
+"blanes",
+"Girona"
+],
+[
+"lloret de mar",
+"Girona"
+],
+[
+"olot",
+"Girona"
+],
+[
+"salt",
+"Girona"
+],
+[
+"palafrugell",
+"Girona"
+],
+[
+"sant feliu de guixols",
+"Girona"
+],
+[
+"roses",
+"Girona"
+],
+[
+"banyoles",
+"Girona"
+],
+[
+"palamos",
+"Girona"
+],
+[
+"santa coloma de farners",
+"Girona"
+],
+[
+"torroella de montgri",
+"Girona"
+],
+[
+"ripoll",
+"Girona"
+],
+[
+"castello d empuries",
+"Girona"
+],
+[
+"la bisbal d emporda",
+"Girona"
+],
+[
+"puigcerda",
+"Girona"
+],
+[
+"cassà de la selva",
+"Girona"
+],
+[
+"cassa de la selva",
+"Girona"
+],
+[
+"arbucies",
+"Girona"
+],
+[
+"tossa de mar",
+"Girona"
+],
+[
+"platja d aro",
+"Girona"
+],
+[
+"castell platja d aro",
+"Girona"
+],
+[
+"l escala",
+"Girona"
+],
+[
+"besalu",
+"Girona"
+],
+[
+"begur",
+"Girona"
+],
+[
+"cadaques",
+"Girona"
+],
+[
+"camprodon",
+"Girona"
+],
+[
+"lleida",
+"Lleida"
+],
+[
+"tarrega",
+"Lleida"
+],
+[
+"balaguer",
+"Lleida"
+],
+[
+"mollerussa",
+"Lleida"
+],
+[
+"la seu d urgell",
+"Lleida"
+],
+[
+"seu d urgell",
+"Lleida"
+],
+[
+"cervera",
+"Lleida"
+],
+[
+"solsona",
+"Lleida"
+],
+[
+"guissona",
+"Lleida"
+],
+[
+"alcarras",
+"Lleida"
+],
+[
+"tremp",
+"Lleida"
+],
+[
+"almacelles",
+"Lleida"
+],
+[
+"agramunt",
+"Lleida"
+],
+[
+"les borges blanques",
+"Lleida"
+],
+[
+"borges blanques",
+"Lleida"
+],
+[
+"bellpuig",
+"Lleida"
+],
+[
+"alpicat",
+"Lleida"
+],
+[
+"vielha",
+"Lleida"
+],
+[
+"sort",
+"Lleida"
+],
+[
+"el pont de suert",
+"Lleida"
+],
+[
+"artesa de segre",
+"Lleida"
+],
+[
+"tarragona",
+"Tarragona"
+],
+[
+"reus",
+"Tarragona"
+],
+[
+"tortosa",
+"Tarragona"
+],
+[
+"el vendrell",
+"Tarragona"
+],
+[
+"vendrell",
+"Tarragona"
+],
+[
+"cambrils",
+"Tarragona"
+],
+[
+"salou",
+"Tarragona"
+],
+[
+"valls",
+"Tarragona"
+],
+[
+"calafell",
+"Tarragona"
+],
+[
+"amposta",
+"Tarragona"
+],
+[
+"vila seca",
+"Tarragona"
+],
+[
+"vilaseca",
+"Tarragona"
+],
+[
+"sant carles de la rapita",
+"Tarragona"
+],
+[
+"la rapita",
+"Tarragona"
+],
+[
+"torredembarra",
+"Tarragona"
+],
+[
+"cunit",
+"Tarragona"
+],
+[
+"montblanc",
+"Tarragona"
+],
+[
+"deltebre",
+"Tarragona"
+],
+[
+"alcanar",
+"Tarragona"
+],
+[
+"la senia",
+"Tarragona"
+],
+[
+"mora d ebre",
+"Tarragona"
+],
+[
+"falset",
+"Tarragona"
+],
+[
+"constantí",
+"Tarragona"
+],
+[
+"constanti",
+"Tarragona"
+],
+[
+"riudoms",
+"Tarragona"
+],
+[
+"roquetes",
+"Tarragona"
+],
+[
+"ulldecona",
+"Tarragona"
+],
+[
+"vandellos",
+"Tarragona"
+],
+[
+"l hospitalet de l infant",
+"Tarragona"
+]
+],
+"catNameIndicators": [
+[
+"diputacio de barcelona",
+"Barcelona"
+],
+[
+"area metropolitana de barcelona",
+"Barcelona"
+],
+[
+"barcelona",
+"Barcelona"
+],
+[
+"bellaterra",
+"Barcelona"
+],
+[
+"cerdanyola",
+"Barcelona"
+],
+[
+"sabadell",
+"Barcelona"
+],
+[
+"terrassa",
+"Barcelona"
+],
+[
+"sant cugat",
+"Barcelona"
+],
+[
+"badalona",
+"Barcelona"
+],
+[
+"hospitalet",
+"Barcelona"
+],
+[
+"mataro",
+"Barcelona"
+],
+[
+"manresa",
+"Barcelona"
+],
+[
+"granollers",
+"Barcelona"
+],
+[
+"igualada",
+"Barcelona"
+],
+[
+"vilafranca",
+"Barcelona"
+],
+[
+"vilanova i la geltru",
+"Barcelona"
+],
+[
+"caldes de montbui",
+"Barcelona"
+],
+[
+"cornella",
+"Barcelona"
+],
+[
+"esplugues",
+"Barcelona"
+],
+[
+"el prat de llobregat",
+"Barcelona"
+],
+[
+"sant joan despi",
+"Barcelona"
+],
+[
+"parc tauli",
+"Barcelona"
+],
+[
+"vall d hebron",
+"Barcelona"
+],
+[
+"germans trias",
+"Barcelona"
+],
+[
+"can ruti",
+"Barcelona"
+],
+[
+"bellvitge",
+"Barcelona"
+],
+[
+"sant pau",
+"Barcelona"
+],
+[
+"sincrotro",
+"Barcelona"
+],
+[
+"alba cells",
+"Barcelona"
+],
+[
+"eurecat",
+"Barcelona"
+],
+[
+"leitat",
+"Barcelona"
+],
+[
+"girona",
+"Girona"
+],
+[
+"figueres",
+"Girona"
+],
+[
+"banyoles",
+"Girona"
+],
+[
+"trueta",
+"Girona"
+],
+[
+"lleida",
+"Lleida"
+],
+[
+"tarrega",
+"Lleida"
+],
+[
+"balaguer",
+"Lleida"
+],
+[
+"mollerussa",
+"Lleida"
+],
+[
+"arnau de vilanova",
+"Lleida"
+],
+[
+"centre tecnologic forestal",
+"Lleida"
+],
+[
+"forest technology centre",
+"Lleida"
+],
+[
+"tarragona",
+"Tarragona"
+],
+[
+"reus",
+"Tarragona"
+],
+[
+"tortosa",
+"Tarragona"
+],
+[
+"amposta",
+"Tarragona"
+],
+[
+"cambrils",
+"Tarragona"
+],
+[
+"joan xxiii",
+"Tarragona"
+],
+[
+"iciq",
+"Tarragona"
+],
+[
+"iphes",
+"Tarragona"
+],
+[
+"paleoecologia humana",
+"Tarragona"
+],
+[
+"catalunya",
+"Catalunya (general)"
+],
+[
+"catalonia",
+"Catalunya (general)"
+],
+[
+"catalan",
+"Catalunya (general)"
+],
+[
+"catalana",
+"Catalunya (general)"
+],
+[
+"generalitat de catalunya",
+"Catalunya (general)"
+],
+[
+"generalitat",
+"Catalunya (general)"
+],
+[
+"agaur",
+"Catalunya (general)"
+],
+[
+"catsalut",
+"Catalunya (general)"
+],
+[
+"servei catala",
+"Catalunya (general)"
+],
+[
+"institut catala",
+"Catalunya (general)"
+],
+[
+"cerca",
+"Catalunya (general)"
+],
+[
+"icrea",
+"Catalunya (general)"
+],
+[
+"irta",
+"Catalunya (general)"
+]
+],
+"cpPrefixProvince": {
+"08": "Barcelona",
+"17": "Girona",
+"25": "Lleida",
+"43": "Tarragona"
+},
+"privateUniKeywords": [
+"ramon llull",
+"uic",
+"internacional de catalunya",
+"abat oliba",
+"esade",
+"iqs",
+"iese",
+"eada",
+"blanquerna",
+"la salle",
+"uoc",
+"oberta de catalunya",
+"uvic",
+"universitat de vic"
+],
+"privateLegalSuffixes": [
+"s l",
+"sl",
+"s a",
+"sa",
+"s l u",
+"slu",
+"s a u",
+"sau",
+"s l p",
+"slp",
+"s coop",
+"scoop",
+"gmbh",
+"ltd",
+"llc",
+"inc",
+"corp",
+"plc",
+"b v",
+"s r l"
+],
+"publicKeywords": [
+"ajuntament",
+"ayuntamiento",
+"diputacio",
+"diputacion",
+"generalitat",
+"consell comarcal",
+"conselleria",
+"ministeri",
+"ministerio",
+"gobierno",
+"govern",
+"agencia estatal",
+"agaur",
+"catsalut",
+"servei catala",
+"institut catala",
+"csic",
+"cerca",
+"irta",
+"icrea",
+"hospital universitari",
+"hospital clinic",
+"hospital de la santa creu",
+"parc tauli",
+"vall d hebron",
+"germans trias",
+"bellvitge",
+"arnau de vilanova",
+"josep trueta",
+"joan xxiii",
+"conselh generau",
+"entitat municipal",
+"mancomunitat",
+"consorci sanitari",
+"area metropolitana de barcelona",
+"autoritat del transport",
+"autoritat portuaria"
+],
+"uabKeepKeywords": [
+"fundacio uab",
+"fundacion uab",
+"parc de recerca uab",
+"clinic veterinari",
+"salut i envelliment",
+"autonoma solidaria",
+"irta",
+"generalitat",
+"diputacio",
+"ajuntament",
+"ayuntamiento",
+"universidad de barcelona",
+"universitat de barcelona",
+"universitat politecnica",
+"universitat pompeu fabra",
+"universitat de vic",
+"csic",
+"cerca",
+"british council",
+"vrije",
+"estatal russa",
+"collado",
+"24 institucions",
+"associacio",
+"asociacion"
+],
+"municipiCoords": [
+[
+"barcelona",
+[
+41.3874,
+2.1686
+]
+],
+[
+"bellaterra",
+[
+41.4997,
+2.0942
+]
+],
+[
+"bellaterra cerdanyola del valles",
+[
+41.4997,
+2.0942
+]
+],
+[
+"cerdanyola del valles",
+[
+41.4911,
+2.1408
+]
+],
+[
+"cerdanyola",
+[
+41.4911,
+2.1408
+]
+],
+[
+"sabadell",
+[
+41.5463,
+2.1086
+]
+],
+[
+"terrassa",
+[
+41.5632,
+2.0089
+]
+],
+[
+"sant cugat del valles",
+[
+41.4735,
+2.0852
+]
+],
+[
+"sant cugat",
+[
+41.4735,
+2.0852
+]
+],
+[
+"l hospitalet de llobregat",
+[
+41.3597,
+2.1003
+]
+],
+[
+"hospitalet de llobregat",
+[
+41.3597,
+2.1003
+]
+],
+[
+"hospitalet",
+[
+41.3597,
+2.1003
+]
+],
+[
+"badalona",
+[
+41.45,
+2.2474
+]
+],
+[
+"mataro",
+[
+41.5381,
+2.4445
+]
+],
+[
+"manresa",
+[
+41.7282,
+1.824
+]
+],
+[
+"vic",
+[
+41.9304,
+2.2546
+]
+],
+[
+"granollers",
+[
+41.608,
+2.2877
+]
+],
+[
+"esplugues de llobregat",
+[
+41.3769,
+2.0869
+]
+],
+[
+"esplugues",
+[
+41.3769,
+2.0869
+]
+],
+[
+"cornella de llobregat",
+[
+41.3574,
+2.0713
+]
+],
+[
+"cornella",
+[
+41.3574,
+2.0713
+]
+],
+[
+"rubi",
+[
+41.4923,
+2.0331
+]
+],
+[
+"el prat de llobregat",
+[
+41.3278,
+2.0947
+]
+],
+[
+"el prat",
+[
+41.3278,
+2.0947
+]
+],
+[
+"vilanova i la geltru",
+[
+41.2244,
+1.7259
+]
+],
+[
+"santa perpetua de mogoda",
+[
+41.5349,
+2.182
+]
+],
+[
+"sant joan despi",
+[
+41.3671,
+2.0549
+]
+],
+[
+"castelldefels",
+[
+41.28,
+1.9766
+]
+],
+[
+"mollet del valles",
+[
+41.5403,
+2.2131
+]
+],
+[
+"mollet",
+[
+41.5403,
+2.2131
+]
+],
+[
+"igualada",
+[
+41.5789,
+1.6172
+]
+],
+[
+"sant just desvern",
+[
+41.3833,
+2.0749
+]
+],
+[
+"sant feliu de llobregat",
+[
+41.3833,
+2.0445
+]
+],
+[
+"gava",
+[
+41.306,
+2.0011
+]
+],
+[
+"barbera del valles",
+[
+41.5159,
+2.1269
+]
+],
+[
+"viladecans",
+[
+41.3144,
+2.0147
+]
+],
+[
+"vilafranca del penedes",
+[
+41.3461,
+1.6971
+]
+],
+[
+"sant quirze del valles",
+[
+41.5335,
+2.0825
+]
+],
+[
+"caldes de montbui",
+[
+41.6345,
+2.1619
+]
+],
+[
+"santa coloma de gramenet",
+[
+41.4515,
+2.2081
+]
+],
+[
+"martorell",
+[
+41.4744,
+1.9306
+]
+],
+[
+"castellbisbal",
+[
+41.4754,
+1.9818
+]
+],
+[
+"viladecavalls",
+[
+41.5579,
+1.9554
+]
+],
+[
+"sant boi de llobregat",
+[
+41.3436,
+2.0366
+]
+],
+[
+"sant boi",
+[
+41.3436,
+2.0366
+]
+],
+[
+"montcada i reixac",
+[
+41.4836,
+2.1879
+]
+],
+[
+"ripollet",
+[
+41.4967,
+2.1558
+]
+],
+[
+"sant adria de besos",
+[
+41.4307,
+2.2216
+]
+],
+[
+"sitges",
+[
+41.2372,
+1.8059
+]
+],
+[
+"molins de rei",
+[
+41.4139,
+2.0156
+]
+],
+[
+"parets del valles",
+[
+41.5734,
+2.2319
+]
+],
+[
+"castellar del valles",
+[
+41.6186,
+2.0875
+]
+],
+[
+"cardedeu",
+[
+41.6406,
+2.3569
+]
+],
+[
+"sant celoni",
+[
+41.6894,
+2.4894
+]
+],
+[
+"la garriga",
+[
+41.6844,
+2.2869
+]
+],
+[
+"canovelles",
+[
+41.6182,
+2.2817
+]
+],
+[
+"les franqueses del valles",
+[
+41.6373,
+2.2966
+]
+],
+[
+"polinya",
+[
+41.5542,
+2.1556
+]
+],
+[
+"palau solita i plegamans",
+[
+41.588,
+2.1783
+]
+],
+[
+"premia de mar",
+[
+41.4919,
+2.3621
+]
+],
+[
+"el masnou",
+[
+41.4817,
+2.3175
+]
+],
+[
+"vilassar de mar",
+[
+41.5037,
+2.3924
+]
+],
+[
+"cabrils",
+[
+41.5276,
+2.3694
+]
+],
+[
+"cabrera de mar",
+[
+41.5259,
+2.3935
+]
+],
+[
+"alella",
+[
+41.4946,
+2.2947
+]
+],
+[
+"tiana",
+[
+41.4833,
+2.2667
+]
+],
+[
+"montgat",
+[
+41.4667,
+2.2833
+]
+],
+[
+"arenys de mar",
+[
+41.5819,
+2.5503
+]
+],
+[
+"calella",
+[
+41.6133,
+2.6606
+]
+],
+[
+"pineda de mar",
+[
+41.6275,
+2.6889
+]
+],
+[
+"malgrat de mar",
+[
+41.6458,
+2.7422
+]
+],
+[
+"berga",
+[
+42.1044,
+1.8458
+]
+],
+[
+"manlleu",
+[
+42.0006,
+2.2836
+]
+],
+[
+"torello",
+[
+42.0494,
+2.2625
+]
+],
+[
+"abrera",
+[
+41.5169,
+1.9011
+]
+],
+[
+"esparreguera",
+[
+41.5394,
+1.87
+]
+],
+[
+"olesa de montserrat",
+[
+41.545,
+1.8944
+]
+],
+[
+"sant andreu de la barca",
+[
+41.4481,
+1.9772
+]
+],
+[
+"cubelles",
+[
+41.2097,
+1.6728
+]
+],
+[
+"sant pere de ribes",
+[
+41.2603,
+1.7731
+]
+],
+[
+"vilanova del cami",
+[
+41.5731,
+1.6414
+]
+],
+[
+"masquefa",
+[
+41.5033,
+1.8136
+]
+],
+[
+"sant vicenc dels horts",
+[
+41.3928,
+2.0086
+]
+],
+[
+"matadepera",
+[
+41.6025,
+2.0258
+]
+],
+[
+"vacarisses",
+[
+41.6075,
+1.9183
+]
+],
+[
+"llica d amunt",
+[
+41.6108,
+2.2389
+]
+],
+[
+"vallromanes",
+[
+41.5314,
+2.2981
+]
+],
+[
+"sant pol de mar",
+[
+41.6025,
+2.6242
+]
+],
+[
+"girona",
+[
+41.9794,
+2.8214
+]
+],
+[
+"figueres",
+[
+42.2666,
+2.9616
+]
+],
+[
+"olot",
+[
+42.181,
+2.4901
+]
+],
+[
+"blanes",
+[
+41.6742,
+2.7904
+]
+],
+[
+"lloret de mar",
+[
+41.6999,
+2.8457
+]
+],
+[
+"salt",
+[
+41.9742,
+2.7931
+]
+],
+[
+"banyoles",
+[
+42.1194,
+2.7667
+]
+],
+[
+"palafrugell",
+[
+41.9167,
+3.1636
+]
+],
+[
+"sant feliu de guixols",
+[
+41.7833,
+3.0333
+]
+],
+[
+"palamos",
+[
+41.8483,
+3.1292
+]
+],
+[
+"roses",
+[
+42.262,
+3.1769
+]
+],
+[
+"ripoll",
+[
+42.2008,
+2.1903
+]
+],
+[
+"puigcerda",
+[
+42.4317,
+1.9281
+]
+],
+[
+"santa coloma de farners",
+[
+41.8625,
+2.6656
+]
+],
+[
+"la bisbal d emporda",
+[
+41.9606,
+3.0378
+]
+],
+[
+"torroella de montgri",
+[
+42.0419,
+3.1267
+]
+],
+[
+"castello d empuries",
+[
+42.2597,
+3.0764
+]
+],
+[
+"cassa de la selva",
+[
+41.8894,
+2.8744
+]
+],
+[
+"arbucies",
+[
+41.8161,
+2.5161
+]
+],
+[
+"tossa de mar",
+[
+41.7219,
+2.9317
+]
+],
+[
+"platja d aro",
+[
+41.8172,
+3.0681
+]
+],
+[
+"l escala",
+[
+42.1244,
+3.1319
+]
+],
+[
+"besalu",
+[
+42.1989,
+2.6986
+]
+],
+[
+"begur",
+[
+41.9542,
+3.2089
+]
+],
+[
+"cadaques",
+[
+42.2886,
+3.2797
+]
+],
+[
+"camprodon",
+[
+42.3125,
+2.3653
+]
+],
+[
+"lleida",
+[
+41.6176,
+0.62
+]
+],
+[
+"tarrega",
+[
+41.6469,
+1.1394
+]
+],
+[
+"balaguer",
+[
+41.7911,
+0.8056
+]
+],
+[
+"mollerussa",
+[
+41.6303,
+0.8961
+]
+],
+[
+"la seu d urgell",
+[
+42.3589,
+1.4614
+]
+],
+[
+"seu d urgell",
+[
+42.3589,
+1.4614
+]
+],
+[
+"cervera",
+[
+41.6708,
+1.2711
+]
+],
+[
+"solsona",
+[
+41.9942,
+1.5172
+]
+],
+[
+"guissona",
+[
+41.7847,
+1.2883
+]
+],
+[
+"alcarras",
+[
+41.5636,
+0.5239
+]
+],
+[
+"tremp",
+[
+42.1672,
+0.895
+]
+],
+[
+"almacelles",
+[
+41.7322,
+0.4369
+]
+],
+[
+"agramunt",
+[
+41.7864,
+1.0964
+]
+],
+[
+"les borges blanques",
+[
+41.5206,
+0.8692
+]
+],
+[
+"borges blanques",
+[
+41.5206,
+0.8692
+]
+],
+[
+"bellpuig",
+[
+41.6264,
+1.0128
+]
+],
+[
+"alpicat",
+[
+41.6675,
+0.5567
+]
+],
+[
+"vielha",
+[
+42.7022,
+0.7964
+]
+],
+[
+"sort",
+[
+42.4119,
+1.1303
+]
+],
+[
+"el pont de suert",
+[
+42.4083,
+0.7408
+]
+],
+[
+"artesa de segre",
+[
+41.895,
+1.0456
+]
+],
+[
+"tarragona",
+[
+41.1189,
+1.2445
+]
+],
+[
+"reus",
+[
+41.1561,
+1.1069
+]
+],
+[
+"tortosa",
+[
+40.8125,
+0.5214
+]
+],
+[
+"el vendrell",
+[
+41.22,
+1.5353
+]
+],
+[
+"vendrell",
+[
+41.22,
+1.5353
+]
+],
+[
+"cambrils",
+[
+41.0669,
+1.0592
+]
+],
+[
+"salou",
+[
+41.0766,
+1.1416
+]
+],
+[
+"valls",
+[
+41.2861,
+1.2494
+]
+],
+[
+"calafell",
+[
+41.2014,
+1.5683
+]
+],
+[
+"amposta",
+[
+40.7128,
+0.5797
+]
+],
+[
+"vila seca",
+[
+41.1114,
+1.1456
+]
+],
+[
+"vilaseca",
+[
+41.1114,
+1.1456
+]
+],
+[
+"sant carles de la rapita",
+[
+40.6186,
+0.5928
+]
+],
+[
+"la rapita",
+[
+40.6186,
+0.5928
+]
+],
+[
+"torredembarra",
+[
+41.1456,
+1.3967
+]
+],
+[
+"cunit",
+[
+41.1975,
+1.6347
+]
+],
+[
+"montblanc",
+[
+41.3764,
+1.1619
+]
+],
+[
+"deltebre",
+[
+40.7192,
+0.7086
+]
+],
+[
+"alcanar",
+[
+40.5433,
+0.4811
+]
+],
+[
+"la senia",
+[
+40.6336,
+0.2856
+]
+],
+[
+"mora d ebre",
+[
+41.0928,
+0.6408
+]
+],
+[
+"falset",
+[
+41.1469,
+0.8203
+]
+],
+[
+"constanti",
+[
+41.1544,
+1.2131
+]
+],
+[
+"riudoms",
+[
+41.1392,
+1.0519
+]
+],
+[
+"roquetes",
+[
+40.8206,
+0.5019
+]
+],
+[
+"ulldecona",
+[
+40.5975,
+0.4472
+]
+],
+[
+"vandellos",
+[
+41.0211,
+0.8314
+]
+],
+[
+"l hospitalet de l infant",
+[
+40.9917,
+0.9225
+]
+]
+],
+"cp3Coords": [
+[
+"080",
+[
+41.3874,
+2.1686
+]
+],
+[
+"081",
+[
+41.52,
+2.12
+]
+],
+[
+"082",
+[
+41.56,
+1.97
+]
+],
+[
+"083",
+[
+41.55,
+2.46
+]
+],
+[
+"084",
+[
+41.63,
+2.31
+]
+],
+[
+"085",
+[
+41.93,
+2.25
+]
+],
+[
+"086",
+[
+41.98,
+1.85
+]
+],
+[
+"087",
+[
+41.44,
+1.77
+]
+],
+[
+"088",
+[
+41.26,
+1.88
+]
+],
+[
+"089",
+[
+41.39,
+2.11
+]
+],
+[
+"170",
+[
+41.9794,
+2.8214
+]
+],
+[
+"171",
+[
+41.95,
+2.86
+]
+],
+[
+"172",
+[
+41.88,
+3.09
+]
+],
+[
+"173",
+[
+41.7,
+2.82
+]
+],
+[
+"174",
+[
+42.14,
+2.84
+]
+],
+[
+"175",
+[
+42.26,
+2.16
+]
+],
+[
+"176",
+[
+42.2666,
+2.9616
+]
+],
+[
+"177",
+[
+42.32,
+2.96
+]
+],
+[
+"178",
+[
+42.16,
+2.55
+]
+],
+[
+"250",
+[
+41.6176,
+0.62
+]
+],
+[
+"251",
+[
+41.64,
+0.65
+]
+],
+[
+"252",
+[
+41.68,
+1.15
+]
+],
+[
+"253",
+[
+41.7,
+1.07
+]
+],
+[
+"254",
+[
+41.52,
+0.87
+]
+],
+[
+"255",
+[
+42.42,
+0.9
+]
+],
+[
+"256",
+[
+41.8,
+0.82
+]
+],
+[
+"257",
+[
+42.24,
+1.46
+]
+],
+[
+"430",
+[
+41.1189,
+1.2445
+]
+],
+[
+"431",
+[
+41.16,
+1.21
+]
+],
+[
+"432",
+[
+41.1561,
+1.1069
+]
+],
+[
+"433",
+[
+41.15,
+1.03
+]
+],
+[
+"434",
+[
+41.29,
+1.2
+]
+],
+[
+"435",
+[
+40.78,
+0.56
+]
+],
+[
+"437",
+[
+41.14,
+0.8
+]
+],
+[
+"438",
+[
+41.18,
+1.44
+]
+]
+],
+"provCentroids": [
+[
+"Barcelona",
+[
+41.3874,
+2.1686
+]
+],
+[
+"Girona",
+[
+41.9794,
+2.8214
+]
+],
+[
+"Lleida",
+[
+41.6176,
+0.62
+]
+],
+[
+"Tarragona",
+[
+41.1189,
+1.2445
+]
+],
+[
+"Catalunya (general)",
+[
+41.72,
+1.82
+]
+]
+]
+}

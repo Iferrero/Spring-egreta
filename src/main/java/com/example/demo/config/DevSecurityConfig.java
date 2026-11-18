@@ -54,10 +54,10 @@ public class DevSecurityConfig {
                     "/api/applications/stats/by-funding-opportunity",
                     "/api/applications/stats/by-funding-opportunity/**"
                 ).hasAnyRole("USER", "EUROPEES")
-                // Acceso específico a mapa-interaccions-territori.html y sus datos
+                // Acceso específico a mapa-interaccions-territori.html y sus consultas dinámicas
                 .requestMatchers(
                     "/mapa-interaccions-territori.html",
-                    "/mapa-territori-data.js"
+                    "/api/mapa-territori/**"
                 ).hasAnyRole("USER", "TERRITORI")
                 .anyRequest().hasRole("USER"))
             .httpBasic(Customizer.withDefaults())

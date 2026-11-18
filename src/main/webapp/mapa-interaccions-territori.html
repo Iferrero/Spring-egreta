@@ -13,7 +13,6 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-    <script src="mapa-territori-data.js"></script>
     <style>
         .tabular-nums { font-variant-numeric: tabular-nums; }
         .drawer-backdrop { transition: opacity 200ms ease; }
@@ -35,6 +34,8 @@
         }
         .sort-th { cursor: pointer; user-select: none; }
         .sort-th:hover { background-color: #e2e8f0; }
+        body.is-loading { cursor: progress; }
+        body.is-loading main { opacity: .8; transition: opacity .15s; }
     </style>
 </head>
 <body class="bg-slate-50 min-h-screen text-slate-800">
@@ -46,6 +47,8 @@
     </header>
 
     <main class="w-full max-w-[1640px] mx-auto px-4 sm:px-6 py-5 space-y-5">
+        <div id="dataBanner" class="hidden" role="status" aria-live="polite"></div>
+
 
         <!-- KPIs globals dinàmics -->
         <section aria-label="Indicadors globals" class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
@@ -542,10 +545,76 @@
 
     <script>
     (function () {
-        const DATA = window.MAPA_TERRITORI_DATA;
-        if (!DATA || !Array.isArray(DATA.agents)) {
-            document.body.innerHTML = '<div class="p-8 max-w-xl mx-auto mt-10 bg-white rounded-2xl border border-rose-200 text-rose-800 font-semibold">Error: no s\'ha pogut carregar <code>mapa-territori-data.js</code>.</div>';
-            return;
+        // Les dades arriben de l'API (/api/mapa-territori/*), consultada a MongoDB amb filtres al servidor.
+        const API = '/mapa-territori';
+        let META = null;      // { meta, options } (sense filtrar)
+        let summary = null;   // darrer /summary amb els filtres vigents
+        let reqSeq = 0;
+        const tableSeq = { agents: 0, convenis: 0, projectes: 0 };
+        let drawerData = null;   // { idx, agent, convs, projs }
+        let pageAgents = {};     // idx -> tupla d'agent (pàgina vigent de convenis/projectes)
+        let pageConv = [];
+        let pageProj = [];
+
+        const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+        function showBanner(html, tone) {
+            const b = document.getElementById('dataBanner');
+            const palette = tone === 'error'
+                ? 'bg-rose-50 border-rose-200 text-rose-800'
+                : 'bg-amber-50 border-amber-200 text-amber-900';
+            b.className = 'rounded-xl border px-4 py-3 text-sm font-semibold ' + palette;
+            b.innerHTML = html;
+        }
+
+        function hideBanner() {
+            document.getElementById('dataBanner').className = 'hidden';
+        }
+
+        function setLoading(on) {
+            document.body.classList.toggle('is-loading', !!on);
+        }
+
+        function handleError(e) {
+            console.error(e);
+            setLoading(false);
+            showBanner('No s\'han pogut carregar les dades: ' + esc(e && e.message ? e.message : e), 'error');
+        }
+
+        async function api(path, params) {
+            const qs = params ? params.toString() : '';
+            const res = await window.apiFetch(API + path + (qs ? '?' + qs : ''), { headers: { Accept: 'application/json' } });
+            if (res.status === 503) {
+                let body = {};
+                try { body = await res.json(); } catch (_) { /* cos buit */ }
+                const err = new Error(body.message || 'Dades no disponibles');
+                err.unavailable = true;
+                err.state = body.state;
+                throw err;
+            }
+            if (!res.ok) throw new Error('Error ' + res.status + ' en consultar ' + path);
+            return res.json();
+        }
+
+        function filterParams(extra) {
+            const p = new URLSearchParams();
+            const put = (k, v) => { if (v !== null && v !== undefined && v !== '' && v !== 'ALL') p.set(k, v); };
+            put('yearFrom', state.yearFrom);
+            put('yearTo', state.yearTo);
+            put('prov', state.prov);
+            put('municipi', state.municipi);
+            put('interaction', state.interaction);
+            put('tipologia', state.tipologia);
+            put('ambit', state.ambit);
+            put('unitat', state.unitat);
+            put('q', state.search.trim().toLowerCase());
+            put('convTipus', state.convTipus);
+            put('convNat', state.convNat);
+            put('projRol', state.projRol);
+            put('projLider', state.projLider);
+            put('projTipus', state.projTipus);
+            if (extra) Object.entries(extra).forEach(([k, v]) => p.set(k, v));
+            return p;
         }
 
         // Índexs dels arrays:
@@ -581,9 +650,6 @@
             drawerTab: 'conv',
         };
 
-        let filteredConvenis = [];
-        let filteredProjectes = [];
-        let filteredAgentsList = []; // array of { idx, ag, nConv, nProjSoci, nProjFin, impUab, totInt }
         let searchTimer = null;
 
         let map = null;
@@ -623,220 +689,77 @@
             return '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700 border border-slate-200">Finançador</span>';
         }
 
+        function fillCounted(id, pairs) {
+            const sel = document.getElementById(id);
+            sel.length = 1;
+            pairs.forEach(([v, n]) => {
+                sel.insertAdjacentHTML('beforeend', `<option value="${esc(v)}">${esc(v)} (${fmtInt.format(n)})</option>`);
+            });
+        }
+
         function initFilterDropdowns() {
-            const years = new Set();
-            DATA.convenis.forEach(r => { if (r[5]) years.add(r[5]); });
-            DATA.projectes.forEach(r => { if (r[6]) years.add(r[6]); });
-            const sortedYears = Array.from(years).sort((a, b) => b - a);
+            const o = META.options;
             const yFrom = document.getElementById('filterYearFrom');
             const yTo = document.getElementById('filterYearTo');
-            sortedYears.forEach(y => {
+            yFrom.length = 1;
+            yTo.length = 1;
+            o.years.forEach(y => {
                 yFrom.insertAdjacentHTML('beforeend', `<option value="${y}">Des de: ${y}</option>`);
                 yTo.insertAdjacentHTML('beforeend', `<option value="${y}">Fins a: ${y}</option>`);
             });
-
-            const tipCounts = new Map();
-            DATA.agents.forEach(a => tipCounts.set(a[4], (tipCounts.get(a[4]) || 0) + 1));
-            const selTip = document.getElementById('filterTipologia');
-            Array.from(tipCounts.entries())
-                .sort((a, b) => b[1] - a[1])
-                .forEach(([t, cnt]) => {
-                    selTip.insertAdjacentHTML('beforeend', `<option value="${esc(t)}">${esc(t)} (${fmtInt.format(cnt)})</option>`);
-                });
-
-            const unitCounts = new Map();
-            DATA.convenis.forEach(r => { if (r[15]) unitCounts.set(r[15], (unitCounts.get(r[15]) || 0) + 1); });
-            DATA.projectes.forEach(r => { if (r[21]) unitCounts.set(r[21], (unitCounts.get(r[21]) || 0) + 1); });
-            const selUnit = document.getElementById('filterUnitat');
-            Array.from(unitCounts.entries())
-                .sort((a, b) => b[1] - a[1])
-                .forEach(([u, cnt]) => {
-                    selUnit.insertAdjacentHTML('beforeend', `<option value="${esc(u)}">${esc(u)} (${fmtInt.format(cnt)})</option>`);
-                });
-
-            const natCounts = new Map();
-            DATA.convenis.forEach(r => { if (r[4]) natCounts.set(r[4], (natCounts.get(r[4]) || 0) + 1); });
-            const selNat = document.getElementById('filterConvNat');
-            Array.from(natCounts.entries()).sort((a, b) => b[1] - a[1]).forEach(([n, cnt]) => {
-                selNat.insertAdjacentHTML('beforeend', `<option value="${esc(n)}">${esc(n)} (${fmtInt.format(cnt)})</option>`);
-            });
-
-            const liderSet = new Set();
-            const projTipusCounts = new Map();
-            DATA.projectes.forEach(r => {
-                if (r[14]) liderSet.add(r[14]);
-                if (r[4]) projTipusCounts.set(r[4], (projTipusCounts.get(r[4]) || 0) + 1);
-            });
+            fillCounted('filterTipologia', o.tipologies);
+            fillCounted('filterUnitat', o.units);
+            fillCounted('filterConvNat', o.natures);
             const selLid = document.getElementById('filterProjLider');
-            Array.from(liderSet).sort().forEach(l => selLid.insertAdjacentHTML('beforeend', `<option value="${esc(l)}">${esc(l)}</option>`));
-            const selPt = document.getElementById('filterProjTipus');
-            Array.from(projTipusCounts.entries()).sort((a, b) => b[1] - a[1]).forEach(([t, cnt]) => {
-                selPt.insertAdjacentHTML('beforeend', `<option value="${esc(t)}">${esc(t)} (${fmtInt.format(cnt)})</option>`);
-            });
+            selLid.length = 1;
+            o.leaders.forEach(l => selLid.insertAdjacentHTML('beforeend', `<option value="${esc(l)}">${esc(l)}</option>`));
+            fillCounted('filterProjTipus', o.projTipus);
         }
 
-        function agentMatchesGlobal(ag) {
-            if (state.prov !== 'ALL' && ag[7] !== state.prov) return false;
-            if (state.municipi && (ag[5] || ag[7]) !== state.municipi) return false;
-            if (state.interaction !== 'ALL' && ag[3] !== state.interaction) return false;
-            if (state.tipologia !== 'ALL' && ag[4] !== state.tipologia) return false;
-            return true;
-        }
-
-        function matchesSearch(q, ag, textFields) {
-            if (!q) return true;
-            for (let i = 0; i < textFields.length; i++) {
-                if (textFields[i] && textFields[i].toLowerCase().includes(q)) return true;
+        // Resum (KPIs, mapa, rànquing, gràfics) amb els filtres vigents; les taules es demanen a part.
+        async function recompute() {
+            const seq = ++reqSeq;
+            setLoading(true);
+            try {
+                const data = await api('/summary', filterParams());
+                if (seq !== reqSeq) return;
+                summary = data;
+                hideBanner();
+                updateKpis();
+                updateTabCounts();
+                if (state.tab === 'dashboard') renderDashboard();
+                else if (state.tab === 'agents') await renderAgentsTable();
+                else if (state.tab === 'convenis') await renderConvenisTable();
+                else if (state.tab === 'projectes') await renderProjectesTable();
+            } catch (e) {
+                if (seq === reqSeq) handleError(e);
+            } finally {
+                if (seq === reqSeq) setLoading(false);
             }
-            return (
-                ag[1].toLowerCase().includes(q) ||
-                ag[5].toLowerCase().includes(q) ||
-                ag[6].toLowerCase().includes(q) ||
-                ag[11].toLowerCase().includes(q)
-            );
-        }
-
-        function recompute() {
-            const q = state.search.trim().toLowerCase();
-            const yFrom = state.yearFrom;
-            const yTo = state.yearTo;
-            const hasYearFilter = (yFrom !== null || yTo !== null);
-
-            const agOk = DATA.agents.map(agentMatchesGlobal);
-            const agAgg = new Map(); // agentIdx -> { nConv, nProjSoci, nProjFin, convAwards: Map, projAwards: Map, units: Map }
-
-            function getAgg(idx) {
-                let entry = agAgg.get(idx);
-                if (!entry) {
-                    entry = { nConv: 0, nProjSoci: 0, nProjFin: 0, impUab: 0, convSeen: new Set(), projSeen: new Set() };
-                    agAgg.set(idx, entry);
-                }
-                return entry;
-            }
-
-            // 1. Filtrar Convenis
-            filteredConvenis = [];
-            for (let i = 0; i < DATA.convenis.length; i++) {
-                const r = DATA.convenis[i];
-                const agIdx = r[10];
-                if (!agOk[agIdx]) continue;
-                const yr = r[5];
-                if (hasYearFilter) {
-                    if (!yr) continue;
-                    if (yFrom !== null && yr < yFrom) continue;
-                    if (yTo !== null && yr > yTo) continue;
-                }
-                if (state.ambit !== 'ALL' && r[17] !== state.ambit) continue;
-                if (state.unitat !== 'ALL' && r[15] !== state.unitat) continue;
-                if (state.convTipus !== 'ALL' && r[3] !== state.convTipus) continue;
-                if (state.convNat !== 'ALL' && r[4] !== state.convNat) continue;
-                const ag = DATA.agents[agIdx];
-                if (!matchesSearch(q, ag, [r[12], r[13], r[15], r[18], r[2], r[4]])) continue;
-
-                filteredConvenis.push(r);
-                const agg = getAgg(agIdx);
-                agg.nConv++;
-                if (!agg.convSeen.has(r[0])) {
-                    agg.convSeen.add(r[0]);
-                    agg.impUab += r[9] || 0;
-                }
-            }
-
-            // 2. Filtrar Projectes
-            filteredProjectes = [];
-            for (let i = 0; i < DATA.projectes.length; i++) {
-                const r = DATA.projectes[i];
-                const agIdx = r[11];
-                if (!agOk[agIdx]) continue;
-                const yr = r[6];
-                if (hasYearFilter) {
-                    if (!yr) continue;
-                    if (yFrom !== null && yr < yFrom) continue;
-                    if (yTo !== null && yr > yTo) continue;
-                }
-                if (state.ambit !== 'ALL' && r[23] !== state.ambit) continue;
-                if (state.unitat !== 'ALL' && r[21] !== state.unitat) continue;
-                if (state.projRol !== 'ALL' && r[12] !== state.projRol) continue;
-                if (state.projLider !== 'ALL' && r[14] !== state.projLider) continue;
-                if (state.projTipus !== 'ALL' && r[4] !== state.projTipus) continue;
-                const ag = DATA.agents[agIdx];
-                if (!matchesSearch(q, ag, [r[17], r[18], r[21], r[24], r[3], r[19], r[16]])) continue;
-
-                filteredProjectes.push(r);
-                const agg = getAgg(agIdx);
-                if (r[12] === 'Soci / Col·laborador de consorci' || r[12] === 'Finançador i Soci de consorci') agg.nProjSoci++;
-                if (r[12] === 'Entitat finançadora / Promotora' || r[12] === 'Finançador i Soci de consorci') agg.nProjFin++;
-                if (!agg.projSeen.has(r[0])) {
-                    agg.projSeen.add(r[0]);
-                    agg.impUab += r[10] || 0;
-                }
-            }
-
-            // 3. Agents actius sota els filtres vigents
-            filteredAgentsList = [];
-            agAgg.forEach((agg, idx) => {
-                const ag = DATA.agents[idx];
-                filteredAgentsList.push({
-                    idx,
-                    ag,
-                    nConv: agg.nConv,
-                    nProjSoci: agg.nProjSoci,
-                    nProjFin: agg.nProjFin,
-                    nProj: agg.projSeen.size,
-                    impUab: agg.impUab,
-                    totInt: agg.convSeen.size + agg.projSeen.size,
-                });
-            });
-
-            updateKpis();
-            updateTabCounts();
-            if (state.tab === 'dashboard') renderDashboard();
-            else if (state.tab === 'agents') renderAgentsTable();
-            else if (state.tab === 'convenis') renderConvenisTable();
-            else if (state.tab === 'projectes') renderProjectesTable();
         }
 
         function updateKpis() {
-            let pubAg = 0, privAg = 0, mixAg = 0;
-            filteredAgentsList.forEach(item => {
-                if (item.ag[3] === 'Publico-Públic') pubAg++;
-                else if (item.ag[3] === 'Publico-Privat') privAg++;
-                else mixAg++;
-            });
-            document.getElementById('kpi-agents').textContent = fmtInt.format(filteredAgentsList.length);
-            document.getElementById('kpi-agents-sub').textContent = `Púb: ${fmtInt.format(pubAg)} · Priv: ${fmtInt.format(privAg)} · Mixt: ${fmtInt.format(mixAg)}`;
+            const k = summary.kpis;
+            document.getElementById('kpi-agents').textContent = fmtInt.format(k.agents);
+            document.getElementById('kpi-agents-sub').textContent = `Púb: ${fmtInt.format(k.agentsPub)} · Priv: ${fmtInt.format(k.agentsPriv)} · Mixt: ${fmtInt.format(k.agentsMixt)}`;
 
-            const convAw = new Map();
-            filteredConvenis.forEach(r => { if (!convAw.has(r[0])) convAw.set(r[0], [r[8] || 0, r[9] || 0]); });
-            let convTot = 0, convUab = 0;
-            convAw.forEach(([t, u]) => { convTot += t; convUab += u; });
-            document.getElementById('kpi-conv-unics').textContent = fmtInt.format(convAw.size);
-            document.getElementById('kpi-conv-sub').textContent = `${fmtInt.format(filteredConvenis.length)} relacions conveni–agent`;
-            document.getElementById('kpi-conv-imp').textContent = fmtEur.format(convUab);
-            document.getElementById('kpi-conv-imp-sub').textContent = `Import total: ${fmtEur.format(convTot)}`;
+            document.getElementById('kpi-conv-unics').textContent = fmtInt.format(k.convUnics);
+            document.getElementById('kpi-conv-sub').textContent = `${fmtInt.format(k.convRels)} relacions conveni–agent`;
+            document.getElementById('kpi-conv-imp').textContent = fmtEur.format(k.convImpUab);
+            document.getElementById('kpi-conv-imp-sub').textContent = `Import total: ${fmtEur.format(k.convImpTot)}`;
 
-            const projAw = new Map();
-            let socCount = 0, finCount = 0;
-            filteredProjectes.forEach(r => {
-                if (!projAw.has(r[0])) projAw.set(r[0], [r[9] || 0, r[10] || 0]);
-                if (r[12] === 'Soci / Col·laborador de consorci') socCount++;
-                else if (r[12] === 'Entitat finançadora / Promotora') finCount++;
-                else { socCount++; finCount++; }
-            });
-            let projTot = 0, projUab = 0;
-            projAw.forEach(([t, u]) => { projTot += t; projUab += u; });
-            document.getElementById('kpi-proj-unics').textContent = fmtInt.format(projAw.size);
-            document.getElementById('kpi-proj-sub').textContent = `${fmtInt.format(filteredProjectes.length)} relacions projecte–agent`;
-            document.getElementById('kpi-proj-rols').textContent = `${fmtInt.format(socCount)} / ${fmtInt.format(finCount)}`;
+            document.getElementById('kpi-proj-unics').textContent = fmtInt.format(k.projUnics);
+            document.getElementById('kpi-proj-sub').textContent = `${fmtInt.format(k.projRels)} relacions projecte–agent`;
+            document.getElementById('kpi-proj-rols').textContent = `${fmtInt.format(k.projSoci)} / ${fmtInt.format(k.projFin)}`;
             document.getElementById('kpi-proj-rols-sub').textContent = 'Socis consorci / Finançadors';
-            document.getElementById('kpi-proj-imp').textContent = fmtEur.format(projUab);
-            document.getElementById('kpi-proj-imp-sub').textContent = `Import total: ${fmtEur.format(projTot)}`;
+            document.getElementById('kpi-proj-imp').textContent = fmtEur.format(k.projImpUab);
+            document.getElementById('kpi-proj-imp-sub').textContent = `Import total: ${fmtEur.format(k.projImpTot)}`;
         }
 
         function updateTabCounts() {
-            document.getElementById('tab-count-agents').textContent = fmtInt.format(filteredAgentsList.length);
-            document.getElementById('tab-count-conv').textContent = fmtInt.format(filteredConvenis.length);
-            document.getElementById('tab-count-proj').textContent = fmtInt.format(filteredProjectes.length);
+            document.getElementById('tab-count-agents').textContent = fmtInt.format(summary.counts.agents);
+            document.getElementById('tab-count-conv').textContent = fmtInt.format(summary.counts.conv);
+            document.getElementById('tab-count-proj').textContent = fmtInt.format(summary.counts.proj);
         }
 
         // -------------------------------------------------------------------
@@ -890,50 +813,20 @@
         }
 
         function renderDashboard() {
+            if (!summary) return;
             ensureMap();
             setTimeout(() => map.invalidateSize(), 50);
 
-            // Agrupar agents filtrats per municipi
-            const muniMap = new Map();
-            filteredAgentsList.forEach(item => {
-                const ag = item.ag;
-                const key = ag[5] || ag[7] || 'Catalunya';
-                let m = muniMap.get(key);
-                if (!m) {
-                    m = {
-                        key,
-                        prov: ag[7],
-                        latSum: 0, lonSum: 0, count: 0,
-                        pubInt: 0, privInt: 0, mixInt: 0,
-                        conv: 0, proj: 0, tot: 0,
-                        topAgents: [],
-                    };
-                    muniMap.set(key, m);
-                }
-                m.latSum += ag[8];
-                m.lonSum += ag[9];
-                m.count++;
-                m.conv += item.nConv;
-                m.proj += item.nProj;
-                m.tot += item.totInt;
-                if (ag[3] === 'Publico-Públic') m.pubInt += item.totInt;
-                else if (ag[3] === 'Publico-Privat') m.privInt += item.totInt;
-                else m.mixInt += item.totInt;
-                m.topAgents.push(item);
-            });
-
             mapLayer.clearLayers();
-            const muniList = Array.from(muniMap.values()).sort((a, b) => b.tot - a.tot);
+            const muniList = summary.muni;
 
             muniList.forEach(m => {
-                const lat = m.latSum / m.count;
-                const lon = m.lonSum / m.count;
                 const radius = Math.max(6, Math.min(28, 4 + Math.sqrt(m.tot) * 0.42));
                 let color = '#0f766e';
                 if (m.pubInt > m.tot * 0.55) color = '#008037';
                 else if (m.privInt > m.tot * 0.55) color = '#d97706';
 
-                const circle = L.circleMarker([lat, lon], {
+                const circle = L.circleMarker([m.lat, m.lon], {
                     radius,
                     color,
                     weight: 1.5,
@@ -941,9 +834,8 @@
                     fillOpacity: 0.62,
                 });
 
-                m.topAgents.sort((a, b) => b.totInt - a.totInt);
-                const topHtml = m.topAgents.slice(0, 4).map(it =>
-                    `<li class="truncate">• <strong>${esc(it.ag[1])}</strong> (${fmtInt.format(it.totInt)})</li>`
+                const topHtml = m.top.map(it =>
+                    `<li class="truncate">• <strong>${esc(it.nom)}</strong> (${fmtInt.format(it.totInt)})</li>`
                 ).join('');
 
                 const popupHtml = `
@@ -973,7 +865,7 @@
         function renderSideRanking(muniList) {
             const box = document.getElementById('sideRankingList');
             if (state.sideRankMode === 'agents') {
-                const top = [...filteredAgentsList].sort((a, b) => b.totInt - a.totInt).slice(0, 25);
+                const top = summary.topAgents;
                 if (!top.length) {
                     box.innerHTML = '<div class="py-8 text-center text-xs text-slate-500">Cap agent coincideix amb els filtres.</div>';
                     return;
@@ -1023,80 +915,42 @@
         }
 
         function renderCharts() {
-            // 1. Evolució anual 2010–2026
-            const yrConv = new Map();
-            const yrProj = new Map();
-            filteredConvenis.forEach(r => {
-                const y = r[5];
-                if (y && y >= 2010 && y <= 2026) {
-                    if (!yrConv.has(y)) yrConv.set(y, new Set());
-                    yrConv.get(y).add(r[0]);
-                }
-            });
-            filteredProjectes.forEach(r => {
-                const y = r[6];
-                if (y && y >= 2010 && y <= 2026) {
-                    if (!yrProj.has(y)) yrProj.set(y, new Set());
-                    yrProj.get(y).add(r[0]);
-                }
-            });
-            const yrs = [];
-            for (let y = 2010; y <= 2026; y++) yrs.push(y);
+            const c = summary.charts;
 
+            // 1. Evolució anual 2010–2026
             setOrUpdateChart('chartEvolution', {
                 type: 'bar',
                 data: {
-                    labels: yrs,
+                    labels: c.evolution.years,
                     datasets: [
-                        { label: 'Convenis únics', data: yrs.map(y => yrConv.get(y)?.size || 0), backgroundColor: '#008037', borderRadius: 4 },
-                        { label: 'Projectes únics', data: yrs.map(y => yrProj.get(y)?.size || 0), backgroundColor: '#0284c7', borderRadius: 4 },
+                        { label: 'Convenis únics', data: c.evolution.conv, backgroundColor: '#008037', borderRadius: 4 },
+                        { label: 'Projectes únics', data: c.evolution.proj, backgroundColor: '#0284c7', borderRadius: 4 },
                     ],
                 },
                 options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } },
             });
 
             // 2. Publico-Públic vs Publico-Privat
-            const cats = ['Publico-Públic', 'Publico-Privat', 'Publico-Mixt / Tercer Sector'];
-            const ppConv = { 'Publico-Públic': 0, 'Publico-Privat': 0, 'Publico-Mixt / Tercer Sector': 0 };
-            const ppProj = { 'Publico-Públic': 0, 'Publico-Privat': 0, 'Publico-Mixt / Tercer Sector': 0 };
-            filteredConvenis.forEach(r => { ppConv[DATA.agents[r[10]][3]]++; });
-            filteredProjectes.forEach(r => { ppProj[DATA.agents[r[11]][3]]++; });
-
             setOrUpdateChart('chartPublicPrivate', {
                 type: 'bar',
                 data: {
                     labels: ['Publico-Públic', 'Publico-Privat', 'Publico-Mixt'],
                     datasets: [
-                        { label: 'Relacions Convenis', data: cats.map(c => ppConv[c]), backgroundColor: '#008037', borderRadius: 4 },
-                        { label: 'Relacions Projectes', data: cats.map(c => ppProj[c]), backgroundColor: '#d97706', borderRadius: 4 },
+                        { label: 'Relacions Convenis', data: c.publicPrivate.conv, backgroundColor: '#008037', borderRadius: 4 },
+                        { label: 'Relacions Projectes', data: c.publicPrivate.proj, backgroundColor: '#d97706', borderRadius: 4 },
                     ],
                 },
                 options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } },
             });
 
             // 3. Top 10 Tipologies
-            const tipConv = new Map();
-            const tipProj = new Map();
-            const tipAll = new Map();
-            filteredConvenis.forEach(r => {
-                const t = DATA.agents[r[10]][4];
-                tipConv.set(t, (tipConv.get(t) || 0) + 1);
-                tipAll.set(t, (tipAll.get(t) || 0) + 1);
-            });
-            filteredProjectes.forEach(r => {
-                const t = DATA.agents[r[11]][4];
-                tipProj.set(t, (tipProj.get(t) || 0) + 1);
-                tipAll.set(t, (tipAll.get(t) || 0) + 1);
-            });
-            const topTips = Array.from(tipAll.entries()).sort((a, b) => b[1] - a[1]).slice(0, 10).map(x => x[0]);
-
             setOrUpdateChart('chartTypologies', {
                 type: 'bar',
                 data: {
-                    labels: topTips.map(t => t.length > 32 ? t.slice(0, 30) + '…' : t),
+                    labels: c.typologies.labels.map(t => t.length > 32 ? t.slice(0, 30) + '…' : t),
                     datasets: [
-                        { label: 'Convenis', data: topTips.map(t => tipConv.get(t) || 0), backgroundColor: '#008037' },
-                        { label: 'Projectes', data: topTips.map(t => tipProj.get(t) || 0), backgroundColor: '#0284c7' },
+                        { label: 'Convenis', data: c.typologies.conv, backgroundColor: '#008037' },
+                        { label: 'Projectes', data: c.typologies.proj, backgroundColor: '#0284c7' },
                     ],
                 },
                 options: {
@@ -1109,28 +963,13 @@
             });
 
             // 4. Top 12 Unitats UAB
-            const uConv = new Map();
-            const uProj = new Map();
-            const uAll = new Map();
-            filteredConvenis.forEach(r => {
-                if (!r[15]) return;
-                uConv.set(r[15], (uConv.get(r[15]) || 0) + 1);
-                uAll.set(r[15], (uAll.get(r[15]) || 0) + 1);
-            });
-            filteredProjectes.forEach(r => {
-                if (!r[21]) return;
-                uProj.set(r[21], (uProj.get(r[21]) || 0) + 1);
-                uAll.set(r[21], (uAll.get(r[21]) || 0) + 1);
-            });
-            const topUnits = Array.from(uAll.entries()).sort((a, b) => b[1] - a[1]).slice(0, 12).map(x => x[0]);
-
             setOrUpdateChart('chartUnits', {
                 type: 'bar',
                 data: {
-                    labels: topUnits.map(u => u.length > 36 ? u.slice(0, 34) + '…' : u),
+                    labels: c.units.labels.map(u => u.length > 36 ? u.slice(0, 34) + '…' : u),
                     datasets: [
-                        { label: 'Convenis', data: topUnits.map(u => uConv.get(u) || 0), backgroundColor: '#0f766e' },
-                        { label: 'Projectes', data: topUnits.map(u => uProj.get(u) || 0), backgroundColor: '#d97706' },
+                        { label: 'Convenis', data: c.units.conv, backgroundColor: '#0f766e' },
+                        { label: 'Projectes', data: c.units.proj, backgroundColor: '#d97706' },
                     ],
                 },
                 options: {
@@ -1162,151 +1001,153 @@
                 </div>`;
         }
 
-        function renderAgentsTable() {
-            const { col, dir } = state.sort.agents;
-            const mul = dir === 'asc' ? 1 : -1;
-            const sorted = [...filteredAgentsList].sort((a, b) => {
-                if (col === 'nom') return mul * a.ag[1].localeCompare(b.ag[1], 'ca');
-                if (col === 'interaccio') return mul * a.ag[3].localeCompare(b.ag[3], 'ca');
-                if (col === 'tipologia') return mul * a.ag[4].localeCompare(b.ag[4], 'ca');
-                if (col === 'municipi') return mul * (a.ag[5] || a.ag[7]).localeCompare(b.ag[5] || b.ag[7], 'ca');
-                if (col === 'nConv') return mul * (a.nConv - b.nConv);
-                if (col === 'nProj') return mul * (a.nProj - b.nProj);
-                if (col === 'impUab') return mul * (a.impUab - b.impUab);
-                return mul * (a.totInt - b.totInt);
-            });
-
-            const p = state.page.agents;
-            const slice = sorted.slice(p * PAGE_SIZE, (p + 1) * PAGE_SIZE);
-            const tbody = document.getElementById('tbody-agents');
-            if (!slice.length) {
-                tbody.innerHTML = '<tr><td colspan="8" class="p-8 text-center text-slate-500">Cap agent trobat amb els filtres actuals.</td></tr>';
-            } else {
-                tbody.innerHTML = slice.map(it => {
-                    const a = it.ag;
-                    const rorLink = a[10] ? `<a href="${esc(a[10])}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()" class="ml-1.5 text-[10px] font-bold text-sky-700 hover:underline">ROR ↗</a>` : '';
-                    return `
-                        <tr onclick="window.__openAgentDrawer(${it.idx})" class="hover:bg-emerald-50/50 cursor-pointer transition-colors">
-                            <td class="p-3 font-semibold text-slate-900 max-w-[300px]">
-                                <div>${esc(a[1])}${rorLink}</div>
-                                ${a[11] ? `<div class="text-[10px] text-slate-400 font-mono">NIF: ${esc(a[11])}</div>` : ''}
-                            </td>
-                            <td class="p-3 whitespace-nowrap">${badgeInteraction(a[3])}</td>
-                            <td class="p-3 text-slate-600">${esc(a[4])}</td>
-                            <td class="p-3 text-slate-700">
-                                <div>${esc(a[5] || '-')} ${a[6] ? `<span class="text-slate-400">(${esc(a[6])})</span>` : ''}</div>
-                                <div class="text-[10px] text-slate-500">${esc(a[7])}</div>
-                            </td>
-                            <td class="p-3 text-right font-bold tabular-nums">${fmtInt.format(it.nConv)}</td>
-                            <td class="p-3 text-right tabular-nums"><strong>${fmtInt.format(it.nProj)}</strong> <span class="text-[10px] text-slate-500">(${it.nProjSoci}/${it.nProjFin})</span></td>
-                            <td class="p-3 text-right font-semibold tabular-nums whitespace-nowrap">${fmtEur.format(it.impUab)}</td>
-                            <td class="p-3 text-slate-600 max-w-[240px] truncate" title="${esc(a[21])}">${esc(a[21] || '-')}</td>
-                        </tr>`;
-                }).join('');
-            }
-            renderPager('pager-agents', 'agents', sorted.length);
+        // Demana al servidor la pàgina vigent (filtres + ordenació + paginació) d'una taula.
+        async function loadTable(key) {
+            const seq = ++tableSeq[key];
+            const sort = state.sort[key];
+            const data = await api('/' + key, filterParams({ sort: sort.col, dir: sort.dir, page: state.page[key] }));
+            return seq === tableSeq[key] ? data : null;
         }
 
-        function renderConvenisTable() {
-            const { col, dir } = state.sort.convenis;
-            const mul = dir === 'asc' ? 1 : -1;
-            const sorted = [...filteredConvenis].sort((a, b) => {
-                if (col === 'any') return mul * ((a[5] || 0) - (b[5] || 0));
-                if (col === 'titol') return mul * a[12].localeCompare(b[12], 'ca');
-                if (col === 'agent') return mul * DATA.agents[a[10]][1].localeCompare(DATA.agents[b[10]][1], 'ca');
-                if (col === 'interaccio') return mul * DATA.agents[a[10]][3].localeCompare(DATA.agents[b[10]][3], 'ca');
-                if (col === 'unitat') return mul * a[15].localeCompare(b[15], 'ca');
-                return mul * ((a[9] || 0) - (b[9] || 0));
-            });
-
-            const p = state.page.convenis;
-            const slice = sorted.slice(p * PAGE_SIZE, (p + 1) * PAGE_SIZE);
-            const tbody = document.getElementById('tbody-convenis');
-            window.__lastConvSlice = sorted;
-            if (!slice.length) {
-                tbody.innerHTML = '<tr><td colspan="6" class="p-8 text-center text-slate-500">Cap conveni trobat amb els filtres actuals.</td></tr>';
-            } else {
-                tbody.innerHTML = slice.map((r, i) => {
-                    const ag = DATA.agents[r[10]];
-                    const globalIdx = p * PAGE_SIZE + i;
-                    return `
-                        <tr onclick="window.__openRecordModal('conv', ${globalIdx})" class="hover:bg-emerald-50/50 cursor-pointer transition-colors">
-                            <td class="p-3 font-bold tabular-nums whitespace-nowrap">${r[5] || '-'}</td>
-                            <td class="p-3 max-w-[380px]">
-                                <div class="font-semibold text-slate-900 line-clamp-2">${esc(r[12])}</div>
-                                <div class="text-[10px] text-slate-500 mt-0.5">${esc(r[3])}${r[4] ? ' · ' + esc(r[4]) : ''}</div>
-                            </td>
-                            <td class="p-3 max-w-[240px]">
-                                <div class="font-semibold text-slate-800">${esc(ag[1])}</div>
-                                <div class="text-[10px] text-slate-500">${esc(ag[5] || ag[7])} · ${esc(ag[4])}</div>
-                            </td>
-                            <td class="p-3 whitespace-nowrap">${badgeInteraction(ag[3])}</td>
-                            <td class="p-3 max-w-[240px]">
-                                <div class="text-slate-800 font-medium truncate" title="${esc(r[15])}">${esc(r[15] || '-')}</div>
-                                <div class="text-[10px] text-slate-500">${esc(r[17])} · ${esc(r[18] || '-')}</div>
-                            </td>
-                            <td class="p-3 text-right font-bold tabular-nums whitespace-nowrap">${fmtEur.format(r[9] || 0)}</td>
-                        </tr>`;
-                }).join('');
+        async function renderAgentsTable() {
+            setLoading(true);
+            try {
+                const data = await loadTable('agents');
+                if (!data) return;
+                const tbody = document.getElementById('tbody-agents');
+                if (!data.items.length) {
+                    tbody.innerHTML = '<tr><td colspan="8" class="p-8 text-center text-slate-500">Cap agent trobat amb els filtres actuals.</td></tr>';
+                } else {
+                    tbody.innerHTML = data.items.map(it => {
+                        const a = it.ag;
+                        const rorLink = a[10] ? `<a href="${esc(a[10])}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()" class="ml-1.5 text-[10px] font-bold text-sky-700 hover:underline">ROR ↗</a>` : '';
+                        return `
+                            <tr onclick="window.__openAgentDrawer(${it.idx})" class="hover:bg-emerald-50/50 cursor-pointer transition-colors">
+                                <td class="p-3 font-semibold text-slate-900 max-w-[300px]">
+                                    <div>${esc(a[1])}${rorLink}</div>
+                                    ${a[11] ? `<div class="text-[10px] text-slate-400 font-mono">NIF: ${esc(a[11])}</div>` : ''}
+                                </td>
+                                <td class="p-3 whitespace-nowrap">${badgeInteraction(a[3])}</td>
+                                <td class="p-3 text-slate-600">${esc(a[4])}</td>
+                                <td class="p-3 text-slate-700">
+                                    <div>${esc(a[5] || '-')} ${a[6] ? `<span class="text-slate-400">(${esc(a[6])})</span>` : ''}</div>
+                                    <div class="text-[10px] text-slate-500">${esc(a[7])}</div>
+                                </td>
+                                <td class="p-3 text-right font-bold tabular-nums">${fmtInt.format(it.nConv)}</td>
+                                <td class="p-3 text-right tabular-nums"><strong>${fmtInt.format(it.nProj)}</strong> <span class="text-[10px] text-slate-500">(${it.nProjSoci}/${it.nProjFin})</span></td>
+                                <td class="p-3 text-right font-semibold tabular-nums whitespace-nowrap">${fmtEur.format(it.impUab)}</td>
+                                <td class="p-3 text-slate-600 max-w-[240px] truncate" title="${esc(a[21])}">${esc(a[21] || '-')}</td>
+                            </tr>`;
+                    }).join('');
+                }
+                renderPager('pager-agents', 'agents', data.total);
+            } catch (e) {
+                handleError(e);
+            } finally {
+                setLoading(false);
             }
-            renderPager('pager-convenis', 'convenis', sorted.length);
         }
 
-        function renderProjectesTable() {
-            const { col, dir } = state.sort.projectes;
-            const mul = dir === 'asc' ? 1 : -1;
-            const sorted = [...filteredProjectes].sort((a, b) => {
-                if (col === 'any') return mul * ((a[6] || 0) - (b[6] || 0));
-                if (col === 'titol') return mul * a[17].localeCompare(b[17], 'ca');
-                if (col === 'agent') return mul * DATA.agents[a[11]][1].localeCompare(DATA.agents[b[11]][1], 'ca');
-                if (col === 'rol') return mul * a[12].localeCompare(b[12], 'ca');
-                if (col === 'unitat') return mul * a[21].localeCompare(b[21], 'ca');
-                return mul * ((a[10] || 0) - (b[10] || 0));
-            });
-
-            const p = state.page.projectes;
-            const slice = sorted.slice(p * PAGE_SIZE, (p + 1) * PAGE_SIZE);
-            const tbody = document.getElementById('tbody-projectes');
-            if (!slice.length) {
-                tbody.innerHTML = '<tr><td colspan="6" class="p-8 text-center text-slate-500">Cap projecte trobat amb els filtres actuals.</td></tr>';
-            } else {
-                window.__lastProjSlice = sorted;
-                tbody.innerHTML = slice.map((r, i) => {
-                    const ag = DATA.agents[r[11]];
-                    const globalIdx = p * PAGE_SIZE + i;
-                    return `
-                        <tr onclick="window.__openRecordModal('proj', ${globalIdx})" class="hover:bg-sky-50/50 cursor-pointer transition-colors">
-                            <td class="p-3 font-bold tabular-nums whitespace-nowrap">${r[6] || '-'}</td>
-                            <td class="p-3 max-w-[360px]">
-                                <div class="font-semibold text-slate-900 line-clamp-2">${esc(r[17])}</div>
-                                <div class="text-[10px] text-slate-500 mt-0.5 truncate">${esc(r[4])}${r[19] ? ' · ' + esc(r[19]) : ''}</div>
-                            </td>
-                            <td class="p-3 max-w-[230px]">
-                                <div class="font-semibold text-slate-800">${esc(ag[1])}</div>
-                                <div class="mt-0.5 flex flex-wrap items-center gap-1">${badgeInteraction(ag[3])} <span class="text-[10px] text-slate-500">${esc(ag[5] || ag[7])}</span></div>
-                            </td>
-                            <td class="p-3">
-                                <div>${badgeProjRol(r[12])}</div>
-                                <div class="text-[10px] text-slate-500 mt-0.5">${esc(r[14])}</div>
-                            </td>
-                            <td class="p-3 max-w-[230px]">
-                                <div class="text-slate-800 font-medium truncate" title="${esc(r[21])}">${esc(r[21] || '-')}</div>
-                                <div class="text-[10px] text-slate-500">${esc(r[23])} · ${esc(r[24] || '-')}</div>
-                            </td>
-                            <td class="p-3 text-right font-bold tabular-nums whitespace-nowrap">${fmtEur.format(r[10] || 0)}</td>
-                        </tr>`;
-                }).join('');
+        async function renderConvenisTable() {
+            setLoading(true);
+            try {
+                const data = await loadTable('convenis');
+                if (!data) return;
+                pageConv = data.items;
+                pageAgents = data.agents;
+                const tbody = document.getElementById('tbody-convenis');
+                if (!data.items.length) {
+                    tbody.innerHTML = '<tr><td colspan="6" class="p-8 text-center text-slate-500">Cap conveni trobat amb els filtres actuals.</td></tr>';
+                } else {
+                    tbody.innerHTML = data.items.map((r, i) => {
+                        const ag = data.agents[r[10]];
+                        return `
+                            <tr onclick="window.__openRecordModal('conv', ${i})" class="hover:bg-emerald-50/50 cursor-pointer transition-colors">
+                                <td class="p-3 font-bold tabular-nums whitespace-nowrap">${r[5] || '-'}</td>
+                                <td class="p-3 max-w-[380px]">
+                                    <div class="font-semibold text-slate-900 line-clamp-2">${esc(r[12])}</div>
+                                    <div class="text-[10px] text-slate-500 mt-0.5">${esc(r[3])}${r[4] ? ' · ' + esc(r[4]) : ''}</div>
+                                </td>
+                                <td class="p-3 max-w-[240px]">
+                                    <div class="font-semibold text-slate-800">${esc(ag[1])}</div>
+                                    <div class="text-[10px] text-slate-500">${esc(ag[5] || ag[7])} · ${esc(ag[4])}</div>
+                                </td>
+                                <td class="p-3 whitespace-nowrap">${badgeInteraction(ag[3])}</td>
+                                <td class="p-3 max-w-[240px]">
+                                    <div class="text-slate-800 font-medium truncate" title="${esc(r[15])}">${esc(r[15] || '-')}</div>
+                                    <div class="text-[10px] text-slate-500">${esc(r[17])} · ${esc(r[18] || '-')}</div>
+                                </td>
+                                <td class="p-3 text-right font-bold tabular-nums whitespace-nowrap">${fmtEur.format(r[9] || 0)}</td>
+                            </tr>`;
+                    }).join('');
+                }
+                renderPager('pager-convenis', 'convenis', data.total);
+            } catch (e) {
+                handleError(e);
+            } finally {
+                setLoading(false);
             }
-            renderPager('pager-projectes', 'projectes', sorted.length);
+        }
+
+        async function renderProjectesTable() {
+            setLoading(true);
+            try {
+                const data = await loadTable('projectes');
+                if (!data) return;
+                pageProj = data.items;
+                pageAgents = data.agents;
+                const tbody = document.getElementById('tbody-projectes');
+                if (!data.items.length) {
+                    tbody.innerHTML = '<tr><td colspan="6" class="p-8 text-center text-slate-500">Cap projecte trobat amb els filtres actuals.</td></tr>';
+                } else {
+                    tbody.innerHTML = data.items.map((r, i) => {
+                        const ag = data.agents[r[11]];
+                        return `
+                            <tr onclick="window.__openRecordModal('proj', ${i})" class="hover:bg-sky-50/50 cursor-pointer transition-colors">
+                                <td class="p-3 font-bold tabular-nums whitespace-nowrap">${r[6] || '-'}</td>
+                                <td class="p-3 max-w-[360px]">
+                                    <div class="font-semibold text-slate-900 line-clamp-2">${esc(r[17])}</div>
+                                    <div class="text-[10px] text-slate-500 mt-0.5 truncate">${esc(r[4])}${r[19] ? ' · ' + esc(r[19]) : ''}</div>
+                                </td>
+                                <td class="p-3 max-w-[230px]">
+                                    <div class="font-semibold text-slate-800">${esc(ag[1])}</div>
+                                    <div class="mt-0.5 flex flex-wrap items-center gap-1">${badgeInteraction(ag[3])} <span class="text-[10px] text-slate-500">${esc(ag[5] || ag[7])}</span></div>
+                                </td>
+                                <td class="p-3">
+                                    <div>${badgeProjRol(r[12])}</div>
+                                    <div class="text-[10px] text-slate-500 mt-0.5">${esc(r[14])}</div>
+                                </td>
+                                <td class="p-3 max-w-[230px]">
+                                    <div class="text-slate-800 font-medium truncate" title="${esc(r[21])}">${esc(r[21] || '-')}</div>
+                                    <div class="text-[10px] text-slate-500">${esc(r[23])} · ${esc(r[24] || '-')}</div>
+                                </td>
+                                <td class="p-3 text-right font-bold tabular-nums whitespace-nowrap">${fmtEur.format(r[10] || 0)}</td>
+                            </tr>`;
+                    }).join('');
+                }
+                renderPager('pager-projectes', 'projectes', data.total);
+            } catch (e) {
+                handleError(e);
+            } finally {
+                setLoading(false);
+            }
         }
 
         // -------------------------------------------------------------------
         // Drawer d'Agent i Modal de Detall
         // -------------------------------------------------------------------
-        window.__openAgentDrawer = function (agentIdx) {
+        window.__openAgentDrawer = async function (agentIdx) {
             state.drawerAgentIdx = agentIdx;
-            state.drawerTab = 'conv';
-            const ag = DATA.agents[agentIdx];
+            setLoading(true);
+            try {
+                drawerData = await api('/agents/' + agentIdx, filterParams());
+            } catch (e) {
+                handleError(e);
+                return;
+            } finally {
+                setLoading(false);
+            }
+            const ag = drawerData.agent;
             document.getElementById('drawerAgentTitle').textContent = ag[1];
             document.getElementById('drawerAgentSubtitle').textContent = `${ag[4]} · ${ag[5] ? ag[5] + ', ' : ''}${ag[7]} ${ag[6] ? '(' + ag[6] + ')' : ''}`;
             document.getElementById('drawerAgentBadges').innerHTML = `
@@ -1320,11 +1161,9 @@
                 <div class="bg-slate-50 p-2.5 rounded-xl border border-slate-200 col-span-2 sm:col-span-1"><div class="text-[10px] text-slate-500 uppercase font-bold">Identificadors</div><div class="text-xs font-semibold text-slate-800 mt-0.5">${ag[11] ? 'NIF: ' + esc(ag[11]) : 'Sense NIF'} ${ag[10] ? `· <a href="${esc(ag[10])}" target="_blank" rel="noopener noreferrer" class="text-emerald-700 underline">ROR ↗</a>` : ''}</div></div>
                 <div class="bg-slate-50 p-2.5 rounded-xl border border-slate-200 col-span-2 sm:col-span-3"><div class="text-[10px] text-slate-500 uppercase font-bold">Principals Unitats UAB</div><div class="text-xs text-slate-700 mt-0.5">${esc(ag[21] || '-')}</div></div>`;
 
-            const convs = filteredConvenis.filter(r => r[10] === agentIdx);
-            const projs = filteredProjectes.filter(r => r[11] === agentIdx);
-            document.getElementById('drawerConvCount').textContent = convs.length;
-            document.getElementById('drawerProjCount').textContent = projs.length;
-            renderDrawerList();
+            document.getElementById('drawerConvCount').textContent = drawerData.convs.length;
+            document.getElementById('drawerProjCount').textContent = drawerData.projs.length;
+            window.switchDrawerTab('conv');
             document.getElementById('agentDrawerOverlay').classList.remove('hidden');
         };
 
@@ -1348,9 +1187,9 @@
 
         function renderDrawerList() {
             const box = document.getElementById('drawerRecordsList');
-            const idx = state.drawerAgentIdx;
+            if (!drawerData) return;
             if (state.drawerTab === 'conv') {
-                const list = filteredConvenis.filter(r => r[10] === idx);
+                const list = drawerData.convs;
                 if (!list.length) {
                     box.innerHTML = '<p class="text-xs text-slate-500 py-4">Cap conveni sota els filtres vigents.</p>';
                     return;
@@ -1366,7 +1205,7 @@
                         ${r[13] ? `<p class="text-[11px] text-slate-600 bg-slate-50 p-2 rounded border border-slate-100 mt-1">${esc(r[13])}</p>` : ''}
                     </div>`).join('');
             } else {
-                const list = filteredProjectes.filter(r => r[11] === idx);
+                const list = drawerData.projs;
                 if (!list.length) {
                     box.innerHTML = '<p class="text-xs text-slate-500 py-4">Cap projecte sota els filtres vigents.</p>';
                     return;
@@ -1388,11 +1227,11 @@
         }
 
         window.__openRecordModal = function (kind, sliceIdx) {
-            const r = kind === 'conv' ? window.__lastConvSlice[sliceIdx] : window.__lastProjSlice[sliceIdx];
+            const r = kind === 'conv' ? pageConv[sliceIdx] : pageProj[sliceIdx];
             if (!r) return;
             const isConv = kind === 'conv';
             const agIdx = isConv ? r[10] : r[11];
-            const ag = DATA.agents[agIdx];
+            const ag = pageAgents[agIdx];
 
             document.getElementById('modalRecordKind').textContent = isConv ? 'Conveni UAB — Territori Català' : 'Projecte de Recerca Conjunt';
             document.getElementById('modalRecordTitle').textContent = isConv ? r[12] : r[17];
@@ -1464,28 +1303,42 @@
             XLSX.writeFile(wb, filename + '.xlsx');
         }
 
-        window.exportAgents = function (fmt) {
-            const headers = ['UUID', 'Agent', 'Tipus Interacció', 'Caràcter', 'Tipologia EGRETA', 'Municipi', 'CP', 'Província', 'ROR', 'NIF', 'Convenis (filtrats)', 'Projectes (filtrats)', 'Import UAB (€)', 'Principals Unitats UAB'];
-            const rows = filteredAgentsList.map(it => [it.ag[0], it.ag[1], it.ag[3], it.ag[2], it.ag[4], it.ag[5], it.ag[6], it.ag[7], it.ag[10], it.ag[11], it.nConv, it.nProj, Math.round(it.impUab * 100) / 100, it.ag[21]]);
-            downloadMatrix('agents_territori_catala_filtrats', headers, rows, fmt);
+        async function fetchAllRows(key) {
+            const sort = state.sort[key];
+            return api('/' + key, filterParams({ all: 'true', sort: sort.col, dir: sort.dir }));
+        }
+
+        window.exportAgents = async function (fmt) {
+            try {
+                const data = await fetchAllRows('agents');
+                const headers = ['UUID', 'Agent', 'Tipus Interacció', 'Caràcter', 'Tipologia EGRETA', 'Municipi', 'CP', 'Província', 'ROR', 'NIF', 'Convenis (filtrats)', 'Projectes (filtrats)', 'Import UAB (€)', 'Principals Unitats UAB'];
+                const rows = data.items.map(it => [it.ag[0], it.ag[1], it.ag[3], it.ag[2], it.ag[4], it.ag[5], it.ag[6], it.ag[7], it.ag[10], it.ag[11], it.nConv, it.nProj, Math.round(it.impUab * 100) / 100, it.ag[21]]);
+                downloadMatrix('agents_territori_catala_filtrats', headers, rows, fmt);
+            } catch (e) { handleError(e); }
         };
 
-        window.exportConvenis = function (fmt) {
-            const headers = ['Award UUID', 'Referència', 'Any', 'Tipus Conveni', 'Naturalesa', 'Títol', 'Agent', 'Caràcter Relació', 'Municipi', 'Província', 'Unitat UAB', 'Àmbit', 'IP UAB', 'Import Total (€)', 'Import UAB (€)'];
-            const rows = filteredConvenis.map(r => {
-                const ag = DATA.agents[r[10]];
-                return [r[0], r[2], r[5], r[3], r[4], r[12], ag[1], ag[3], ag[5], ag[7], r[15], r[17], r[18], r[8], r[9]];
-            });
-            downloadMatrix('convenis_territori_catala_filtrats', headers, rows, fmt);
+        window.exportConvenis = async function (fmt) {
+            try {
+                const data = await fetchAllRows('convenis');
+                const headers = ['Award UUID', 'Referència', 'Any', 'Tipus Conveni', 'Naturalesa', 'Títol', 'Agent', 'Caràcter Relació', 'Municipi', 'Província', 'Unitat UAB', 'Àmbit', 'IP UAB', 'Import Total (€)', 'Import UAB (€)'];
+                const rows = data.items.map(r => {
+                    const ag = data.agents[r[10]];
+                    return [r[0], r[2], r[5], r[3], r[4], r[12], ag[1], ag[3], ag[5], ag[7], r[15], r[17], r[18], r[8], r[9]];
+                });
+                downloadMatrix('convenis_territori_catala_filtrats', headers, rows, fmt);
+            } catch (e) { handleError(e); }
         };
 
-        window.exportProjectes = function (fmt) {
-            const headers = ['Award UUID', 'Project UUID', 'Referència', 'Any', 'Tipus Projecte', 'Títol', 'Agent', 'Caràcter Relació', 'Rol Projecte', 'Lideratge UAB', 'Municipi', 'Província', 'Unitat UAB', 'Àmbit', 'IP UAB', 'Convocatòria', 'Import Total (€)', 'Import UAB (€)'];
-            const rows = filteredProjectes.map(r => {
-                const ag = DATA.agents[r[11]];
-                return [r[0], r[1], r[3], r[6], r[4], r[17], ag[1], ag[3], r[12], r[14], ag[5], ag[7], r[21], r[23], r[24], r[19], r[9], r[10]];
-            });
-            downloadMatrix('projectes_territori_catala_filtrats', headers, rows, fmt);
+        window.exportProjectes = async function (fmt) {
+            try {
+                const data = await fetchAllRows('projectes');
+                const headers = ['Award UUID', 'Project UUID', 'Referència', 'Any', 'Tipus Projecte', 'Títol', 'Agent', 'Caràcter Relació', 'Rol Projecte', 'Lideratge UAB', 'Municipi', 'Província', 'Unitat UAB', 'Àmbit', 'IP UAB', 'Convocatòria', 'Import Total (€)', 'Import UAB (€)'];
+                const rows = data.items.map(r => {
+                    const ag = data.agents[r[11]];
+                    return [r[0], r[1], r[3], r[6], r[4], r[17], ag[1], ag[3], r[12], r[14], ag[5], ag[7], r[21], r[23], r[24], r[19], r[9], r[10]];
+                });
+                downloadMatrix('projectes_territori_catala_filtrats', headers, rows, fmt);
+            } catch (e) { handleError(e); }
         };
 
         // -------------------------------------------------------------------
@@ -1634,20 +1487,25 @@
         };
 
         function populateMethodologyTab() {
-            const st = DATA.meta.stats || {};
-            const co = DATA.meta.coordOrigins || {};
+            const st = META.meta.stats || {};
+            const co = META.meta.coordOrigins || {};
+            const built = META.meta.builtAt ? new Date(META.meta.builtAt).toLocaleString('ca-ES') : '-';
             document.getElementById('metodologiaStats').innerHTML = `
-                <div class="p-3 rounded-xl bg-slate-50 border border-slate-200 flex justify-between"><span>Total ExternalOrganizations a Kraken</span><strong class="tabular-nums">${fmtInt.format(st.totalEo || 60703)}</strong></div>
-                <div class="p-3 rounded-xl bg-slate-50 border border-slate-200 flex justify-between"><span>Placeholders exclosos (Sense entitat, Clients varis…)</span><strong class="tabular-nums text-rose-700">-${fmtInt.format(st.placeholdersExclosos || 29)}</strong></div>
-                <div class="p-3 rounded-xl bg-slate-50 border border-slate-200 flex justify-between"><span>Autoreferències internes UAB excloses</span><strong class="tabular-nums text-rose-700">-${fmtInt.format(st.autoreferenciesExcloses || 1614)}</strong></div>
-                <div class="p-3 rounded-xl bg-emerald-50 border border-emerald-200 flex justify-between"><span>Agents catalans identificats (actius amb UAB)</span><strong class="tabular-nums text-emerald-900">${fmtInt.format(st.agentsCatalunya || 9804)} (${fmtInt.format(st.agentsActius || 3820)} actius)</strong></div>
+                <div class="p-3 rounded-xl bg-sky-50 border border-sky-200 flex items-center justify-between gap-3">
+                    <span>Dades consultades a MongoDB (Kraken): <strong>${esc(built)}</strong> <span class="text-slate-500">· es refresquen automàticament cada hora</span></span>
+                    <button type="button" onclick="window.refreshData()" class="px-2.5 py-1 rounded-lg bg-sky-700 text-white font-bold text-[11px] hover:bg-sky-800 cursor-pointer shrink-0">Refrescar ara</button>
+                </div>
+                <div class="p-3 rounded-xl bg-slate-50 border border-slate-200 flex justify-between"><span>Total ExternalOrganizations a Kraken</span><strong class="tabular-nums">${fmtInt.format(st.totalEo || 0)}</strong></div>
+                <div class="p-3 rounded-xl bg-slate-50 border border-slate-200 flex justify-between"><span>Placeholders exclosos (Sense entitat, Clients varis…)</span><strong class="tabular-nums text-rose-700">-${fmtInt.format(st.placeholdersExclosos || 0)}</strong></div>
+                <div class="p-3 rounded-xl bg-slate-50 border border-slate-200 flex justify-between"><span>Autoreferències internes UAB excloses</span><strong class="tabular-nums text-rose-700">-${fmtInt.format(st.autoreferenciesExcloses || 0)}</strong></div>
+                <div class="p-3 rounded-xl bg-emerald-50 border border-emerald-200 flex justify-between"><span>Agents catalans identificats (actius amb UAB)</span><strong class="tabular-nums text-emerald-900">${fmtInt.format(st.agentsCatalunya || 0)} (${fmtInt.format(st.agentsActius || 0)} actius)</strong></div>
                 <div class="p-3 rounded-xl bg-slate-50 border border-slate-200">
-                    <div class="font-bold text-slate-800 mb-1">Geocodificació per al mapa web (3.820 agents):</div>
+                    <div class="font-bold text-slate-800 mb-1">Geocodificació per al mapa web (${fmtInt.format(st.agentsActius || 0)} agents):</div>
                     <div class="text-[11px] text-slate-600 tabular-nums">Municipi: <strong>${fmtInt.format(co.municipi || 0)}</strong> · Prefix CP: <strong>${fmtInt.format(co.cp3 || 0)}</strong> · Província: <strong>${fmtInt.format(co.provincia || 0)}</strong> · Coords EGRETA: <strong>${fmtInt.format(co.egreta || 0)}</strong></div>
                 </div>
                 <p class="text-[11px] text-slate-500 leading-relaxed pt-1"><strong>Regla d'imports:</strong> quan un mateix conveni o projecte té diversos socis catalans, cada fila representa un parell (Interacció, Agent). Els KPIs globals d'aquesta pàgina dedupliquen automàticament per <code>award_uuid</code> per no duplicar imports.</p>`;
 
-            const rcRows = DATA.meta.rc0025r || [];
+            const rcRows = META.meta.rc0025r || [];
             document.getElementById('tbody-rc0025r').innerHTML = rcRows.map(row => {
                 const isTot = row[0] === 'TOTAL RC0025R';
                 return `<tr class="${isTot ? 'bg-emerald-50 font-extrabold text-emerald-900' : ''}">
@@ -1658,6 +1516,42 @@
             }).join('');
         }
 
+        // Espera que el servidor tingui la instantània llesta (la primera construcció triga uns 40 s).
+        async function loadMeta() {
+            for (;;) {
+                try {
+                    META = await api('/meta');
+                    return;
+                } catch (e) {
+                    if (e.unavailable && e.state !== 'error') {
+                        showBanner('<i class="fa-solid fa-spinner fa-spin mr-2"></i>Carregant les dades des de MongoDB… pot trigar uns 40 segons la primera vegada.', 'info');
+                        await sleep(4000);
+                        continue;
+                    }
+                    throw e;
+                }
+            }
+        }
+
+        window.refreshData = async function () {
+            const before = META && META.meta ? META.meta.builtAt : null;
+            showBanner('<i class="fa-solid fa-spinner fa-spin mr-2"></i>Refrescant les dades des de MongoDB… (uns 40 segons)', 'info');
+            try {
+                await window.apiFetch(API + '/refresh', { method: 'POST' });
+                for (let i = 0; i < 100; i++) {
+                    await sleep(3000);
+                    const st = await (await window.apiFetch(API + '/status')).json();
+                    if (st.state === 'error') throw new Error(st.error || 'Error en refrescar les dades');
+                    if (st.state === 'ready' && st.builtAt && st.builtAt !== before) break;
+                }
+                await loadMeta();
+                initFilterDropdowns();
+                populateMethodologyTab();
+                hideBanner();
+                await recompute();
+            } catch (e) { handleError(e); }
+        };
+
         document.addEventListener('keydown', e => {
             if (e.key === 'Escape') {
                 closeRecordModal();
@@ -1665,9 +1559,15 @@
             }
         });
 
-        initFilterDropdowns();
-        populateMethodologyTab();
-        recompute();
+        (async function init() {
+            try {
+                await loadMeta();
+                hideBanner();
+                initFilterDropdowns();
+                populateMethodologyTab();
+                await recompute();
+            } catch (e) { handleError(e); }
+        })();
     })();
     </script>
 </body>
