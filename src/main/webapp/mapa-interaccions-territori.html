@@ -1,0 +1,1674 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mapa d'Interaccions UAB — Agents del Territori Català | Portal de Recerca</title>
+    <script src="config.js"></script>
+    <script src="uab-brand.js" defer></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="uab-theme.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="mapa-territori-data.js"></script>
+    <style>
+        .tabular-nums { font-variant-numeric: tabular-nums; }
+        .drawer-backdrop { transition: opacity 200ms ease; }
+        .drawer-panel { transition: transform 240ms cubic-bezier(0.16, 1, 0.3, 1); }
+        @media (prefers-reduced-motion: reduce) {
+            .drawer-backdrop, .drawer-panel { transition: none !important; }
+        }
+        #cataloniaMap { height: 480px; z-index: 1; }
+        .leaflet-popup-content { margin: 12px 14px; min-width: 240px; }
+        .tab-btn[aria-selected="true"] {
+            background-color: #008037;
+            color: #ffffff;
+            box-shadow: 0 1px 3px rgba(0, 128, 55, 0.25);
+        }
+        .prov-pill[aria-pressed="true"] {
+            background-color: #008037;
+            color: #ffffff;
+            border-color: #008037;
+        }
+        .sort-th { cursor: pointer; user-select: none; }
+        .sort-th:hover { background-color: #e2e8f0; }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen text-slate-800">
+
+    <!-- Capçalera llegida per uab-brand.js -->
+    <header class="hidden">
+        <h1>Mapa d'Interaccions UAB — Agents del Territori Català</h1>
+        <p>Convenis publico-públics i publico-privats i projectes de recerca conjunts (dades netes EGRETA / Kraken)</p>
+    </header>
+
+    <main class="w-full max-w-[1640px] mx-auto px-4 sm:px-6 py-5 space-y-5">
+
+        <!-- KPIs globals dinàmics -->
+        <section aria-label="Indicadors globals" class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+            <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs">
+                <div class="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                    <span>Agents Catalans</span>
+                    <span class="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center">
+                        <i class="fa-solid fa-building-columns text-xs"></i>
+                    </span>
+                </div>
+                <div id="kpi-agents" class="mt-2 text-2xl font-extrabold text-slate-900 tabular-nums">-</div>
+                <div id="kpi-agents-sub" class="mt-1 text-[11px] text-slate-500 tabular-nums">-</div>
+            </div>
+
+            <div class="bg-white rounded-2xl border border-emerald-200 p-4 shadow-xs">
+                <div class="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-emerald-800">
+                    <span>Convenis Únics</span>
+                    <span class="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center">
+                        <i class="fa-solid fa-file-signature text-xs"></i>
+                    </span>
+                </div>
+                <div id="kpi-conv-unics" class="mt-2 text-2xl font-extrabold text-emerald-800 tabular-nums">-</div>
+                <div id="kpi-conv-sub" class="mt-1 text-[11px] text-slate-600 tabular-nums">-</div>
+            </div>
+
+            <div class="bg-white rounded-2xl border border-emerald-200 p-4 shadow-xs">
+                <div class="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-emerald-800">
+                    <span>Import Convenis UAB</span>
+                    <span class="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center">
+                        <i class="fa-solid fa-euro-sign text-xs"></i>
+                    </span>
+                </div>
+                <div id="kpi-conv-imp" class="mt-2 text-2xl font-extrabold text-emerald-800 tabular-nums">-</div>
+                <div id="kpi-conv-imp-sub" class="mt-1 text-[11px] text-slate-500 tabular-nums">-</div>
+            </div>
+
+            <div class="bg-white rounded-2xl border border-sky-200 p-4 shadow-xs">
+                <div class="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-sky-900">
+                    <span>Projectes Únics</span>
+                    <span class="w-7 h-7 rounded-lg bg-sky-50 text-sky-800 flex items-center justify-center">
+                        <i class="fa-solid fa-flask text-xs"></i>
+                    </span>
+                </div>
+                <div id="kpi-proj-unics" class="mt-2 text-2xl font-extrabold text-sky-900 tabular-nums">-</div>
+                <div id="kpi-proj-sub" class="mt-1 text-[11px] text-slate-600 tabular-nums">-</div>
+            </div>
+
+            <div class="bg-white rounded-2xl border border-amber-200 p-4 shadow-xs">
+                <div class="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-amber-900">
+                    <span>Rol en Projectes</span>
+                    <span class="w-7 h-7 rounded-lg bg-amber-50 text-amber-800 flex items-center justify-center">
+                        <i class="fa-solid fa-people-arrows text-xs"></i>
+                    </span>
+                </div>
+                <div id="kpi-proj-rols" class="mt-2 text-lg font-extrabold text-amber-900 tabular-nums">-</div>
+                <div id="kpi-proj-rols-sub" class="mt-1 text-[11px] text-slate-600 tabular-nums">-</div>
+            </div>
+
+            <div class="bg-white rounded-2xl border border-sky-200 p-4 shadow-xs">
+                <div class="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-sky-900">
+                    <span>Import Projectes UAB</span>
+                    <span class="w-7 h-7 rounded-lg bg-sky-50 text-sky-800 flex items-center justify-center">
+                        <i class="fa-solid fa-coins text-xs"></i>
+                    </span>
+                </div>
+                <div id="kpi-proj-imp" class="mt-2 text-2xl font-extrabold text-sky-900 tabular-nums">-</div>
+                <div id="kpi-proj-imp-sub" class="mt-1 text-[11px] text-slate-500 tabular-nums">-</div>
+            </div>
+        </section>
+
+        <!-- Barra de filtres globals transversals -->
+        <section aria-label="Filtres globals" class="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs space-y-3">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-3 items-end">
+
+                <!-- Anys -->
+                <div class="lg:col-span-3">
+                    <div class="flex items-center justify-between mb-1">
+                        <span class="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Període (any concessió)</span>
+                        <div class="flex gap-1">
+                            <button type="button" onclick="setYearPreset(null, null)" class="year-preset-btn px-2 py-0.5 text-[10px] font-bold rounded border border-slate-200 bg-slate-100 text-slate-700 hover:bg-emerald-50 cursor-pointer">Tots</button>
+                            <button type="button" onclick="setYearPreset(2020, 2026)" class="year-preset-btn px-2 py-0.5 text-[10px] font-bold rounded border border-slate-200 bg-slate-100 text-slate-700 hover:bg-emerald-50 cursor-pointer">2020–2026</button>
+                            <button type="button" onclick="setYearPreset(2021, 2025)" class="year-preset-btn px-2 py-0.5 text-[10px] font-bold rounded border border-slate-200 bg-slate-100 text-slate-700 hover:bg-emerald-50 cursor-pointer">2021–2025</button>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <select id="filterYearFrom" aria-label="Any inici" onchange="onFilterChange()"
+                                class="w-full h-[38px] px-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700">
+                            <option value="">Des de: Tots</option>
+                        </select>
+                        <select id="filterYearTo" aria-label="Any fi" onchange="onFilterChange()"
+                                class="w-full h-[38px] px-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700">
+                            <option value="">Fins a: Tots</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Tipus interacció -->
+                <div class="lg:col-span-2">
+                    <label for="filterInteraction" class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Caràcter relació</label>
+                    <select id="filterInteraction" onchange="onFilterChange()"
+                            class="w-full h-[38px] px-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700">
+                        <option value="ALL">Tots (Públic i Privat)</option>
+                        <option value="Publico-Públic">Publico-Públic</option>
+                        <option value="Publico-Privat">Publico-Privat</option>
+                        <option value="Publico-Mixt / Tercer Sector">Publico-Mixt / Tercer Sector</option>
+                    </select>
+                </div>
+
+                <!-- Tipologia d'agent -->
+                <div class="lg:col-span-2">
+                    <label for="filterTipologia" class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Tipologia d'agent</label>
+                    <select id="filterTipologia" onchange="onFilterChange()"
+                            class="w-full h-[38px] px-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700">
+                        <option value="ALL">Totes les tipologies</option>
+                    </select>
+                </div>
+
+                <!-- Àmbit i Unitat UAB -->
+                <div class="lg:col-span-3">
+                    <label for="filterUnitat" class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Resposta UAB (Àmbit i Unitat)</label>
+                    <div class="grid grid-cols-5 gap-2">
+                        <select id="filterAmbit" aria-label="Àmbit UAB" onchange="onFilterChange()"
+                                class="col-span-2 h-[38px] px-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700">
+                            <option value="ALL">UAB + Esfera</option>
+                            <option value="UAB">Només UAB</option>
+                            <option value="Esfera UAB">Només Esfera UAB</option>
+                        </select>
+                        <select id="filterUnitat" aria-label="Unitat gestora UAB" onchange="onFilterChange()"
+                                class="col-span-3 h-[38px] px-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700">
+                            <option value="ALL">Totes les unitats UAB</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Cercador -->
+                <div class="lg:col-span-2">
+                    <label for="filterSearch" class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Cercador lliure</label>
+                    <div class="relative">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs" aria-hidden="true"></i>
+                        <input id="filterSearch" type="search" placeholder="Agent, municipi, títol, IP..."
+                               oninput="onSearchInput()"
+                               class="w-full h-[38px] pl-8 pr-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Fila de províncies, xip municipi i reset -->
+            <div class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100">
+                <div class="flex flex-wrap items-center gap-1.5" role="group" aria-label="Filtrar per província">
+                    <span class="text-[11px] font-bold text-slate-500 uppercase tracking-wider mr-1">Territori:</span>
+                    <button type="button" data-prov="ALL" aria-pressed="true" onclick="setProvinceFilter('ALL')" class="prov-pill px-2.5 py-1 rounded-lg text-xs font-semibold border border-slate-200 bg-white text-slate-700 hover:bg-slate-100 cursor-pointer">Totes</button>
+                    <button type="button" data-prov="Barcelona" aria-pressed="false" onclick="setProvinceFilter('Barcelona')" class="prov-pill px-2.5 py-1 rounded-lg text-xs font-semibold border border-slate-200 bg-white text-slate-700 hover:bg-slate-100 cursor-pointer">Barcelona</button>
+                    <button type="button" data-prov="Girona" aria-pressed="false" onclick="setProvinceFilter('Girona')" class="prov-pill px-2.5 py-1 rounded-lg text-xs font-semibold border border-slate-200 bg-white text-slate-700 hover:bg-slate-100 cursor-pointer">Girona</button>
+                    <button type="button" data-prov="Tarragona" aria-pressed="false" onclick="setProvinceFilter('Tarragona')" class="prov-pill px-2.5 py-1 rounded-lg text-xs font-semibold border border-slate-200 bg-white text-slate-700 hover:bg-slate-100 cursor-pointer">Tarragona</button>
+                    <button type="button" data-prov="Lleida" aria-pressed="false" onclick="setProvinceFilter('Lleida')" class="prov-pill px-2.5 py-1 rounded-lg text-xs font-semibold border border-slate-200 bg-white text-slate-700 hover:bg-slate-100 cursor-pointer">Lleida</button>
+                    <button type="button" data-prov="Catalunya (general)" aria-pressed="false" onclick="setProvinceFilter('Catalunya (general)')" class="prov-pill px-2.5 py-1 rounded-lg text-xs font-semibold border border-slate-200 bg-white text-slate-700 hover:bg-slate-100 cursor-pointer">Catalunya (gen.)</button>
+
+                    <span id="municipiChip" class="hidden inline-flex items-center gap-1.5 ml-2 px-2.5 py-1 rounded-full bg-amber-100 text-amber-900 border border-amber-300 text-xs font-bold">
+                        <i class="fa-solid fa-location-dot" aria-hidden="true"></i>
+                        <span id="municipiChipText"></span>
+                        <button type="button" onclick="clearMunicipiFilter()" aria-label="Treure filtre de municipi" class="hover:text-amber-700 cursor-pointer">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    </span>
+                </div>
+
+                <button type="button" onclick="resetAllFilters()"
+                        class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 cursor-pointer">
+                    <i class="fa-solid fa-rotate-left"></i> Reiniciar filtres
+                </button>
+            </div>
+        </section>
+
+        <!-- Navegació per 5 pestanyes -->
+        <nav aria-label="Seccions del mapa d'interaccions" class="bg-white rounded-2xl border border-slate-200 p-1.5 shadow-xs flex flex-wrap gap-1.5">
+            <button type="button" role="tab" aria-selected="true" data-tab="dashboard" onclick="switchTab('dashboard')"
+                    class="tab-btn flex-1 min-w-[160px] py-2 px-3 rounded-xl text-xs sm:text-sm font-bold text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer flex items-center justify-center gap-2">
+                <i class="fa-solid fa-map-location-dot" aria-hidden="true"></i> Mapa i Dashboard
+            </button>
+            <button type="button" role="tab" aria-selected="false" data-tab="agents" onclick="switchTab('agents')"
+                    class="tab-btn flex-1 min-w-[160px] py-2 px-3 rounded-xl text-xs sm:text-sm font-bold text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer flex items-center justify-center gap-2">
+                <i class="fa-solid fa-users-gear" aria-hidden="true"></i> Agents (<span id="tab-count-agents" class="tabular-nums">-</span>)
+            </button>
+            <button type="button" role="tab" aria-selected="false" data-tab="convenis" onclick="switchTab('convenis')"
+                    class="tab-btn flex-1 min-w-[160px] py-2 px-3 rounded-xl text-xs sm:text-sm font-bold text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer flex items-center justify-center gap-2">
+                <i class="fa-solid fa-handshake" aria-hidden="true"></i> Convenis (<span id="tab-count-conv" class="tabular-nums">-</span>)
+            </button>
+            <button type="button" role="tab" aria-selected="false" data-tab="projectes" onclick="switchTab('projectes')"
+                    class="tab-btn flex-1 min-w-[160px] py-2 px-3 rounded-xl text-xs sm:text-sm font-bold text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer flex items-center justify-center gap-2">
+                <i class="fa-solid fa-diagram-project" aria-hidden="true"></i> Projectes (<span id="tab-count-proj" class="tabular-nums">-</span>)
+            </button>
+            <button type="button" role="tab" aria-selected="false" data-tab="metodologia" onclick="switchTab('metodologia')"
+                    class="tab-btn flex-1 min-w-[160px] py-2 px-3 rounded-xl text-xs sm:text-sm font-bold text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer flex items-center justify-center gap-2">
+                <i class="fa-solid fa-book-open" aria-hidden="true"></i> Metodologia i Fonts
+            </button>
+        </nav>
+
+        <!-- PESTANYA 1: Mapa Geogràfic i Dashboard Analític -->
+        <section id="panel-dashboard" class="tab-panel space-y-5">
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+                <!-- Mapa Leaflet -->
+                <div class="lg:col-span-8 bg-white rounded-2xl border border-slate-200 p-4 shadow-xs flex flex-col gap-3">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                            <h2 class="text-sm font-bold text-slate-900">Distribució Territorial dels Agents (Catalunya · WMS ICGC)</h2>
+                            <p class="text-xs text-slate-500">Cartografia base WMS de l'Institut Cartogràfic i Geològic de Catalunya (ICGC). Mida proporcional al volum d'interaccions; clic a qualsevol cercle per filtrar.</p>
+                        </div>
+                        <div class="flex flex-wrap items-center gap-3 text-[11px] font-semibold text-slate-600">
+                            <span class="inline-flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-[#008037] inline-block"></span> Predomini Publico-Públic</span>
+                            <span class="inline-flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-[#d97706] inline-block"></span> Predomini Publico-Privat</span>
+                            <span class="inline-flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-[#0f766e] inline-block"></span> Equilibrat / Mixt</span>
+                        </div>
+                    </div>
+                    <div id="cataloniaMap" class="w-full rounded-xl border border-slate-200"></div>
+                </div>
+
+                <!-- Rànquing lateral -->
+                <div class="lg:col-span-4 bg-white rounded-2xl border border-slate-200 p-4 shadow-xs flex flex-col">
+                    <div class="flex items-center justify-between gap-2 mb-3">
+                        <h2 class="text-sm font-bold text-slate-900">Rànquing Territorial</h2>
+                        <div class="inline-flex rounded-lg bg-slate-100 p-0.5 text-[11px] font-bold">
+                            <button type="button" id="rankBtnAgents" onclick="setSideRankMode('agents')" class="px-2.5 py-1 rounded-md bg-white text-slate-900 shadow-xs cursor-pointer">Top Agents</button>
+                            <button type="button" id="rankBtnMunis" onclick="setSideRankMode('munis')" class="px-2.5 py-1 rounded-md text-slate-600 cursor-pointer">Top Municipis</button>
+                        </div>
+                    </div>
+                    <div id="sideRankingList" class="divide-y divide-slate-100 overflow-y-auto max-h-[445px] pr-1"></div>
+                </div>
+            </div>
+
+            <!-- 4 Gràfics Chart.js -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs">
+                    <h3 class="text-sm font-bold text-slate-900 mb-1">1. Evolució Anual d'Interaccions Úniques (2010–2026)</h3>
+                    <p class="text-xs text-slate-500 mb-3">Convenis únics vs. Projectes de recerca únics amb agents catalans</p>
+                    <div class="h-72"><canvas id="chartEvolution"></canvas></div>
+                </div>
+                <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs">
+                    <h3 class="text-sm font-bold text-slate-900 mb-1">2. Publico-Públic vs. Publico-Privat</h3>
+                    <p class="text-xs text-slate-500 mb-3">Distribució de relacions de conveni i projecte segons el caràcter de l'agent</p>
+                    <div class="h-72"><canvas id="chartPublicPrivate"></canvas></div>
+                </div>
+                <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs">
+                    <h3 class="text-sm font-bold text-slate-900 mb-1">3. Top 10 Tipologies d'Agents del Territori</h3>
+                    <p class="text-xs text-slate-500 mb-3">Volum de convenis i projectes segons la classificació EGRETA de l'entitat externa</p>
+                    <div class="h-80"><canvas id="chartTypologies"></canvas></div>
+                </div>
+                <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs">
+                    <h3 class="text-sm font-bold text-slate-900 mb-1">4. Top 12 Unitats UAB / Esfera UAB (Resposta)</h3>
+                    <p class="text-xs text-slate-500 mb-3">Departaments i instituts que concentren més interaccions amb el territori</p>
+                    <div class="h-80"><canvas id="chartUnits"></canvas></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- PESTANYA 2: Directori d'Agents -->
+        <section id="panel-agents" class="tab-panel hidden bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-xs space-y-4">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                    <h2 class="text-base font-bold text-slate-900">Directori d'Agents del Territori Català</h2>
+                    <p class="text-xs text-slate-500">Feu clic en qualsevol agent per obrir la seva fitxa completa amb tots els convenis i projectes associats.</p>
+                </div>
+                <div class="flex flex-wrap items-center gap-2">
+                    <button type="button" onclick="exportAgents('xlsx')" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-700 text-white hover:bg-emerald-800 cursor-pointer inline-flex items-center gap-1.5">
+                        <i class="fa-solid fa-file-excel"></i> Exportar Excel
+                    </button>
+                    <button type="button" onclick="exportAgents('csv')" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200 cursor-pointer inline-flex items-center gap-1.5">
+                        <i class="fa-solid fa-file-csv"></i> Exportar CSV
+                    </button>
+                </div>
+            </div>
+
+            <div class="overflow-x-auto rounded-xl border border-slate-200">
+                <table class="w-full text-left border-collapse text-xs">
+                    <thead class="bg-slate-100 text-slate-700 uppercase text-[11px] font-bold">
+                        <tr>
+                            <th class="p-3 sort-th" onclick="sortTable('agents', 'nom')">Agent del Territori <i class="fa-solid fa-sort text-slate-400 ml-1"></i></th>
+                            <th class="p-3 sort-th" onclick="sortTable('agents', 'interaccio')">Caràcter <i class="fa-solid fa-sort text-slate-400 ml-1"></i></th>
+                            <th class="p-3 sort-th" onclick="sortTable('agents', 'tipologia')">Tipologia EGRETA <i class="fa-solid fa-sort text-slate-400 ml-1"></i></th>
+                            <th class="p-3 sort-th" onclick="sortTable('agents', 'municipi')">Municipi / Província <i class="fa-solid fa-sort text-slate-400 ml-1"></i></th>
+                            <th class="p-3 text-right sort-th" onclick="sortTable('agents', 'nConv')">Convenis <i class="fa-solid fa-sort text-slate-400 ml-1"></i></th>
+                            <th class="p-3 text-right sort-th" onclick="sortTable('agents', 'nProj')">Proj. (Soc/Fin) <i class="fa-solid fa-sort text-slate-400 ml-1"></i></th>
+                            <th class="p-3 text-right sort-th" onclick="sortTable('agents', 'impUab')">Import UAB (€) <i class="fa-solid fa-sort text-slate-400 ml-1"></i></th>
+                            <th class="p-3">Principals Unitats UAB</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-agents" class="divide-y divide-slate-100"></tbody>
+                </table>
+            </div>
+            <div id="pager-agents" class="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600"></div>
+        </section>
+
+        <!-- PESTANYA 3: Convenis -->
+        <section id="panel-convenis" class="tab-panel hidden bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-xs space-y-4">
+            <div class="flex flex-wrap items-end justify-between gap-3">
+                <div>
+                    <h2 class="text-base font-bold text-slate-900">Convenis Publico-Públics i Publico-Privats</h2>
+                    <p class="text-xs text-slate-500">Clic a qualsevol fila per veure el detall de demanda, resposta UAB i concreció de la relació.</p>
+                </div>
+                <div class="flex flex-wrap items-center gap-2">
+                    <select id="filterConvTipus" aria-label="Tipus de conveni" onchange="onSubFilterChange('convenis')"
+                            class="h-[34px] px-2.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700">
+                        <option value="ALL">Tipus: Tots</option>
+                        <option value="Concessió conveni">Concessió conveni</option>
+                        <option value="Conveni extern a la UAB">Conveni extern a la UAB</option>
+                    </select>
+                    <select id="filterConvNat" aria-label="Naturalesa EGRETA" onchange="onSubFilterChange('convenis')"
+                            class="h-[34px] px-2.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 max-w-[240px]">
+                        <option value="ALL">Naturalesa: Totes</option>
+                    </select>
+                    <button type="button" onclick="exportConvenis('xlsx')" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-700 text-white hover:bg-emerald-800 cursor-pointer inline-flex items-center gap-1.5">
+                        <i class="fa-solid fa-file-excel"></i> Exportar Excel
+                    </button>
+                    <button type="button" onclick="exportConvenis('csv')" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200 cursor-pointer inline-flex items-center gap-1.5">
+                        <i class="fa-solid fa-file-csv"></i> CSV
+                    </button>
+                </div>
+            </div>
+
+            <div class="overflow-x-auto rounded-xl border border-slate-200">
+                <table class="w-full text-left border-collapse text-xs">
+                    <thead class="bg-slate-100 text-slate-700 uppercase text-[11px] font-bold">
+                        <tr>
+                            <th class="p-3 sort-th" onclick="sortTable('convenis', 'any')">Any <i class="fa-solid fa-sort text-slate-400 ml-1"></i></th>
+                            <th class="p-3 sort-th" onclick="sortTable('convenis', 'titol')">Títol i Naturalesa (Demanda) <i class="fa-solid fa-sort text-slate-400 ml-1"></i></th>
+                            <th class="p-3 sort-th" onclick="sortTable('convenis', 'agent')">Agent del Territori <i class="fa-solid fa-sort text-slate-400 ml-1"></i></th>
+                            <th class="p-3 sort-th" onclick="sortTable('convenis', 'interaccio')">Caràcter <i class="fa-solid fa-sort text-slate-400 ml-1"></i></th>
+                            <th class="p-3 sort-th" onclick="sortTable('convenis', 'unitat')">Resposta UAB (Unitat i IP) <i class="fa-solid fa-sort text-slate-400 ml-1"></i></th>
+                            <th class="p-3 text-right sort-th" onclick="sortTable('convenis', 'impUab')">Import UAB (€) <i class="fa-solid fa-sort text-slate-400 ml-1"></i></th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-convenis" class="divide-y divide-slate-100"></tbody>
+                </table>
+            </div>
+            <div id="pager-convenis" class="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600"></div>
+        </section>
+
+        <!-- PESTANYA 4: Projectes -->
+        <section id="panel-projectes" class="tab-panel hidden bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-xs space-y-4">
+            <div class="flex flex-wrap items-end justify-between gap-3">
+                <div>
+                    <h2 class="text-base font-bold text-slate-900">Projectes de Recerca amb Agents del Territori Català</h2>
+                    <p class="text-xs text-slate-500">Clic a qualsevol projecte per veure el resum/abstract complet, els socis del consorci i les metadades.</p>
+                </div>
+                <div class="flex flex-wrap items-center gap-2">
+                    <select id="filterProjRol" aria-label="Rol de l'agent territorial" onchange="onSubFilterChange('projectes')"
+                            class="h-[34px] px-2.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700">
+                        <option value="ALL">Rol: Tots</option>
+                        <option value="Soci / Col·laborador de consorci">Soci / Col·laborador de consorci</option>
+                        <option value="Entitat finançadora / Promotora">Entitat finançadora / Promotora</option>
+                        <option value="Finançador i Soci de consorci">Finançador i Soci de consorci</option>
+                    </select>
+                    <select id="filterProjLider" aria-label="Lideratge UAB" onchange="onSubFilterChange('projectes')"
+                            class="h-[34px] px-2.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 max-w-[220px]">
+                        <option value="ALL">Lideratge: Tots</option>
+                    </select>
+                    <select id="filterProjTipus" aria-label="Tipus de projecte" onchange="onSubFilterChange('projectes')"
+                            class="h-[34px] px-2.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 max-w-[240px]">
+                        <option value="ALL">Tipus: Tots</option>
+                    </select>
+                    <button type="button" onclick="exportProjectes('xlsx')" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-700 text-white hover:bg-emerald-800 cursor-pointer inline-flex items-center gap-1.5">
+                        <i class="fa-solid fa-file-excel"></i> Exportar Excel
+                    </button>
+                    <button type="button" onclick="exportProjectes('csv')" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200 cursor-pointer inline-flex items-center gap-1.5">
+                        <i class="fa-solid fa-file-csv"></i> CSV
+                    </button>
+                </div>
+            </div>
+
+            <div class="overflow-x-auto rounded-xl border border-slate-200">
+                <table class="w-full text-left border-collapse text-xs">
+                    <thead class="bg-slate-100 text-slate-700 uppercase text-[11px] font-bold">
+                        <tr>
+                            <th class="p-3 sort-th" onclick="sortTable('projectes', 'any')">Any <i class="fa-solid fa-sort text-slate-400 ml-1"></i></th>
+                            <th class="p-3 sort-th" onclick="sortTable('projectes', 'titol')">Projecte i Convocatòria (Demanda) <i class="fa-solid fa-sort text-slate-400 ml-1"></i></th>
+                            <th class="p-3 sort-th" onclick="sortTable('projectes', 'agent')">Agent Territorial <i class="fa-solid fa-sort text-slate-400 ml-1"></i></th>
+                            <th class="p-3 sort-th" onclick="sortTable('projectes', 'rol')">Rol i Lideratge <i class="fa-solid fa-sort text-slate-400 ml-1"></i></th>
+                            <th class="p-3 sort-th" onclick="sortTable('projectes', 'unitat')">Resposta UAB (Unitat i IP) <i class="fa-solid fa-sort text-slate-400 ml-1"></i></th>
+                            <th class="p-3 text-right sort-th" onclick="sortTable('projectes', 'impUab')">Import UAB (€) <i class="fa-solid fa-sort text-slate-400 ml-1"></i></th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-projectes" class="divide-y divide-slate-100"></tbody>
+                </table>
+            </div>
+            <div id="pager-projectes" class="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600"></div>
+        </section>
+
+        <!-- PESTANYA 5: Marc Metodològic i Fonts -->
+        <section id="panel-metodologia" class="tab-panel hidden space-y-5">
+            <!-- Flux conceptual -->
+            <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-4">
+                <div>
+                    <h2 class="text-base font-bold text-slate-900">Marc Conceptual: Demanda → Resposta UAB → Concreció de la Relació</h2>
+                    <p class="text-xs text-slate-500 mt-1">Correspondència entre els objectius del mapa d'interaccions i les variables netes d'EGRETA / Kraken.</p>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                    <div class="rounded-xl border border-emerald-200 bg-emerald-50/40 p-4">
+                        <div class="text-xs font-extrabold uppercase tracking-wider text-emerald-800 mb-1">1. Agent del Territori</div>
+                        <p class="text-xs text-slate-700 leading-relaxed">Qui genera o co-crea la demanda. Identificat per nom net, caràcter (<strong>Publico-Públic</strong> vs <strong>Publico-Privat</strong>), tipologia EGRETA, municipi, CP, província, ROR i NIF.</p>
+                    </div>
+                    <div class="rounded-xl border border-sky-200 bg-sky-50/40 p-4">
+                        <div class="text-xs font-extrabold uppercase tracking-wider text-sky-900 mb-1">2. Demanda / Necessitat</div>
+                        <p class="text-xs text-slate-700 leading-relaxed">Contingut i context de la interacció: títol, resum/abstract (<strong>descripció</strong>), convocatòria i programa d'origen, i naturalesa EGRETA (càtedres, assajos clínics, recerca col·laborativa, etc.).</p>
+                    </div>
+                    <div class="rounded-xl border border-teal-200 bg-teal-50/40 p-4">
+                        <div class="text-xs font-extrabold uppercase tracking-wider text-teal-900 mb-1">3. Resposta de la UAB</div>
+                        <p class="text-xs text-slate-700 leading-relaxed">Capacitat mobilitzada: unitat gestora acadèmica (departament, institut propi o centre de l'<strong>Esfera UAB</strong>), investigador/a principal (IP) i mida de l'equip.</p>
+                    </div>
+                    <div class="rounded-xl border border-amber-200 bg-amber-50/40 p-4">
+                        <div class="text-xs font-extrabold uppercase tracking-wider text-amber-900 mb-1">4. Concreció de la Relació</div>
+                        <p class="text-xs text-slate-700 leading-relaxed">Forma jurídica i rol: conveni o projecte de recerca, rol territorial (<strong>Soci de consorci</strong> vs <strong>Finançador</strong>), lideratge UAB, vigència i finançament captat.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Qualitat i neteja + Prestació de Serveis -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-3">
+                    <h3 class="text-sm font-bold text-slate-900">Neteja Aplicada i Cobertura de Dades</h3>
+                    <div id="metodologiaStats" class="space-y-2 text-xs text-slate-700"></div>
+                </div>
+
+                <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-3">
+                    <div>
+                        <h3 class="text-sm font-bold text-slate-900">Font Complementària: Prestació de Serveis (RC0025R)</h3>
+                        <p class="text-xs text-slate-500 mt-0.5">Registre comptable de facturació per prestació de serveis (sense camp d'entitat externa estructurada).</p>
+                    </div>
+                    <div class="overflow-x-auto rounded-xl border border-slate-200 max-h-80">
+                        <table class="w-full text-left border-collapse text-xs">
+                            <thead class="bg-slate-100 text-slate-700 text-[11px] font-bold uppercase sticky top-0">
+                                <tr>
+                                    <th class="p-2.5">Any</th>
+                                    <th class="p-2.5 text-right">N Prestacions</th>
+                                    <th class="p-2.5 text-right">Import Real (€)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-rc0025r" class="divide-y divide-slate-100 tabular-nums"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Drawer lateral de detall d'Agent -->
+    <div id="agentDrawerOverlay" class="hidden fixed inset-0 z-50" role="dialog" aria-modal="true" aria-labelledby="drawerAgentTitle">
+        <div class="drawer-backdrop fixed inset-0 bg-slate-900/45" onclick="closeAgentDrawer()"></div>
+        <aside class="drawer-panel fixed right-0 top-0 bottom-0 w-full max-w-3xl bg-white shadow-2xl flex flex-col">
+            <div class="p-5 border-b border-slate-200 flex items-start justify-between gap-4 bg-slate-50">
+                <div class="space-y-1">
+                    <div id="drawerAgentBadges" class="flex flex-wrap gap-1.5"></div>
+                    <h2 id="drawerAgentTitle" class="text-lg font-extrabold text-slate-900"></h2>
+                    <p id="drawerAgentSubtitle" class="text-xs text-slate-500"></p>
+                </div>
+                <button type="button" onclick="closeAgentDrawer()" aria-label="Tancar fitxa de l'agent"
+                        class="w-9 h-9 rounded-lg bg-white border border-slate-200 text-slate-600 hover:bg-slate-100 flex items-center justify-center cursor-pointer shrink-0">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div class="p-5 overflow-y-auto flex-1 space-y-4">
+                <div id="drawerAgentMeta" class="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs"></div>
+
+                <div class="flex gap-2 border-b border-slate-200 pb-2">
+                    <button type="button" id="drawerTabConv" onclick="switchDrawerTab('conv')" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-700 text-white cursor-pointer">
+                        Convenis (<span id="drawerConvCount">0</span>)
+                    </button>
+                    <button type="button" id="drawerTabProj" onclick="switchDrawerTab('proj')" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100 text-slate-700 cursor-pointer">
+                        Projectes de Recerca (<span id="drawerProjCount">0</span>)
+                    </button>
+                </div>
+
+                <div id="drawerRecordsList" class="space-y-2.5"></div>
+            </div>
+        </aside>
+    </div>
+
+    <!-- Modal de detall d'un Conveni o Projecte -->
+    <div id="recordModalOverlay" class="hidden fixed inset-0 z-[60] flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="modalRecordTitle">
+        <div class="fixed inset-0 bg-slate-900/50" onclick="closeRecordModal()"></div>
+        <div class="relative bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-2xl max-h-[88vh] flex flex-col overflow-hidden">
+            <div class="p-5 border-b border-slate-200 flex items-start justify-between gap-4 bg-slate-50">
+                <div>
+                    <span id="modalRecordKind" class="text-[11px] font-bold uppercase tracking-wider text-emerald-700"></span>
+                    <h2 id="modalRecordTitle" class="text-base font-extrabold text-slate-900 mt-0.5"></h2>
+                </div>
+                <button type="button" onclick="closeRecordModal()" aria-label="Tancar detall"
+                        class="w-8 h-8 rounded-lg bg-white border border-slate-200 text-slate-600 hover:bg-slate-100 flex items-center justify-center cursor-pointer shrink-0">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div id="modalRecordBody" class="p-5 overflow-y-auto space-y-4 text-xs"></div>
+        </div>
+    </div>
+
+    <script>
+    (function () {
+        const DATA = window.MAPA_TERRITORI_DATA;
+        if (!DATA || !Array.isArray(DATA.agents)) {
+            document.body.innerHTML = '<div class="p-8 max-w-xl mx-auto mt-10 bg-white rounded-2xl border border-rose-200 text-rose-800 font-semibold">Error: no s\'ha pogut carregar <code>mapa-territori-data.js</code>.</div>';
+            return;
+        }
+
+        // Índexs dels arrays:
+        // Agent: [0:uuid, 1:nom, 2:caracter, 3:tipusInteraccio, 4:tipologia, 5:municipi, 6:cp, 7:provincia, 8:lat, 9:lon, 10:ror, 11:nif, 12:metode, 13:nConv, 14:impConvUab, 15:anysConv, 16:nProjSoci, 17:nProjFin, 18:impProjUab, 19:anysProj, 20:totInt, 21:unitatsUab, 22:mostraTitols]
+        // Conveni: [0:awardUuid, 1:pureId, 2:ref, 3:tipusConveni, 4:naturalesa, 5:any, 6:inici, 7:fi, 8:impTot, 9:impUab, 10:agentIdx, 11:rolAgent, 12:titol, 13:desc, 14:convNom, 15:unitatUab, 16:tipusUnitatUab, 17:ambitUab, 18:ipUab, 19:nMembres]
+        // Projecte: [0:awardUuid, 1:projUuid, 2:pureId, 3:ref, 4:tipusProj, 5:naturalesa, 6:any, 7:inici, 8:fi, 9:impTot, 10:impUab, 11:agentIdx, 12:rolProj, 13:rolDetall, 14:uabLider, 15:totSocis, 16:altresSocis, 17:titol, 18:desc, 19:convNom, 20:progConv, 21:unitatUab, 22:tipusUnitatUab, 23:ambitUab, 24:ipUab, 25:nMembres]
+
+        const PAGE_SIZE = 50;
+        const state = {
+            tab: 'dashboard',
+            yearFrom: null,
+            yearTo: null,
+            prov: 'ALL',
+            municipi: '',
+            interaction: 'ALL',
+            tipologia: 'ALL',
+            ambit: 'ALL',
+            unitat: 'ALL',
+            search: '',
+            convTipus: 'ALL',
+            convNat: 'ALL',
+            projRol: 'ALL',
+            projLider: 'ALL',
+            projTipus: 'ALL',
+            sideRankMode: 'agents',
+            sort: {
+                agents: { col: 'totInt', dir: 'desc' },
+                convenis: { col: 'any', dir: 'desc' },
+                projectes: { col: 'any', dir: 'desc' },
+            },
+            page: { agents: 0, convenis: 0, projectes: 0 },
+            drawerAgentIdx: null,
+            drawerTab: 'conv',
+        };
+
+        let filteredConvenis = [];
+        let filteredProjectes = [];
+        let filteredAgentsList = []; // array of { idx, ag, nConv, nProjSoci, nProjFin, impUab, totInt }
+        let searchTimer = null;
+
+        let map = null;
+        let mapLayer = null;
+        const charts = {};
+
+        const fmtInt = new Intl.NumberFormat('ca-ES');
+        const fmtEur = new Intl.NumberFormat('ca-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
+        const fmtEurDec = new Intl.NumberFormat('ca-ES', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+        function esc(s) {
+            return String(s == null ? '' : s)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function badgeInteraction(val) {
+            if (val === 'Publico-Públic') {
+                return '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">Publico-Públic</span>';
+            }
+            if (val === 'Publico-Privat') {
+                return '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-900 border border-amber-200">Publico-Privat</span>';
+            }
+            return '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-teal-100 text-teal-900 border border-teal-200">Publico-Mixt</span>';
+        }
+
+        function badgeProjRol(val) {
+            if (val === 'Soci / Col·laborador de consorci') {
+                return '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-sky-100 text-sky-900 border border-sky-200">Soci consorci</span>';
+            }
+            if (val === 'Finançador i Soci de consorci') {
+                return '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-violet-100 text-violet-900 border border-violet-200">Finançador + Soci</span>';
+            }
+            return '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700 border border-slate-200">Finançador</span>';
+        }
+
+        function initFilterDropdowns() {
+            const years = new Set();
+            DATA.convenis.forEach(r => { if (r[5]) years.add(r[5]); });
+            DATA.projectes.forEach(r => { if (r[6]) years.add(r[6]); });
+            const sortedYears = Array.from(years).sort((a, b) => b - a);
+            const yFrom = document.getElementById('filterYearFrom');
+            const yTo = document.getElementById('filterYearTo');
+            sortedYears.forEach(y => {
+                yFrom.insertAdjacentHTML('beforeend', `<option value="${y}">Des de: ${y}</option>`);
+                yTo.insertAdjacentHTML('beforeend', `<option value="${y}">Fins a: ${y}</option>`);
+            });
+
+            const tipCounts = new Map();
+            DATA.agents.forEach(a => tipCounts.set(a[4], (tipCounts.get(a[4]) || 0) + 1));
+            const selTip = document.getElementById('filterTipologia');
+            Array.from(tipCounts.entries())
+                .sort((a, b) => b[1] - a[1])
+                .forEach(([t, cnt]) => {
+                    selTip.insertAdjacentHTML('beforeend', `<option value="${esc(t)}">${esc(t)} (${fmtInt.format(cnt)})</option>`);
+                });
+
+            const unitCounts = new Map();
+            DATA.convenis.forEach(r => { if (r[15]) unitCounts.set(r[15], (unitCounts.get(r[15]) || 0) + 1); });
+            DATA.projectes.forEach(r => { if (r[21]) unitCounts.set(r[21], (unitCounts.get(r[21]) || 0) + 1); });
+            const selUnit = document.getElementById('filterUnitat');
+            Array.from(unitCounts.entries())
+                .sort((a, b) => b[1] - a[1])
+                .forEach(([u, cnt]) => {
+                    selUnit.insertAdjacentHTML('beforeend', `<option value="${esc(u)}">${esc(u)} (${fmtInt.format(cnt)})</option>`);
+                });
+
+            const natCounts = new Map();
+            DATA.convenis.forEach(r => { if (r[4]) natCounts.set(r[4], (natCounts.get(r[4]) || 0) + 1); });
+            const selNat = document.getElementById('filterConvNat');
+            Array.from(natCounts.entries()).sort((a, b) => b[1] - a[1]).forEach(([n, cnt]) => {
+                selNat.insertAdjacentHTML('beforeend', `<option value="${esc(n)}">${esc(n)} (${fmtInt.format(cnt)})</option>`);
+            });
+
+            const liderSet = new Set();
+            const projTipusCounts = new Map();
+            DATA.projectes.forEach(r => {
+                if (r[14]) liderSet.add(r[14]);
+                if (r[4]) projTipusCounts.set(r[4], (projTipusCounts.get(r[4]) || 0) + 1);
+            });
+            const selLid = document.getElementById('filterProjLider');
+            Array.from(liderSet).sort().forEach(l => selLid.insertAdjacentHTML('beforeend', `<option value="${esc(l)}">${esc(l)}</option>`));
+            const selPt = document.getElementById('filterProjTipus');
+            Array.from(projTipusCounts.entries()).sort((a, b) => b[1] - a[1]).forEach(([t, cnt]) => {
+                selPt.insertAdjacentHTML('beforeend', `<option value="${esc(t)}">${esc(t)} (${fmtInt.format(cnt)})</option>`);
+            });
+        }
+
+        function agentMatchesGlobal(ag) {
+            if (state.prov !== 'ALL' && ag[7] !== state.prov) return false;
+            if (state.municipi && (ag[5] || ag[7]) !== state.municipi) return false;
+            if (state.interaction !== 'ALL' && ag[3] !== state.interaction) return false;
+            if (state.tipologia !== 'ALL' && ag[4] !== state.tipologia) return false;
+            return true;
+        }
+
+        function matchesSearch(q, ag, textFields) {
+            if (!q) return true;
+            for (let i = 0; i < textFields.length; i++) {
+                if (textFields[i] && textFields[i].toLowerCase().includes(q)) return true;
+            }
+            return (
+                ag[1].toLowerCase().includes(q) ||
+                ag[5].toLowerCase().includes(q) ||
+                ag[6].toLowerCase().includes(q) ||
+                ag[11].toLowerCase().includes(q)
+            );
+        }
+
+        function recompute() {
+            const q = state.search.trim().toLowerCase();
+            const yFrom = state.yearFrom;
+            const yTo = state.yearTo;
+            const hasYearFilter = (yFrom !== null || yTo !== null);
+
+            const agOk = DATA.agents.map(agentMatchesGlobal);
+            const agAgg = new Map(); // agentIdx -> { nConv, nProjSoci, nProjFin, convAwards: Map, projAwards: Map, units: Map }
+
+            function getAgg(idx) {
+                let entry = agAgg.get(idx);
+                if (!entry) {
+                    entry = { nConv: 0, nProjSoci: 0, nProjFin: 0, impUab: 0, convSeen: new Set(), projSeen: new Set() };
+                    agAgg.set(idx, entry);
+                }
+                return entry;
+            }
+
+            // 1. Filtrar Convenis
+            filteredConvenis = [];
+            for (let i = 0; i < DATA.convenis.length; i++) {
+                const r = DATA.convenis[i];
+                const agIdx = r[10];
+                if (!agOk[agIdx]) continue;
+                const yr = r[5];
+                if (hasYearFilter) {
+                    if (!yr) continue;
+                    if (yFrom !== null && yr < yFrom) continue;
+                    if (yTo !== null && yr > yTo) continue;
+                }
+                if (state.ambit !== 'ALL' && r[17] !== state.ambit) continue;
+                if (state.unitat !== 'ALL' && r[15] !== state.unitat) continue;
+                if (state.convTipus !== 'ALL' && r[3] !== state.convTipus) continue;
+                if (state.convNat !== 'ALL' && r[4] !== state.convNat) continue;
+                const ag = DATA.agents[agIdx];
+                if (!matchesSearch(q, ag, [r[12], r[13], r[15], r[18], r[2], r[4]])) continue;
+
+                filteredConvenis.push(r);
+                const agg = getAgg(agIdx);
+                agg.nConv++;
+                if (!agg.convSeen.has(r[0])) {
+                    agg.convSeen.add(r[0]);
+                    agg.impUab += r[9] || 0;
+                }
+            }
+
+            // 2. Filtrar Projectes
+            filteredProjectes = [];
+            for (let i = 0; i < DATA.projectes.length; i++) {
+                const r = DATA.projectes[i];
+                const agIdx = r[11];
+                if (!agOk[agIdx]) continue;
+                const yr = r[6];
+                if (hasYearFilter) {
+                    if (!yr) continue;
+                    if (yFrom !== null && yr < yFrom) continue;
+                    if (yTo !== null && yr > yTo) continue;
+                }
+                if (state.ambit !== 'ALL' && r[23] !== state.ambit) continue;
+                if (state.unitat !== 'ALL' && r[21] !== state.unitat) continue;
+                if (state.projRol !== 'ALL' && r[12] !== state.projRol) continue;
+                if (state.projLider !== 'ALL' && r[14] !== state.projLider) continue;
+                if (state.projTipus !== 'ALL' && r[4] !== state.projTipus) continue;
+                const ag = DATA.agents[agIdx];
+                if (!matchesSearch(q, ag, [r[17], r[18], r[21], r[24], r[3], r[19], r[16]])) continue;
+
+                filteredProjectes.push(r);
+                const agg = getAgg(agIdx);
+                if (r[12] === 'Soci / Col·laborador de consorci' || r[12] === 'Finançador i Soci de consorci') agg.nProjSoci++;
+                if (r[12] === 'Entitat finançadora / Promotora' || r[12] === 'Finançador i Soci de consorci') agg.nProjFin++;
+                if (!agg.projSeen.has(r[0])) {
+                    agg.projSeen.add(r[0]);
+                    agg.impUab += r[10] || 0;
+                }
+            }
+
+            // 3. Agents actius sota els filtres vigents
+            filteredAgentsList = [];
+            agAgg.forEach((agg, idx) => {
+                const ag = DATA.agents[idx];
+                filteredAgentsList.push({
+                    idx,
+                    ag,
+                    nConv: agg.nConv,
+                    nProjSoci: agg.nProjSoci,
+                    nProjFin: agg.nProjFin,
+                    nProj: agg.projSeen.size,
+                    impUab: agg.impUab,
+                    totInt: agg.convSeen.size + agg.projSeen.size,
+                });
+            });
+
+            updateKpis();
+            updateTabCounts();
+            if (state.tab === 'dashboard') renderDashboard();
+            else if (state.tab === 'agents') renderAgentsTable();
+            else if (state.tab === 'convenis') renderConvenisTable();
+            else if (state.tab === 'projectes') renderProjectesTable();
+        }
+
+        function updateKpis() {
+            let pubAg = 0, privAg = 0, mixAg = 0;
+            filteredAgentsList.forEach(item => {
+                if (item.ag[3] === 'Publico-Públic') pubAg++;
+                else if (item.ag[3] === 'Publico-Privat') privAg++;
+                else mixAg++;
+            });
+            document.getElementById('kpi-agents').textContent = fmtInt.format(filteredAgentsList.length);
+            document.getElementById('kpi-agents-sub').textContent = `Púb: ${fmtInt.format(pubAg)} · Priv: ${fmtInt.format(privAg)} · Mixt: ${fmtInt.format(mixAg)}`;
+
+            const convAw = new Map();
+            filteredConvenis.forEach(r => { if (!convAw.has(r[0])) convAw.set(r[0], [r[8] || 0, r[9] || 0]); });
+            let convTot = 0, convUab = 0;
+            convAw.forEach(([t, u]) => { convTot += t; convUab += u; });
+            document.getElementById('kpi-conv-unics').textContent = fmtInt.format(convAw.size);
+            document.getElementById('kpi-conv-sub').textContent = `${fmtInt.format(filteredConvenis.length)} relacions conveni–agent`;
+            document.getElementById('kpi-conv-imp').textContent = fmtEur.format(convUab);
+            document.getElementById('kpi-conv-imp-sub').textContent = `Import total: ${fmtEur.format(convTot)}`;
+
+            const projAw = new Map();
+            let socCount = 0, finCount = 0;
+            filteredProjectes.forEach(r => {
+                if (!projAw.has(r[0])) projAw.set(r[0], [r[9] || 0, r[10] || 0]);
+                if (r[12] === 'Soci / Col·laborador de consorci') socCount++;
+                else if (r[12] === 'Entitat finançadora / Promotora') finCount++;
+                else { socCount++; finCount++; }
+            });
+            let projTot = 0, projUab = 0;
+            projAw.forEach(([t, u]) => { projTot += t; projUab += u; });
+            document.getElementById('kpi-proj-unics').textContent = fmtInt.format(projAw.size);
+            document.getElementById('kpi-proj-sub').textContent = `${fmtInt.format(filteredProjectes.length)} relacions projecte–agent`;
+            document.getElementById('kpi-proj-rols').textContent = `${fmtInt.format(socCount)} / ${fmtInt.format(finCount)}`;
+            document.getElementById('kpi-proj-rols-sub').textContent = 'Socis consorci / Finançadors';
+            document.getElementById('kpi-proj-imp').textContent = fmtEur.format(projUab);
+            document.getElementById('kpi-proj-imp-sub').textContent = `Import total: ${fmtEur.format(projTot)}`;
+        }
+
+        function updateTabCounts() {
+            document.getElementById('tab-count-agents').textContent = fmtInt.format(filteredAgentsList.length);
+            document.getElementById('tab-count-conv').textContent = fmtInt.format(filteredConvenis.length);
+            document.getElementById('tab-count-proj').textContent = fmtInt.format(filteredProjectes.length);
+        }
+
+        // -------------------------------------------------------------------
+        // PESTANYA 1: Mapa Leaflet + Rànquing + 4 Gràfics Chart.js
+        // -------------------------------------------------------------------
+        function ensureMap() {
+            if (map) return;
+            map = L.map('cataloniaMap', { scrollWheelZoom: true }).setView([41.68, 1.72], 8);
+            const icgcWmsUrl = 'https://geoserveis.icgc.cat/servei/catalunya/mapa-base/wms';
+            const icgcAttr = 'Cartografia &copy; <a href="https://www.icgc.cat" target="_blank" rel="noopener noreferrer">Institut Cartogràfic i Geològic de Catalunya (ICGC)</a> CC-BY 4.0';
+            const wmsTopografic = L.tileLayer.wms(icgcWmsUrl, {
+                layers: 'topografic',
+                format: 'image/png',
+                transparent: false,
+                version: '1.1.1',
+                maxZoom: 19,
+                attribution: icgcAttr,
+            });
+            const wmsTopograficGris = L.tileLayer.wms(icgcWmsUrl, {
+                layers: 'topografic-gris',
+                format: 'image/png',
+                transparent: false,
+                version: '1.1.1',
+                maxZoom: 19,
+                attribution: icgcAttr,
+            });
+            const wmsAdministratiu = L.tileLayer.wms(icgcWmsUrl, {
+                layers: 'administratiu',
+                format: 'image/png',
+                transparent: false,
+                version: '1.1.1',
+                maxZoom: 19,
+                attribution: icgcAttr,
+            });
+            const wmsOrtoHibrida = L.tileLayer.wms(icgcWmsUrl, {
+                layers: 'orto-hibrida',
+                format: 'image/png',
+                transparent: false,
+                version: '1.1.1',
+                maxZoom: 19,
+                attribution: icgcAttr,
+            });
+            wmsTopografic.addTo(map);
+            L.control.layers({
+                'ICGC Topogràfic (WMS)': wmsTopografic,
+                'ICGC Topogràfic Gris (WMS)': wmsTopograficGris,
+                'ICGC Administratiu (WMS)': wmsAdministratiu,
+                'ICGC Ortofoto Híbrida (WMS)': wmsOrtoHibrida,
+            }, null, { position: 'topright', collapsed: true }).addTo(map);
+            mapLayer = L.layerGroup().addTo(map);
+        }
+
+        function renderDashboard() {
+            ensureMap();
+            setTimeout(() => map.invalidateSize(), 50);
+
+            // Agrupar agents filtrats per municipi
+            const muniMap = new Map();
+            filteredAgentsList.forEach(item => {
+                const ag = item.ag;
+                const key = ag[5] || ag[7] || 'Catalunya';
+                let m = muniMap.get(key);
+                if (!m) {
+                    m = {
+                        key,
+                        prov: ag[7],
+                        latSum: 0, lonSum: 0, count: 0,
+                        pubInt: 0, privInt: 0, mixInt: 0,
+                        conv: 0, proj: 0, tot: 0,
+                        topAgents: [],
+                    };
+                    muniMap.set(key, m);
+                }
+                m.latSum += ag[8];
+                m.lonSum += ag[9];
+                m.count++;
+                m.conv += item.nConv;
+                m.proj += item.nProj;
+                m.tot += item.totInt;
+                if (ag[3] === 'Publico-Públic') m.pubInt += item.totInt;
+                else if (ag[3] === 'Publico-Privat') m.privInt += item.totInt;
+                else m.mixInt += item.totInt;
+                m.topAgents.push(item);
+            });
+
+            mapLayer.clearLayers();
+            const muniList = Array.from(muniMap.values()).sort((a, b) => b.tot - a.tot);
+
+            muniList.forEach(m => {
+                const lat = m.latSum / m.count;
+                const lon = m.lonSum / m.count;
+                const radius = Math.max(6, Math.min(28, 4 + Math.sqrt(m.tot) * 0.42));
+                let color = '#0f766e';
+                if (m.pubInt > m.tot * 0.55) color = '#008037';
+                else if (m.privInt > m.tot * 0.55) color = '#d97706';
+
+                const circle = L.circleMarker([lat, lon], {
+                    radius,
+                    color,
+                    weight: 1.5,
+                    fillColor: color,
+                    fillOpacity: 0.62,
+                });
+
+                m.topAgents.sort((a, b) => b.totInt - a.totInt);
+                const topHtml = m.topAgents.slice(0, 4).map(it =>
+                    `<li class="truncate">• <strong>${esc(it.ag[1])}</strong> (${fmtInt.format(it.totInt)})</li>`
+                ).join('');
+
+                const popupHtml = `
+                    <div class="text-xs text-slate-800 space-y-1.5">
+                        <div class="font-extrabold text-sm text-slate-900">${esc(m.key)}</div>
+                        <div class="text-[11px] text-slate-500">${esc(m.prov)} · ${fmtInt.format(m.count)} agents actius</div>
+                        <div class="grid grid-cols-2 gap-1 bg-slate-50 p-1.5 rounded border border-slate-200 tabular-nums">
+                            <div>Convenis: <strong>${fmtInt.format(m.conv)}</strong></div>
+                            <div>Projectes: <strong>${fmtInt.format(m.proj)}</strong></div>
+                            <div class="text-emerald-800">Públic: <strong>${fmtInt.format(m.pubInt)}</strong></div>
+                            <div class="text-amber-800">Privat: <strong>${fmtInt.format(m.privInt)}</strong></div>
+                        </div>
+                        <ul class="text-[11px] text-slate-700 space-y-0.5">${topHtml}</ul>
+                        <button type="button" onclick="window.__setMunicipiFilter('${esc(m.key)}')"
+                                class="w-full mt-1 py-1.5 px-2 rounded-lg bg-emerald-700 text-white font-bold text-[11px] hover:bg-emerald-800 cursor-pointer">
+                            Filtrar per aquest municipi
+                        </button>
+                    </div>`;
+                circle.bindPopup(popupHtml);
+                circle.addTo(mapLayer);
+            });
+
+            renderSideRanking(muniList);
+            renderCharts();
+        }
+
+        function renderSideRanking(muniList) {
+            const box = document.getElementById('sideRankingList');
+            if (state.sideRankMode === 'agents') {
+                const top = [...filteredAgentsList].sort((a, b) => b.totInt - a.totInt).slice(0, 25);
+                if (!top.length) {
+                    box.innerHTML = '<div class="py-8 text-center text-xs text-slate-500">Cap agent coincideix amb els filtres.</div>';
+                    return;
+                }
+                box.innerHTML = top.map((it, i) => `
+                    <button type="button" onclick="window.__openAgentDrawer(${it.idx})"
+                            class="w-full text-left py-2.5 px-2 hover:bg-slate-50 rounded-lg transition-colors cursor-pointer flex items-start justify-between gap-2">
+                        <div class="min-w-0">
+                            <div class="text-xs font-bold text-slate-900 truncate">${i + 1}. ${esc(it.ag[1])}</div>
+                            <div class="text-[11px] text-slate-500 flex items-center gap-1.5 mt-0.5">
+                                ${badgeInteraction(it.ag[3])}
+                                <span class="truncate">${esc(it.ag[5] || it.ag[7])}</span>
+                            </div>
+                        </div>
+                        <div class="text-right shrink-0 tabular-nums">
+                            <div class="text-xs font-extrabold text-emerald-800">${fmtInt.format(it.totInt)}</div>
+                            <div class="text-[10px] text-slate-500">${it.nConv}c · ${it.nProj}p</div>
+                        </div>
+                    </button>
+                `).join('');
+            } else {
+                const topM = muniList.slice(0, 25);
+                if (!topM.length) {
+                    box.innerHTML = '<div class="py-8 text-center text-xs text-slate-500">Cap municipi coincideix amb els filtres.</div>';
+                    return;
+                }
+                box.innerHTML = topM.map((m, i) => `
+                    <button type="button" onclick="window.__setMunicipiFilter('${esc(m.key)}')"
+                            class="w-full text-left py-2.5 px-2 hover:bg-slate-50 rounded-lg transition-colors cursor-pointer flex items-center justify-between gap-2">
+                        <div class="min-w-0">
+                            <div class="text-xs font-bold text-slate-900 truncate">${i + 1}. ${esc(m.key)}</div>
+                            <div class="text-[11px] text-slate-500">${esc(m.prov)} · ${fmtInt.format(m.count)} agents</div>
+                        </div>
+                        <div class="text-right shrink-0 tabular-nums">
+                            <div class="text-xs font-extrabold text-emerald-800">${fmtInt.format(m.tot)}</div>
+                            <div class="text-[10px] text-slate-500">${fmtInt.format(m.conv)}c · ${fmtInt.format(m.proj)}p</div>
+                        </div>
+                    </button>
+                `).join('');
+            }
+        }
+
+        function setOrUpdateChart(id, cfg) {
+            if (charts[id]) charts[id].destroy();
+            const ctx = document.getElementById(id).getContext('2d');
+            charts[id] = new Chart(ctx, cfg);
+        }
+
+        function renderCharts() {
+            // 1. Evolució anual 2010–2026
+            const yrConv = new Map();
+            const yrProj = new Map();
+            filteredConvenis.forEach(r => {
+                const y = r[5];
+                if (y && y >= 2010 && y <= 2026) {
+                    if (!yrConv.has(y)) yrConv.set(y, new Set());
+                    yrConv.get(y).add(r[0]);
+                }
+            });
+            filteredProjectes.forEach(r => {
+                const y = r[6];
+                if (y && y >= 2010 && y <= 2026) {
+                    if (!yrProj.has(y)) yrProj.set(y, new Set());
+                    yrProj.get(y).add(r[0]);
+                }
+            });
+            const yrs = [];
+            for (let y = 2010; y <= 2026; y++) yrs.push(y);
+
+            setOrUpdateChart('chartEvolution', {
+                type: 'bar',
+                data: {
+                    labels: yrs,
+                    datasets: [
+                        { label: 'Convenis únics', data: yrs.map(y => yrConv.get(y)?.size || 0), backgroundColor: '#008037', borderRadius: 4 },
+                        { label: 'Projectes únics', data: yrs.map(y => yrProj.get(y)?.size || 0), backgroundColor: '#0284c7', borderRadius: 4 },
+                    ],
+                },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } },
+            });
+
+            // 2. Publico-Públic vs Publico-Privat
+            const cats = ['Publico-Públic', 'Publico-Privat', 'Publico-Mixt / Tercer Sector'];
+            const ppConv = { 'Publico-Públic': 0, 'Publico-Privat': 0, 'Publico-Mixt / Tercer Sector': 0 };
+            const ppProj = { 'Publico-Públic': 0, 'Publico-Privat': 0, 'Publico-Mixt / Tercer Sector': 0 };
+            filteredConvenis.forEach(r => { ppConv[DATA.agents[r[10]][3]]++; });
+            filteredProjectes.forEach(r => { ppProj[DATA.agents[r[11]][3]]++; });
+
+            setOrUpdateChart('chartPublicPrivate', {
+                type: 'bar',
+                data: {
+                    labels: ['Publico-Públic', 'Publico-Privat', 'Publico-Mixt'],
+                    datasets: [
+                        { label: 'Relacions Convenis', data: cats.map(c => ppConv[c]), backgroundColor: '#008037', borderRadius: 4 },
+                        { label: 'Relacions Projectes', data: cats.map(c => ppProj[c]), backgroundColor: '#d97706', borderRadius: 4 },
+                    ],
+                },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } },
+            });
+
+            // 3. Top 10 Tipologies
+            const tipConv = new Map();
+            const tipProj = new Map();
+            const tipAll = new Map();
+            filteredConvenis.forEach(r => {
+                const t = DATA.agents[r[10]][4];
+                tipConv.set(t, (tipConv.get(t) || 0) + 1);
+                tipAll.set(t, (tipAll.get(t) || 0) + 1);
+            });
+            filteredProjectes.forEach(r => {
+                const t = DATA.agents[r[11]][4];
+                tipProj.set(t, (tipProj.get(t) || 0) + 1);
+                tipAll.set(t, (tipAll.get(t) || 0) + 1);
+            });
+            const topTips = Array.from(tipAll.entries()).sort((a, b) => b[1] - a[1]).slice(0, 10).map(x => x[0]);
+
+            setOrUpdateChart('chartTypologies', {
+                type: 'bar',
+                data: {
+                    labels: topTips.map(t => t.length > 32 ? t.slice(0, 30) + '…' : t),
+                    datasets: [
+                        { label: 'Convenis', data: topTips.map(t => tipConv.get(t) || 0), backgroundColor: '#008037' },
+                        { label: 'Projectes', data: topTips.map(t => tipProj.get(t) || 0), backgroundColor: '#0284c7' },
+                    ],
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: { x: { stacked: true }, y: { stacked: true } },
+                    plugins: { legend: { position: 'bottom' } },
+                },
+            });
+
+            // 4. Top 12 Unitats UAB
+            const uConv = new Map();
+            const uProj = new Map();
+            const uAll = new Map();
+            filteredConvenis.forEach(r => {
+                if (!r[15]) return;
+                uConv.set(r[15], (uConv.get(r[15]) || 0) + 1);
+                uAll.set(r[15], (uAll.get(r[15]) || 0) + 1);
+            });
+            filteredProjectes.forEach(r => {
+                if (!r[21]) return;
+                uProj.set(r[21], (uProj.get(r[21]) || 0) + 1);
+                uAll.set(r[21], (uAll.get(r[21]) || 0) + 1);
+            });
+            const topUnits = Array.from(uAll.entries()).sort((a, b) => b[1] - a[1]).slice(0, 12).map(x => x[0]);
+
+            setOrUpdateChart('chartUnits', {
+                type: 'bar',
+                data: {
+                    labels: topUnits.map(u => u.length > 36 ? u.slice(0, 34) + '…' : u),
+                    datasets: [
+                        { label: 'Convenis', data: topUnits.map(u => uConv.get(u) || 0), backgroundColor: '#0f766e' },
+                        { label: 'Projectes', data: topUnits.map(u => uProj.get(u) || 0), backgroundColor: '#d97706' },
+                    ],
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: { x: { stacked: true }, y: { stacked: true } },
+                    plugins: { legend: { position: 'bottom' } },
+                },
+            });
+        }
+
+        // -------------------------------------------------------------------
+        // Paginació i Taules (Agents, Convenis, Projectes)
+        // -------------------------------------------------------------------
+        function renderPager(elId, tabKey, total) {
+            const p = state.page[tabKey];
+            const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+            const start = total === 0 ? 0 : p * PAGE_SIZE + 1;
+            const end = Math.min(total, (p + 1) * PAGE_SIZE);
+            document.getElementById(elId).innerHTML = `
+                <div class="tabular-nums">Mostrant <strong>${fmtInt.format(start)}–${fmtInt.format(end)}</strong> de <strong>${fmtInt.format(total)}</strong> registres</div>
+                <div class="flex items-center gap-1.5">
+                    <button type="button" ${p === 0 ? 'disabled' : ''} onclick="window.__goPage('${tabKey}', ${p - 1})"
+                            class="px-2.5 py-1 rounded-lg border border-slate-200 bg-white font-semibold disabled:opacity-40 cursor-pointer">Anterior</button>
+                    <span class="px-2 tabular-nums">Pàg. ${p + 1} / ${totalPages}</span>
+                    <button type="button" ${p + 1 >= totalPages ? 'disabled' : ''} onclick="window.__goPage('${tabKey}', ${p + 1})"
+                            class="px-2.5 py-1 rounded-lg border border-slate-200 bg-white font-semibold disabled:opacity-40 cursor-pointer">Següent</button>
+                </div>`;
+        }
+
+        function renderAgentsTable() {
+            const { col, dir } = state.sort.agents;
+            const mul = dir === 'asc' ? 1 : -1;
+            const sorted = [...filteredAgentsList].sort((a, b) => {
+                if (col === 'nom') return mul * a.ag[1].localeCompare(b.ag[1], 'ca');
+                if (col === 'interaccio') return mul * a.ag[3].localeCompare(b.ag[3], 'ca');
+                if (col === 'tipologia') return mul * a.ag[4].localeCompare(b.ag[4], 'ca');
+                if (col === 'municipi') return mul * (a.ag[5] || a.ag[7]).localeCompare(b.ag[5] || b.ag[7], 'ca');
+                if (col === 'nConv') return mul * (a.nConv - b.nConv);
+                if (col === 'nProj') return mul * (a.nProj - b.nProj);
+                if (col === 'impUab') return mul * (a.impUab - b.impUab);
+                return mul * (a.totInt - b.totInt);
+            });
+
+            const p = state.page.agents;
+            const slice = sorted.slice(p * PAGE_SIZE, (p + 1) * PAGE_SIZE);
+            const tbody = document.getElementById('tbody-agents');
+            if (!slice.length) {
+                tbody.innerHTML = '<tr><td colspan="8" class="p-8 text-center text-slate-500">Cap agent trobat amb els filtres actuals.</td></tr>';
+            } else {
+                tbody.innerHTML = slice.map(it => {
+                    const a = it.ag;
+                    const rorLink = a[10] ? `<a href="${esc(a[10])}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()" class="ml-1.5 text-[10px] font-bold text-sky-700 hover:underline">ROR ↗</a>` : '';
+                    return `
+                        <tr onclick="window.__openAgentDrawer(${it.idx})" class="hover:bg-emerald-50/50 cursor-pointer transition-colors">
+                            <td class="p-3 font-semibold text-slate-900 max-w-[300px]">
+                                <div>${esc(a[1])}${rorLink}</div>
+                                ${a[11] ? `<div class="text-[10px] text-slate-400 font-mono">NIF: ${esc(a[11])}</div>` : ''}
+                            </td>
+                            <td class="p-3 whitespace-nowrap">${badgeInteraction(a[3])}</td>
+                            <td class="p-3 text-slate-600">${esc(a[4])}</td>
+                            <td class="p-3 text-slate-700">
+                                <div>${esc(a[5] || '-')} ${a[6] ? `<span class="text-slate-400">(${esc(a[6])})</span>` : ''}</div>
+                                <div class="text-[10px] text-slate-500">${esc(a[7])}</div>
+                            </td>
+                            <td class="p-3 text-right font-bold tabular-nums">${fmtInt.format(it.nConv)}</td>
+                            <td class="p-3 text-right tabular-nums"><strong>${fmtInt.format(it.nProj)}</strong> <span class="text-[10px] text-slate-500">(${it.nProjSoci}/${it.nProjFin})</span></td>
+                            <td class="p-3 text-right font-semibold tabular-nums whitespace-nowrap">${fmtEur.format(it.impUab)}</td>
+                            <td class="p-3 text-slate-600 max-w-[240px] truncate" title="${esc(a[21])}">${esc(a[21] || '-')}</td>
+                        </tr>`;
+                }).join('');
+            }
+            renderPager('pager-agents', 'agents', sorted.length);
+        }
+
+        function renderConvenisTable() {
+            const { col, dir } = state.sort.convenis;
+            const mul = dir === 'asc' ? 1 : -1;
+            const sorted = [...filteredConvenis].sort((a, b) => {
+                if (col === 'any') return mul * ((a[5] || 0) - (b[5] || 0));
+                if (col === 'titol') return mul * a[12].localeCompare(b[12], 'ca');
+                if (col === 'agent') return mul * DATA.agents[a[10]][1].localeCompare(DATA.agents[b[10]][1], 'ca');
+                if (col === 'interaccio') return mul * DATA.agents[a[10]][3].localeCompare(DATA.agents[b[10]][3], 'ca');
+                if (col === 'unitat') return mul * a[15].localeCompare(b[15], 'ca');
+                return mul * ((a[9] || 0) - (b[9] || 0));
+            });
+
+            const p = state.page.convenis;
+            const slice = sorted.slice(p * PAGE_SIZE, (p + 1) * PAGE_SIZE);
+            const tbody = document.getElementById('tbody-convenis');
+            window.__lastConvSlice = sorted;
+            if (!slice.length) {
+                tbody.innerHTML = '<tr><td colspan="6" class="p-8 text-center text-slate-500">Cap conveni trobat amb els filtres actuals.</td></tr>';
+            } else {
+                tbody.innerHTML = slice.map((r, i) => {
+                    const ag = DATA.agents[r[10]];
+                    const globalIdx = p * PAGE_SIZE + i;
+                    return `
+                        <tr onclick="window.__openRecordModal('conv', ${globalIdx})" class="hover:bg-emerald-50/50 cursor-pointer transition-colors">
+                            <td class="p-3 font-bold tabular-nums whitespace-nowrap">${r[5] || '-'}</td>
+                            <td class="p-3 max-w-[380px]">
+                                <div class="font-semibold text-slate-900 line-clamp-2">${esc(r[12])}</div>
+                                <div class="text-[10px] text-slate-500 mt-0.5">${esc(r[3])}${r[4] ? ' · ' + esc(r[4]) : ''}</div>
+                            </td>
+                            <td class="p-3 max-w-[240px]">
+                                <div class="font-semibold text-slate-800">${esc(ag[1])}</div>
+                                <div class="text-[10px] text-slate-500">${esc(ag[5] || ag[7])} · ${esc(ag[4])}</div>
+                            </td>
+                            <td class="p-3 whitespace-nowrap">${badgeInteraction(ag[3])}</td>
+                            <td class="p-3 max-w-[240px]">
+                                <div class="text-slate-800 font-medium truncate" title="${esc(r[15])}">${esc(r[15] || '-')}</div>
+                                <div class="text-[10px] text-slate-500">${esc(r[17])} · ${esc(r[18] || '-')}</div>
+                            </td>
+                            <td class="p-3 text-right font-bold tabular-nums whitespace-nowrap">${fmtEur.format(r[9] || 0)}</td>
+                        </tr>`;
+                }).join('');
+            }
+            renderPager('pager-convenis', 'convenis', sorted.length);
+        }
+
+        function renderProjectesTable() {
+            const { col, dir } = state.sort.projectes;
+            const mul = dir === 'asc' ? 1 : -1;
+            const sorted = [...filteredProjectes].sort((a, b) => {
+                if (col === 'any') return mul * ((a[6] || 0) - (b[6] || 0));
+                if (col === 'titol') return mul * a[17].localeCompare(b[17], 'ca');
+                if (col === 'agent') return mul * DATA.agents[a[11]][1].localeCompare(DATA.agents[b[11]][1], 'ca');
+                if (col === 'rol') return mul * a[12].localeCompare(b[12], 'ca');
+                if (col === 'unitat') return mul * a[21].localeCompare(b[21], 'ca');
+                return mul * ((a[10] || 0) - (b[10] || 0));
+            });
+
+            const p = state.page.projectes;
+            const slice = sorted.slice(p * PAGE_SIZE, (p + 1) * PAGE_SIZE);
+            const tbody = document.getElementById('tbody-projectes');
+            if (!slice.length) {
+                tbody.innerHTML = '<tr><td colspan="6" class="p-8 text-center text-slate-500">Cap projecte trobat amb els filtres actuals.</td></tr>';
+            } else {
+                window.__lastProjSlice = sorted;
+                tbody.innerHTML = slice.map((r, i) => {
+                    const ag = DATA.agents[r[11]];
+                    const globalIdx = p * PAGE_SIZE + i;
+                    return `
+                        <tr onclick="window.__openRecordModal('proj', ${globalIdx})" class="hover:bg-sky-50/50 cursor-pointer transition-colors">
+                            <td class="p-3 font-bold tabular-nums whitespace-nowrap">${r[6] || '-'}</td>
+                            <td class="p-3 max-w-[360px]">
+                                <div class="font-semibold text-slate-900 line-clamp-2">${esc(r[17])}</div>
+                                <div class="text-[10px] text-slate-500 mt-0.5 truncate">${esc(r[4])}${r[19] ? ' · ' + esc(r[19]) : ''}</div>
+                            </td>
+                            <td class="p-3 max-w-[230px]">
+                                <div class="font-semibold text-slate-800">${esc(ag[1])}</div>
+                                <div class="mt-0.5 flex flex-wrap items-center gap-1">${badgeInteraction(ag[3])} <span class="text-[10px] text-slate-500">${esc(ag[5] || ag[7])}</span></div>
+                            </td>
+                            <td class="p-3">
+                                <div>${badgeProjRol(r[12])}</div>
+                                <div class="text-[10px] text-slate-500 mt-0.5">${esc(r[14])}</div>
+                            </td>
+                            <td class="p-3 max-w-[230px]">
+                                <div class="text-slate-800 font-medium truncate" title="${esc(r[21])}">${esc(r[21] || '-')}</div>
+                                <div class="text-[10px] text-slate-500">${esc(r[23])} · ${esc(r[24] || '-')}</div>
+                            </td>
+                            <td class="p-3 text-right font-bold tabular-nums whitespace-nowrap">${fmtEur.format(r[10] || 0)}</td>
+                        </tr>`;
+                }).join('');
+            }
+            renderPager('pager-projectes', 'projectes', sorted.length);
+        }
+
+        // -------------------------------------------------------------------
+        // Drawer d'Agent i Modal de Detall
+        // -------------------------------------------------------------------
+        window.__openAgentDrawer = function (agentIdx) {
+            state.drawerAgentIdx = agentIdx;
+            state.drawerTab = 'conv';
+            const ag = DATA.agents[agentIdx];
+            document.getElementById('drawerAgentTitle').textContent = ag[1];
+            document.getElementById('drawerAgentSubtitle').textContent = `${ag[4]} · ${ag[5] ? ag[5] + ', ' : ''}${ag[7]} ${ag[6] ? '(' + ag[6] + ')' : ''}`;
+            document.getElementById('drawerAgentBadges').innerHTML = `
+                ${badgeInteraction(ag[3])}
+                <span class="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-slate-200 text-slate-700">${esc(ag[2])}</span>
+                <span class="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-600">${esc(ag[12])}</span>`;
+
+            document.getElementById('drawerAgentMeta').innerHTML = `
+                <div class="bg-slate-50 p-2.5 rounded-xl border border-slate-200"><div class="text-[10px] text-slate-500 uppercase font-bold">Convenis històrics</div><div class="text-sm font-extrabold text-slate-900 tabular-nums mt-0.5">${fmtInt.format(ag[13])} (${fmtEur.format(ag[14])})</div></div>
+                <div class="bg-slate-50 p-2.5 rounded-xl border border-slate-200"><div class="text-[10px] text-slate-500 uppercase font-bold">Projectes (Soci / Fin.)</div><div class="text-sm font-extrabold text-slate-900 tabular-nums mt-0.5">${fmtInt.format(ag[16])} / ${fmtInt.format(ag[17])} (${fmtEur.format(ag[18])})</div></div>
+                <div class="bg-slate-50 p-2.5 rounded-xl border border-slate-200 col-span-2 sm:col-span-1"><div class="text-[10px] text-slate-500 uppercase font-bold">Identificadors</div><div class="text-xs font-semibold text-slate-800 mt-0.5">${ag[11] ? 'NIF: ' + esc(ag[11]) : 'Sense NIF'} ${ag[10] ? `· <a href="${esc(ag[10])}" target="_blank" rel="noopener noreferrer" class="text-emerald-700 underline">ROR ↗</a>` : ''}</div></div>
+                <div class="bg-slate-50 p-2.5 rounded-xl border border-slate-200 col-span-2 sm:col-span-3"><div class="text-[10px] text-slate-500 uppercase font-bold">Principals Unitats UAB</div><div class="text-xs text-slate-700 mt-0.5">${esc(ag[21] || '-')}</div></div>`;
+
+            const convs = filteredConvenis.filter(r => r[10] === agentIdx);
+            const projs = filteredProjectes.filter(r => r[11] === agentIdx);
+            document.getElementById('drawerConvCount').textContent = convs.length;
+            document.getElementById('drawerProjCount').textContent = projs.length;
+            renderDrawerList();
+            document.getElementById('agentDrawerOverlay').classList.remove('hidden');
+        };
+
+        window.closeAgentDrawer = function () {
+            document.getElementById('agentDrawerOverlay').classList.add('hidden');
+        };
+
+        window.switchDrawerTab = function (t) {
+            state.drawerTab = t;
+            const bc = document.getElementById('drawerTabConv');
+            const bp = document.getElementById('drawerTabProj');
+            if (t === 'conv') {
+                bc.className = 'px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-700 text-white cursor-pointer';
+                bp.className = 'px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100 text-slate-700 cursor-pointer';
+            } else {
+                bp.className = 'px-3 py-1.5 rounded-lg text-xs font-bold bg-sky-700 text-white cursor-pointer';
+                bc.className = 'px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100 text-slate-700 cursor-pointer';
+            }
+            renderDrawerList();
+        };
+
+        function renderDrawerList() {
+            const box = document.getElementById('drawerRecordsList');
+            const idx = state.drawerAgentIdx;
+            if (state.drawerTab === 'conv') {
+                const list = filteredConvenis.filter(r => r[10] === idx);
+                if (!list.length) {
+                    box.innerHTML = '<p class="text-xs text-slate-500 py-4">Cap conveni sota els filtres vigents.</p>';
+                    return;
+                }
+                box.innerHTML = list.map(r => `
+                    <div class="p-3 rounded-xl border border-slate-200 bg-white space-y-1">
+                        <div class="flex items-start justify-between gap-2">
+                            <div class="text-xs font-bold text-slate-900">${esc(r[12])}</div>
+                            <span class="text-xs font-extrabold text-emerald-800 tabular-nums shrink-0">${fmtEur.format(r[9] || 0)}</span>
+                        </div>
+                        <div class="text-[11px] text-slate-500">${r[5] || '-'} · ${esc(r[3])}${r[4] ? ' · ' + esc(r[4]) : ''}</div>
+                        <div class="text-[11px] text-slate-700"><strong>Resposta UAB:</strong> ${esc(r[15])} (${esc(r[18] || '-')})</div>
+                        ${r[13] ? `<p class="text-[11px] text-slate-600 bg-slate-50 p-2 rounded border border-slate-100 mt-1">${esc(r[13])}</p>` : ''}
+                    </div>`).join('');
+            } else {
+                const list = filteredProjectes.filter(r => r[11] === idx);
+                if (!list.length) {
+                    box.innerHTML = '<p class="text-xs text-slate-500 py-4">Cap projecte sota els filtres vigents.</p>';
+                    return;
+                }
+                box.innerHTML = list.map(r => `
+                    <div class="p-3 rounded-xl border border-slate-200 bg-white space-y-1">
+                        <div class="flex items-start justify-between gap-2">
+                            <div class="text-xs font-bold text-slate-900">${esc(r[17])}</div>
+                            <span class="text-xs font-extrabold text-sky-900 tabular-nums shrink-0">${fmtEur.format(r[10] || 0)}</span>
+                        </div>
+                        <div class="flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">
+                            <span>${r[6] || '-'}</span> · ${badgeProjRol(r[12])} · <span>${esc(r[14])}</span>
+                        </div>
+                        <div class="text-[11px] text-slate-700"><strong>Resposta UAB:</strong> ${esc(r[21])} (${esc(r[24] || '-')})</div>
+                        ${r[19] ? `<div class="text-[11px] text-slate-500"><strong>Convocatòria:</strong> ${esc(r[19])}</div>` : ''}
+                        ${r[18] ? `<p class="text-[11px] text-slate-600 bg-slate-50 p-2 rounded border border-slate-100 mt-1">${esc(r[18])}</p>` : ''}
+                    </div>`).join('');
+            }
+        }
+
+        window.__openRecordModal = function (kind, sliceIdx) {
+            const r = kind === 'conv' ? window.__lastConvSlice[sliceIdx] : window.__lastProjSlice[sliceIdx];
+            if (!r) return;
+            const isConv = kind === 'conv';
+            const agIdx = isConv ? r[10] : r[11];
+            const ag = DATA.agents[agIdx];
+
+            document.getElementById('modalRecordKind').textContent = isConv ? 'Conveni UAB — Territori Català' : 'Projecte de Recerca Conjunt';
+            document.getElementById('modalRecordTitle').textContent = isConv ? r[12] : r[17];
+
+            const desc = isConv ? r[13] : r[18];
+            const convNom = isConv ? r[14] : r[19];
+            const unitat = isConv ? r[15] : r[21];
+            const ambit = isConv ? r[17] : r[23];
+            const ip = isConv ? r[18] : r[24];
+            const nMemb = isConv ? r[19] : r[25];
+
+            document.getElementById('modalRecordBody').innerHTML = `
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div class="p-3 rounded-xl bg-emerald-50/60 border border-emerald-200 space-y-1">
+                        <div class="text-[10px] font-bold uppercase text-emerald-800">Agent del Territori (Demanda)</div>
+                        <div class="font-bold text-slate-900">${esc(ag[1])}</div>
+                        <div>${badgeInteraction(ag[3])} <span class="text-slate-600 ml-1">${esc(ag[4])}</span></div>
+                        <div class="text-slate-600">${esc(ag[5] || '-')} (${esc(ag[6] || 'sense CP')}) · ${esc(ag[7])}</div>
+                        <button type="button" onclick="closeRecordModal(); window.__openAgentDrawer(${agIdx})" class="mt-1 text-emerald-800 font-bold underline cursor-pointer">Obrir fitxa completa de l'agent →</button>
+                    </div>
+                    <div class="p-3 rounded-xl bg-sky-50/60 border border-sky-200 space-y-1">
+                        <div class="text-[10px] font-bold uppercase text-sky-900">Resposta UAB</div>
+                        <div class="font-bold text-slate-900">${esc(unitat || '-')}</div>
+                        <div class="text-slate-600">Àmbit: <strong>${esc(ambit || '-')}</strong></div>
+                        <div class="text-slate-600">IP: <strong>${esc(ip || '-')}</strong> · Equip: ${nMemb} membres</div>
+                    </div>
+                </div>
+                <div class="p-3 rounded-xl bg-slate-50 border border-slate-200 grid grid-cols-2 sm:grid-cols-4 gap-2 tabular-nums">
+                    <div><span class="text-slate-500 block">Any / Vigència</span><strong>${(isConv ? r[5] : r[6]) || '-'}</strong> (${esc((isConv ? r[6] : r[7]) || '?')} → ${esc((isConv ? r[7] : r[8]) || '?')})</div>
+                    <div><span class="text-slate-500 block">Referència</span><strong>${esc((isConv ? r[2] : r[3]) || '-')}</strong></div>
+                    <div><span class="text-slate-500 block">Import Part UAB</span><strong class="text-emerald-800">${fmtEurDec.format((isConv ? r[9] : r[10]) || 0)}</strong></div>
+                    <div><span class="text-slate-500 block">Import Total</span><strong>${fmtEurDec.format((isConv ? r[8] : r[9]) || 0)}</strong></div>
+                </div>
+                ${!isConv ? `
+                <div class="p-3 rounded-xl bg-amber-50/50 border border-amber-200 space-y-1">
+                    <div class="text-[10px] font-bold uppercase text-amber-900">Concreció del Consorci</div>
+                    <div>Rol agent: <strong>${esc(r[12])}</strong> (${esc(r[13] || '-')}) · Lideratge UAB: <strong>${esc(r[14])}</strong> · Socis externs: <strong>${r[15]}</strong></div>
+                    ${r[16] ? `<div class="text-slate-700">Altres socis catalans al projecte: ${esc(r[16])}</div>` : ''}
+                </div>` : ''}
+                ${convNom ? `<div><strong class="text-slate-700">Convocatòria:</strong> ${esc(convNom)}${!isConv && r[20] ? ' (' + esc(r[20]) + ')' : ''}</div>` : ''}
+                <div>
+                    <div class="text-[10px] font-bold uppercase text-slate-500 mb-1">Descripció / Resum de la Demanda</div>
+                    <div class="p-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-700 leading-relaxed whitespace-pre-line">${esc(desc || 'No hi ha descripció detallada registrada a EGRETA per a aquest registre.')}</div>
+                </div>`;
+            document.getElementById('recordModalOverlay').classList.remove('hidden');
+        };
+
+        window.closeRecordModal = function () {
+            document.getElementById('recordModalOverlay').classList.add('hidden');
+        };
+
+        // -------------------------------------------------------------------
+        // Exportació Excel / CSV del subconjunt filtrat
+        // -------------------------------------------------------------------
+        function downloadMatrix(filename, headers, rows, format) {
+            if (format === 'csv') {
+                const escapeCsv = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+                const lines = [headers.map(escapeCsv).join(',')].concat(rows.map(r => r.map(escapeCsv).join(',')));
+                const blob = new Blob(['\uFEFF' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = filename + '.csv';
+                a.click();
+                return;
+            }
+            const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Dades');
+            XLSX.writeFile(wb, filename + '.xlsx');
+        }
+
+        window.exportAgents = function (fmt) {
+            const headers = ['UUID', 'Agent', 'Tipus Interacció', 'Caràcter', 'Tipologia EGRETA', 'Municipi', 'CP', 'Província', 'ROR', 'NIF', 'Convenis (filtrats)', 'Projectes (filtrats)', 'Import UAB (€)', 'Principals Unitats UAB'];
+            const rows = filteredAgentsList.map(it => [it.ag[0], it.ag[1], it.ag[3], it.ag[2], it.ag[4], it.ag[5], it.ag[6], it.ag[7], it.ag[10], it.ag[11], it.nConv, it.nProj, Math.round(it.impUab * 100) / 100, it.ag[21]]);
+            downloadMatrix('agents_territori_catala_filtrats', headers, rows, fmt);
+        };
+
+        window.exportConvenis = function (fmt) {
+            const headers = ['Award UUID', 'Referència', 'Any', 'Tipus Conveni', 'Naturalesa', 'Títol', 'Agent', 'Caràcter Relació', 'Municipi', 'Província', 'Unitat UAB', 'Àmbit', 'IP UAB', 'Import Total (€)', 'Import UAB (€)'];
+            const rows = filteredConvenis.map(r => {
+                const ag = DATA.agents[r[10]];
+                return [r[0], r[2], r[5], r[3], r[4], r[12], ag[1], ag[3], ag[5], ag[7], r[15], r[17], r[18], r[8], r[9]];
+            });
+            downloadMatrix('convenis_territori_catala_filtrats', headers, rows, fmt);
+        };
+
+        window.exportProjectes = function (fmt) {
+            const headers = ['Award UUID', 'Project UUID', 'Referència', 'Any', 'Tipus Projecte', 'Títol', 'Agent', 'Caràcter Relació', 'Rol Projecte', 'Lideratge UAB', 'Municipi', 'Província', 'Unitat UAB', 'Àmbit', 'IP UAB', 'Convocatòria', 'Import Total (€)', 'Import UAB (€)'];
+            const rows = filteredProjectes.map(r => {
+                const ag = DATA.agents[r[11]];
+                return [r[0], r[1], r[3], r[6], r[4], r[17], ag[1], ag[3], r[12], r[14], ag[5], ag[7], r[21], r[23], r[24], r[19], r[9], r[10]];
+            });
+            downloadMatrix('projectes_territori_catala_filtrats', headers, rows, fmt);
+        };
+
+        // -------------------------------------------------------------------
+        // Controls d'estat i navegació
+        // -------------------------------------------------------------------
+        window.switchTab = function (tab) {
+            state.tab = tab;
+            document.querySelectorAll('.tab-btn').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === tab ? 'true' : 'false'));
+            document.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'));
+            document.getElementById('panel-' + tab).classList.remove('hidden');
+            if (tab === 'dashboard') renderDashboard();
+            else if (tab === 'agents') renderAgentsTable();
+            else if (tab === 'convenis') renderConvenisTable();
+            else if (tab === 'projectes') renderProjectesTable();
+        };
+
+        window.setYearPreset = function (fromY, toY) {
+            document.getElementById('filterYearFrom').value = fromY ? String(fromY) : '';
+            document.getElementById('filterYearTo').value = toY ? String(toY) : '';
+            onFilterChange();
+        };
+
+        window.setProvinceFilter = function (prov) {
+            state.prov = prov;
+            state.municipi = '';
+            document.getElementById('municipiChip').classList.add('hidden');
+            document.querySelectorAll('.prov-pill').forEach(b => b.setAttribute('aria-pressed', b.dataset.prov === prov ? 'true' : 'false'));
+            state.page = { agents: 0, convenis: 0, projectes: 0 };
+            recompute();
+        };
+
+        window.__setMunicipiFilter = function (muni) {
+            state.municipi = muni;
+            document.getElementById('municipiChipText').textContent = 'Municipi: ' + muni;
+            document.getElementById('municipiChip').classList.remove('hidden');
+            state.page = { agents: 0, convenis: 0, projectes: 0 };
+            if (map) map.closePopup();
+            recompute();
+        };
+
+        window.clearMunicipiFilter = function () {
+            state.municipi = '';
+            document.getElementById('municipiChip').classList.add('hidden');
+            state.page = { agents: 0, convenis: 0, projectes: 0 };
+            recompute();
+        };
+
+        window.setSideRankMode = function (mode) {
+            state.sideRankMode = mode;
+            const ba = document.getElementById('rankBtnAgents');
+            const bm = document.getElementById('rankBtnMunis');
+            if (mode === 'agents') {
+                ba.className = 'px-2.5 py-1 rounded-md bg-white text-slate-900 shadow-xs cursor-pointer';
+                bm.className = 'px-2.5 py-1 rounded-md text-slate-600 cursor-pointer';
+            } else {
+                bm.className = 'px-2.5 py-1 rounded-md bg-white text-slate-900 shadow-xs cursor-pointer';
+                ba.className = 'px-2.5 py-1 rounded-md text-slate-600 cursor-pointer';
+            }
+            renderDashboard();
+        };
+
+        window.onFilterChange = function () {
+            const yf = document.getElementById('filterYearFrom').value;
+            const yt = document.getElementById('filterYearTo').value;
+            state.yearFrom = yf ? parseInt(yf, 10) : null;
+            state.yearTo = yt ? parseInt(yt, 10) : null;
+            state.interaction = document.getElementById('filterInteraction').value;
+            state.tipologia = document.getElementById('filterTipologia').value;
+            state.ambit = document.getElementById('filterAmbit').value;
+            state.unitat = document.getElementById('filterUnitat').value;
+            state.page = { agents: 0, convenis: 0, projectes: 0 };
+            recompute();
+        };
+
+        window.onSubFilterChange = function (which) {
+            if (which === 'convenis') {
+                state.convTipus = document.getElementById('filterConvTipus').value;
+                state.convNat = document.getElementById('filterConvNat').value;
+                state.page.convenis = 0;
+            } else {
+                state.projRol = document.getElementById('filterProjRol').value;
+                state.projLider = document.getElementById('filterProjLider').value;
+                state.projTipus = document.getElementById('filterProjTipus').value;
+                state.page.projectes = 0;
+            }
+            recompute();
+        };
+
+        window.onSearchInput = function () {
+            clearTimeout(searchTimer);
+            searchTimer = setTimeout(() => {
+                state.search = document.getElementById('filterSearch').value || '';
+                state.page = { agents: 0, convenis: 0, projectes: 0 };
+                recompute();
+            }, 180);
+        };
+
+        window.resetAllFilters = function () {
+            document.getElementById('filterYearFrom').value = '';
+            document.getElementById('filterYearTo').value = '';
+            document.getElementById('filterInteraction').value = 'ALL';
+            document.getElementById('filterTipologia').value = 'ALL';
+            document.getElementById('filterAmbit').value = 'ALL';
+            document.getElementById('filterUnitat').value = 'ALL';
+            document.getElementById('filterSearch').value = '';
+            document.getElementById('filterConvTipus').value = 'ALL';
+            document.getElementById('filterConvNat').value = 'ALL';
+            document.getElementById('filterProjRol').value = 'ALL';
+            document.getElementById('filterProjLider').value = 'ALL';
+            document.getElementById('filterProjTipus').value = 'ALL';
+            state.yearFrom = null;
+            state.yearTo = null;
+            state.prov = 'ALL';
+            state.municipi = '';
+            state.interaction = 'ALL';
+            state.tipologia = 'ALL';
+            state.ambit = 'ALL';
+            state.unitat = 'ALL';
+            state.search = '';
+            state.convTipus = 'ALL';
+            state.convNat = 'ALL';
+            state.projRol = 'ALL';
+            state.projLider = 'ALL';
+            state.projTipus = 'ALL';
+            document.getElementById('municipiChip').classList.add('hidden');
+            document.querySelectorAll('.prov-pill').forEach(b => b.setAttribute('aria-pressed', b.dataset.prov === 'ALL' ? 'true' : 'false'));
+            state.page = { agents: 0, convenis: 0, projectes: 0 };
+            recompute();
+        };
+
+        window.sortTable = function (tabKey, col) {
+            const s = state.sort[tabKey];
+            if (s.col === col) s.dir = s.dir === 'asc' ? 'desc' : 'asc';
+            else { s.col = col; s.dir = (col === 'nom' || col === 'titol' || col === 'agent' || col === 'municipi') ? 'asc' : 'desc'; }
+            state.page[tabKey] = 0;
+            if (tabKey === 'agents') renderAgentsTable();
+            else if (tabKey === 'convenis') renderConvenisTable();
+            else renderProjectesTable();
+        };
+
+        window.__goPage = function (tabKey, p) {
+            state.page[tabKey] = Math.max(0, p);
+            if (tabKey === 'agents') renderAgentsTable();
+            else if (tabKey === 'convenis') renderConvenisTable();
+            else renderProjectesTable();
+        };
+
+        function populateMethodologyTab() {
+            const st = DATA.meta.stats || {};
+            const co = DATA.meta.coordOrigins || {};
+            document.getElementById('metodologiaStats').innerHTML = `
+                <div class="p-3 rounded-xl bg-slate-50 border border-slate-200 flex justify-between"><span>Total ExternalOrganizations a Kraken</span><strong class="tabular-nums">${fmtInt.format(st.totalEo || 60703)}</strong></div>
+                <div class="p-3 rounded-xl bg-slate-50 border border-slate-200 flex justify-between"><span>Placeholders exclosos (Sense entitat, Clients varis…)</span><strong class="tabular-nums text-rose-700">-${fmtInt.format(st.placeholdersExclosos || 29)}</strong></div>
+                <div class="p-3 rounded-xl bg-slate-50 border border-slate-200 flex justify-between"><span>Autoreferències internes UAB excloses</span><strong class="tabular-nums text-rose-700">-${fmtInt.format(st.autoreferenciesExcloses || 1614)}</strong></div>
+                <div class="p-3 rounded-xl bg-emerald-50 border border-emerald-200 flex justify-between"><span>Agents catalans identificats (actius amb UAB)</span><strong class="tabular-nums text-emerald-900">${fmtInt.format(st.agentsCatalunya || 9804)} (${fmtInt.format(st.agentsActius || 3820)} actius)</strong></div>
+                <div class="p-3 rounded-xl bg-slate-50 border border-slate-200">
+                    <div class="font-bold text-slate-800 mb-1">Geocodificació per al mapa web (3.820 agents):</div>
+                    <div class="text-[11px] text-slate-600 tabular-nums">Municipi: <strong>${fmtInt.format(co.municipi || 0)}</strong> · Prefix CP: <strong>${fmtInt.format(co.cp3 || 0)}</strong> · Província: <strong>${fmtInt.format(co.provincia || 0)}</strong> · Coords EGRETA: <strong>${fmtInt.format(co.egreta || 0)}</strong></div>
+                </div>
+                <p class="text-[11px] text-slate-500 leading-relaxed pt-1"><strong>Regla d'imports:</strong> quan un mateix conveni o projecte té diversos socis catalans, cada fila representa un parell (Interacció, Agent). Els KPIs globals d'aquesta pàgina dedupliquen automàticament per <code>award_uuid</code> per no duplicar imports.</p>`;
+
+            const rcRows = DATA.meta.rc0025r || [];
+            document.getElementById('tbody-rc0025r').innerHTML = rcRows.map(row => {
+                const isTot = row[0] === 'TOTAL RC0025R';
+                return `<tr class="${isTot ? 'bg-emerald-50 font-extrabold text-emerald-900' : ''}">
+                    <td class="p-2.5">${esc(row[0])}</td>
+                    <td class="p-2.5 text-right">${fmtInt.format(row[1])}</td>
+                    <td class="p-2.5 text-right">${fmtEurDec.format(row[2])}</td>
+                </tr>`;
+            }).join('');
+        }
+
+        document.addEventListener('keydown', e => {
+            if (e.key === 'Escape') {
+                closeRecordModal();
+                closeAgentDrawer();
+            }
+        });
+
+        initFilterDropdowns();
+        populateMethodologyTab();
+        recompute();
+    })();
+    </script>
+</body>
+</html>

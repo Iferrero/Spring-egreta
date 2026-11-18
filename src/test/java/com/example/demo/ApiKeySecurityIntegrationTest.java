@@ -10,6 +10,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -70,6 +72,107 @@ public class ApiKeySecurityIntegrationTest {
     @Test
     public void whenRequestPublicEndpoint_shouldSucceedWithoutApiKey() throws Exception {
         mockMvc.perform(get("/v3/api-docs")
+                .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    public void whenEuropeesUserRequestsAllowedAndDisallowedResources_shouldEnforceScope() throws Exception {
+        mockMvc.perform(get("/convocatories-europees.html")
+                .with(httpBasic("europees", "UAB")))
+                .andExpect(result -> {
+                    int status = result.getResponse().getStatus();
+                    assertNotEquals(401, status);
+                    assertNotEquals(403, status);
+                });
+
+        mockMvc.perform(get("/config.js")
+                .with(httpBasic("europees", "UAB")))
+                .andExpect(result -> {
+                    int status = result.getResponse().getStatus();
+                    assertNotEquals(401, status);
+                    assertNotEquals(403, status);
+                });
+
+        mockMvc.perform(get("/api/applications/stats/by-funding-opportunity")
+                .param("program", "PJE,PEI")
+                .with(httpBasic("europees", "UAB"))
+                .accept(MediaType.APPLICATION_JSON))
+                .andExpect(result -> {
+                    int status = result.getResponse().getStatus();
+                    assertNotEquals(401, status);
+                    assertNotEquals(403, status);
+                });
+
+        mockMvc.perform(get("/mapa-interaccions-territori.html")
+                .with(httpBasic("europees", "UAB")))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(get("/api/journals/jcr-by-issn")
+                .param("issn", "1234-5678")
+                .with(httpBasic("europees", "UAB"))
+                .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    public void whenTerritoriUserRequestsAllowedAndDisallowedResources_shouldEnforceScope() throws Exception {
+        mockMvc.perform(get("/mapa-interaccions-territori.html")
+                .with(httpBasic("territori", "UAB")))
+                .andExpect(result -> {
+                    int status = result.getResponse().getStatus();
+                    assertNotEquals(401, status);
+                    assertNotEquals(403, status);
+                });
+
+        mockMvc.perform(get("/mapa-territori-data.js")
+                .with(httpBasic("territori", "UAB")))
+                .andExpect(result -> {
+                    int status = result.getResponse().getStatus();
+                    assertNotEquals(401, status);
+                    assertNotEquals(403, status);
+                });
+
+        mockMvc.perform(get("/config.js")
+                .with(httpBasic("territori", "UAB")))
+                .andExpect(result -> {
+                    int status = result.getResponse().getStatus();
+                    assertNotEquals(401, status);
+                    assertNotEquals(403, status);
+                });
+
+        mockMvc.perform(get("/convocatories-europees.html")
+                .with(httpBasic("territori", "UAB")))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(get("/api/journals/jcr-by-issn")
+                .param("issn", "1234-5678")
+                .with(httpBasic("territori", "UAB"))
+                .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    public void whenRecercaUserRequestsAllResources_shouldAllowAccess() throws Exception {
+        mockMvc.perform(get("/convocatories-europees.html")
+                .with(httpBasic("recerca", "UAB")))
+                .andExpect(result -> {
+                    int status = result.getResponse().getStatus();
+                    assertNotEquals(401, status);
+                    assertNotEquals(403, status);
+                });
+
+        mockMvc.perform(get("/mapa-interaccions-territori.html")
+                .with(httpBasic("recerca", "UAB")))
+                .andExpect(result -> {
+                    int status = result.getResponse().getStatus();
+                    assertNotEquals(401, status);
+                    assertNotEquals(403, status);
+                });
+
+        mockMvc.perform(get("/api/journals/jcr-by-issn")
+                .param("issn", "1234-5678")
+                .with(httpBasic("recerca", "UAB"))
                 .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk());
     }

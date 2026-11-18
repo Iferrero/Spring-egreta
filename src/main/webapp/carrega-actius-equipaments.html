@@ -518,6 +518,7 @@
                 }
 
                 const parsed = parseClientRows(rows, file.name);
+                await resolveMissingPersons(parsed);
                 loadDataset(parsed, file.name);
             } catch (err) {
                 console.warn('Error en parseig client-side, intentant backend...', err);
@@ -560,6 +561,294 @@
             return false;
         }
 
+        function hasValidProject(projectVal) {
+            if (!projectVal) return false;
+            const str = String(projectVal).trim();
+            return str.length > 0 && !str.includes('#');
+        }
+
+        function getItemFundingText(item) {
+            if (!item || !hasValidProject(item.project)) return '';
+            const desc = item.projectDesc ? String(item.projectDesc).trim() : '';
+            if (desc && !desc.includes('#')) return desc;
+            const fin = item.financament ? String(item.financament).trim() : '';
+            if (fin && !fin.includes('#')) return fin;
+            return '';
+        }
+
+        const FIRST_NAME_CANONICAL_MAP = {
+            juan: 'juan', joan: 'juan',
+            francisco: 'francisco', francesc: 'francisco',
+            javier: 'javier', xavier: 'javier',
+            antonio: 'antonio', antoni: 'antonio',
+            carlos: 'carlos', carles: 'carlos',
+            luis: 'luis', lluis: 'luis',
+            jose: 'jose', josep: 'jose',
+            jorge: 'jorge', jordi: 'jorge',
+            pablo: 'pablo', pau: 'pablo',
+            pedro: 'pedro', pere: 'pedro',
+            miguel: 'miguel', miquel: 'miguel',
+            jaime: 'jaime', jaume: 'jaime',
+            alberto: 'alberto', albert: 'alberto',
+            alfonso: 'alfonso', alfons: 'alfonso',
+            joaquin: 'joaquin', joaquim: 'joaquin',
+            vicente: 'vicente', vicenc: 'vicente',
+            enrique: 'enrique', enric: 'enrique',
+            fernando: 'fernando', ferran: 'fernando',
+            guillermo: 'guillermo', guillem: 'guillermo',
+            ricardo: 'ricardo', ricard: 'ricardo',
+            eduardo: 'eduardo', eduard: 'eduardo',
+            alejandro: 'alejandro', alex: 'alejandro', alexandre: 'alejandro',
+            rafael: 'rafael', rafel: 'rafael',
+            esteban: 'esteban', esteve: 'esteban',
+            andres: 'andres', andreu: 'andres'
+        };
+
+        const SURNAME_PARTICLES_SET = new Set(['de', 'del', 'dela', 'dels', 'la', 'las', 'los', 'da', 'dos', 'das', 'van', 'von', 'geb', 'i', 'y']);
+
+        function normalizePersonText(str) {
+            if (!str) return '';
+            return String(str)
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .toLowerCase()
+                .replace(/[-.,'`’]+/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim();
+        }
+
+        function splitPersonTokens(str) {
+            const norm = normalizePersonText(str);
+            return norm ? norm.split(' ').filter(Boolean) : [];
+        }
+
+        function parseResponsibleInterpretations(responsible) {
+            const raw = String(responsible || '').trim();
+            if (!raw || raw === '#') return [];
+            if (raw.includes(',')) {
+                const idx = raw.indexOf(',');
+                return [{
+                    rawLast: raw.slice(0, idx).trim(),
+                    lastTokens: splitPersonTokens(raw.slice(0, idx)),
+                    firstTokens: splitPersonTokens(raw.slice(idx + 1))
+                }];
+            }
+            const toks = splitPersonTokens(raw);
+            if (toks.length === 0) return [];
+            if (toks.length === 1) {
+                return [{ rawLast: raw, lastTokens: [toks[0]], firstTokens: [] }];
+            }
+            const res = [{
+                rawLast: toks[toks.length - 1],
+                lastTokens: [toks[toks.length - 1]],
+                firstTokens: toks.slice(0, toks.length - 1)
+            }];
+            if (toks.length >= 3 && toks[toks.length - 2].length >= 3) {
+                res.push({
+                    rawLast: `${toks[toks.length - 2]} ${toks[toks.length - 1]}`,
+                    lastTokens: [toks[toks.length - 2], toks[toks.length - 1]],
+                    firstTokens: toks.slice(0, toks.length - 2)
+                });
+            }
+            return res;
+        }
+
+        function scoreFirstTokenPairJs(a, b) {
+            if (a === b) return 50;
+            const ca = FIRST_NAME_CANONICAL_MAP[a];
+            const cb = FIRST_NAME_CANONICAL_MAP[b];
+            if (ca && ca === cb) return 45;
+            if ((a.length >= 4 && b.startsWith(a)) || (b.length >= 4 && a.startsWith(b))) return 35;
+            if ((a.length === 1 && b.startsWith(a)) || (b.length === 1 && a.startsWith(b))) return 25;
+            return 0;
+        }
+
+        function scoreFirstNameTokensJs(inFirstTokens, candFirstTokens) {
+            if (inFirstTokens.length === 0) return 0;
+            if (candFirstTokens.length === 0) return -1;
+            if (inFirstTokens.join(' ') === candFirstTokens.join(' ')) return 120;
+
+            let totalScore = 0;
+            let matchedCount = 0;
+            let matchedStrong = false;
+            const hasMultiCharInput = inFirstTokens.some(t => t.length >= 2);
+            const candUsed = new Array(candFirstTokens.length).fill(false);
+            const inputUsed = new Array(inFirstTokens.length).fill(false);
+
+            for (let i = 0; i < inFirstTokens.length; i++) {
+                let bestIdx = -1;
+                let bestScore = 0;
+                for (let j = 0; j < candFirstTokens.length; j++) {
+                    if (candUsed[j]) continue;
+                    const s = scoreFirstTokenPairJs(inFirstTokens[i], candFirstTokens[j]);
+                    if (s > bestScore) {
+                        bestScore = s;
+                        bestIdx = j;
+                    }
+                }
+                if (bestIdx >= 0) {
+                    candUsed[bestIdx] = true;
+                    inputUsed[i] = true;
+                    totalScore += bestScore;
+                    matchedCount++;
+                    if (bestScore >= 35) matchedStrong = true;
+                }
+            }
+
+            if (matchedCount === 0) return -1;
+            if (hasMultiCharInput && !matchedStrong) return -1;
+
+            if (inFirstTokens.length >= 2 && candFirstTokens.length >= 2) {
+                const unmatchedMultiInput = inFirstTokens.some((t, i) => !inputUsed[i] && t.length >= 2);
+                const unmatchedMultiCand = candFirstTokens.some((t, j) => !candUsed[j] && t.length >= 2);
+                if (unmatchedMultiInput && unmatchedMultiCand) return -1;
+            }
+
+            if (inFirstTokens.length === candFirstTokens.length) totalScore += 10;
+            return totalScore;
+        }
+
+        function scoreLastNameTokensJs(inLastTokens, candLastTokens) {
+            if (inLastTokens.length === 0 || candLastTokens.length === 0) return 0;
+            if (inLastTokens.join(' ') === candLastTokens.join(' ')) return 120;
+
+            if (inLastTokens.length >= 2 && candLastTokens.length >= 2) {
+                const matched = inLastTokens.filter(t => candLastTokens.includes(t)).length;
+                if (matched >= 2 && candLastTokens[0] === inLastTokens[0]) return 100;
+            }
+
+            if (candLastTokens[0] === inLastTokens[0]) return 75;
+            if (inLastTokens.length === 1 && candLastTokens.includes(inLastTokens[0])) return 60;
+
+            const inFirst = inLastTokens[0];
+            const candFirst = candLastTokens[0];
+            if (inFirst.length >= 4 && candFirst.length >= 4 && (candFirst.startsWith(inFirst) || inFirst.startsWith(candFirst))) {
+                return 50;
+            }
+            return 0;
+        }
+
+        function scorePersonCandidate(responsible, candFirstName, candLastName) {
+            const interpretations = parseResponsibleInterpretations(responsible);
+            const candLastTokens = splitPersonTokens(candLastName);
+            const candFirstTokens = splitPersonTokens(candFirstName);
+            let best = 0;
+
+            for (const interp of interpretations) {
+                const lastScore = scoreLastNameTokensJs(interp.lastTokens, candLastTokens);
+                if (lastScore <= 0) continue;
+                const firstScore = scoreFirstNameTokensJs(interp.firstTokens, candFirstTokens);
+                if (firstScore < 0) continue;
+                const total = lastScore + firstScore;
+                if (total > best) best = total;
+            }
+            return best;
+        }
+
+        async function resolvePersonViaPersonasApi(responsible) {
+            const interpretations = parseResponsibleInterpretations(responsible);
+            if (interpretations.length === 0) return null;
+
+            const rawTerms = [];
+            for (const interp of interpretations) {
+                const rawTokens = String(interp.rawLast || '').trim().split(/\s+/).filter(Boolean);
+                if (rawTokens.length >= 2) rawTerms.push(rawTokens.join(' '));
+                const significantRaw = rawTokens.find(t => !SURNAME_PARTICLES_SET.has(normalizePersonText(t)) && t.length >= 2) || rawTokens[0];
+                if (significantRaw) rawTerms.push(significantRaw);
+                const significantNorm = interp.lastTokens.find(t => !SURNAME_PARTICLES_SET.has(t) && t.length >= 2) || interp.lastTokens[0];
+                if (interp.lastTokens.length >= 2) rawTerms.push(interp.lastTokens.join(' '));
+                if (significantNorm) rawTerms.push(significantNorm);
+            }
+
+            const searchTerms = Array.from(new Set(rawTerms.map(t => t.trim()).filter(Boolean)));
+            let bestMatch = null;
+            let bestScore = 0;
+
+            for (const term of searchTerms) {
+                for (let page = 0; page < 3; page++) {
+                    const resp = await window.apiFetch(`personas?apellido=${encodeURIComponent(term)}&page=${page}`);
+                    if (!resp.ok) break;
+                    const data = await resp.json();
+                    const list = Array.isArray(data?.content)
+                        ? data.content
+                        : (Array.isArray(data?._embedded?.personas) ? data._embedded.personas : []);
+
+                    for (const p of list) {
+                        const score = scorePersonCandidate(responsible, p?.name?.firstName || '', p?.name?.lastName || '');
+                        if (score > bestScore && p?.uuid) {
+                            bestScore = score;
+                            bestMatch = { personUuid: p.uuid, email: '' };
+                        }
+                    }
+
+                    const totalPages = data?.page?.totalPages ?? 1;
+                    if (bestMatch || list.length === 0 || page + 1 >= totalPages) break;
+                }
+                if (bestMatch) break;
+            }
+            return bestMatch;
+        }
+
+        async function resolveMissingPersons(items) {
+            if (!Array.isArray(items) || items.length === 0) return;
+
+            const isNonEmpty = v => Boolean(v && String(v).trim() && String(v).trim() !== '#');
+            const toResolve = items.filter(it => !it.personUuid && (isNonEmpty(it.niu) || isNonEmpty(it.responsible)));
+            if (toResolve.length === 0) return;
+
+            // Pas A: Resolució en bloc via endpoint dedicat (consulta MongoDB Persons per NIU i nom)
+            try {
+                const resp = await window.apiFetch('equipment-loader/resolve-persons', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        items: toResolve.map(it => ({
+                            rowIndex: it.rowIndex,
+                            niu: it.niu || '',
+                            responsible: it.responsible || ''
+                        }))
+                    })
+                });
+                if (resp.ok) {
+                    const data = await resp.json();
+                    const byRow = new Map((data.resolved || []).map(r => [r.rowIndex, r]));
+                    toResolve.forEach(it => {
+                        const res = byRow.get(it.rowIndex);
+                        if (res) {
+                            if (res.personUuid) it.personUuid = res.personUuid;
+                            if (!it.email && res.email) it.email = res.email;
+                        }
+                    });
+                }
+            } catch (err) {
+                console.warn('No s\'ha pogut contactar amb equipment-loader/resolve-persons:', err);
+            }
+
+            // Pas B: Fallback directe a /api/personas per responsables encara pendents
+            const stillMissing = toResolve.filter(it => !it.personUuid && isNonEmpty(it.responsible));
+            if (stillMissing.length === 0) return;
+
+            const uniqueNames = Array.from(new Set(stillMissing.map(it => String(it.responsible).trim())));
+            const fallbackCache = new Map();
+
+            for (const name of uniqueNames) {
+                try {
+                    const resolved = await resolvePersonViaPersonasApi(name);
+                    if (resolved) fallbackCache.set(name, resolved);
+                } catch (err) {
+                    console.warn('Error en fallback /api/personas per', name, err);
+                }
+            }
+
+            stillMissing.forEach(it => {
+                const resolved = fallbackCache.get(String(it.responsible).trim());
+                if (resolved?.personUuid) {
+                    it.personUuid = resolved.personUuid;
+                    if (!it.email && resolved.email) it.email = resolved.email;
+                }
+            });
+        }
+
         function parseClientRows(rows, fileName) {
             const headerRow = rows[0].map(h => normalizeHeader(h));
             
@@ -581,9 +870,9 @@
                 else if (h.includes('descripcio centre de cost')) colCostDesc = idx;
                 else if (h.includes('centre de cost')) colCost = idx;
                 else if (h.includes('descripcio projecte')) colProjDesc = idx;
+                else if (h.includes('responsable')) colResp = idx;
                 else if (h.includes('projecte') || h.includes('proyecto')) colProj = idx;
                 else if (h.includes('capitalitzaci') || h.includes('any')) colYear = idx;
-                else if (h.includes('responsable')) colResp = idx;
                 else if (h.includes('valor net')) colNet = idx;
                 else if (h.includes('amortitzaci')) colAmort = idx;
                 else if (h.includes('valor actual') || h.includes('valor')) colVal = idx;
@@ -630,7 +919,12 @@
                     let personUuid = '';
                     let email = '';
                     if (typeof ACTIUS_DATA !== 'undefined' && Array.isArray(ACTIUS_DATA)) {
-                        const match = ACTIUS_DATA.find(x => (niu && x.niu === niu) || (assetNumber && x.assetNumber === assetNumber));
+                        const normResp = normalizePersonText(responsible);
+                        const match = ACTIUS_DATA.find(x =>
+                            (niu && x.niu === niu) ||
+                            (assetNumber && x.assetNumber === assetNumber) ||
+                            (normResp && x.personUuid && normalizePersonText(x.responsible) === normResp)
+                        );
                         if (match) {
                             personUuid = match.personUuid || '';
                             email = match.email || '';
@@ -665,7 +959,7 @@
                         descCat,
                         descCas,
                         descAng,
-                        financament: (project && project !== '#') ? `Projecte ${project}${projectDesc && projectDesc !== '#' ? ': ' + projectDesc : ''}` : '',
+                        financament: hasValidProject(project) ? `Projecte ${project}${projectDesc && !String(projectDesc).includes('#') ? ': ' + projectDesc : ''}` : '',
                         tipusPrestacioRaw: 'Sense servei',
                         tipusPrestacioUri: '/dk/atira/pure/equipment/loantypes/sense_servei'
                     });
@@ -729,7 +1023,7 @@
             equipmentsData.forEach(eq => {
                 const val = parseFloat(String(eq.currentValue || '0').replace(/[^0-9.-]/g, '')) || 0;
                 totalVal += val;
-                if (eq.project && eq.project !== '#') withProj++;
+                if (hasValidProject(eq.project)) withProj++;
                 if (eq.orgName) orgs.add(eq.orgName);
                 if (eq.capYear) years.add(eq.capYear);
                 if (eq.orgUuid) matchedUuidCount++;
@@ -817,10 +1111,8 @@
             let dCas = item.descCas || '';
             let dAng = item.descAng || '';
 
-            // Finançament (Source of funding) afegit a la descripció principal posant en negreta Financiación:
-            const fundingText = (item.projectDesc && item.projectDesc !== '#') 
-                ? item.projectDesc 
-                : (item.financament || '');
+            // Finançament (Source of funding): si en projecte hi ha #, no hi ha funding
+            const fundingText = getItemFundingText(item);
 
             if (fundingText) {
                 const fCat = `<b>Finançament:</b><br/>${escapeHtml(fundingText)}`;
@@ -859,7 +1151,7 @@
                     metaCas.push(`• <b>Responsable:</b> ${escapeHtml(respInfo)}`);
                     metaAng.push(`• <b>Responsible person:</b> ${escapeHtml(respInfo)}`);
                 }
-                if (item.project && item.project !== '#') {
+                if (hasValidProject(item.project)) {
                     metaCat.push(`• <b>Codi projecte:</b> ${escapeHtml(item.project)}`);
                     metaCas.push(`• <b>Código proyecto:</b> ${escapeHtml(item.project)}`);
                     metaAng.push(`• <b>Project code:</b> ${escapeHtml(item.project)}`);
@@ -952,8 +1244,8 @@
                 const matchesYear = yearFilter === 'ALL' || item.capYear === yearFilter;
                 
                 let matchesProj = true;
-                if (projFilter === 'WITH_PROJECT') matchesProj = Boolean(item.project && item.project !== '#');
-                else if (projFilter === 'NO_PROJECT') matchesProj = !item.project || item.project === '#';
+                if (projFilter === 'WITH_PROJECT') matchesProj = hasValidProject(item.project);
+                else if (projFilter === 'NO_PROJECT') matchesProj = !hasValidProject(item.project);
 
                 const matchesStatus = statusFilter === 'ALL' || item.status === statusFilter;
 
@@ -994,6 +1286,8 @@
                     </span>
                 `;
 
+                const fundingText = getItemFundingText(item);
+
                 // Titles & Descriptions
                 const titlesHtml = `
                     <div class="font-bold text-slate-900 leading-snug">${escapeHtml(item.titleCat || 'Sense denominació')}</div>
@@ -1004,9 +1298,9 @@
                             ${escapeHtml(item.descCat)}
                         </div>
                     ` : ''}
-                    ${item.projectDesc && item.projectDesc !== '#' ? `
-                        <div class="mt-1 text-[10px] text-slate-600 bg-slate-50/80 px-1.5 py-0.5 rounded border border-slate-200 line-clamp-1 max-w-sm" title="Finançament: ${escapeHtml(item.projectDesc)}">
-                            <span class="font-bold text-slate-700">Finançament:</span> ${escapeHtml(item.projectDesc)}
+                    ${fundingText ? `
+                        <div class="mt-1 text-[10px] text-slate-600 bg-slate-50/80 px-1.5 py-0.5 rounded border border-slate-200 line-clamp-1 max-w-sm" title="Finançament: ${escapeHtml(fundingText)}">
+                            <span class="font-bold text-slate-700">Finançament:</span> ${escapeHtml(fundingText)}
                         </div>
                     ` : ''}
                 `;
@@ -1019,7 +1313,7 @@
                     </div>
                     ${item.niu ? `<div class="text-[10px] text-slate-400 font-mono">NIU: ${escapeHtml(item.niu)}</div>` : ''}
                     ${item.email ? `<div class="text-[10px] text-slate-500 font-mono truncate max-w-[170px]" title="${escapeHtml(item.email)}">${escapeHtml(item.email)}</div>` : ''}
-                    ${item.project && item.project !== '#' ? `
+                    ${hasValidProject(item.project) ? `
                         <div class="mt-1 text-[10px] text-teal-800 bg-teal-50/80 px-1.5 py-0.5 rounded border border-teal-200 font-semibold line-clamp-1 max-w-[200px]" title="${escapeHtml(item.project + ' - ' + item.projectDesc)}">
                             <i class="fa-solid fa-folder-closed mr-1"></i>${escapeHtml(item.project)}
                         </div>

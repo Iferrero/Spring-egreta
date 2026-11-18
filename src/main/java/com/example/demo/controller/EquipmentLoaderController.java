@@ -263,12 +263,12 @@ public class EquipmentLoaderController {
                         colLocation = c;
                     } else if (h.contains("centre de cost") || h.contains("centro de coste")) {
                         colCostCenter = c;
+                    } else if (h.contains("responsable")) {
+                        colResponsible = c;
                     } else if (h.contains("projecte") || h.contains("proyecto") || h.contains("project")) {
                         colProject = c;
                     } else if (h.contains("capitalitzaci") || h.contains("any") || h.contains("ano") || h.contains("year")) {
                         colCapYear = c;
-                    } else if (h.contains("responsable")) {
-                        colResponsible = c;
                     } else if (h.contains("valor net")) {
                         colNetVal = c;
                     } else if (h.contains("amortitzaci")) {
@@ -373,52 +373,13 @@ public class EquipmentLoaderController {
                     item.put("tipusPrestacioRaw", "Sense servei");
                     item.put("tipusPrestacioUri", "/dk/atira/pure/equipment/loantypes/sense_servei");
 
-                    String personUuid = "";
-                    String personEmail = "";
-                    if (mongoTemplate != null) {
-                        try {
-                            Document p = null;
-                            if (!niu.isBlank()) {
-                                p = mongoTemplate.getCollection("Persons").find(new Document("identifiers.value", niu)).first();
-                                if (p == null) {
-                                    p = mongoTemplate.getCollection("Persons").find(new Document("identifiers.id", niu)).first();
-                                }
-                            }
-                            if (p == null && !responsible.isBlank()) {
-                                String[] parts = responsible.split(",");
-                                if (parts.length >= 2) {
-                                    p = mongoTemplate.getCollection("Persons").find(new Document("name.lastName",
-                                        Pattern.compile("^" + Pattern.quote(parts[0].trim()), Pattern.CASE_INSENSITIVE))).first();
-                                }
-                            }
-                            if (p != null) {
-                                personUuid = p.getString("uuid");
-                                List<Document> assocs = (List<Document>) p.get("staffOrganizationAssociations");
-                                if (assocs != null) {
-                                    for (Document assoc : assocs) {
-                                        List<Document> emails = (List<Document>) assoc.get("emails");
-                                        if (emails != null) {
-                                            for (Document em : emails) {
-                                                String val = em.getString("value");
-                                                if (val != null && val.contains("@")) {
-                                                    personEmail = val.trim().toLowerCase();
-                                                    break;
-                                                }
-                                            }
-                                        }
-                                        if (!personEmail.isEmpty()) break;
-                                    }
-                                }
-                            }
-                        } catch (Exception e) {
-                            logger.warn("No s'ha pogut resoldre persona per NIU {}: {}", niu, e.getMessage());
-                        }
-                    }
-                    item.put("personUuid", personUuid != null ? personUuid : "");
-                    item.put("email", !personEmail.isEmpty() ? personEmail : cleanEmail(emailRaw));
+                    Map<String, String> resolvedPerson = resolvePersonFromMongo(niu, responsible);
+                    item.put("personUuid", resolvedPerson.getOrDefault("personUuid", ""));
+                    String resolvedEmail = resolvedPerson.getOrDefault("email", "");
+                    item.put("email", !resolvedEmail.isEmpty() ? resolvedEmail : cleanEmail(emailRaw));
 
-                    if (!project.isBlank() && !project.equals("#")) {
-                        item.put("financament", "Projecte " + project + (!projectDesc.isBlank() && !projectDesc.equals("#") ? ": " + projectDesc : ""));
+                    if (!project.isBlank() && !project.contains("#")) {
+                        item.put("financament", "Projecte " + project + (!projectDesc.isBlank() && !projectDesc.contains("#") ? ": " + projectDesc : ""));
                     } else {
                         item.put("financament", "");
                     }
@@ -666,7 +627,14 @@ public class EquipmentLoaderController {
         String projDesc = (String) row.getOrDefault("projectDesc", "");
         String financament = (String) row.getOrDefault("financament", "");
 
-        String fundingRaw = (projDesc != null && !projDesc.isBlank() && !projDesc.equals("#")) ? projDesc : financament;
+        String fundingRaw;
+        if (row.containsKey("project") && (proj == null || proj.isBlank() || proj.contains("#"))) {
+            fundingRaw = "";
+        } else {
+            fundingRaw = (projDesc != null && !projDesc.isBlank() && !projDesc.contains("#"))
+                    ? projDesc
+                    : (financament != null && !(row.containsKey("project") && financament.contains("#")) ? financament : "");
+        }
         MultilingualFunding funding = adaptFunding(fundingRaw);
         String fundCat = !funding.cat().isBlank() ? funding.cat() : fundingRaw;
         String fundCas = !funding.cas().isBlank() ? funding.cas() : fundingRaw;
@@ -713,7 +681,7 @@ public class EquipmentLoaderController {
                 metaCas.append("• <b>Responsable:</b> ").append(resp).append(!niu.isBlank() ? " (NIU: " + niu + ")" : "").append("<br/>");
                 metaAng.append("• <b>Responsible person:</b> ").append(resp).append(!niu.isBlank() ? " (NIU: " + niu + ")" : "").append("<br/>");
             }
-            if (!proj.isBlank() && !proj.equals("#")) {
+            if (proj != null && !proj.isBlank() && !proj.contains("#")) {
                 metaCat.append("• <b>Codi projecte:</b> ").append(proj).append("<br/>");
                 metaCas.append("• <b>Código proyecto:</b> ").append(proj).append("<br/>");
                 metaAng.append("• <b>Project code:</b> ").append(proj).append("<br/>");
@@ -765,6 +733,360 @@ public class EquipmentLoaderController {
         }
 
         return payload;
+    }
+
+    private static final Set<String> SURNAME_PARTICLES = Set.of("de", "del", "dela", "dels", "la", "las", "los", "da", "dos", "das", "van", "von", "geb", "i", "y");
+
+    private static final Map<String, String> FIRST_NAME_CANONICAL = Map.ofEntries(
+        Map.entry("juan", "juan"), Map.entry("joan", "juan"),
+        Map.entry("francisco", "francisco"), Map.entry("francesc", "francisco"),
+        Map.entry("javier", "javier"), Map.entry("xavier", "javier"),
+        Map.entry("antonio", "antonio"), Map.entry("antoni", "antonio"),
+        Map.entry("carlos", "carlos"), Map.entry("carles", "carlos"),
+        Map.entry("luis", "luis"), Map.entry("lluis", "luis"),
+        Map.entry("jose", "jose"), Map.entry("josep", "jose"),
+        Map.entry("jorge", "jorge"), Map.entry("jordi", "jorge"),
+        Map.entry("pablo", "pablo"), Map.entry("pau", "pablo"),
+        Map.entry("pedro", "pedro"), Map.entry("pere", "pedro"),
+        Map.entry("miguel", "miguel"), Map.entry("miquel", "miguel"),
+        Map.entry("jaime", "jaime"), Map.entry("jaume", "jaime"),
+        Map.entry("alberto", "alberto"), Map.entry("albert", "alberto"),
+        Map.entry("alfonso", "alfonso"), Map.entry("alfons", "alfonso"),
+        Map.entry("joaquin", "joaquin"), Map.entry("joaquim", "joaquin"),
+        Map.entry("vicente", "vicente"), Map.entry("vicenc", "vicente"),
+        Map.entry("enrique", "enrique"), Map.entry("enric", "enrique"),
+        Map.entry("fernando", "fernando"), Map.entry("ferran", "fernando"),
+        Map.entry("guillermo", "guillermo"), Map.entry("guillem", "guillermo"),
+        Map.entry("ricardo", "ricardo"), Map.entry("ricard", "ricardo"),
+        Map.entry("eduardo", "eduardo"), Map.entry("eduard", "eduardo"),
+        Map.entry("alejandro", "alejandro"), Map.entry("alex", "alejandro"), Map.entry("alexandre", "alejandro"),
+        Map.entry("rafael", "rafael"), Map.entry("rafel", "rafael"),
+        Map.entry("esteban", "esteban"), Map.entry("esteve", "esteban"),
+        Map.entry("andres", "andres"), Map.entry("andreu", "andres")
+    );
+
+    private static final Document PERSON_PROJECTION = new Document("_id", 0)
+        .append("uuid", 1)
+        .append("name", 1)
+        .append("staffOrganizationAssociations.emails", 1)
+        .append("emails", 1);
+
+    private String normalizeForMatch(String text) {
+        if (text == null) return "";
+        String normalized = Normalizer.normalize(text, Normalizer.Form.NFD)
+            .replaceAll("\\p{InCombiningDiacriticalMarks}+", "")
+            .toLowerCase(Locale.ROOT)
+            .replaceAll("[-.,'`’]+", " ")
+            .replaceAll("\\s+", " ")
+            .trim();
+        return normalized;
+    }
+
+    private List<String> splitTokens(String normalized) {
+        if (normalized == null || normalized.isBlank()) return Collections.emptyList();
+        return Arrays.stream(normalized.split("\\s+"))
+            .filter(t -> !t.isBlank())
+            .toList();
+    }
+
+    private String buildAccentInsensitiveTokenRegex(String rawToken) {
+        String norm = normalizeForMatch(rawToken);
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < norm.length(); i++) {
+            char ch = norm.charAt(i);
+            switch (ch) {
+                case 'a' -> sb.append("[aáàäâ]");
+                case 'e' -> sb.append("[eéèëê]");
+                case 'i' -> sb.append("[iíìïî]");
+                case 'o' -> sb.append("[oóòöô]");
+                case 'u' -> sb.append("[uúùüû]");
+                case 'c' -> sb.append("[cç]");
+                case 'n' -> sb.append("[nñ]");
+                default -> sb.append(Pattern.quote(String.valueOf(ch)));
+            }
+        }
+        return sb.toString();
+    }
+
+    private int scoreFirstTokenPair(String a, String b) {
+        if (a.equals(b)) return 50;
+        String ca = FIRST_NAME_CANONICAL.get(a);
+        String cb = FIRST_NAME_CANONICAL.get(b);
+        if (ca != null && ca.equals(cb)) return 45;
+        if ((a.length() >= 4 && b.startsWith(a)) || (b.length() >= 4 && a.startsWith(b))) return 35;
+        if ((a.length() == 1 && b.startsWith(a)) || (b.length() == 1 && a.startsWith(b))) return 25;
+        return 0;
+    }
+
+    private int scoreFirstName(List<String> inputFirstTokens, List<String> candFirstTokens) {
+        if (inputFirstTokens.isEmpty()) return 0;
+        if (candFirstTokens.isEmpty()) return -1;
+        String inJoined = String.join(" ", inputFirstTokens);
+        String candJoined = String.join(" ", candFirstTokens);
+        if (inJoined.equals(candJoined)) return 120;
+
+        int totalScore = 0;
+        int matchedCount = 0;
+        boolean matchedStrong = false;
+        boolean hasMultiCharInput = inputFirstTokens.stream().anyMatch(t -> t.length() >= 2);
+        boolean[] candUsed = new boolean[candFirstTokens.size()];
+        boolean[] inputUsed = new boolean[inputFirstTokens.size()];
+
+        for (int i = 0; i < inputFirstTokens.size(); i++) {
+            int bestIdx = -1;
+            int bestScore = 0;
+            for (int j = 0; j < candFirstTokens.size(); j++) {
+                if (candUsed[j]) continue;
+                int s = scoreFirstTokenPair(inputFirstTokens.get(i), candFirstTokens.get(j));
+                if (s > bestScore) {
+                    bestScore = s;
+                    bestIdx = j;
+                }
+            }
+            if (bestIdx >= 0) {
+                candUsed[bestIdx] = true;
+                inputUsed[i] = true;
+                totalScore += bestScore;
+                matchedCount++;
+                if (bestScore >= 35) matchedStrong = true;
+            }
+        }
+
+        if (matchedCount == 0) return -1;
+        if (hasMultiCharInput && !matchedStrong) return -1;
+
+        if (inputFirstTokens.size() >= 2 && candFirstTokens.size() >= 2) {
+            boolean unmatchedMultiInput = false;
+            boolean unmatchedMultiCand = false;
+            for (int i = 0; i < inputFirstTokens.size(); i++) {
+                if (!inputUsed[i] && inputFirstTokens.get(i).length() >= 2) unmatchedMultiInput = true;
+            }
+            for (int j = 0; j < candFirstTokens.size(); j++) {
+                if (!candUsed[j] && candFirstTokens.get(j).length() >= 2) unmatchedMultiCand = true;
+            }
+            if (unmatchedMultiInput && unmatchedMultiCand) return -1;
+        }
+
+        // Lleuger avantatge si coincideixen en nombre de tokens
+        if (inputFirstTokens.size() == candFirstTokens.size()) totalScore += 10;
+        return totalScore;
+    }
+
+    private int scoreLastName(List<String> inputLastTokens, List<String> candLastTokens) {
+        if (inputLastTokens.isEmpty() || candLastTokens.isEmpty()) return 0;
+        String inJoined = String.join(" ", inputLastTokens);
+        String candJoined = String.join(" ", candLastTokens);
+        if (inJoined.equals(candJoined)) return 120;
+
+        if (inputLastTokens.size() >= 2 && candLastTokens.size() >= 2) {
+            int matched = 0;
+            for (String inTok : inputLastTokens) {
+                if (candLastTokens.contains(inTok)) matched++;
+            }
+            if (matched >= 2 && candLastTokens.get(0).equals(inputLastTokens.get(0))) return 100;
+        }
+
+        if (candLastTokens.get(0).equals(inputLastTokens.get(0))) return 75;
+        if (inputLastTokens.size() == 1 && candLastTokens.contains(inputLastTokens.get(0))) return 60;
+
+        String inFirst = inputLastTokens.get(0);
+        String candFirst = candLastTokens.get(0);
+        if (inFirst.length() >= 4 && candFirst.length() >= 4
+                && (candFirst.startsWith(inFirst) || inFirst.startsWith(candFirst))) {
+            return 50;
+        }
+        return 0;
+    }
+
+    @SuppressWarnings("unchecked")
+    private String extractEmailFromPersonDoc(Document p) {
+        List<Document> assocs = (List<Document>) p.get("staffOrganizationAssociations");
+        if (assocs != null) {
+            for (Document assoc : assocs) {
+                List<Document> emails = (List<Document>) assoc.get("emails");
+                if (emails != null) {
+                    for (Document em : emails) {
+                        String val = em.getString("value");
+                        if (val != null && val.contains("@")) {
+                            return val.trim().toLowerCase(Locale.ROOT);
+                        }
+                    }
+                }
+            }
+        }
+        List<Document> rootEmails = (List<Document>) p.get("emails");
+        if (rootEmails != null) {
+            for (Document em : rootEmails) {
+                String val = em.getString("value");
+                if (val != null && val.contains("@")) {
+                    return val.trim().toLowerCase(Locale.ROOT);
+                }
+            }
+        }
+        return "";
+    }
+
+    private List<Document> queryPersonCandidatesBySurname(List<String> surnameTokens) {
+        if (surnameTokens.isEmpty()) return Collections.emptyList();
+        var col = mongoTemplate.getCollection("Persons");
+
+        List<String> significant = surnameTokens.stream()
+            .filter(t -> !SURNAME_PARTICLES.contains(t) && t.length() >= 2)
+            .toList();
+        if (significant.isEmpty()) significant = surnameTokens;
+
+        String tok1 = significant.get(0);
+        String rx1 = buildAccentInsensitiveTokenRegex(tok1);
+
+        if (significant.size() >= 2 && significant.get(1).length() >= 3) {
+            String rx2 = buildAccentInsensitiveTokenRegex(significant.get(1));
+            List<Document> tier1 = col.find(new Document("name.lastName",
+                    Pattern.compile("^" + rx1 + "[\\s\\-]+" + rx2, Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE)))
+                .projection(PERSON_PROJECTION)
+                .limit(20)
+                .into(new ArrayList<>());
+            if (!tier1.isEmpty()) return tier1;
+        }
+
+        List<Document> tier2 = col.find(new Document("name.lastName",
+                Pattern.compile("^" + rx1 + "(?:$|[\\s\\-])", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE)))
+            .projection(PERSON_PROJECTION)
+            .limit(500)
+            .into(new ArrayList<>());
+        if (!tier2.isEmpty()) return tier2;
+
+        return col.find(new Document("name.lastName",
+                Pattern.compile("(?:^|[\\s\\-])" + rx1 + "(?:$|[\\s\\-])", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE)))
+            .projection(PERSON_PROJECTION)
+            .limit(200)
+            .into(new ArrayList<>());
+    }
+
+    private Map<String, String> resolvePersonFromMongo(String niu, String responsible) {
+        if (mongoTemplate == null) {
+            return Map.of("personUuid", "", "email", "");
+        }
+        try {
+            var col = mongoTemplate.getCollection("Persons");
+            Document matched = null;
+
+            String niuClean = niu != null ? niu.trim().replaceAll("\\.0+$", "") : "";
+            if (!niuClean.isBlank() && !niuClean.equals("#")) {
+                List<Document> orClauses = new ArrayList<>();
+                orClauses.add(new Document("identifiers.value", niuClean));
+                orClauses.add(new Document("identifiers.id", niuClean));
+                orClauses.add(new Document("externalId", niuClean));
+                if (niuClean.matches("\\d+")) {
+                    try {
+                        long niuNum = Long.parseLong(niuClean);
+                        orClauses.add(new Document("identifiers.value", niuNum));
+                        orClauses.add(new Document("identifiers.id", niuNum));
+                    } catch (NumberFormatException ignored) {}
+                }
+                matched = col.find(new Document("$or", orClauses))
+                    .projection(PERSON_PROJECTION)
+                    .first();
+            }
+
+            if (matched == null && responsible != null && !responsible.isBlank() && !responsible.trim().equals("#")) {
+                String respTrim = responsible.trim();
+                List<String[]> interpretations = new ArrayList<>();
+                if (respTrim.contains(",")) {
+                    String[] parts = respTrim.split(",", 2);
+                    interpretations.add(new String[]{ parts[0].trim(), parts[1].trim() });
+                } else {
+                    List<String> allToks = splitTokens(normalizeForMatch(respTrim));
+                    if (allToks.size() >= 2) {
+                        interpretations.add(new String[]{
+                            allToks.get(allToks.size() - 1),
+                            String.join(" ", allToks.subList(0, allToks.size() - 1))
+                        });
+                        if (allToks.size() >= 3 && allToks.get(allToks.size() - 2).length() >= 3) {
+                            interpretations.add(new String[]{
+                                allToks.get(allToks.size() - 2) + " " + allToks.get(allToks.size() - 1),
+                                String.join(" ", allToks.subList(0, allToks.size() - 2))
+                            });
+                        }
+                    } else if (allToks.size() == 1) {
+                        interpretations.add(new String[]{ allToks.get(0), "" });
+                    }
+                }
+
+                int bestScore = 0;
+                for (String[] interp : interpretations) {
+                    List<String> inLastTokens = splitTokens(normalizeForMatch(interp[0]));
+                    List<String> inFirstTokens = splitTokens(normalizeForMatch(interp[1]));
+                    List<Document> candidates = queryPersonCandidatesBySurname(inLastTokens);
+                    for (Document cand : candidates) {
+                        Document nameDoc = cand.get("name", Document.class);
+                        if (nameDoc == null) continue;
+                        List<String> candLastTokens = splitTokens(normalizeForMatch(nameDoc.getString("lastName")));
+                        List<String> candFirstTokens = splitTokens(normalizeForMatch(nameDoc.getString("firstName")));
+
+                        int lastScore = scoreLastName(inLastTokens, candLastTokens);
+                        if (lastScore <= 0) continue;
+
+                        int firstScore = scoreFirstName(inFirstTokens, candFirstTokens);
+                        if (firstScore < 0) continue;
+
+                        int total = lastScore + firstScore;
+                        if (total > bestScore) {
+                            bestScore = total;
+                            matched = cand;
+                        }
+                    }
+                }
+            }
+
+            if (matched != null) {
+                String uuid = matched.getString("uuid");
+                String email = extractEmailFromPersonDoc(matched);
+                return Map.of(
+                    "personUuid", uuid != null ? uuid : "",
+                    "email", email != null ? email : ""
+                );
+            }
+        } catch (Exception e) {
+            logger.warn("No s'ha pogut resoldre persona (NIU='{}', responsible='{}'): {}", niu, responsible, e.getMessage());
+        }
+        return Map.of("personUuid", "", "email", "");
+    }
+
+    /**
+     * Resol en bloc els UUIDs i correus electrònics de responsables a partir de NIU o nom complet.
+     */
+    @PostMapping("/resolve-persons")
+    @SuppressWarnings("unchecked")
+    public ResponseEntity<?> resolvePersons(@RequestBody Object requestBody) {
+        List<Map<String, Object>> items;
+        if (requestBody instanceof Map<?, ?> mapBody) {
+            Object rawItems = mapBody.get("items");
+            items = rawItems instanceof List<?> ? (List<Map<String, Object>>) rawItems : Collections.emptyList();
+        } else if (requestBody instanceof List<?> listBody) {
+            items = (List<Map<String, Object>>) listBody;
+        } else {
+            return ResponseEntity.badRequest().body(Map.of("error", "Format de petició invàlid."));
+        }
+
+        Map<String, Map<String, String>> cache = new HashMap<>();
+        List<Map<String, Object>> resolved = new ArrayList<>();
+
+        for (Map<String, Object> item : items) {
+            Object rowIndex = item.get("rowIndex");
+            String niu = item.get("niu") != null ? String.valueOf(item.get("niu")).trim() : "";
+            String responsible = item.get("responsible") != null ? String.valueOf(item.get("responsible")).trim() : "";
+
+            String cacheKey = niu + "|" + responsible.toLowerCase(Locale.ROOT);
+            Map<String, String> res = cache.computeIfAbsent(cacheKey, k -> resolvePersonFromMongo(niu, responsible));
+
+            Map<String, Object> entry = new LinkedHashMap<>();
+            entry.put("rowIndex", rowIndex);
+            entry.put("personUuid", res.getOrDefault("personUuid", ""));
+            entry.put("email", res.getOrDefault("email", ""));
+            resolved.add(entry);
+        }
+
+        return ResponseEntity.ok(Map.of("resolved", resolved));
     }
 
     /**

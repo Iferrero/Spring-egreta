@@ -40,7 +40,26 @@ public class DevSecurityConfig {
                     "/swagger-ui.html",
                     "/rapidoc.html"
                 ).permitAll()
-                .anyRequest().authenticated())
+                // Recursos estáticos compartidos por las páginas con usuarios específicos
+                .requestMatchers(
+                    "/config.js",
+                    "/uab-brand.js",
+                    "/uab-theme.css",
+                    "/egreta-modal.js",
+                    "/favicon.ico"
+                ).hasAnyRole("USER", "EUROPEES", "TERRITORI")
+                // Acceso específico a convocatories-europees.html y sus endpoints
+                .requestMatchers(
+                    "/convocatories-europees.html",
+                    "/api/applications/stats/by-funding-opportunity",
+                    "/api/applications/stats/by-funding-opportunity/**"
+                ).hasAnyRole("USER", "EUROPEES")
+                // Acceso específico a mapa-interaccions-territori.html y sus datos
+                .requestMatchers(
+                    "/mapa-interaccions-territori.html",
+                    "/mapa-territori-data.js"
+                ).hasAnyRole("USER", "TERRITORI")
+                .anyRequest().hasRole("USER"))
             .httpBasic(Customizer.withDefaults())
             .formLogin(form -> form.disable())
             .csrf(csrf -> csrf.disable());
@@ -51,12 +70,24 @@ public class DevSecurityConfig {
     UserDetailsService devUserDetailsService(
             @Value("${dev.user.name:recerca}") String username,
             @Value("${dev.user.password:UAB}") String password,
+            @Value("${dev.eu.user.name:europees}") String euUsername,
+            @Value("${dev.eu.user.password:UAB}") String euPassword,
+            @Value("${dev.territori.user.name:territori}") String territoriUsername,
+            @Value("${dev.territori.user.password:UAB}") String territoriPassword,
             PasswordEncoder passwordEncoder) {
-        UserDetails user = User.withUsername(username)
+        UserDetails mainUser = User.withUsername(username)
                 .password(passwordEncoder.encode(password))
                 .roles("USER")
                 .build();
-        return new InMemoryUserDetailsManager(user);
+        UserDetails euUser = User.withUsername(euUsername)
+                .password(passwordEncoder.encode(euPassword))
+                .roles("EUROPEES")
+                .build();
+        UserDetails territoriUser = User.withUsername(territoriUsername)
+                .password(passwordEncoder.encode(territoriPassword))
+                .roles("TERRITORI")
+                .build();
+        return new InMemoryUserDetailsManager(mainUser, euUser, territoriUser);
     }
 
     @Bean
