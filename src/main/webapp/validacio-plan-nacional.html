@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="referrer" content="same-origin">
+    <title>Validador d'Equips PDI — Pla Nacional (AEI / MICIU) | UAB</title>
+    <script src="config.js"></script>
+    <script src="uab-brand.js" defer></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <link rel="stylesheet" href="uab-theme.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .tabular-nums {
+            font-variant-numeric: tabular-nums;
+        }
+        .drop-zone-active {
+            border-color: #008037 !important;
+            background-color: #ecfdf5 !important;
+        }
+        .kpi-card {
+            transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+        }
+        .kpi-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 18px -4px rgba(0, 0, 0, 0.08);
+        }
+        .kpi-card-active {
+            ring: 2px;
+            border-color: #008037 !important;
+            box-shadow: 0 8px 20px -4px rgba(0, 128, 55, 0.18);
+        }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen text-slate-800 flex flex-col font-sans">
+
+    <header hidden>
+        <h1>Validador d'Equips PDI — Pla Nacional (AEI / MICIU)</h1>
+        <p>Comprovació automàtica d'investigadors principals i equips de recerca en PDFs de sol·licitud front a Egreta</p>
+    </header>
+
+    <main class="flex-1 max-w-[1520px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+        <!-- Barra de paràmetres de convocatòria -->
+        <section class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 flex flex-col xl:flex-row xl:items-end justify-between gap-4">
+            <div class="flex flex-wrap items-end gap-4">
+                <div>
+                    <label for="inputReferenceDate" class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                        <i class="fa-regular fa-calendar mr-1 text-emerald-700"></i> Data de referència
+                    </label>
+                    <input type="date" id="inputReferenceDate"
+                           class="bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:bg-white">
+                </div>
+
+                <div>
+                    <label for="selectDefaultDuration" class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                        <i class="fa-regular fa-clock mr-1 text-emerald-700"></i> Durada per defecte
+                    </label>
+                    <select id="selectDefaultDuration"
+                            class="bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:bg-white">
+                        <option value="">3 anys (defecte) / segons PDF</option>
+                        <option value="3">Forçar 3 anys</option>
+                        <option value="4">Forçar 4 anys</option>
+                    </select>
+                </div>
+
+                <button id="btnRecalculateBatch" type="button" disabled
+                        class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-semibold transition shadow-sm">
+                    <i class="fa-solid fa-arrows-rotate"></i>
+                    <span>Recalcular lot</span>
+                </button>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-3">
+                <button id="btnOpenRulesModal" type="button"
+                        class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 text-sm font-semibold transition">
+                    <i class="fa-solid fa-scale-balanced text-emerald-700"></i>
+                    <span>Criteris de validació</span>
+                </button>
+
+                <button id="btnExportExcel" type="button" disabled
+                        class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-semibold transition shadow-sm">
+                    <i class="fa-solid fa-file-excel text-emerald-400"></i>
+                    <span>Exportar Excel (.xlsx)</span>
+                </button>
+            </div>
+        </section>
+
+        <!-- Zona Drag & Drop per lots -->
+        <section class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
+            <div id="dropZone"
+                 class="border-2 border-dashed border-slate-300 hover:border-emerald-600 rounded-2xl p-6 text-center transition cursor-pointer bg-slate-50/70">
+                <input type="file" id="pdfFileInput" multiple accept=".pdf,application/pdf" class="hidden">
+                <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
+                    <div class="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                        <i class="fa-solid fa-file-arrow-up text-xl"></i>
+                    </div>
+                    <div class="text-center sm:text-left">
+                        <p class="text-sm font-bold text-slate-800">
+                            Arrossega aquí un o múltiples PDFs de sol·licitud del Pla Nacional (AEI / MICIU)
+                        </p>
+                        <p class="text-xs text-slate-500 mt-0.5">
+                            Processament 100% en memòria (no es desa cap fitxer ni DNI). Pots afegir més PDFs al lot en qualsevol moment.
+                        </p>
+                    </div>
+                    <div class="flex items-center gap-2 sm:ml-auto">
+                        <button id="btnSelectFiles" type="button"
+                                class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold transition shadow-sm">
+                            <i class="fa-solid fa-folder-open"></i> Seleccionar PDFs
+                        </button>
+                        <button id="btnClearBatch" type="button" disabled
+                                class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white hover:bg-rose-50 border border-slate-200 hover:border-rose-300 text-slate-600 hover:text-rose-700 disabled:opacity-40 text-xs font-semibold transition">
+                            <i class="fa-solid fa-trash-can"></i> Buidar lot
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Barra de progrés -->
+            <div id="progressContainer" class="hidden space-y-1.5">
+                <div class="flex items-center justify-between text-xs font-semibold text-slate-600">
+                    <span id="progressText">Validant 0 de 0 PDFs...</span>
+                    <span id="progressPercent" class="tabular-nums">0%</span>
+                </div>
+                <div class="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden border border-slate-200">
+                    <div id="progressBar" class="h-full bg-emerald-600 transition-all duration-200" style="width: 0%"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- KPIs globals clicables -->
+        <section class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+            <button id="kpiProjectsCard" type="button" data-filter="ALL"
+                    class="kpi-card text-left bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Projectes</span>
+                    <span class="w-8 h-8 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center">
+                        <i class="fa-solid fa-folder-tree text-sm"></i>
+                    </span>
+                </div>
+                <div id="kpiProjectsValue" class="text-2xl font-extrabold text-slate-900 mt-2 tabular-nums">0</div>
+                <div class="text-xs text-slate-500 mt-0.5">Carregats al lot</div>
+            </button>
+
+            <button id="kpiOkCard" type="button" data-filter="OK"
+                    class="kpi-card text-left bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-bold uppercase tracking-wider text-emerald-700">OK</span>
+                    <span class="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center">
+                        <i class="fa-solid fa-circle-check text-sm"></i>
+                    </span>
+                </div>
+                <div id="kpiOkValue" class="text-2xl font-extrabold text-emerald-700 mt-2 tabular-nums">0</div>
+                <div class="text-xs text-slate-500 mt-0.5">Sense incidències</div>
+            </button>
+
+            <button id="kpiAvisCard" type="button" data-filter="AVIS"
+                    class="kpi-card text-left bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-bold uppercase tracking-wider text-amber-600">Avisos</span>
+                    <span class="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
+                        <i class="fa-solid fa-triangle-exclamation text-sm"></i>
+                    </span>
+                </div>
+                <div id="kpiAvisValue" class="text-2xl font-extrabold text-amber-600 mt-2 tabular-nums">0</div>
+                <div class="text-xs text-slate-500 mt-0.5">Requereixen revisió</div>
+            </button>
+
+            <button id="kpiNoOkCard" type="button" data-filter="NO_OK"
+                    class="kpi-card text-left bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-bold uppercase tracking-wider text-rose-600">NO OK</span>
+                    <span class="w-8 h-8 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center">
+                        <i class="fa-solid fa-circle-xmark text-sm"></i>
+                    </span>
+                </div>
+                <div id="kpiNoOkValue" class="text-2xl font-extrabold text-rose-600 mt-2 tabular-nums">0</div>
+                <div class="text-xs text-slate-500 mt-0.5">Amb incompatibilitats</div>
+            </button>
+
+            <button id="kpiMembersCard" type="button" data-filter="ALL"
+                    class="kpi-card text-left bg-white p-4 rounded-2xl border border-slate-200 shadow-sm col-span-2 sm:col-span-1">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Membres revisats</span>
+                    <span class="w-8 h-8 rounded-lg bg-sky-50 text-sky-700 flex items-center justify-center">
+                        <i class="fa-solid fa-users text-sm"></i>
+                    </span>
+                </div>
+                <div id="kpiMembersValue" class="text-2xl font-extrabold text-slate-900 mt-2 tabular-nums">0</div>
+                <div class="text-xs text-slate-500 mt-0.5">Total en els PDFs</div>
+            </button>
+        </section>
+
+        <!-- Vista Maestro - Detall -->
+        <section class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+
+            <!-- Panell Esquerre: Llista de projectes -->
+            <aside class="lg:col-span-4 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+                <div class="p-4 border-b border-slate-200 bg-slate-50/70 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <h2 class="text-sm font-extrabold uppercase tracking-wider text-slate-700">Llista de projectes</h2>
+                        <span id="projectListCount" class="text-xs font-bold px-2.5 py-0.5 rounded-full bg-slate-200 text-slate-700 tabular-nums">0</span>
+                    </div>
+                    <div class="relative">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                        <input type="text" id="projectSearchInput" placeholder="Cercar fitxer, codi o acrònim..."
+                               class="w-full pl-8 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-emerald-600">
+                    </div>
+                    <select id="projectStatusFilter"
+                            class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-600">
+                        <option value="ALL">Tots els semàfors</option>
+                        <option value="NO_OK">NO OK</option>
+                        <option value="AVIS">AVÍS</option>
+                        <option value="OK">OK</option>
+                        <option value="ERROR">ERROR de lectura</option>
+                    </select>
+                </div>
+
+                <div id="projectListContainer" class="divide-y divide-slate-100 max-h-[680px] overflow-y-auto p-2 space-y-1.5">
+                    <div class="text-center py-10 px-4 text-xs text-slate-400">
+                        Cap PDF carregat encara.
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Panell Dret: Detall de l'equip -->
+            <div class="lg:col-span-8 space-y-4">
+
+                <!-- Estat buit -->
+                <div id="emptyDetailState" class="bg-white rounded-2xl border border-slate-200 shadow-sm p-12 text-center">
+                    <div class="w-14 h-14 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mx-auto mb-3">
+                        <i class="fa-regular fa-file-pdf text-2xl"></i>
+                    </div>
+                    <h3 class="text-base font-bold text-slate-800">Selecciona o arrossega un PDF per començar</h3>
+                    <p class="text-xs text-slate-500 mt-1 max-w-md mx-auto">
+                        Quan carreguis sol·licituds oficials de l'AEI / MICIU, aquí apareixerà la revisió detallada de l'IP i dels membres de l'Equip d'Investigació i de Treball.
+                    </p>
+                </div>
+
+                <!-- Targeta d'error aïllat per fitxer -->
+                <div id="errorDetailContainer" class="hidden bg-white rounded-2xl border border-rose-200 shadow-sm p-6 space-y-3">
+                    <div class="flex items-start gap-3">
+                        <div class="w-10 h-10 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center shrink-0">
+                            <i class="fa-solid fa-triangle-exclamation"></i>
+                        </div>
+                        <div>
+                            <span class="text-xs font-bold uppercase tracking-wider text-rose-600">Error en processar el fitxer PDF</span>
+                            <h3 id="errorDetailFileName" class="text-base font-bold text-slate-900 mt-0.5">--</h3>
+                            <p id="errorDetailMessage" class="text-sm text-rose-700 mt-2">--</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Detall complet del projecte seleccionat -->
+                <div id="projectDetailContainer" class="hidden space-y-4">
+
+                    <!-- Fitxa capçalera del projecte -->
+                    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
+                        <div class="flex flex-col md:flex-row md:items-start justify-between gap-3">
+                            <div class="space-y-1 min-w-0">
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <span id="detailProjectCode" class="px-2.5 py-0.5 rounded-lg bg-slate-100 text-slate-700 font-mono text-xs font-bold">--</span>
+                                    <span id="detailAcronym" class="px-2.5 py-0.5 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-bold">--</span>
+                                    <span id="detailExtractionBadge" class="px-2.5 py-0.5 rounded-lg bg-slate-100 text-slate-600 text-xs font-semibold">Parser AEI</span>
+                                </div>
+                                <h3 id="detailTitle" class="text-lg font-extrabold text-slate-900 leading-snug">--</h3>
+                                <p class="text-xs text-slate-500">
+                                    <span id="detailApplicantEntity">--</span>
+                                    <span class="mx-1.5">·</span>
+                                    <span id="detailProjectPeriod">--</span>
+                                </p>
+                            </div>
+
+                            <div class="flex items-center gap-3 shrink-0">
+                                <span id="detailOverallBadge" class="px-3 py-1.5 rounded-xl text-xs font-extrabold border">--</span>
+                            </div>
+                        </div>
+
+                        <div id="detailWarningsBox" class="hidden bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800 space-y-1"></div>
+
+                        <!-- Controls locals i filtres de taula -->
+                        <div class="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <select id="roleFilter" class="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-medium text-slate-700">
+                                    <option value="ALL">Tots els rols</option>
+                                    <option value="IP">Només IP</option>
+                                    <option value="EQUIPO_INVESTIGACION">Equip d'Investigació (EI)</option>
+                                    <option value="EQUIPO_TRABAJO">Equip de Treball (ET)</option>
+                                </select>
+
+                                <select id="memberStatusFilter" class="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-medium text-slate-700">
+                                    <option value="ALL">Tots els estats</option>
+                                    <option value="NO_OK">NO OK</option>
+                                    <option value="AVIS">AVÍS</option>
+                                    <option value="OK">OK</option>
+                                    <option value="EXTERN">EXTERN</option>
+                                </select>
+                            </div>
+
+                            <div class="flex items-center gap-2">
+                                <label for="detailDurationSelect" class="text-xs font-semibold text-slate-500">Durada projecte:</label>
+                                <select id="detailDurationSelect" class="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-semibold text-slate-700">
+                                    <option value="">Segons PDF / defecte</option>
+                                    <option value="3">3 anys</option>
+                                    <option value="4">4 anys</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Taula d'equip -->
+                    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse text-xs">
+                                <thead>
+                                    <tr class="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase tracking-wider font-bold">
+                                        <th class="py-3 px-4">Rol</th>
+                                        <th class="py-3 px-4">Membre al PDF</th>
+                                        <th class="py-3 px-4">Situació a Egreta</th>
+                                        <th class="py-3 px-4">Check</th>
+                                        <th class="py-3 px-4">Motiu</th>
+                                        <th class="py-3 px-4 text-right">Accions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="teamTableBody" class="divide-y divide-slate-100">
+                                    <tr id="teamEmptyRow" class="hidden">
+                                        <td colspan="6" class="py-10 text-center text-slate-400">
+                                            Cap membre coincideix amb els filtres seleccionats.
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Panell plegable Diagnòstic d'extracció -->
+                    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                        <button id="btnToggleDiagnostic" type="button"
+                                class="w-full px-5 py-3 flex items-center justify-between text-xs font-bold text-slate-600 hover:bg-slate-50 transition">
+                            <span><i class="fa-solid fa-terminal mr-2 text-slate-400"></i>Diagnòstic d'extracció del PDF</span>
+                            <i class="fa-solid fa-chevron-down text-slate-400"></i>
+                        </button>
+                        <div id="diagnosticPanel" class="hidden border-t border-slate-100 p-4 space-y-3 bg-slate-50/70">
+                            <div id="diagnosticWarnings" class="text-xs text-amber-700 space-y-1"></div>
+                            <pre id="diagnosticPreview" class="text-[11px] font-mono text-slate-600 bg-white border border-slate-200 rounded-xl p-3 max-h-60 overflow-auto whitespace-pre-wrap"></pre>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Modal Criteris de validació -->
+    <div id="rulesModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-4xl w-full max-h-[88vh] flex flex-col shadow-2xl overflow-hidden">
+            <div class="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+                <div>
+                    <h3 class="text-base font-extrabold text-slate-900">Criteris de validació PDI (Pla Nacional)</h3>
+                    <p class="text-xs text-slate-500 mt-0.5">Regles actives aplicades sobre la col·lecció Persons d'Egreta</p>
+                </div>
+                <button id="btnCloseRulesModal" type="button" class="w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-600 flex items-center justify-center">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div id="rulesModalContent" class="p-6 overflow-y-auto space-y-5 text-xs text-slate-700">
+                <p class="text-slate-400">Carregant criteris...</p>
+            </div>
+            <div class="px-6 py-3 bg-slate-50 border-t border-slate-200 flex justify-end">
+                <button id="btnCloseRulesModalFooter" type="button" class="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-semibold">
+                    Tancar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="validacio-plan-nacional.js"></script>
+</body>
+</html>
