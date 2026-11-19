@@ -7,6 +7,8 @@ import com.example.demo.plannacional.parser.AeiSolicitudParser;
 import com.example.demo.plannacional.parser.InvalidPdfException;
 import com.example.demo.plannacional.parser.PdfTextExtractor;
 import com.example.demo.plannacional.parser.VllmProposalFallbackParser;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -20,6 +22,7 @@ import java.util.Optional;
 @Service
 public class PlanNacionalValidationService {
 
+    private static final Logger log = LoggerFactory.getLogger(PlanNacionalValidationService.class);
     private static final int MIN_DURATION_YEARS = 1;
     private static final int MAX_DURATION_YEARS = 6;
 
@@ -54,19 +57,43 @@ public class PlanNacionalValidationService {
             throw new InvalidPdfException("El fitxer PDF és buit.");
         }
 
+        long tStart = System.nanoTime();
         LocalDate effectiveRef = referenceDate != null ? referenceDate : LocalDate.now();
         String rawText = pdfTextExtractor.extractText(pdfBytes);
-        ExtractedProposal proposal = aeiSolicitudParser.parse(fileName, rawText);
+        long tPdf = System.nanoTime();
 
+        ExtractedProposal proposal = aeiSolicitudParser.parse(fileName, rawText);
+        long tParse = System.nanoTime();
+
+        long vllmMs = 0L;
         if (proposal.members().isEmpty() && useAiFallback) {
+            long tVllmStart = System.nanoTime();
             Optional<ExtractedProposal> fallback = vllmFallbackParser.parseFallback(fileName, rawText);
+            vllmMs = elapsedMs(tVllmStart);
             if (fallback.isPresent()) {
                 proposal = mergeFallbackMetadata(proposal, fallback.get());
             }
         }
 
+        long tLookupStart = System.nanoTime();
         List<PersonLookupMatch> matches = lookupService.lookupAll(proposal.members(), effectiveRef);
-        return eligibilityEngine.evaluateProposal(proposal, matches, effectiveRef, durationYears);
+        long lookupMs = elapsedMs(tLookupStart);
+
+        long tEvalStart = System.nanoTime();
+        ProposalValidationResponse response = eligibilityEngine.evaluateProposal(proposal, matches, effectiveRef, durationYears);
+        long evalMs = elapsedMs(tEvalStart);
+
+        log.info("Pla Nacional validat: fitxer={}, membres={}, metode={}, pdfMs={}, parseMs={}, vllmMs={}, lookupMs={}, evalMs={}, totalMs={}",
+                fileName,
+                proposal.members().size(),
+                proposal.extractionMethod(),
+                (tPdf - tStart) / 1_000_000L,
+                (tParse - tPdf) / 1_000_000L,
+                vllmMs,
+                lookupMs,
+                evalMs,
+                elapsedMs(tStart));
+        return response;
     }
 
     public ProposalValidationResponse reevaluateTeam(ReevaluateTeamRequest request) {
@@ -74,10 +101,27 @@ public class PlanNacionalValidationService {
             throw new IllegalArgumentException("Cal especificar les dades del projecte a reavaluar.");
         }
         validateDurationYears(request.durationYears());
+        long tStart = System.nanoTime();
         LocalDate effectiveRef = request.referenceDate() != null ? request.referenceDate() : LocalDate.now();
 
         List<PersonLookupMatch> matches = lookupService.lookupAll(request.proposal().members(), effectiveRef);
-        return eligibilityEngine.evaluateProposal(request.proposal(), matches, effectiveRef, request.durationYears());
+        long lookupMs = elapsedMs(tStart);
+
+        long tEvalStart = System.nanoTime();
+        ProposalValidationResponse response = eligibilityEngine.evaluateProposal(
+                request.proposal(), matches, effectiveRef, request.durationYears());
+        long evalMs = elapsedMs(tEvalStart);
+
+        log.info("Pla Nacional reavaluat: membres={}, lookupMs={}, evalMs={}, totalMs={}",
+                request.proposal().members().size(),
+                lookupMs,
+                evalMs,
+                elapsedMs(tStart));
+        return response;
+    }
+
+    private static long elapsedMs(long startNanos) {
+        return (System.nanoTime() - startNanos) / 1_000_000L;
     }
 
     public RuleCatalogResponse getRuleCatalog() {

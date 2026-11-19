@@ -3,6 +3,7 @@ package com.example.demo.plannacional.lookup;
 import com.example.demo.plannacional.engine.PlanNacionalEligibilityEngine;
 import com.example.demo.plannacional.model.*;
 import com.mongodb.client.MongoCursor;
+import com.mongodb.client.model.Filters;
 import com.mongodb.client.model.Projections;
 import org.bson.Document;
 import org.bson.conversions.Bson;
@@ -26,13 +27,29 @@ public class PersonPdiLookupService {
 
     private static final int BATCH_SIZE = 500;
     private static final int MAX_AMBIGUOUS_CANDIDATES = 5;
-    private static final long DEFAULT_CACHE_TTL_MS = 60_000L;
     private static final String EGRETA_EDITOR_PREFIX =
             "https://egreta.uab.cat/admin/editor/dk/atira/pure/api/shared/model/person/editor/personeditor.xhtml?scheme=&type=&id=";
 
-    private static final Bson PERSONS_PROJECTION = Projections.include(
-            "uuid", "pureId", "name", "names", "identifiers", "retirementDate",
-            "staffOrganizationAssociations", "visitingScholarOrganizationAssociations"
+    private static final Bson SLIM_PERSONS_PROJECTION = Projections.include(
+            "uuid", "pureId", "systemName",
+            "name.firstName", "name.lastName",
+            "names.firstName", "names.lastName", "names.name.firstName", "names.name.lastName",
+            "identifiers.id", "identifiers.value", "identifiers.type.uri", "identifiers.type.term",
+            "retirementDate",
+            "staffOrganizationAssociations.period.startDate",
+            "staffOrganizationAssociations.period.endDate",
+            "staffOrganizationAssociations.organization.uuid",
+            "staffOrganizationAssociations.organization.name",
+            "staffOrganizationAssociations.employmentType.term",
+            "staffOrganizationAssociations.contractType.term",
+            "staffOrganizationAssociations.staffType.term",
+            "staffOrganizationAssociations.primaryAssociation",
+            "visitingScholarOrganizationAssociations.period.startDate",
+            "visitingScholarOrganizationAssociations.period.endDate",
+            "visitingScholarOrganizationAssociations.organization.uuid",
+            "visitingScholarOrganizationAssociations.organization.name",
+            "visitingScholarOrganizationAssociations.jobTitle.term",
+            "visitingScholarOrganizationAssociations.primaryAssociation"
     );
 
     private static final Pattern COMBINING_MARKS = Pattern.compile("\\p{M}+");
@@ -45,21 +62,11 @@ public class PersonPdiLookupService {
 
     private final MongoTemplate mongoTemplate;
     private final PlanNacionalEligibilityEngine eligibilityEngine;
-    private final long cacheTtlMs;
-    private volatile CachedLookupIndex cachedIndex;
 
     @Autowired
     public PersonPdiLookupService(MongoTemplate mongoTemplate, PlanNacionalEligibilityEngine eligibilityEngine) {
-        this(mongoTemplate, eligibilityEngine, DEFAULT_CACHE_TTL_MS);
-    }
-
-    public PersonPdiLookupService(
-            MongoTemplate mongoTemplate,
-            PlanNacionalEligibilityEngine eligibilityEngine,
-            long cacheTtlMs) {
         this.mongoTemplate = mongoTemplate;
         this.eligibilityEngine = eligibilityEngine;
-        this.cacheTtlMs = Math.max(0L, cacheTtlMs);
     }
 
     public PersonLookupMatch lookup(ExtractedMember member, LocalDate referenceDate) {
@@ -74,34 +81,162 @@ public class PersonPdiLookupService {
             return List.of();
         }
         LocalDate effectiveRef = referenceDate != null ? referenceDate : LocalDate.now();
-        LookupIndex index = getOrLoadLookupIndex();
+        LookupIndex index = new LookupIndex();
+        PersonLookupMatch[] resolved = new PersonLookupMatch[members.size()];
+
+        // Fase 1: consulta dirigida exacta pels NIF/NIE complets
+        Set<String> exactNifQueryValues = collectExactNifQueryValues(members);
+        if (!exactNifQueryValues.isEmpty()) {
+            List<String> nifList = List.copyOf(exactNifQueryValues);
+            Bson phase1Filter = Filters.or(
+                    Filters.in("identifiers.id", nifList),
+                    Filters.in("identifiers.value", nifList)
+            );
+            fetchAndIndexPersons(phase1Filter, index);
+
+            for (int i = 0; i < members.size(); i++) {
+                ExtractedMember member = members.get(i);
+                if (member != null) {
+                    resolved[i] = matchExactNif(member, index, effectiveRef);
+                }
+            }
+        }
+
+        // Fase 2: consulta dirigida per a membres pendents (NIF emmascarat o sense coincidència exacta de NIF)
+        List<ExtractedMember> unresolved = new ArrayList<>();
+        for (int i = 0; i < members.size(); i++) {
+            if (resolved[i] == null && members.get(i) != null) {
+                unresolved.add(members.get(i));
+            }
+        }
+        if (!unresolved.isEmpty()) {
+            Bson phase2Filter = buildPhase2Filter(unresolved);
+            if (phase2Filter != null) {
+                fetchAndIndexPersons(phase2Filter, index);
+            }
+        }
 
         List<PersonLookupMatch> results = new ArrayList<>(members.size());
-        for (ExtractedMember member : members) {
-            results.add(lookupInIndex(member, index, effectiveRef));
+        for (int i = 0; i < members.size(); i++) {
+            results.add(resolved[i] != null ? resolved[i] : lookupInIndex(members.get(i), index, effectiveRef));
         }
         return results;
     }
 
-    private LookupIndex getOrLoadLookupIndex() {
-        if (cacheTtlMs == 0L) {
-            return loadLookupIndex();
-        }
-        long now = System.currentTimeMillis();
-        CachedLookupIndex current = cachedIndex;
-        if (current != null && (now - current.loadedAtMs) < cacheTtlMs) {
-            return current.index;
-        }
-        synchronized (this) {
-            now = System.currentTimeMillis();
-            current = cachedIndex;
-            if (current != null && (now - current.loadedAtMs) < cacheTtlMs) {
-                return current.index;
+    private Set<String> collectExactNifQueryValues(List<ExtractedMember> members) {
+        Set<String> values = new LinkedHashSet<>();
+        for (ExtractedMember member : members) {
+            if (member == null) {
+                continue;
             }
-            LookupIndex loaded = loadLookupIndex();
-            cachedIndex = new CachedLookupIndex(loaded, now);
-            return loaded;
+            String rawNif = member.nif();
+            if (rawNif == null || rawNif.isBlank() || rawNif.contains("*")) {
+                continue;
+            }
+            String norm = normalizeNif(rawNif);
+            if (!norm.isEmpty()) {
+                values.add(norm);
+                String trimmedUpper = rawNif.trim().toUpperCase(Locale.ROOT);
+                if (!trimmedUpper.equals(norm)) {
+                    values.add(trimmedUpper);
+                }
+            }
         }
+        return values;
+    }
+
+    private Bson buildPhase2Filter(List<ExtractedMember> unresolved) {
+        Set<String> maskedChunks = new LinkedHashSet<>();
+        Set<String> surnameTokens = new LinkedHashSet<>();
+
+        for (ExtractedMember member : unresolved) {
+            String rawNif = member.nif();
+            if (rawNif != null && rawNif.contains("*")) {
+                String chunk = extractLongestAlnumChunk(rawNif);
+                if (chunk.length() >= 3) {
+                    maskedChunks.add(chunk);
+                }
+            }
+            List<String> memberSurnames = extractQuerySurnameTokens(member);
+            boolean hasLongToken = memberSurnames.stream().anyMatch(t -> t.length() >= 3);
+            for (String token : memberSurnames) {
+                if (token.length() >= 3 || (!hasLongToken && token.length() >= 2)) {
+                    surnameTokens.add(token);
+                }
+            }
+        }
+
+        List<Bson> orClauses = new ArrayList<>();
+        if (!maskedChunks.isEmpty()) {
+            String combinedChunks = String.join("|", maskedChunks);
+            orClauses.add(Filters.regex("identifiers.id", combinedChunks, "i"));
+            orClauses.add(Filters.regex("identifiers.value", combinedChunks, "i"));
+        }
+        if (!surnameTokens.isEmpty()) {
+            List<String> accentPatterns = surnameTokens.stream()
+                    .map(PersonPdiLookupService::toAccentTolerantRegex)
+                    .toList();
+            String combinedSurnameRegex = "(?:^|[\\s'\\-])(?:" + String.join("|", accentPatterns) + ")(?:$|[\\s'\\-])";
+            orClauses.add(Filters.regex("name.lastName", combinedSurnameRegex, "i"));
+            orClauses.add(Filters.regex("names.name.lastName", combinedSurnameRegex, "i"));
+            orClauses.add(Filters.regex("names.lastName", combinedSurnameRegex, "i"));
+        }
+        return orClauses.isEmpty() ? null : Filters.or(orClauses);
+    }
+
+    private String extractLongestAlnumChunk(String rawMaskedNif) {
+        String compact = rawMaskedNif.toUpperCase(Locale.ROOT).replaceAll("[^A-Z0-9*]", "");
+        String best = "";
+        for (String part : compact.split("\\*+")) {
+            if (part.length() > best.length()) {
+                best = part;
+            }
+        }
+        return best;
+    }
+
+    private List<String> extractQuerySurnameTokens(ExtractedMember member) {
+        if (member.lastName() != null && !member.lastName().isBlank()) {
+            return tokenize(member.lastName(), true);
+        }
+        return extractSurnameCandidates(member);
+    }
+
+    private static String toAccentTolerantRegex(String asciiToken) {
+        StringBuilder sb = new StringBuilder(asciiToken.length() * 6);
+        for (int i = 0; i < asciiToken.length(); i++) {
+            char ch = asciiToken.charAt(i);
+            switch (ch) {
+                case 'a' -> sb.append("[aáàäâ]");
+                case 'e' -> sb.append("[eéèëê]");
+                case 'i' -> sb.append("[iíìïî]");
+                case 'o' -> sb.append("[oóòöô]");
+                case 'u' -> sb.append("[uúùüû]");
+                case 'c' -> sb.append("[cç]");
+                case 'n' -> sb.append("[nñ]");
+                default -> sb.append(ch);
+            }
+        }
+        return sb.toString();
+    }
+
+    private PersonLookupMatch matchExactNif(ExtractedMember member, LookupIndex index, LocalDate referenceDate) {
+        String rawNif = member.nif();
+        if (rawNif == null || rawNif.isBlank() || rawNif.contains("*")) {
+            return null;
+        }
+        String normNif = normalizeNif(rawNif);
+        if (normNif.isEmpty()) {
+            return null;
+        }
+        List<IndexedPerson> nifHits = index.byExactNif.getOrDefault(normNif, List.of());
+        if (nifHits.size() == 1) {
+            return toMatch(nifHits.get(0), MatchConfidence.NIF_EXACTE, referenceDate);
+        }
+        if (nifHits.size() > 1) {
+            return toAmbiguous(nifHits, referenceDate);
+        }
+        return null;
     }
 
     private PersonLookupMatch lookupInIndex(ExtractedMember member, LookupIndex index, LocalDate referenceDate) {
@@ -118,15 +253,9 @@ public class PersonPdiLookupService {
                     return maskedResult;
                 }
             } else {
-                String normNif = normalizeNif(rawNif);
-                if (!normNif.isEmpty()) {
-                    List<IndexedPerson> nifHits = index.byExactNif.getOrDefault(normNif, List.of());
-                    if (nifHits.size() == 1) {
-                        return toMatch(nifHits.get(0), MatchConfidence.NIF_EXACTE, referenceDate);
-                    }
-                    if (nifHits.size() > 1) {
-                        return toAmbiguous(nifHits, referenceDate);
-                    }
+                PersonLookupMatch exactNifMatch = matchExactNif(member, index, referenceDate);
+                if (exactNifMatch != null) {
+                    return exactNifMatch;
                 }
             }
         }
@@ -497,30 +626,16 @@ public class PersonPdiLookupService {
                 || (c.contractType() != null && !c.contractType().isBlank());
     }
 
-    private LookupIndex loadLookupIndex() {
-        List<IndexedPerson> allPersons = new ArrayList<>();
-        Map<String, List<IndexedPerson>> byExactNif = new HashMap<>();
-        Map<String, List<IndexedPerson>> bySortedTokens = new HashMap<>();
-
+    private void fetchAndIndexPersons(Bson filter, LookupIndex index) {
         try (MongoCursor<Document> cursor = mongoTemplate.getCollection("Persons")
-                .find()
-                .projection(PERSONS_PROJECTION)
+                .find(filter)
+                .projection(SLIM_PERSONS_PROJECTION)
                 .batchSize(BATCH_SIZE)
                 .iterator()) {
             while (cursor.hasNext()) {
-                Document doc = cursor.next();
-                IndexedPerson indexed = buildIndexedPerson(doc);
-                allPersons.add(indexed);
-
-                for (String nif : indexed.normalizedNifs) {
-                    byExactNif.computeIfAbsent(nif, k -> new ArrayList<>()).add(indexed);
-                }
-                for (String key : indexed.sortedTokenKeys) {
-                    bySortedTokens.computeIfAbsent(key, k -> new ArrayList<>()).add(indexed);
-                }
+                index.add(buildIndexedPerson(cursor.next()));
             }
         }
-        return new LookupIndex(allPersons, byExactNif, bySortedTokens);
     }
 
     private IndexedPerson buildIndexedPerson(Document doc) {
@@ -781,13 +896,39 @@ public class PersonPdiLookupService {
 
     private record NameVariant(List<String> fullTokens, List<String> firstCoreTokens, List<String> lastCoreTokens) {}
 
-    private record CachedLookupIndex(LookupIndex index, long loadedAtMs) {}
+    private static final class LookupIndex {
+        final List<IndexedPerson> allPersons = new ArrayList<>();
+        final Map<String, List<IndexedPerson>> byExactNif = new HashMap<>();
+        final Map<String, List<IndexedPerson>> bySortedTokens = new HashMap<>();
+        private final Set<String> seenKeys = new HashSet<>();
 
-    private record LookupIndex(
-            List<IndexedPerson> allPersons,
-            Map<String, List<IndexedPerson>> byExactNif,
-            Map<String, List<IndexedPerson>> bySortedTokens
-    ) {}
+        void add(IndexedPerson indexed) {
+            String dedupKey = dedupKeyFor(indexed);
+            if (dedupKey != null && !seenKeys.add(dedupKey)) {
+                return;
+            }
+            allPersons.add(indexed);
+            for (String nif : indexed.normalizedNifs) {
+                byExactNif.computeIfAbsent(nif, k -> new ArrayList<>()).add(indexed);
+            }
+            for (String key : indexed.sortedTokenKeys) {
+                bySortedTokens.computeIfAbsent(key, k -> new ArrayList<>()).add(indexed);
+            }
+        }
+
+        private static String dedupKeyFor(IndexedPerson p) {
+            if (p.uuid != null && !p.uuid.isBlank()) {
+                return "uuid:" + p.uuid;
+            }
+            if (p.pureId != null) {
+                return "pure:" + p.pureId;
+            }
+            if (!p.displayName.isEmpty() || !p.normalizedNifs.isEmpty()) {
+                return "anon:" + p.displayName + "|" + p.normalizedNifs + "|" + p.sortedTokenKeys;
+            }
+            return null;
+        }
+    }
 
     private static final class IndexedPerson {
         final String uuid;

@@ -2,15 +2,19 @@ package com.example.demo.plannacional.lookup;
 
 import com.example.demo.plannacional.engine.PlanNacionalEligibilityEngine;
 import com.example.demo.plannacional.model.*;
+import com.mongodb.MongoClientSettings;
 import com.mongodb.ServerAddress;
 import com.mongodb.ServerCursor;
 import com.mongodb.client.FindIterable;
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoCursor;
+import org.bson.BsonDocument;
 import org.bson.Document;
+import org.bson.conversions.Bson;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.mongodb.core.MongoTemplate;
@@ -22,6 +26,7 @@ import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -43,12 +48,12 @@ class PersonPdiLookupServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new PersonPdiLookupService(mongoTemplate, new PlanNacionalEligibilityEngine(), 0L);
+        service = new PersonPdiLookupService(mongoTemplate, new PlanNacionalEligibilityEngine());
     }
 
     private void stubPersons(List<Document> docs) {
         when(mongoTemplate.getCollection("Persons")).thenReturn(personsCollection);
-        when(personsCollection.find()).thenReturn(findIterable);
+        when(personsCollection.find(any(Bson.class))).thenReturn(findIterable);
         when(findIterable.projection(any())).thenReturn(findIterable);
         when(findIterable.batchSize(anyInt())).thenReturn(findIterable);
         when(findIterable.iterator()).thenAnswer(inv -> new ListMongoCursor(docs));
@@ -318,16 +323,47 @@ class PersonPdiLookupServiceTest {
     }
 
     @Test
-    void lookupAllReusesShortTtlCacheAcrossCalls() {
-        PersonPdiLookupService cachedService = new PersonPdiLookupService(mongoTemplate, new PlanNacionalEligibilityEngine(), 60_000L);
+    void lookupAllUsesTargetedNifQueryAndSkipsSecondPhaseWhenAllMatched() {
         Document p = personDoc("uuid-c", 900L, "Marc", "Font", List.of(idDoc("DNI", "11122233H")), List.of(), null);
         stubPersons(List.of(p));
 
         ExtractedMember m = new ExtractedMember(MemberRole.IP, "Font, Marc", "Marc", "Font", "11122233H", "UAB", null, "");
-        assertEquals(MatchConfidence.NIF_EXACTE, cachedService.lookupAll(List.of(m), REF_DATE).get(0).matchConfidence());
-        assertEquals(MatchConfidence.NIF_EXACTE, cachedService.lookupAll(List.of(m), REF_DATE).get(0).matchConfidence());
+        List<PersonLookupMatch> matches = service.lookupAll(List.of(m), REF_DATE);
 
-        verify(mongoTemplate, times(1)).getCollection("Persons");
+        assertEquals(MatchConfidence.NIF_EXACTE, matches.get(0).matchConfidence());
+
+        ArgumentCaptor<Bson> filterCaptor = ArgumentCaptor.forClass(Bson.class);
+        verify(personsCollection, never()).find();
+        verify(personsCollection, times(1)).find(filterCaptor.capture());
+
+        String filterJson = filterCaptor.getValue()
+                .toBsonDocument(BsonDocument.class, MongoClientSettings.getDefaultCodecRegistry())
+                .toJson();
+        assertTrue(filterJson.contains("11122233H"), filterJson);
+        assertTrue(filterJson.contains("identifiers.id"), filterJson);
+        assertTrue(filterJson.contains("identifiers.value"), filterJson);
+    }
+
+    @Test
+    void lookupAllRunsSecondPhaseWithAccentTolerantSurnameAndMaskedNifFilter() {
+        Document p = personDoc("uuid-d", 901L, "Maria", "Garcia Lopez", List.of(idDoc("DNI", "99945678Z")), List.of(), null);
+        stubPersons(List.of(p));
+
+        ExtractedMember m = new ExtractedMember(
+                MemberRole.EQUIPO_INVESTIGACION, "GARCIA LOPEZ, MARIA", null, null, "***4567**", "UAB", null, "");
+        List<PersonLookupMatch> matches = service.lookupAll(List.of(m), REF_DATE);
+
+        assertEquals(MatchConfidence.NIF_EXACTE, matches.get(0).matchConfidence());
+
+        ArgumentCaptor<Bson> filterCaptor = ArgumentCaptor.forClass(Bson.class);
+        verify(personsCollection, never()).find();
+        verify(personsCollection, times(1)).find(filterCaptor.capture());
+
+        String filterJson = filterCaptor.getValue()
+                .toBsonDocument(BsonDocument.class, MongoClientSettings.getDefaultCodecRegistry())
+                .toJson();
+        assertTrue(filterJson.contains("4567"), filterJson);
+        assertTrue(filterJson.contains("g[aáàäâ]r[cç][iíìïî][aáàäâ]"), filterJson);
     }
 
     private static class ListMongoCursor implements MongoCursor<Document> {
