@@ -127,6 +127,16 @@
                     <div id="progressBar" class="h-full bg-emerald-600 transition-all duration-200" style="width: 0%"></div>
                 </div>
             </div>
+
+            <div id="batchErrorBanner" class="hidden bg-rose-50 border border-rose-200 text-rose-800 rounded-xl px-4 py-2.5 text-xs flex items-center justify-between gap-3">
+                <div class="flex items-center gap-2">
+                    <i class="fa-solid fa-circle-exclamation text-rose-600"></i>
+                    <span id="batchErrorText"></span>
+                </div>
+                <button id="btnDismissBatchError" type="button" class="text-rose-600 hover:text-rose-900 font-bold">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
         </section>
 
         <!-- KPIs globals clicables -->

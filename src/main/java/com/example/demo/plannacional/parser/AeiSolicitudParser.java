@@ -42,10 +42,9 @@ public class AeiSolicitudParser {
 
     private static final Pattern PAGE_NOISE_LINE = Pattern.compile(
             "(?i)^(?:[-\\s]*(?:p[áa]g(?:ina)?\\.?\\s*\\d+(?:\\s*(?:de|/)\\s*\\d+)?|ministerio\\s+de\\s+ciencia[^\\n]*|agencia\\s+estatal\\s+de\\s+investigaci[óo]n[^\\n]*)[-\\s]*)$");
-    private static final Pattern NIF_TOKEN = Pattern.compile(
-            "^(?:\\*{2,}[0-9A-Za-z*]{2,}|[0-9]{7,8}[-\\s]?[A-Za-z]|[XYZ][-\\s]?\\d{7}[-\\s]?[A-Za-z]|[A-Z]{2,3}\\d{5,9})$");
     private static final Pattern INLINE_NIF_SEARCH = Pattern.compile(
-            "(?:\\*{2,}[0-9A-Za-z*]{2,}|\\b[0-9]{7,8}[-]?[A-Za-z]\\b|\\b[XYZ][-]?\\d{7}[-]?[A-Za-z]\\b|\\b[A-Z]{2,3}\\d{5,9}\\b)");
+            "(?i)(?:\\b\\d{1,3}(?:\\.\\d{3}){2}[-]?[A-Z]\\b|\\b\\d{7,8}[-]?[A-Z]\\b|\\b[XYZ][-]?\\d{7}[-]?[A-Z]\\b|\\b[A-Z]{2,3}\\d{5,9}\\b|(?:[0-9A-Z]*\\*{2,}[0-9A-Z*]*))");
+    private static final Pattern LEADING_ROW_INDEX = Pattern.compile("^\\d+[.)]?\\s+");
 
     private static final DateTimeFormatter DMY_SLASH = DateTimeFormatter.ofPattern("dd/MM/yyyy");
     private static final DateTimeFormatter DMY_DASH = DateTimeFormatter.ofPattern("dd-MM-yyyy");
@@ -94,11 +93,7 @@ public class AeiSolicitudParser {
         String[] lines = text.split("\n");
         for (String rawLine : lines) {
             String line = rawLine.trim();
-            if (line.isEmpty()) {
-                flushBlockIfReady(block, currentRole, deduplicated);
-                continue;
-            }
-            if (PAGE_NOISE_LINE.matcher(line).matches()) {
+            if (line.isEmpty() || PAGE_NOISE_LINE.matcher(line).matches()) {
                 continue;
             }
 
@@ -238,9 +233,9 @@ public class AeiSolicitudParser {
 
         // Línia sense separadors explícits però amb NIF incrustat (p. ex. còpia de taula amb un espai)
         Matcher m = INLINE_NIF_SEARCH.matcher(line);
-        if (m.find()) {
+        if (m.find() && isValidNifCandidate(m.group())) {
             String nif = cleanNif(m.group());
-            String before = line.substring(0, m.start()).trim().replaceAll("[,;\\-]+$", "").trim();
+            String before = stripLeadingIndex(line.substring(0, m.start()).trim().replaceAll("[,;\\-]+$", "").trim());
             String after = line.substring(m.end()).trim().replaceAll("^[,;\\-]+", "").trim();
             if (looksLikePersonName(before)) {
                 NameParts np = splitName(before, null, null);
@@ -265,11 +260,16 @@ public class AeiSolicitudParser {
         List<String> remaining = new ArrayList<>();
 
         for (String col : cols) {
-            String compact = col.replace(" ", "");
-            if (nif == null && NIF_TOKEN.matcher(compact).matches()) {
+            String compact = col.replaceAll("[\\s]", "");
+            if (nif == null && isValidNifCandidate(compact)) {
                 nif = cleanNif(col);
-            } else if (nameCandidate == null && !col.matches("^\\d+$") && looksLikePersonName(col)) {
-                nameCandidate = col;
+            } else if (nameCandidate == null) {
+                String strippedCol = stripLeadingIndex(col);
+                if (!strippedCol.matches("^\\d+$") && looksLikePersonName(strippedCol)) {
+                    nameCandidate = strippedCol;
+                } else if (!col.matches("^\\d+$")) {
+                    remaining.add(col);
+                }
             } else if (!col.matches("^\\d+$")) {
                 remaining.add(col);
             }
@@ -284,6 +284,23 @@ public class AeiSolicitudParser {
         return new ExtractedMember(role, np.fullName, np.firstName, np.lastName, nif, entity, linkage, rawLine);
     }
 
+    private boolean isValidNifCandidate(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return false;
+        }
+        String compact = raw.trim().replace(" ", "");
+        if (compact.contains("*")) {
+            return compact.length() >= 6 && compact.replace("*", "").length() >= 3
+                    && compact.matches("(?i)[0-9A-Z*]+");
+        }
+        String strippedDots = compact.replace(".", "");
+        return strippedDots.matches("(?i)(?:\\d{7,8}[-]?[A-Z]|[XYZ][-]?\\d{7}[-]?[A-Z]|[A-Z]{2,3}\\d{5,9})");
+    }
+
+    private String stripLeadingIndex(String value) {
+        return value == null ? "" : LEADING_ROW_INDEX.matcher(value).replaceFirst("").trim();
+    }
+
     private void addDeduplicated(Map<String, ExtractedMember> map, ExtractedMember candidate) {
         String key = buildDeduplicationKey(candidate);
         ExtractedMember existing = map.get(key);
@@ -294,7 +311,7 @@ public class AeiSolicitudParser {
 
     private String buildDeduplicationKey(ExtractedMember m) {
         if (m.nif() != null && !m.nif().isBlank() && !m.nif().contains("*")) {
-            return "NIF:" + m.nif().replaceAll("[^A-Z0-9]", "").toUpperCase(Locale.ROOT);
+            return "NIF:" + m.nif().toUpperCase(Locale.ROOT).replaceAll("[^A-Z0-9]", "");
         }
         String normName = normalizeUpper(m.fullName()).replaceAll("[^A-Z0-9 ]", " ").replaceAll("\\s+", " ").trim();
         return "NAME:" + normName;
@@ -315,8 +332,10 @@ public class AeiSolicitudParser {
                 || upper.startsWith("FIRMA")) {
             return SectionMatch.END_OF_TEAMS;
         }
-        // Evitar confondre una fila de membre amb capçalera
-        if (line.contains("|")) {
+        // Evitar confondre una fila tabular, línia amb NIF o camp key-value amb una capçalera de secció
+        if (line.contains("|") || line.contains(";") || line.contains("\t") || line.contains(" - ")
+                || isMemberFieldPrefix(upper)
+                || hasInlineNif(line)) {
             return null;
         }
 
@@ -328,6 +347,7 @@ public class AeiSolicitudParser {
 
         if (upper.contains("INVESTIGADOR/A PRINCIPAL")
                 || upper.contains("INVESTIGADOR PRINCIPAL")
+                || upper.contains("INVESTIGADORA PRINCIPAL")
                 || upper.contains("CO-INVESTIGADOR")
                 || upper.matches("^(?:\\d+\\.?\\s*)?(?:IP\\s*[12]|\\(IP[12]\\)).*")) {
             return new SectionMatch(MemberRole.IP, trailing);
@@ -339,6 +359,33 @@ public class AeiSolicitudParser {
             return new SectionMatch(MemberRole.EQUIPO_TRABAJO, trailing);
         }
         return null;
+    }
+
+    private boolean isMemberFieldPrefix(String upperLine) {
+        int colon = upperLine.indexOf(':');
+        if (colon <= 0 || colon > 35) {
+            return false;
+        }
+        String label = upperLine.substring(0, colon);
+        return label.startsWith("APELLIDOS") || label.startsWith("COGNOMS")
+                || label.startsWith("NOMBRE") || label.equals("NOM") || label.startsWith("NOM I COGNOMS")
+                || label.contains("NIF") || label.contains("DNI") || label.contains("NIE")
+                || label.contains("PASAPORTE") || label.contains("PASSAPORT")
+                || label.contains("ENTIDAD") || label.contains("ENTITAT")
+                || label.contains("UNIVERSIDAD") || label.contains("UNIVERSITAT")
+                || label.contains("CENTRO") || label.contains("ORGANISMO")
+                || label.contains("VINCULACION") || label.contains("VINCULACIO")
+                || label.contains("CATEGORIA") || label.contains("CUERPO") || label.contains("SITUACION");
+    }
+
+    private boolean hasInlineNif(String line) {
+        Matcher m = INLINE_NIF_SEARCH.matcher(line);
+        while (m.find()) {
+            if (isValidNifCandidate(m.group())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private boolean isTableHeaderLine(String line) {

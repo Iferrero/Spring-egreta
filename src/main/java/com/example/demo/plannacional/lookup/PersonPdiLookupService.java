@@ -26,6 +26,7 @@ public class PersonPdiLookupService {
 
     private static final int BATCH_SIZE = 500;
     private static final int MAX_AMBIGUOUS_CANDIDATES = 5;
+    private static final long DEFAULT_CACHE_TTL_MS = 60_000L;
     private static final String EGRETA_EDITOR_PREFIX =
             "https://egreta.uab.cat/admin/editor/dk/atira/pure/api/shared/model/person/editor/personeditor.xhtml?scheme=&type=&id=";
 
@@ -44,11 +45,21 @@ public class PersonPdiLookupService {
 
     private final MongoTemplate mongoTemplate;
     private final PlanNacionalEligibilityEngine eligibilityEngine;
+    private final long cacheTtlMs;
+    private volatile CachedLookupIndex cachedIndex;
 
     @Autowired
     public PersonPdiLookupService(MongoTemplate mongoTemplate, PlanNacionalEligibilityEngine eligibilityEngine) {
+        this(mongoTemplate, eligibilityEngine, DEFAULT_CACHE_TTL_MS);
+    }
+
+    public PersonPdiLookupService(
+            MongoTemplate mongoTemplate,
+            PlanNacionalEligibilityEngine eligibilityEngine,
+            long cacheTtlMs) {
         this.mongoTemplate = mongoTemplate;
         this.eligibilityEngine = eligibilityEngine;
+        this.cacheTtlMs = Math.max(0L, cacheTtlMs);
     }
 
     public PersonLookupMatch lookup(ExtractedMember member, LocalDate referenceDate) {
@@ -63,13 +74,34 @@ public class PersonPdiLookupService {
             return List.of();
         }
         LocalDate effectiveRef = referenceDate != null ? referenceDate : LocalDate.now();
-        LookupIndex index = loadLookupIndex();
+        LookupIndex index = getOrLoadLookupIndex();
 
         List<PersonLookupMatch> results = new ArrayList<>(members.size());
         for (ExtractedMember member : members) {
             results.add(lookupInIndex(member, index, effectiveRef));
         }
         return results;
+    }
+
+    private LookupIndex getOrLoadLookupIndex() {
+        if (cacheTtlMs == 0L) {
+            return loadLookupIndex();
+        }
+        long now = System.currentTimeMillis();
+        CachedLookupIndex current = cachedIndex;
+        if (current != null && (now - current.loadedAtMs) < cacheTtlMs) {
+            return current.index;
+        }
+        synchronized (this) {
+            now = System.currentTimeMillis();
+            current = cachedIndex;
+            if (current != null && (now - current.loadedAtMs) < cacheTtlMs) {
+                return current.index;
+            }
+            LookupIndex loaded = loadLookupIndex();
+            cachedIndex = new CachedLookupIndex(loaded, now);
+            return loaded;
+        }
     }
 
     private PersonLookupMatch lookupInIndex(ExtractedMember member, LookupIndex index, LocalDate referenceDate) {
@@ -114,24 +146,21 @@ public class PersonPdiLookupService {
             }
         }
 
-        // Nivell 3: Concordança aproximada (sense partícules o subconjunt estricte de tokens)
-        List<String> coreTokens = buildOrderedNameTokens(member, true);
-        if (coreTokens.size() >= 2) {
-            List<ScoredPerson> approxCandidates = findApproximateCandidates(coreTokens, member, index.allPersons);
-            if (approxCandidates.size() == 1) {
-                return toMatch(approxCandidates.get(0).person, MatchConfidence.NOM_APROXIMAT, referenceDate);
+        // Nivell 3: Concordança aproximada (cognoms + nom propi o inicial)
+        List<ScoredPerson> approxCandidates = findApproximateCandidates(member, index.allPersons);
+        if (approxCandidates.size() == 1) {
+            return toMatch(approxCandidates.get(0).person, MatchConfidence.NOM_APROXIMAT, referenceDate);
+        }
+        if (approxCandidates.size() > 1) {
+            double topScore = approxCandidates.get(0).score;
+            List<IndexedPerson> topTied = approxCandidates.stream()
+                    .filter(sp -> Math.abs(sp.score - topScore) < 0.05)
+                    .map(sp -> sp.person)
+                    .toList();
+            if (topTied.size() == 1 && topScore >= 0.85) {
+                return toMatch(topTied.get(0), MatchConfidence.NOM_APROXIMAT, referenceDate);
             }
-            if (approxCandidates.size() > 1) {
-                double topScore = approxCandidates.get(0).score;
-                List<IndexedPerson> topTied = approxCandidates.stream()
-                        .filter(sp -> Math.abs(sp.score - topScore) < 0.05)
-                        .map(sp -> sp.person)
-                        .toList();
-                if (topTied.size() == 1 && topScore >= 0.85) {
-                    return toMatch(topTied.get(0), MatchConfidence.NOM_APROXIMAT, referenceDate);
-                }
-                return toAmbiguous(topTied.size() > 1 ? topTied : approxCandidates.stream().map(s -> s.person).toList(), referenceDate);
-            }
+            return toAmbiguous(topTied.size() > 1 ? topTied : approxCandidates.stream().map(s -> s.person).toList(), referenceDate);
         }
 
         return notFound();
@@ -147,12 +176,13 @@ public class PersonPdiLookupService {
         if (visibleDigits.length() < 3) {
             return null;
         }
-
-        List<String> surnameTokens = extractSurnameTokens(member);
+        Pattern wildcardPattern = buildMaskWildcardPattern(compactMask);
+        List<String> surnameTokens = extractSurnameCandidates(member);
         List<IndexedPerson> candidates = new ArrayList<>();
 
         for (IndexedPerson person : index.allPersons) {
-            boolean idMatches = person.normalizedNifs.stream().anyMatch(nif -> matchesMask(nif, compactMask, visibleDigits));
+            boolean idMatches = person.normalizedNifs.stream()
+                    .anyMatch(nif -> matchesMask(nif, compactMask, wildcardPattern));
             if (!idMatches) {
                 continue;
             }
@@ -170,53 +200,76 @@ public class PersonPdiLookupService {
         return null;
     }
 
-    private boolean matchesMask(String candidateNif, String compactMask, String visibleFragment) {
+    private Pattern buildMaskWildcardPattern(String compactMask) {
+        StringBuilder sb = new StringBuilder("^");
+        StringBuilder literal = new StringBuilder();
+        for (int i = 0; i < compactMask.length(); i++) {
+            char c = compactMask.charAt(i);
+            if (c == '*') {
+                if (!literal.isEmpty()) {
+                    sb.append(Pattern.quote(literal.toString()));
+                    literal.setLength(0);
+                }
+                if (sb.length() < 2 || !sb.substring(sb.length() - 2).equals(".*")) {
+                    sb.append(".*");
+                }
+            } else {
+                literal.append(c);
+            }
+        }
+        if (!literal.isEmpty()) {
+            sb.append(Pattern.quote(literal.toString()));
+        }
+        sb.append("$");
+        return Pattern.compile(sb.toString());
+    }
+
+    private boolean matchesMask(String candidateNif, String compactMask, Pattern wildcardPattern) {
         if (candidateNif == null || candidateNif.isEmpty()) {
             return false;
         }
         if (candidateNif.length() == compactMask.length()) {
-            boolean positionalMatch = true;
             for (int i = 0; i < compactMask.length(); i++) {
                 char mc = compactMask.charAt(i);
                 if (mc != '*' && mc != candidateNif.charAt(i)) {
-                    positionalMatch = false;
-                    break;
+                    return false;
                 }
             }
-            if (positionalMatch) {
-                return true;
-            }
+            return true;
         }
-        return candidateNif.contains(visibleFragment);
+        return wildcardPattern.matcher(candidateNif).matches();
     }
 
-    private List<ScoredPerson> findApproximateCandidates(
-            List<String> memberCoreTokens,
-            ExtractedMember member,
-            List<IndexedPerson> allPersons) {
-        Set<String> memberSet = new LinkedHashSet<>(memberCoreTokens);
-        List<String> surnameTokens = extractSurnameTokens(member);
-        List<ScoredPerson> hits = new ArrayList<>();
+    private List<ScoredPerson> findApproximateCandidates(ExtractedMember member, List<IndexedPerson> allPersons) {
+        // Rebutja cerques només per cognoms sense cap nom propi/inicial
+        boolean explicitSurnameOnly = member.firstName() == null
+                && !safeString(member.fullName()).contains(",")
+                && member.lastName() != null && !member.lastName().isBlank();
+        if (explicitSurnameOnly) {
+            return List.of();
+        }
 
+        List<String> memberCore = buildOrderedNameTokens(member, true);
+        if (memberCore.size() < 2) {
+            return List.of();
+        }
+
+        boolean hasComma = safeString(member.fullName()).contains(",");
+        List<String> preferredSurnameTokens = hasComma
+                ? tokenize(safeString(member.fullName()).split(",", 2)[0], true)
+                : memberCore;
+
+        List<ScoredPerson> hits = new ArrayList<>();
         for (IndexedPerson person : allPersons) {
-            List<String> pTokens = person.coreTokens;
-            if (pTokens.isEmpty()) {
-                continue;
+            double bestScore = 0.0;
+            for (NameVariant variant : person.nameVariants) {
+                double score = scoreVariant(memberCore, preferredSurnameTokens, hasComma, member, variant);
+                if (score > bestScore) {
+                    bestScore = score;
+                }
             }
-            Set<String> pSet = new LinkedHashSet<>(pTokens);
-            long shared = memberSet.stream().filter(pSet::contains).count();
-            if (shared < 2) {
-                continue;
-            }
-            if (!surnameTokens.isEmpty() && !person.sharesSurnameToken(surnameTokens)) {
-                continue;
-            }
-            int union = memberSet.size() + pSet.size() - (int) shared;
-            double jaccard = union > 0 ? (double) shared / union : 0.0;
-            double coverage = (double) shared / Math.min(memberSet.size(), pSet.size());
-            if (jaccard >= 0.60 || coverage >= 0.90) {
-                double score = 0.6 * jaccard + 0.4 * coverage;
-                hits.add(new ScoredPerson(person, score));
+            if (bestScore >= 0.75) {
+                hits.add(new ScoredPerson(person, bestScore));
             }
         }
 
@@ -224,8 +277,65 @@ public class PersonPdiLookupService {
         return hits;
     }
 
+    private double scoreVariant(
+            List<String> memberCore,
+            List<String> preferredSurnameTokens,
+            boolean hasComma,
+            ExtractedMember member,
+            NameVariant variant) {
+        if (variant.lastCoreTokens.isEmpty() || variant.firstCoreTokens.isEmpty()) {
+            return 0.0;
+        }
+
+        Set<String> surnamePool = new LinkedHashSet<>(preferredSurnameTokens);
+        List<String> matchedSurnames = new ArrayList<>();
+        for (String lt : variant.lastCoreTokens) {
+            if (surnamePool.contains(lt)) {
+                matchedSurnames.add(lt);
+            }
+        }
+        if (matchedSurnames.isEmpty()) {
+            return 0.0;
+        }
+        double surnameRatio = (double) matchedSurnames.size() / variant.lastCoreTokens.size();
+        if (variant.lastCoreTokens.size() >= 2 && surnameRatio < 0.5) {
+            return 0.0;
+        }
+
+        // Extreu els tokens restants del membre que NO corresponen al cognom aparellat
+        List<String> remainingForFirst;
+        if (hasComma && member.firstName() != null && !member.firstName().isBlank()) {
+            remainingForFirst = tokenize(member.firstName(), true);
+        } else {
+            remainingForFirst = new ArrayList<>(memberCore);
+            for (String s : matchedSurnames) {
+                remainingForFirst.remove(s);
+            }
+        }
+        if (remainingForFirst.isEmpty()) {
+            return 0.0;
+        }
+
+        int firstMatches = 0;
+        for (String r : remainingForFirst) {
+            boolean matchesFirst = variant.firstCoreTokens.stream().anyMatch(ft ->
+                    ft.equals(r)
+                            || (r.length() == 1 && ft.startsWith(r))
+                            || (ft.length() == 1 && r.startsWith(ft)));
+            if (matchesFirst) {
+                firstMatches++;
+            }
+        }
+        if (firstMatches == 0) {
+            return 0.0;
+        }
+
+        double firstRatio = (double) firstMatches / Math.max(remainingForFirst.size(), variant.firstCoreTokens.size());
+        return 0.60 * surnameRatio + 0.40 * Math.max(firstRatio, 0.70);
+    }
+
     private PersonLookupMatch toMatch(IndexedPerson person, MatchConfidence confidence, LocalDate referenceDate) {
-        ContractSelection selection = selectContracts(person.doc, referenceDate);
+        ContractSelection selection = selectContracts(person.contracts, referenceDate);
         String url = person.pureId != null ? EGRETA_EDITOR_PREFIX + person.pureId : null;
         return new PersonLookupMatch(
                 confidence,
@@ -244,7 +354,7 @@ public class PersonPdiLookupService {
         List<PersonCandidateSummary> summaries = candidates.stream()
                 .limit(MAX_AMBIGUOUS_CANDIDATES)
                 .map(p -> {
-                    ContractSelection sel = selectContracts(p.doc, referenceDate);
+                    ContractSelection sel = selectContracts(p.contracts, referenceDate);
                     String activeEmp = sel.primaryContract != null ? sel.primaryContract.employmentType() : "Sense contracte vigent";
                     String dept = sel.primaryContract != null ? sel.primaryContract.organizationName() : "";
                     return new PersonCandidateSummary(p.uuid, p.pureId, p.displayName, activeEmp, dept);
@@ -253,11 +363,7 @@ public class PersonPdiLookupService {
         return new PersonLookupMatch(MatchConfidence.AMBIGU, null, null, null, null, null, List.of(), null, summaries);
     }
 
-    private ContractSelection selectContracts(Document personDoc, LocalDate referenceDate) {
-        List<ContractSnapshot> allContracts = new ArrayList<>();
-        extractStaffContracts(personDoc, allContracts);
-        extractVisitingContracts(personDoc, allContracts);
-
+    private ContractSelection selectContracts(List<ContractSnapshot> allContracts, LocalDate referenceDate) {
         List<ContractSnapshot> activeRaw = new ArrayList<>();
         for (ContractSnapshot c : allContracts) {
             if (isActiveAt(c, referenceDate)) {
@@ -277,7 +383,6 @@ public class PersonPdiLookupService {
                 return new ContractSelection(primary, activeRaw, null);
             }
 
-            // Només té "Adscripció a recerca" o associació sense contracte laboral real
             List<ContractSnapshot> normalizedActive = activeRaw.stream()
                     .map(c -> isAdscripcioARecerca(c)
                             ? new ContractSnapshot(c.source(), c.organizationName(), c.organizationUuid(),
@@ -338,7 +443,7 @@ public class PersonPdiLookupService {
             return 0;
         }
         if (a == null) {
-            return -1; // sense data de fi = vigència més llarga
+            return -1;
         }
         if (b == null) {
             return 1;
@@ -346,7 +451,8 @@ public class PersonPdiLookupService {
         return b.compareTo(a);
     }
 
-    private void extractStaffContracts(Document personDoc, List<ContractSnapshot> out) {
+    private List<ContractSnapshot> extractAllContracts(Document personDoc) {
+        List<ContractSnapshot> out = new ArrayList<>();
         for (Document assoc : asDocumentList(personDoc.get("staffOrganizationAssociations"))) {
             Document period = assoc.get("period", Document.class);
             LocalDate start = parseLocalDate(period != null ? period.get("startDate") : null);
@@ -361,9 +467,6 @@ public class PersonPdiLookupService {
 
             out.add(new ContractSnapshot("STAFF", orgName, orgUuid, empType, contractType, staffType, start, end, primary, false));
         }
-    }
-
-    private void extractVisitingContracts(Document personDoc, List<ContractSnapshot> out) {
         for (Document assoc : asDocumentList(personDoc.get("visitingScholarOrganizationAssociations"))) {
             Document period = assoc.get("period", Document.class);
             LocalDate start = parseLocalDate(period != null ? period.get("startDate") : null);
@@ -376,6 +479,7 @@ public class PersonPdiLookupService {
 
             out.add(new ContractSnapshot("VISITING", orgName, orgUuid, jobTitle, null, "Acadèmic", start, end, primary, false));
         }
+        return List.copyOf(out);
     }
 
     private boolean isActiveAt(ContractSnapshot c, LocalDate referenceDate) {
@@ -433,8 +537,9 @@ public class PersonPdiLookupService {
 
         Set<String> normalizedNifs = new LinkedHashSet<>();
         for (Document idDoc : asDocumentList(doc.get("identifiers"))) {
-            String typeLabel = normalize(extractTerm(idDoc.get("type", Document.class)));
-            String typeUri = normalize(idDoc.get("type", Document.class) != null ? idDoc.get("type", Document.class).getString("uri") : "");
+            Document typeDoc = idDoc.get("type", Document.class);
+            String typeLabel = normalize(extractTerm(typeDoc));
+            String typeUri = normalize(typeDoc != null ? typeDoc.getString("uri") : "");
             boolean isLegalId = LEGAL_ID_TYPES.contains(typeLabel)
                     || typeUri.endsWith("/dni")
                     || typeUri.endsWith("/nie")
@@ -443,40 +548,47 @@ public class PersonPdiLookupService {
                     || typeLabel.contains("nif")
                     || typeLabel.contains("dni");
             if (isLegalId) {
-                String normVal = normalizeNif(idDoc.getString("value"));
-                if (!normVal.isEmpty()) {
-                    normalizedNifs.add(normVal);
-                }
+                addNormalizedIfPresent(normalizedNifs, idDoc.getString("value"));
+                addNormalizedIfPresent(normalizedNifs, idDoc.getString("id"));
             }
         }
 
-        List<List<String>> nameVariantsTokens = new ArrayList<>();
-        List<String> primaryTokens = tokenize((firstName + " " + lastName).trim(), false);
-        if (!primaryTokens.isEmpty()) {
-            nameVariantsTokens.add(primaryTokens);
-        }
+        List<NameVariant> nameVariants = new ArrayList<>();
+        addNameVariant(nameVariants, firstName, lastName);
         for (Document altName : asDocumentList(doc.get("names"))) {
             Document nested = altName.get("name", Document.class);
-            if (nested != null) {
-                List<String> altTokens = tokenize(
-                        (safeString(nested.getString("firstName")) + " " + safeString(nested.getString("lastName"))).trim(),
-                        false
-                );
-                if (!altTokens.isEmpty()) {
-                    nameVariantsTokens.add(altTokens);
-                }
-            }
+            Document source = nested != null ? nested : altName;
+            addNameVariant(nameVariants, safeString(source.getString("firstName")), safeString(source.getString("lastName")));
         }
 
         Set<String> sortedTokenKeys = new LinkedHashSet<>();
-        for (List<String> variant : nameVariantsTokens) {
-            sortedTokenKeys.add(joinTokens(sortedCopy(variant)));
+        Set<String> allSurnameTokens = new LinkedHashSet<>();
+        for (NameVariant v : nameVariants) {
+            if (!v.fullTokens.isEmpty()) {
+                sortedTokenKeys.add(joinTokens(sortedCopy(v.fullTokens)));
+            }
+            allSurnameTokens.addAll(v.lastCoreTokens);
         }
 
-        List<String> surnameTokens = tokenize(lastName, true);
-        List<String> coreTokens = tokenize((firstName + " " + lastName).trim(), true);
+        List<ContractSnapshot> contracts = extractAllContracts(doc);
+        return new IndexedPerson(uuid, pureId, displayName, normalizedNifs, nameVariants, sortedTokenKeys, allSurnameTokens, contracts);
+    }
 
-        return new IndexedPerson(doc, uuid, pureId, displayName, normalizedNifs, nameVariantsTokens, sortedTokenKeys, surnameTokens, coreTokens);
+    private void addNormalizedIfPresent(Set<String> out, String rawVal) {
+        String normVal = normalizeNif(rawVal);
+        if (!normVal.isEmpty()) {
+            out.add(normVal);
+        }
+    }
+
+    private void addNameVariant(List<NameVariant> variants, String first, String last) {
+        List<String> fullTokens = tokenize((first + " " + last).trim(), false);
+        if (fullTokens.isEmpty()) {
+            return;
+        }
+        List<String> firstCore = tokenize(first, true);
+        List<String> lastCore = tokenize(last, true);
+        variants.add(new NameVariant(fullTokens, firstCore, lastCore));
     }
 
     private List<String> buildOrderedNameTokens(ExtractedMember member, boolean stripParticles) {
@@ -492,16 +604,15 @@ public class PersonPdiLookupService {
         return tokenize(full, stripParticles);
     }
 
-    private List<String> extractSurnameTokens(ExtractedMember member) {
-        if (member.lastName() != null && !member.lastName().isBlank()) {
-            return tokenize(member.lastName(), true);
-        }
+    private List<String> extractSurnameCandidates(ExtractedMember member) {
         String full = safeString(member.fullName());
         if (full.contains(",")) {
             return tokenize(full.split(",", 2)[0], true);
         }
-        List<String> all = tokenize(full, true);
-        return all.size() > 1 ? all.subList(1, all.size()) : all;
+        if (member.firstName() == null && member.lastName() != null && !member.lastName().isBlank()) {
+            return tokenize(member.lastName(), true);
+        }
+        return tokenize(full, true);
     }
 
     private static List<String> tokenize(String raw, boolean stripParticles) {
@@ -668,6 +779,10 @@ public class PersonPdiLookupService {
 
     private record ScoredPerson(IndexedPerson person, double score) {}
 
+    private record NameVariant(List<String> fullTokens, List<String> firstCoreTokens, List<String> lastCoreTokens) {}
+
+    private record CachedLookupIndex(LookupIndex index, long loadedAtMs) {}
+
     private record LookupIndex(
             List<IndexedPerson> allPersons,
             Map<String, List<IndexedPerson>> byExactNif,
@@ -675,41 +790,39 @@ public class PersonPdiLookupService {
     ) {}
 
     private static final class IndexedPerson {
-        final Document doc;
         final String uuid;
         final Long pureId;
         final String displayName;
         final Set<String> normalizedNifs;
-        final List<List<String>> nameVariantsTokens;
+        final List<NameVariant> nameVariants;
         final Set<String> sortedTokenKeys;
-        final List<String> surnameTokens;
-        final List<String> coreTokens;
+        final Set<String> surnameTokens;
+        final List<ContractSnapshot> contracts;
 
         IndexedPerson(
-                Document doc,
                 String uuid,
                 Long pureId,
                 String displayName,
                 Set<String> normalizedNifs,
-                List<List<String>> nameVariantsTokens,
+                List<NameVariant> nameVariants,
                 Set<String> sortedTokenKeys,
-                List<String> surnameTokens,
-                List<String> coreTokens) {
-            this.doc = doc;
+                Set<String> surnameTokens,
+                List<ContractSnapshot> contracts) {
             this.uuid = uuid;
             this.pureId = pureId;
             this.displayName = displayName;
             this.normalizedNifs = normalizedNifs;
-            this.nameVariantsTokens = nameVariantsTokens;
+            this.nameVariants = nameVariants;
             this.sortedTokenKeys = sortedTokenKeys;
             this.surnameTokens = surnameTokens;
-            this.coreTokens = coreTokens;
+            this.contracts = contracts;
         }
 
         boolean matchesExactOrderedTokens(List<String> candidateOrderedTokens) {
             Set<String> candidateSet = new LinkedHashSet<>(candidateOrderedTokens);
-            for (List<String> variant : nameVariantsTokens) {
-                if (variant.size() == candidateOrderedTokens.size() && new LinkedHashSet<>(variant).equals(candidateSet)) {
+            for (NameVariant variant : nameVariants) {
+                if (variant.fullTokens.size() == candidateOrderedTokens.size()
+                        && new LinkedHashSet<>(variant.fullTokens).equals(candidateSet)) {
                     return true;
                 }
             }
@@ -720,9 +833,8 @@ public class PersonPdiLookupService {
             if (surnameTokens.isEmpty()) {
                 return false;
             }
-            Set<String> mine = new LinkedHashSet<>(surnameTokens);
             for (String token : targetSurnameTokens) {
-                if (token.length() > 1 && mine.contains(token)) {
+                if (token.length() > 1 && surnameTokens.contains(token)) {
                     return true;
                 }
             }

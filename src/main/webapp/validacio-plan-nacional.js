@@ -11,9 +11,19 @@
             .replace(/'/g, '&#39;');
     }
 
+    function resolveBatchDurationForItem(item, globalDurationValue) {
+        if (item && item.localDurationOverride !== null && item.localDurationOverride !== undefined) {
+            return item.localDurationOverride;
+        }
+        if (globalDurationValue !== null && globalDurationValue !== undefined && globalDurationValue !== '') {
+            return Number(globalDurationValue);
+        }
+        return null;
+    }
+
     if (typeof document === 'undefined') {
         if (typeof module !== 'undefined' && module.exports) {
-            module.exports = { escapeHtml };
+            module.exports = { escapeHtml, resolveBatchDurationForItem };
         }
         return;
     }
@@ -60,6 +70,7 @@
             'inputReferenceDate', 'selectDefaultDuration', 'btnRecalculateBatch', 'btnOpenRulesModal', 'btnExportExcel',
             'dropZone', 'pdfFileInput', 'btnSelectFiles', 'btnClearBatch',
             'progressContainer', 'progressBar', 'progressText', 'progressPercent',
+            'batchErrorBanner', 'batchErrorText', 'btnDismissBatchError',
             'kpiProjectsCard', 'kpiOkCard', 'kpiAvisCard', 'kpiNoOkCard', 'kpiMembersCard',
             'kpiProjectsValue', 'kpiOkValue', 'kpiAvisValue', 'kpiNoOkValue', 'kpiMembersValue',
             'projectSearchInput', 'projectStatusFilter', 'projectListContainer', 'projectListCount',
@@ -120,8 +131,11 @@
             e.stopPropagation();
             state.projects = [];
             state.selectedId = null;
+            hideBatchError();
             renderAll();
         });
+
+        el.btnDismissBatchError.addEventListener('click', hideBatchError);
 
         el.btnRecalculateBatch.addEventListener('click', recalculateBatch);
         el.btnExportExcel.addEventListener('click', exportExcel);
@@ -213,7 +227,7 @@
                     fileName: file.name,
                     error: msg,
                     response: null,
-                    durationOverride: durationOverride ? Number(durationOverride) : null
+                    localDurationOverride: null
                 });
             } else {
                 state.projects.push({
@@ -221,7 +235,7 @@
                     fileName: data.fileName || file.name,
                     error: null,
                     response: data,
-                    durationOverride: durationOverride ? Number(durationOverride) : null
+                    localDurationOverride: null
                 });
             }
         } catch (err) {
@@ -230,7 +244,7 @@
                 fileName: file.name,
                 error: err && err.message ? err.message : 'Error de connexió amb el servidor.',
                 response: null,
-                durationOverride: null
+                localDurationOverride: null
             });
         }
 
@@ -256,22 +270,41 @@
         };
     }
 
+    function showBatchError(msg) {
+        if (!el.batchErrorBanner || !el.batchErrorText) return;
+        el.batchErrorText.textContent = msg;
+        el.batchErrorBanner.classList.remove('hidden');
+    }
+
+    function hideBatchError() {
+        if (!el.batchErrorBanner) return;
+        el.batchErrorBanner.classList.add('hidden');
+        if (el.batchErrorText) el.batchErrorText.textContent = '';
+    }
+
     async function reevaluateItem(item, refDate, durationYears) {
-        if (!item || !item.response) return;
+        if (!item || !item.response) return { ok: true };
         const payload = {
             proposal: toExtractedProposal(item.response),
             referenceDate: refDate || null,
             durationYears: durationYears || null
         };
-        const resp = await global.apiFetch('/plan-nacional/validar-equipo', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-        const data = await safeJson(resp);
-        if (resp.ok && data) {
+        try {
+            const resp = await global.apiFetch('/plan-nacional/validar-equipo', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const data = await safeJson(resp);
+            if (!resp.ok || !data) {
+                const msg = (data && data.message) ? data.message : ('Error HTTP ' + resp.status);
+                return { ok: false, error: msg };
+            }
             item.response = data;
             item.error = null;
+            return { ok: true };
+        } catch (err) {
+            return { ok: false, error: (err && err.message) ? err.message : 'Error de connexió en recalcular.' };
         }
     }
 
@@ -280,31 +313,47 @@
         if (validItems.length === 0) return;
 
         const refDate = el.inputReferenceDate.value || null;
-        const globalDur = el.selectDefaultDuration.value ? Number(el.selectDefaultDuration.value) : null;
+        const globalDur = el.selectDefaultDuration.value || '';
 
+        hideBatchError();
         el.btnRecalculateBatch.disabled = true;
         showProgress(0, validItems.length);
         let done = 0;
+        const failures = [];
 
-        for (const item of validItems) {
-            const effDur = globalDur !== null ? globalDur : item.durationOverride;
-            item.durationOverride = effDur;
-            await reevaluateItem(item, refDate, effDur);
-            done++;
-            showProgress(done, validItems.length);
+        try {
+            for (const item of validItems) {
+                const effDur = resolveBatchDurationForItem(item, globalDur);
+                const result = await reevaluateItem(item, refDate, effDur);
+                if (!result.ok) {
+                    failures.push(item.fileName + ': ' + result.error);
+                }
+                done++;
+                showProgress(done, validItems.length);
+            }
+        } finally {
+            el.btnRecalculateBatch.disabled = false;
+            setTimeout(() => el.progressContainer.classList.add('hidden'), 400);
+            if (failures.length > 0) {
+                showBatchError('No s\'han pogut recalcular alguns projectes: ' + failures.join(' | '));
+            }
+            renderAll();
         }
-
-        el.btnRecalculateBatch.disabled = false;
-        setTimeout(() => el.progressContainer.classList.add('hidden'), 400);
-        renderAll();
     }
 
     async function onLocalDurationChange() {
         const item = getSelectedProject();
         if (!item || !item.response) return;
+        const prevOverride = item.localDurationOverride;
         const val = el.detailDurationSelect.value;
-        item.durationOverride = val ? Number(val) : null;
-        await reevaluateItem(item, el.inputReferenceDate.value || null, item.durationOverride);
+        item.localDurationOverride = val ? Number(val) : null;
+        const effDur = resolveBatchDurationForItem(item, el.selectDefaultDuration.value || '');
+        hideBatchError();
+        const result = await reevaluateItem(item, el.inputReferenceDate.value || null, effDur);
+        if (!result.ok) {
+            item.localDurationOverride = prevOverride;
+            showBatchError('Error recalculant "' + item.fileName + '": ' + result.error);
+        }
         renderAll();
     }
 
@@ -489,7 +538,7 @@
         el.detailOverallBadge.className = 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-extrabold border ' + overallBadge.cls;
         el.detailOverallBadge.innerHTML = '<i class="fa-solid ' + overallBadge.icon + '"></i><span>' + overallBadge.label + '</span>';
 
-        el.detailDurationSelect.value = item.durationOverride ? String(item.durationOverride) : '';
+        el.detailDurationSelect.value = item.localDurationOverride ? String(item.localDurationOverride) : '';
 
         const warnings = res.extractionWarnings || [];
         if (warnings.length > 0) {

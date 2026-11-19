@@ -187,6 +187,96 @@ class AeiSolicitudParserTest {
     }
 
     @Test
+    void parsePreservesKeyValueMemberAcrossBlankLinesAtPageBreak() {
+        String splitAcrossPageBreak = """
+                Referencia: PID2025-888111OB-I00
+                INVESTIGADOR/A PRINCIPAL
+                Apellidos: Vila Mas
+
+                MINISTERIO DE CIENCIA E INNOVACIÓN
+                Página 2 de 4
+
+                Nombre: Pere
+
+                NIF/NIE: 11223344M
+
+                Entidad: Universitat Autònoma de Barcelona
+                Vinculación: Titular de universidad
+                """;
+        ExtractedProposal proposal = parser.parse("split.pdf", splitAcrossPageBreak);
+        assertEquals(1, proposal.members().size());
+        ExtractedMember m = proposal.members().get(0);
+        assertEquals(MemberRole.IP, m.role());
+        assertEquals("Pere", m.firstName());
+        assertEquals("Vila Mas", m.lastName());
+        assertEquals("11223344M", m.nif());
+        assertEquals("Universitat Autònoma de Barcelona", m.entity());
+    }
+
+    @Test
+    void parseHandlesDottedNifsLowercaseNieMidMaskedAndNumberedSingleSpaceRows() {
+        String messyRows = """
+                Referencia: PID2025-888222OB-I00
+                INVESTIGADOR/A PRINCIPAL
+                1 GARCÍA LÓPEZ, JOAN 12.345.678-a UAB
+
+                EQUIPO DE INVESTIGACIÓN
+                GARCÍA LÓPEZ, JOAN | 12345678A | UAB | Catedrático
+                2 Perez Vila, Anna x-1234567-l UAB
+                3 Soler Mas, Pere | 123****8A | UAB | Lector
+                """;
+        ExtractedProposal proposal = parser.parse("messy.pdf", messyRows);
+
+        assertEquals(3, proposal.members().size());
+        ExtractedMember joan = proposal.members().stream()
+                .filter(m -> m.fullName().contains("GARCÍA"))
+                .findFirst().orElseThrow();
+        assertEquals(MemberRole.IP, joan.role());
+        assertEquals("12345678A", joan.nif().replaceAll("[^A-Z0-9a-z]", "").toUpperCase());
+
+        ExtractedMember anna = proposal.members().stream()
+                .filter(m -> m.fullName().contains("Anna"))
+                .findFirst().orElseThrow();
+        assertEquals(MemberRole.EQUIPO_INVESTIGACION, anna.role());
+        assertEquals("x-1234567-l", anna.nif());
+
+        ExtractedMember pere = proposal.members().stream()
+                .filter(m -> m.fullName().contains("Soler Mas, Pere"))
+                .findFirst().orElseThrow();
+        assertEquals("123****8A", pere.nif());
+        assertEquals("UAB", pere.entity());
+    }
+
+    @Test
+    void parseIgnoresRoleKeywordsInsideLinkageOrSemicolonRowsAndDetectsFemaleIpHeader() {
+        String text = """
+                Referencia: PID2025-888333OB-I00
+                INVESTIGADORA PRINCIPAL (IP1)
+                Apellidos: Serra Font
+                Nombre: Marta
+                NIF/NIE: 99887766Z
+                Entidad: UAB
+                Vinculación: Co-investigador principal equipo de trabajo
+
+                Apellidos: Camps Roig
+                Nombre: Oriol
+                NIF/NIE: 55443322P
+                Entidad: UAB
+
+                EQUIPO DE INVESTIGACIÓN
+                Puig, Laura; 44556677K; UAB; Investigador principal
+                Valls, Marc; 33445566N; UAB; Titular
+                """;
+        ExtractedProposal proposal = parser.parse("female_ip.pdf", text);
+
+        assertEquals(4, proposal.members().size());
+        assertEquals(MemberRole.IP, proposal.members().get(0).role());
+        assertEquals(MemberRole.IP, proposal.members().get(1).role());
+        assertEquals(MemberRole.EQUIPO_INVESTIGACION, proposal.members().get(2).role());
+        assertEquals(MemberRole.EQUIPO_INVESTIGACION, proposal.members().get(3).role());
+    }
+
+    @Test
     void vllmFallbackParsesStructuredJsonResponseAndFlagsMethod() {
         VllmProposalFallbackParser fallback = new VllmProposalFallbackParser(true, "https://localhost:9999/v1/chat/completions", "test-model", "", 1000);
         String openAiResponse = """

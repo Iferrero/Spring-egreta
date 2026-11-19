@@ -22,6 +22,8 @@ import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -41,7 +43,7 @@ class PersonPdiLookupServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new PersonPdiLookupService(mongoTemplate, new PlanNacionalEligibilityEngine());
+        service = new PersonPdiLookupService(mongoTemplate, new PlanNacionalEligibilityEngine(), 0L);
     }
 
     private void stubPersons(List<Document> docs) {
@@ -235,6 +237,97 @@ class PersonPdiLookupServiceTest {
         assertNotNull(match.latestHistoricalContract());
         assertEquals(LocalDate.of(2025, 12, 31), match.latestHistoricalContract().endDate());
         assertEquals("Professor/a lector/a ajudant doctor/a", match.latestHistoricalContract().employmentType());
+    }
+
+    @Test
+    void lookupExtractsLegalIdsFromClassifiedIdField() {
+        Document classifiedIdDoc = new Document("type", new Document("term", new Document("ca_ES", "DNI")))
+                .append("id", "55443322Z");
+        Document person = personDoc("uuid-cid", 800L, "Carla", "Soler",
+                List.of(classifiedIdDoc),
+                List.of(staffAssoc("Catedràtic/a d'universitat", "Funcionari/a", "Acadèmic", "Dept. Dret", "o8", "2012-01-01", null, true)),
+                null);
+        stubPersons(List.of(person));
+
+        ExtractedMember member = new ExtractedMember(MemberRole.IP, "Soler, Carla", "Carla", "Soler", "55443322Z", "UAB", null, "");
+        PersonLookupMatch match = service.lookup(member, REF_DATE);
+
+        assertEquals(MatchConfidence.NIF_EXACTE, match.matchConfidence());
+        assertEquals("uuid-cid", match.matchedPersonUuid());
+    }
+
+    @Test
+    void lookupMaskedNifRejectsSameLengthPositionalMismatchAndHandlesMidWildcards() {
+        Document wrongPos = personDoc("uuid-wp", 810L, "Anna", "Garcia",
+                List.of(idDoc("DNI", "45671234B")),
+                List.of(), null);
+        Document rightPos = personDoc("uuid-rp", 811L, "Pere", "Soler",
+                List.of(idDoc("DNI", "12345678A")),
+                List.of(), null);
+        stubPersons(List.of(wrongPos, rightPos));
+
+        // "***4567**" té longitud 9 però "45671234B" té "4567" a les posicions 0..3 -> NO ha de casar
+        ExtractedMember wrongMask = new ExtractedMember(MemberRole.IP, "Garcia, Anna", "Anna", "Garcia", "***4567**", "UAB", null, "");
+        assertEquals(MatchConfidence.NOM_EXACTE, service.lookup(wrongMask, REF_DATE).matchConfidence());
+
+        // Ara sense coincidir per nom: ha de ser NO_TROBAT, no fals positiu per contains("4567")
+        ExtractedMember otherNameSameMask = new ExtractedMember(MemberRole.IP, "Lopez, Maria", "Maria", "Lopez", "***4567**", "UAB", null, "");
+        assertEquals(MatchConfidence.NO_TROBAT, service.lookup(otherNameSameMask, REF_DATE).matchConfidence());
+
+        // Màscara amb asteriscs interns "123****8A" casa amb "12345678A"
+        ExtractedMember midMask = new ExtractedMember(MemberRole.IP, "Soler, Pere", "Pere", "Soler", "123****8A", "UAB", null, "");
+        PersonLookupMatch midMatch = service.lookup(midMask, REF_DATE);
+        assertEquals(MatchConfidence.NIF_EXACTE, midMatch.matchConfidence());
+        assertEquals("uuid-rp", midMatch.matchedPersonUuid());
+    }
+
+    @Test
+    void lookupApproximateMatchesInitialHandlesSurnameFirstWithoutCommaAndRejectsSurnameOnly() {
+        Document joan = personDoc("uuid-j", 820L, "Joan", "Garcia Lopez", List.of(), List.of(), null);
+        Document joseMaria = personDoc("uuid-jm", 821L, "Jose Maria", "Garcia",
+                List.of(), List.of(), null);
+        Document altNamePerson = personDoc("uuid-alt", 822L, "Carles", "Roca", List.of(), List.of(), null)
+                .append("names", List.of(new Document("name", new Document("firstName", "Carlos").append("lastName", "Roca"))));
+        stubPersons(List.of(joan, joseMaria, altNamePerson));
+
+        // Inicial + cognoms
+        ExtractedMember withInitial = new ExtractedMember(MemberRole.EQUIPO_INVESTIGACION, "J. Garcia Lopez", "J.", "Garcia Lopez", null, "UAB", null, "");
+        PersonLookupMatch initMatch = service.lookup(withInitial, REF_DATE);
+        assertEquals(MatchConfidence.NOM_APROXIMAT, initMatch.matchConfidence());
+        assertEquals("uuid-j", initMatch.matchedPersonUuid());
+
+        // Nom sense coma en ordre "COGNOM NOM1 NOM2" -> tots els tokens exactes (NOM_EXACTE)
+        ExtractedMember surnameFirstExact = new ExtractedMember(MemberRole.EQUIPO_INVESTIGACION, "GARCIA JOSE MARIA", "GARCIA", "JOSE MARIA", null, "UAB", null, "");
+        PersonLookupMatch sfExactMatch = service.lookup(surnameFirstExact, REF_DATE);
+        assertEquals(MatchConfidence.NOM_EXACTE, sfExactMatch.matchConfidence());
+        assertEquals("uuid-jm", sfExactMatch.matchedPersonUuid());
+
+        // Nom sense coma en ordre "COGNOM NOM1" amb nom compost parcial -> Level 3 NOM_APROXIMAT
+        ExtractedMember surnameFirstPartial = new ExtractedMember(MemberRole.EQUIPO_INVESTIGACION, "GARCIA JOSE", "GARCIA", "JOSE", null, "UAB", null, "");
+        PersonLookupMatch sfApproxMatch = service.lookup(surnameFirstPartial, REF_DATE);
+        assertEquals(MatchConfidence.NOM_APROXIMAT, sfApproxMatch.matchConfidence());
+        assertEquals("uuid-jm", sfApproxMatch.matchedPersonUuid());
+
+        // Només cognoms sense nom propi -> no casa a cegues
+        ExtractedMember surnameOnly = new ExtractedMember(MemberRole.EQUIPO_INVESTIGACION, "Garcia Lopez", null, "Garcia Lopez", null, "UAB", null, "");
+        assertEquals(MatchConfidence.NO_TROBAT, service.lookup(surnameOnly, REF_DATE).matchConfidence());
+
+        // Variant a names[] -> NOM_EXACTE o NOM_APROXIMAT
+        ExtractedMember altSearch = new ExtractedMember(MemberRole.EQUIPO_INVESTIGACION, "Carlos Roca", "Carlos", "Roca", null, "UAB", null, "");
+        assertEquals(MatchConfidence.NOM_EXACTE, service.lookup(altSearch, REF_DATE).matchConfidence());
+    }
+
+    @Test
+    void lookupAllReusesShortTtlCacheAcrossCalls() {
+        PersonPdiLookupService cachedService = new PersonPdiLookupService(mongoTemplate, new PlanNacionalEligibilityEngine(), 60_000L);
+        Document p = personDoc("uuid-c", 900L, "Marc", "Font", List.of(idDoc("DNI", "11122233H")), List.of(), null);
+        stubPersons(List.of(p));
+
+        ExtractedMember m = new ExtractedMember(MemberRole.IP, "Font, Marc", "Marc", "Font", "11122233H", "UAB", null, "");
+        assertEquals(MatchConfidence.NIF_EXACTE, cachedService.lookupAll(List.of(m), REF_DATE).get(0).matchConfidence());
+        assertEquals(MatchConfidence.NIF_EXACTE, cachedService.lookupAll(List.of(m), REF_DATE).get(0).matchConfidence());
+
+        verify(mongoTemplate, times(1)).getCollection("Persons");
     }
 
     private static class ListMongoCursor implements MongoCursor<Document> {
