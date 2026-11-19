@@ -116,6 +116,12 @@
 			<artifactId>language-detector</artifactId>
 			<version>0.6</version>
 		</dependency>
+		<!-- Apache PDFBox: Extracció de text en memòria per a sol·licituds del Pla Nacional -->
+		<dependency>
+			<groupId>org.apache.pdfbox</groupId>
+			<artifactId>pdfbox</artifactId>
+			<version>3.0.4</version>
+		</dependency>
 	</dependencies>
 
 	<build>
