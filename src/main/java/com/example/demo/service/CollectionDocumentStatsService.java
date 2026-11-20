@@ -1,5 +1,6 @@
 package com.example.demo.service;
 
+import com.example.demo.linkaudit.LinkAuditConstants;
 import com.mongodb.client.MongoCollection;
 import org.bson.Document;
 import org.slf4j.Logger;
@@ -40,7 +41,12 @@ public class CollectionDocumentStatsService {
         log.info("Calculating collection document statistics with types breakdown from MongoDB (kraken)...");
         long startTime = System.currentTimeMillis();
 
-        Set<String> collectionNames = new TreeSet<>(mongoTemplate.getDb().listCollectionNames().into(new ArrayList<>()));
+        Set<String> collectionNames = new TreeSet<>();
+        for (String colName : mongoTemplate.getDb().listCollectionNames().into(new ArrayList<>())) {
+            if (!LinkAuditConstants.isInternalCollection(colName)) {
+                collectionNames.add(colName);
+            }
+        }
 
         List<Map<String, Object>> collectionStatsList = new ArrayList<>();
         long grandTotalBytes = 0;
