@@ -133,15 +133,15 @@ public class CollectionLinkExtractor {
                 continue;
             }
 
-            String subType = firstNonBlank(
-                    resolveTermText(el, "type"),
-                    LinkAuditConstants.UNSPECIFIED_LABEL
+            String subType = firstNonBlankOrDefault(
+                    LinkAuditConstants.UNSPECIFIED_LABEL,
+                    resolveTermText(el, "type")
             );
-            String linkLabel = firstNonBlank(
+            String linkLabel = firstNonBlankOrDefault(
+                    "",
                     resolveText(el.get("title")),
                     asNonBlankTrimmed(el.get("fileName")),
-                    fileDoc != null ? asNonBlankTrimmed(fileDoc.get("fileName")) : null,
-                    ""
+                    fileDoc != null ? asNonBlankTrimmed(fileDoc.get("fileName")) : null
             );
 
             appendRefs(out, ctx, LinkSourceField.DOCUMENTS.getFieldName(), subType, linkLabel, urls);
@@ -155,14 +155,14 @@ public class CollectionLinkExtractor {
                 continue;
             }
 
-            String subType = firstNonBlank(
-                    resolveTermText(el, "linkType"),
-                    LinkAuditConstants.UNSPECIFIED_LABEL
+            String subType = firstNonBlankOrDefault(
+                    LinkAuditConstants.UNSPECIFIED_LABEL,
+                    resolveTermText(el, "linkType")
             );
-            String linkLabel = firstNonBlank(
+            String linkLabel = firstNonBlankOrDefault(
+                    "",
                     asNonBlankTrimmed(el.get("alias")),
-                    resolveLocalizedText(asDocument(el.get("description"))),
-                    ""
+                    resolveLocalizedText(asDocument(el.get("description")))
             );
 
             appendRefs(out, ctx, LinkSourceField.LINKS.getFieldName(), subType, linkLabel, List.of(url));
@@ -183,15 +183,15 @@ public class CollectionLinkExtractor {
                 continue;
             }
 
-            String subType = firstNonBlank(
+            String subType = firstNonBlankOrDefault(
+                    LinkAuditConstants.UNSPECIFIED_LABEL,
                     resolveTermText(el, "versionType"),
-                    asNonBlankTrimmed(el.get("typeDiscriminator")),
-                    LinkAuditConstants.UNSPECIFIED_LABEL
+                    asNonBlankTrimmed(el.get("typeDiscriminator"))
             );
-            String linkLabel = firstNonBlank(
+            String linkLabel = firstNonBlankOrDefault(
+                    "",
                     fileDoc != null ? asNonBlankTrimmed(fileDoc.get("fileName")) : null,
-                    resolveText(el.get("title")),
-                    ""
+                    resolveText(el.get("title"))
             );
 
             appendRefs(out, ctx, LinkSourceField.ELECTRONIC_VERSIONS.getFieldName(), subType, linkLabel, urls);
@@ -225,10 +225,10 @@ public class CollectionLinkExtractor {
         String recordUuid = asNonBlankTrimmed(doc.get("uuid"));
         Long recordPureId = doc.get("pureId") instanceof Number num ? num.longValue() : null;
         String recordTitle = resolveRecordTitle(doc, recordUuid, recordId);
-        String recordType = firstNonBlank(
+        String recordType = firstNonBlankOrDefault(
+                LinkAuditConstants.UNSPECIFIED_LABEL,
                 resolveTermText(doc, "type"),
-                asNonBlankTrimmed(doc.get("typeDiscriminator")),
-                LinkAuditConstants.UNSPECIFIED_LABEL
+                asNonBlankTrimmed(doc.get("typeDiscriminator"))
         );
         return new RecordContext(collection, recordId, recordUuid, recordPureId, recordTitle, recordType);
     }
@@ -271,7 +271,7 @@ public class CollectionLinkExtractor {
             return stringName;
         }
 
-        return firstNonBlank(recordUuid, recordId);
+        return firstNonBlankOrDefault("", recordUuid, recordId);
     }
 
     private String resolveTermText(Document container, String wrapperKey) {
@@ -345,13 +345,13 @@ public class CollectionLinkExtractor {
         return first != null ? first : second;
     }
 
-    private String firstNonBlank(String... candidates) {
+    private String firstNonBlankOrDefault(String fallback, String... candidates) {
         for (String candidate : candidates) {
             if (candidate != null && !candidate.isBlank()) {
                 return candidate;
             }
         }
-        return null;
+        return fallback;
     }
 
     private record RecordContext(

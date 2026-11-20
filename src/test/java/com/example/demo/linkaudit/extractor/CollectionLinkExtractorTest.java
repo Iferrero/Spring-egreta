@@ -146,6 +146,27 @@ class CollectionLinkExtractorTest {
     }
 
     @Test
+    void extractFromDocumentFallsBackToEmptyStringForMissingLinkLabelsAndMissingRecordTitle() {
+        Document doc = new Document("documents", List.of(
+                new Document("url", "https://example.org/doc-no-label")
+        ))
+                .append("links", List.of(
+                        new Document("url", "https://example.org/link-no-label")
+                ))
+                .append("electronicVersions", List.of(
+                        new Document("link", "https://example.org/ev-no-label")
+                ));
+
+        List<ExtractedLinkRef> refs = extractor.extractFromDocument("Researchoutputs", doc);
+
+        assertEquals(3, refs.size());
+        for (ExtractedLinkRef ref : refs) {
+            assertEquals("", ref.recordTitle());
+            assertEquals("", ref.linkLabel());
+        }
+    }
+
+    @Test
     void extractFromDocumentHandlesNullsAndMalformedNestedStructures() {
         Document doc = new Document("_id", "bad-1")
                 .append("title", null)
