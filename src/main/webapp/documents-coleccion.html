@@ -432,13 +432,24 @@
                 </div>
             </div>
 
+            <!-- Inline Feedback Notice inside Modal -->
+            <div id="issuesModalErrorNotice" class="hidden px-6 py-2.5 border-b text-xs items-center justify-between gap-3">
+                <span class="flex items-center gap-2 min-w-0">
+                    <i id="issuesModalErrorNoticeIcon" class="fa-solid fa-circle-info shrink-0"></i>
+                    <span id="issuesModalErrorNoticeText" class="break-words"></span>
+                </span>
+                <button type="button" onclick="hideIssuesModalNotice()" class="ml-3 text-current opacity-70 hover:opacity-100 transition-opacity shrink-0" title="Amagar avís">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
             <!-- Inline Active Scan Notice inside Modal -->
             <div id="issuesModalJobNotice" class="hidden px-6 py-2 bg-amber-50 border-b border-amber-200 text-xs text-amber-900 flex items-center justify-between gap-3">
                 <span class="flex items-center gap-2">
                     <i class="fa-solid fa-spinner fa-spin text-amber-600"></i>
                     <span id="issuesModalJobNoticeText">Auditoria en curs...</span>
                 </span>
-                <button type="button" onclick="cancelLinkAudit()" class="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-semibold transition-colors">
+                <button id="btnModalCancelLinkAudit" type="button" onclick="cancelLinkAudit()" class="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                     Cancel·lar
                 </button>
             </div>
@@ -637,35 +648,64 @@
             badge.textContent = count;
         }
 
-        function showLinkAuditNotice(type, message) {
-            const notice = document.getElementById('linkAuditNotice');
-            const icon = document.getElementById('linkAuditNoticeIcon');
-            const text = document.getElementById('linkAuditNoticeText');
-            if (!notice || !icon || !text) return;
+        const NOTICE_STYLE_MAP = {
+            success: {
+                box: 'bg-emerald-50 border-emerald-200 text-emerald-800',
+                icon: 'fa-solid fa-circle-check text-emerald-600 shrink-0'
+            },
+            warning: {
+                box: 'bg-amber-50 border-amber-200 text-amber-800',
+                icon: 'fa-solid fa-triangle-exclamation text-amber-600 shrink-0'
+            },
+            error: {
+                box: 'bg-rose-50 border-rose-200 text-rose-800',
+                icon: 'fa-solid fa-circle-exclamation text-rose-600 shrink-0'
+            },
+            info: {
+                box: 'bg-blue-50 border-blue-200 text-blue-800',
+                icon: 'fa-solid fa-circle-info text-blue-600 shrink-0'
+            }
+        };
 
-            const styleMap = {
-                success: {
-                    box: 'bg-emerald-50 border-emerald-200 text-emerald-800',
-                    icon: 'fa-solid fa-circle-check text-emerald-600 shrink-0'
-                },
-                warning: {
-                    box: 'bg-amber-50 border-amber-200 text-amber-800',
-                    icon: 'fa-solid fa-triangle-exclamation text-amber-600 shrink-0'
-                },
-                error: {
-                    box: 'bg-rose-50 border-rose-200 text-rose-800',
-                    icon: 'fa-solid fa-circle-exclamation text-rose-600 shrink-0'
-                },
-                info: {
-                    box: 'bg-blue-50 border-blue-200 text-blue-800',
-                    icon: 'fa-solid fa-circle-info text-blue-600 shrink-0'
-                }
-            };
-            const style = styleMap[type] || styleMap.info;
-            notice.className = `flex items-center justify-between rounded-xl px-4 py-2.5 text-xs mb-4 border ${style.box}`;
+        function applyNoticeBanner(notice, icon, text, baseClass, type, message) {
+            if (!notice || !icon || !text) return;
+            const style = NOTICE_STYLE_MAP[type] || NOTICE_STYLE_MAP.info;
+            notice.className = `${baseClass} ${style.box}`;
             icon.className = style.icon;
             text.textContent = message || '';
             text.title = message || '';
+        }
+
+        function showIssuesModalNotice(type, message) {
+            applyNoticeBanner(
+                document.getElementById('issuesModalErrorNotice'),
+                document.getElementById('issuesModalErrorNoticeIcon'),
+                document.getElementById('issuesModalErrorNoticeText'),
+                'flex items-center justify-between px-6 py-2.5 border-b text-xs gap-3',
+                type,
+                message
+            );
+        }
+
+        function hideIssuesModalNotice() {
+            const notice = document.getElementById('issuesModalErrorNotice');
+            if (notice) {
+                notice.className = 'hidden items-center justify-between px-6 py-2.5 border-b text-xs gap-3';
+            }
+        }
+
+        function showLinkAuditNotice(type, message) {
+            applyNoticeBanner(
+                document.getElementById('linkAuditNotice'),
+                document.getElementById('linkAuditNoticeIcon'),
+                document.getElementById('linkAuditNoticeText'),
+                'flex items-center justify-between rounded-xl px-4 py-2.5 text-xs mb-4 border',
+                type,
+                message
+            );
+            if (issuesModalState.open) {
+                showIssuesModalNotice(type, message);
+            }
         }
 
         function hideLinkAuditNotice() {
@@ -673,6 +713,7 @@
             if (notice) {
                 notice.className = 'hidden items-center justify-between rounded-xl px-4 py-2.5 text-xs mb-4 border';
             }
+            hideIssuesModalNotice();
         }
 
         async function loadStats(forceRefresh = false) {
@@ -1187,13 +1228,29 @@
             subEl.textContent = `${blocked.toLocaleString('ca-ES')} bloquejats · ${checked.toLocaleString('ca-ES')} comprovats`;
         }
 
+        function setCancelButtonsVisualState(isCancelling) {
+            const btnCancel = document.getElementById('btnCancelLinkAudit');
+            if (btnCancel) {
+                btnCancel.disabled = isCancelling;
+                btnCancel.innerHTML = isCancelling
+                    ? '<i class="fa-solid fa-spinner fa-spin"></i> Cancel·lant...'
+                    : '<i class="fa-solid fa-stop"></i> Cancel·lar';
+            }
+            const btnModalCancel = document.getElementById('btnModalCancelLinkAudit');
+            if (btnModalCancel) {
+                btnModalCancel.disabled = isCancelling;
+                btnModalCancel.innerHTML = isCancelling
+                    ? '<i class="fa-solid fa-spinner fa-spin"></i> Cancel·lant...'
+                    : 'Cancel·lar';
+            }
+        }
+
         function updateAuditJobUI(job) {
             lastAuditJobState = job || null;
             const active = isJobActive(job);
             const banner = document.getElementById('linkAuditBanner');
             const btnScanAll = document.getElementById('btnScanAllLinks');
             const scanAllIcon = document.getElementById('scanAllIcon');
-            const btnCancel = document.getElementById('btnCancelLinkAudit');
             const btnModalRescan = document.getElementById('btnIssuesModalRescan');
             const modalRescanIcon = document.getElementById('issuesModalRescanIcon');
             const modalJobNotice = document.getElementById('issuesModalJobNotice');
@@ -1240,12 +1297,7 @@
                 document.getElementById('auditBannerBroken').textContent = Number(job.brokenFound || 0).toLocaleString('ca-ES');
                 document.getElementById('auditBannerBlocked').textContent = Number(job.blockedFound || 0).toLocaleString('ca-ES');
 
-                if (btnCancel) {
-                    btnCancel.disabled = isCancelling;
-                    btnCancel.innerHTML = isCancelling
-                        ? '<i class="fa-solid fa-spinner fa-spin"></i> Cancel·lant...'
-                        : '<i class="fa-solid fa-stop"></i> Cancel·lar';
-                }
+                setCancelButtonsVisualState(isCancelling);
 
                 if (banner) {
                     banner.classList.remove('hidden');
@@ -1410,6 +1462,10 @@
 
             const btnScanAll = document.getElementById('btnScanAllLinks');
             if (btnScanAll) btnScanAll.disabled = true;
+            const btnModalRescan = document.getElementById('btnIssuesModalRescan');
+            if (btnModalRescan) btnModalRescan.disabled = true;
+            const modalRescanIcon = document.getElementById('issuesModalRescanIcon');
+            if (modalRescanIcon) modalRescanIcon.className = 'fa-solid fa-spinner fa-spin';
 
             try {
                 const payload = collection ? { collection } : {};
@@ -1464,11 +1520,7 @@
         }
 
         async function cancelLinkAudit() {
-            const btnCancel = document.getElementById('btnCancelLinkAudit');
-            if (btnCancel) {
-                btnCancel.disabled = true;
-                btnCancel.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Cancel·lant...';
-            }
+            setCancelButtonsVisualState(true);
 
             try {
                 const res = await window.apiFetch('/mongo/collections/link-audit/cancel', {
@@ -1482,10 +1534,7 @@
             } catch (err) {
                 console.error('Error cancelling link audit:', err);
                 showLinkAuditNotice('error', `No s'ha pogut cancel·lar l'auditoria: ${err.message}`);
-                if (btnCancel) {
-                    btnCancel.disabled = false;
-                    btnCancel.innerHTML = '<i class="fa-solid fa-stop"></i> Cancel·lar';
-                }
+                setCancelButtonsVisualState(false);
             }
         }
 
@@ -1529,6 +1578,7 @@
                 <span class="text-rose-700">${escapeHtml(collection)}</span>
             `;
 
+            hideIssuesModalNotice();
             updateIssuesHeaderSummary(null);
             updateIssuesStatusTabsUI();
             updateIssuesExportLink();
@@ -1548,6 +1598,7 @@
                 issuesAbortController.abort();
                 issuesAbortController = null;
             }
+            hideIssuesModalNotice();
             document.getElementById('linkIssuesModal').classList.add('hidden');
         }
 
@@ -1615,14 +1666,20 @@
             loadLinkIssues();
         }
 
+        function getCurrentIssuesSearchQuery() {
+            const searchInput = document.getElementById('issuesSearchInput');
+            return searchInput ? (searchInput.value || '').trim() : (issuesModalState.q || '');
+        }
+
         function onIssuesSearchInput() {
-            const value = (document.getElementById('issuesSearchInput').value || '').trim();
+            const value = getCurrentIssuesSearchQuery();
+            updateIssuesExportLink(value);
             if (issuesSearchDebounceTimer) {
                 clearTimeout(issuesSearchDebounceTimer);
             }
             issuesSearchDebounceTimer = setTimeout(() => {
                 issuesSearchDebounceTimer = null;
-                issuesModalState.q = value;
+                issuesModalState.q = getCurrentIssuesSearchQuery();
                 issuesModalState.page = 0;
                 updateIssuesExportLink();
                 loadLinkIssues();
@@ -1638,7 +1695,7 @@
             loadLinkIssues();
         }
 
-        function buildIssuesExportUrl() {
+        function buildIssuesExportUrl(qOverride) {
             const col = issuesModalState.collection;
             if (!col) return '#';
             const params = new URLSearchParams();
@@ -1649,16 +1706,18 @@
             if (issuesModalState.reason && issuesModalState.reason !== 'ALL') {
                 params.set('reason', issuesModalState.reason);
             }
-            if (issuesModalState.q) {
-                params.set('q', issuesModalState.q);
+            const q = qOverride !== undefined ? qOverride : issuesModalState.q;
+            if (q) {
+                params.set('q', q);
             }
             return window.apiUrl(`/mongo/collections/link-audit/${encodeURIComponent(col)}/issues/export?${params.toString()}`);
         }
 
-        function updateIssuesExportLink() {
+        function updateIssuesExportLink(qOverride) {
             const link = document.getElementById('btnIssuesModalExportCsv');
             if (!link) return;
-            link.href = buildIssuesExportUrl();
+            const effectiveQ = qOverride !== undefined ? qOverride : getCurrentIssuesSearchQuery();
+            link.href = buildIssuesExportUrl(effectiveQ);
         }
 
         function openIssuesCsvExport(event) {
@@ -1666,11 +1725,8 @@
                 if (event) event.preventDefault();
                 return false;
             }
-            const url = buildIssuesExportUrl();
-            const link = document.getElementById('btnIssuesModalExportCsv');
-            if (link) {
-                link.href = url;
-            }
+            issuesModalState.q = (document.getElementById('issuesSearchInput')?.value || '').trim();
+            updateIssuesExportLink();
             return true;
         }
 

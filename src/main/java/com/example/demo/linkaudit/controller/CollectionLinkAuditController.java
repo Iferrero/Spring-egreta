@@ -31,6 +31,7 @@ import java.io.OutputStreamWriter;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicReference;
@@ -216,16 +217,16 @@ public class CollectionLinkAuditController {
                 issue.reason() != null ? issue.reason().name() : "",
                 issue.httpStatus() != null ? issue.httpStatus().toString() : "",
                 issue.sourceField(),
-                issue.subType(),
+                sanitizeFormula(issue.subType()),
                 sanitizeFormula(issue.linkLabel()),
-                issue.url(),
-                issue.finalUrl(),
+                sanitizeCsvUrl(issue.url()),
+                sanitizeCsvUrl(issue.finalUrl()),
                 sanitizeFormula(issue.errorMessage()),
                 issue.recordId(),
                 issue.recordUuid(),
                 issue.recordPureId() != null ? issue.recordPureId().toString() : "",
                 sanitizeFormula(issue.recordTitle()),
-                issue.recordType(),
+                sanitizeFormula(issue.recordType()),
                 issue.egretaUrl(),
                 issue.checkedAt() != null ? issue.checkedAt().toString() : ""
         };
@@ -237,6 +238,18 @@ public class CollectionLinkAuditController {
             row.append(escapeCsv(columns[i]));
         }
         return row.toString();
+    }
+
+    private static String sanitizeCsvUrl(String value) {
+        if (value == null || value.isEmpty()) {
+            return "";
+        }
+        String trimmedLower = value.trim().toLowerCase(Locale.ROOT);
+        if ((trimmedLower.startsWith("http://") || trimmedLower.startsWith("https://"))
+                && value.charAt(0) != '\t' && value.charAt(0) != '\r') {
+            return value;
+        }
+        return sanitizeFormula(value);
     }
 
     private static String sanitizeFormula(String value) {

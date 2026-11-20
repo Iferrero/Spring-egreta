@@ -239,6 +239,16 @@ class CollectionLinkAuditControllerTest {
                         "id-2", "uuid-2", null,
                         "\rCrTitle", "Ajut", null,
                         null
+                ),
+                new LinkAuditIssue(
+                        "Awards", "scan-1", LinkStatus.BROKEN, FailureReason.INVALID_SYNTAX, null,
+                        "Sintaxi d'URL invàlida",
+                        "=HYPERLINK(\"http://evil\",\"click\")",
+                        "+HYPERLINK(\"http://evil\",\"final\")",
+                        "links", "=SubtipusEvil", "Etiqueta normal",
+                        "id-3", "uuid-3", null,
+                        "Títol normal", "@TipusEvil", null,
+                        checkedAt
                 )
         );
 
@@ -273,6 +283,10 @@ class CollectionLinkAuditControllerTest {
         assertTrue(csvWithoutBom.contains("'\tTabLabel"));
         assertTrue(csvWithoutBom.contains("\"'\rCrTitle\""));
         assertTrue(csvWithoutBom.contains(",https://example.com/ok,https://example.com/ok,"));
+        assertTrue(csvWithoutBom.contains("\"'=HYPERLINK(\"\"http://evil\"\",\"\"click\"\")\""));
+        assertTrue(csvWithoutBom.contains("\"'+HYPERLINK(\"\"http://evil\"\",\"\"final\"\")\""));
+        assertTrue(csvWithoutBom.contains("'=SubtipusEvil"));
+        assertTrue(csvWithoutBom.contains("'@TipusEvil"));
     }
 
     @Test
