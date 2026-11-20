@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import javax.net.ssl.SSLException;
 import javax.net.ssl.SSLHandshakeException;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.net.ConnectException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -20,6 +21,7 @@ import java.net.SocketTimeoutException;
 import java.net.UnknownHostException;
 import java.net.http.HttpTimeoutException;
 import java.nio.channels.UnresolvedAddressException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -301,11 +303,14 @@ class HttpLinkVerifierTest {
         HttpServer externalServer = startLoopbackServer();
 
         List<String> egretaReceivedKeys = new CopyOnWriteArrayList<>();
+        List<String> egretaMethods = new CopyOnWriteArrayList<>();
         List<Boolean> externalSawApiKeyHeader = new CopyOnWriteArrayList<>();
+        List<String> externalMethods = new CopyOnWriteArrayList<>();
 
         String externalTargetUrl = url(externalServer, "127.0.0.1", "/external-resource");
 
         egretaServer.createContext("/egreta-redirect", exchange -> {
+            egretaMethods.add(exchange.getRequestMethod());
             egretaReceivedKeys.add(exchange.getRequestHeaders().getFirst("api-key"));
             exchange.getResponseHeaders().add("Location", externalTargetUrl);
             exchange.sendResponseHeaders(302, -1);
@@ -313,6 +318,7 @@ class HttpLinkVerifierTest {
         });
 
         externalServer.createContext("/external-resource", exchange -> {
+            externalMethods.add(exchange.getRequestMethod());
             externalSawApiKeyHeader.add(exchange.getRequestHeaders().containsKey("api-key"));
             exchange.sendResponseHeaders(200, -1);
             exchange.close();
@@ -333,14 +339,110 @@ class HttpLinkVerifierTest {
         assertEquals(FailureReason.OK, result.reason());
         assertEquals(externalTargetUrl, result.finalUrl());
         assertEquals(List.of("secret-egreta-key"), egretaReceivedKeys);
+        assertEquals(List.of("GET"), egretaMethods);
         assertEquals(List.of(false), externalSawApiKeyHeader);
+        assertEquals(List.of("HEAD"), externalMethods);
 
         // Also verify direct map constructor normalizes host keys case-insensitively and strips on redirect
         HttpLinkVerifier mapVerifier = new HttpLinkVerifier(defaultProps(), Map.of("LOCALHOST", "map-key"));
         LinkCheckResult mapResult = mapVerifier.verify(url(egretaServer, "localhost", "/egreta-redirect"));
         assertEquals(LinkStatus.OK, mapResult.status());
         assertEquals(List.of("secret-egreta-key", "map-key"), egretaReceivedKeys);
+        assertEquals(List.of("GET", "GET"), egretaMethods);
         assertEquals(List.of(false, false), externalSawApiKeyHeader);
+        assertEquals(List.of("HEAD", "HEAD"), externalMethods);
+    }
+
+    @Test
+    void verifyUsesDirectGetWithoutHeadForConfiguredEgretaHost() throws Exception {
+        HttpServer egretaServer = startServer(InetAddress.getByName("localhost"));
+        List<String> recordedMethods = new CopyOnWriteArrayList<>();
+        List<String> recordedKeys = new CopyOnWriteArrayList<>();
+
+        egretaServer.createContext("/ws/api/impacts/123/files/abc/doc.pdf", exchange -> {
+            String method = exchange.getRequestMethod();
+            recordedMethods.add(method);
+            recordedKeys.add(exchange.getRequestHeaders().getFirst("api-key"));
+            if ("HEAD".equals(method)) {
+                try {
+                    Thread.sleep(1500);
+                } catch (InterruptedException ignored) {
+                    Thread.currentThread().interrupt();
+                }
+                try {
+                    exchange.sendResponseHeaders(200, -1);
+                } catch (IOException ignored) {
+                    // Client timed out if HEAD was wrongly attempted
+                } finally {
+                    exchange.close();
+                }
+                return;
+            }
+            exchange.sendResponseHeaders(200, 0);
+            try (OutputStream out = exchange.getResponseBody()) {
+                out.write("%PDF-1.4\n".getBytes(StandardCharsets.US_ASCII));
+            }
+            exchange.close();
+        });
+
+        LinkAuditProperties props = defaultProps();
+        props.setConnectTimeoutMs(500);
+        props.setRequestTimeoutMs(400);
+        HttpLinkVerifier verifier = new HttpLinkVerifier(props, Map.of("localhost", "egreta-secret"));
+
+        LinkCheckResult result = verifier.verify(url(egretaServer, "localhost", "/ws/api/impacts/123/files/abc/doc.pdf"));
+
+        assertEquals(LinkStatus.OK, result.status());
+        assertEquals(FailureReason.OK, result.reason());
+        assertEquals(200, result.httpStatus());
+        assertEquals(List.of("GET"), recordedMethods);
+        assertEquals(List.of("egreta-secret"), recordedKeys);
+    }
+
+    @Test
+    void verifyClosesChunkedGetStreamWithoutDrainingFullBody() throws Exception {
+        HttpServer server = startLoopbackServer();
+        CountDownLatch bodyRelease = new CountDownLatch(1);
+
+        server.createContext("/chunked-stream", exchange -> {
+            if ("HEAD".equals(exchange.getRequestMethod())) {
+                exchange.sendResponseHeaders(405, -1);
+                exchange.close();
+                return;
+            }
+            exchange.sendResponseHeaders(200, 0);
+            try (OutputStream out = exchange.getResponseBody()) {
+                out.write("%PDF-1.4\n".getBytes(StandardCharsets.US_ASCII));
+                out.flush();
+                try {
+                    bodyRelease.await(5, TimeUnit.SECONDS);
+                } catch (InterruptedException ignored) {
+                    Thread.currentThread().interrupt();
+                }
+            } catch (IOException ignored) {
+                // Client closed stream early after reading response headers
+            } finally {
+                exchange.close();
+            }
+        });
+
+        LinkAuditProperties props = defaultProps();
+        props.setRequestTimeoutMs(2000);
+        HttpLinkVerifier verifier = new HttpLinkVerifier(props, Map.of());
+
+        long startNanos = System.nanoTime();
+        LinkCheckResult result;
+        try {
+            result = verifier.verify(url(server, "127.0.0.1", "/chunked-stream"));
+        } finally {
+            bodyRelease.countDown();
+        }
+        long elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos);
+
+        assertEquals(LinkStatus.OK, result.status());
+        assertEquals(FailureReason.OK, result.reason());
+        assertEquals(200, result.httpStatus());
+        assertTrue(elapsedMs < 1500, "Expected early return without draining body, took " + elapsedMs + " ms");
     }
 
     @Test

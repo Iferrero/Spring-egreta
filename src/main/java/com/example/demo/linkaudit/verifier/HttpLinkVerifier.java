@@ -10,6 +10,7 @@ import org.springframework.stereotype.Component;
 
 import javax.net.ssl.SSLException;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.SocketTimeoutException;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -98,9 +99,9 @@ public class HttpLinkVerifier implements LinkVerifier {
         int redirects = 0;
 
         while (true) {
-            HttpResponse<Void> response;
+            HttpProbeResponse response;
             try {
-                response = sendHeadWithGetFallback(currentUri);
+                response = probeUri(currentUri);
             } catch (InterruptedException ex) {
                 Thread.currentThread().interrupt();
                 return result(rawUrl, normalizedUrl, currentUri.toString(),
@@ -122,7 +123,7 @@ public class HttpLinkVerifier implements LinkVerifier {
                             statusCode, "Massa redireccions (> " + maxRedirects + ")");
                 }
 
-                String location = response.headers().firstValue("Location").orElse(null);
+                String location = response.location();
                 if (location == null || location.isBlank()) {
                     return result(rawUrl, normalizedUrl, currentUri.toString(),
                             LinkStatus.BROKEN, FailureReason.CONNECTION_ERROR,
@@ -145,14 +146,35 @@ public class HttpLinkVerifier implements LinkVerifier {
         }
     }
 
-    private HttpResponse<Void> sendHeadWithGetFallback(URI uri) throws IOException, InterruptedException {
+    private HttpProbeResponse probeUri(URI uri) throws IOException, InterruptedException {
+        if (isConfiguredEgretaHost(uri)) {
+            return sendLightweightGet(uri);
+        }
         HttpRequest headRequest = buildRequest(uri, "HEAD", false);
         HttpResponse<Void> headResponse = httpClient.send(headRequest, HttpResponse.BodyHandlers.discarding());
         if (HEAD_FALLBACK_STATUSES.contains(headResponse.statusCode())) {
-            HttpRequest getRequest = buildRequest(uri, "GET", true);
-            return httpClient.send(getRequest, HttpResponse.BodyHandlers.discarding());
+            return sendLightweightGet(uri);
         }
-        return headResponse;
+        return new HttpProbeResponse(
+                headResponse.statusCode(),
+                headResponse.headers().firstValue("Location").orElse(null)
+        );
+    }
+
+    private HttpProbeResponse sendLightweightGet(URI uri) throws IOException, InterruptedException {
+        HttpRequest getRequest = buildRequest(uri, "GET", true);
+        HttpResponse<InputStream> getResponse = httpClient.send(getRequest, HttpResponse.BodyHandlers.ofInputStream());
+        try (InputStream ignored = getResponse.body()) {
+            return new HttpProbeResponse(
+                    getResponse.statusCode(),
+                    getResponse.headers().firstValue("Location").orElse(null)
+            );
+        }
+    }
+
+    private boolean isConfiguredEgretaHost(URI uri) {
+        String host = uri.getHost();
+        return host != null && egretaHostApiKeys.containsKey(host.toLowerCase(Locale.ROOT));
     }
 
     private HttpRequest buildRequest(URI uri, String method, boolean rangeFirstByte) {
@@ -347,6 +369,9 @@ public class HttpLinkVerifier implements LinkVerifier {
             String errorMessage
     ) {
         return new LinkCheckResult(rawUrl, normalizedUrl, finalUrl, status, reason, httpStatus, errorMessage, Instant.now());
+    }
+
+    private record HttpProbeResponse(int statusCode, String location) {
     }
 
     private record UriValidation(URI uri, String errorMessage) {
