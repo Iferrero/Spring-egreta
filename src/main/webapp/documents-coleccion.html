@@ -44,7 +44,11 @@
                     Recompte de documents de MongoDB amb el camp <code class="bg-slate-200/70 text-slate-800 px-1 py-0.5 rounded text-xs font-semibold">documents</code> (o <code class="bg-slate-200/70 text-slate-800 px-1 py-0.5 rounded text-xs font-semibold">links</code> a Researchoutputs), mida en <span class="font-semibold text-slate-700">MB</span> i desglossament detallat per <span class="font-bold text-emerald-800">tipus de document</span>.
                 </p>
             </div>
-            <div class="flex items-center gap-3">
+            <div class="flex flex-wrap items-center gap-3">
+                <button id="btnScanAllLinks" onclick="startLinkAudit(null)"
+                        class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-rose-200 hover:border-rose-400 hover:bg-rose-50/60 text-sm font-semibold text-rose-700 shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                    <i id="scanAllIcon" class="fa-solid fa-link-slash"></i> Comprovar enllaços (tot)
+                </button>
                 <button id="btnRefresh" onclick="loadStats(true)"
                         class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-slate-300 hover:border-emerald-500 hover:text-emerald-700 text-sm font-semibold text-slate-700 shadow-sm transition-all">
                     <i id="refreshIcon" class="fa-solid fa-arrows-rotate"></i> Recalcular dades
@@ -57,7 +61,7 @@
         </header>
 
         <!-- Notification Banner / Meta -->
-        <div id="metaBanner" class="hidden items-center justify-between bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-2.5 text-xs text-emerald-800 mb-6">
+        <div id="metaBanner" class="hidden items-center justify-between bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-2.5 text-xs text-emerald-800 mb-4">
             <span class="flex items-center gap-2">
                 <i class="fa-solid fa-circle-check text-emerald-600"></i>
                 <span id="metaText">Dades carregades correctament</span>
@@ -65,8 +69,77 @@
             <span id="metaTime" class="text-slate-500"></span>
         </div>
 
+        <!-- Link Audit Feedback Notice -->
+        <div id="linkAuditNotice" class="hidden items-center justify-between rounded-xl px-4 py-2.5 text-xs mb-4 border">
+            <span class="flex items-center gap-2 min-w-0">
+                <i id="linkAuditNoticeIcon" class="fa-solid fa-circle-info shrink-0"></i>
+                <span id="linkAuditNoticeText" class="truncate"></span>
+            </span>
+            <button type="button" onclick="hideLinkAuditNotice()" class="ml-3 text-current opacity-70 hover:opacity-100 transition-opacity shrink-0" title="Amagar avís">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+
+        <!-- Link Audit Live Progress Banner -->
+        <div id="linkAuditBanner" class="hidden bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-6 shadow-sm">
+            <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                <div class="flex-1 min-w-0 space-y-2.5">
+                    <div class="flex flex-wrap items-center gap-2 text-xs">
+                        <span id="auditBannerStatusBadge" class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                            <i class="fa-solid fa-spinner fa-spin"></i>
+                            <span id="auditBannerStatusText">Auditoria d'enllaços en curs</span>
+                        </span>
+                        <span class="text-slate-700 font-semibold">
+                            Col·lecció actual: <code id="auditBannerCurrentCol" class="bg-white/80 px-1.5 py-0.5 rounded border border-amber-200 font-mono text-slate-900">-</code>
+                        </span>
+                        <span id="auditBannerScope" class="text-[11px] text-slate-500"></span>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-[11px]">
+                        <div>
+                            <div class="flex items-center justify-between text-slate-600 mb-1">
+                                <span class="font-semibold">Col·leccions completades</span>
+                                <span id="auditBannerColProgressText" class="font-mono font-bold text-slate-800">0 / 0</span>
+                            </div>
+                            <div class="w-full h-2 bg-amber-100 rounded-full overflow-hidden">
+                                <div id="auditBannerColProgressBar" class="h-full bg-emerald-600 rounded-full transition-all duration-300" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="flex items-center justify-between text-slate-600 mb-1">
+                                <span class="font-semibold">URLs úniques (col·lecció actual)</span>
+                                <span id="auditBannerUrlProgressText" class="font-mono font-bold text-slate-800">0 / 0</span>
+                            </div>
+                            <div class="w-full h-2 bg-amber-100 rounded-full overflow-hidden">
+                                <div id="auditBannerUrlProgressBar" class="h-full bg-amber-500 rounded-full transition-all duration-300" style="width: 0%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex flex-wrap items-center gap-2 shrink-0">
+                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-xs font-semibold text-slate-700">
+                        <i class="fa-solid fa-link text-slate-400"></i>
+                        <span id="auditBannerTotalChecked">0</span> comprovats
+                    </span>
+                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-rose-100 border border-rose-200 text-xs font-bold text-rose-800">
+                        <i class="fa-solid fa-circle-xmark"></i>
+                        <span id="auditBannerBroken">0</span> rots
+                    </span>
+                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-100 border border-amber-300 text-xs font-bold text-amber-900">
+                        <i class="fa-solid fa-shield-halved"></i>
+                        <span id="auditBannerBlocked">0</span> bloquejats
+                    </span>
+                    <button id="btnCancelLinkAudit" type="button" onclick="cancelLinkAudit()"
+                            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                        <i class="fa-solid fa-stop"></i> Cancel·lar
+                    </button>
+                </div>
+            </div>
+        </div>
+
         <!-- KPI Cards Row -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
             <!-- Card 1: Espai total -->
             <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
                 <div class="flex items-center justify-between text-slate-400 mb-2">
@@ -125,6 +198,21 @@
                 </div>
                 <p class="text-xs text-amber-700 font-semibold mt-1">amb documents/links actius</p>
             </div>
+
+            <!-- Card 5: Enllaços Rots -->
+            <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
+                <div class="flex items-center justify-between text-slate-400 mb-2">
+                    <span class="text-xs font-semibold uppercase tracking-wider">Enllaços Rots</span>
+                    <span class="w-8 h-8 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center text-sm">
+                        <i class="fa-solid fa-link-slash"></i>
+                    </span>
+                </div>
+                <div class="flex items-baseline gap-2">
+                    <span id="kpiBrokenLinks" class="text-2xl font-black text-rose-600">-</span>
+                    <span class="text-xs text-slate-500 font-medium">rots</span>
+                </div>
+                <p id="kpiBrokenSub" class="text-xs text-slate-500 mt-1">Encara no auditat</p>
+            </div>
         </div>
 
         <!-- Storage Distribution Visual Bar -->
@@ -149,19 +237,25 @@
         <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden mb-8">
             
             <!-- Toolbar -->
-            <div class="p-4 sm:p-5 border-b border-slate-200 bg-slate-50/50 flex flex-col sm:flex-row items-center justify-between gap-4">
-                <div class="relative w-full sm:w-80">
+            <div class="p-4 sm:p-5 border-b border-slate-200 bg-slate-50/50 flex flex-col lg:flex-row items-center justify-between gap-4">
+                <div class="relative w-full lg:w-80">
                     <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
                     <input type="text" id="searchInput" oninput="applyFilters()"
                            placeholder="Cercar col·lecció (ex: Researchoutputs, Awards)..."
                            class="w-full pl-9 pr-3 py-2 bg-white border border-slate-300 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 shadow-sm">
                 </div>
 
-                <div class="flex items-center gap-4 w-full sm:w-auto justify-end">
+                <div class="flex flex-wrap items-center gap-4 w-full lg:w-auto justify-end">
                     <label class="inline-flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700 select-none">
                         <input type="checkbox" id="chkOnlyWithDocs" onchange="applyFilters()" checked
                                class="w-4 h-4 rounded text-emerald-600 border-slate-300 focus:ring-emerald-500 cursor-pointer">
                         <span>Només amb contingut (<span id="countWithDocsBadge">0</span>)</span>
+                    </label>
+
+                    <label class="inline-flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700 select-none">
+                        <input type="checkbox" id="chkOnlyWithBroken" onchange="applyFilters()"
+                               class="w-4 h-4 rounded text-rose-600 border-slate-300 focus:ring-rose-500 cursor-pointer">
+                        <span>Només amb enllaços rots</span>
                     </label>
 
                     <div class="text-xs text-slate-500 border-l border-slate-300 pl-4">
@@ -205,11 +299,14 @@
                             <th scope="col" class="py-3 px-4 text-center">
                                 Tipus de Document
                             </th>
+                            <th scope="col" class="py-3 px-4 text-center cursor-pointer hover:bg-slate-200/70 transition-colors whitespace-nowrap" onclick="sortBy('brokenCount')">
+                                Enllaços Rots <i id="sort_brokenCount" class="fa-solid fa-sort text-slate-400 ml-1"></i>
+                            </th>
                         </tr>
                     </thead>
                     <tbody id="tableBody" class="divide-y divide-slate-100">
                         <tr>
-                            <td colspan="10" class="py-12 text-center text-slate-400">
+                            <td colspan="11" class="py-12 text-center text-slate-400">
                                 <i class="fa-solid fa-spinner fa-spin text-xl text-emerald-600 mb-2"></i>
                                 <p>Carregant dades des de MongoDB...</p>
                             </td>
@@ -304,11 +401,184 @@
         </div>
     </div>
 
+    <!-- Modal for Link Audit Issues -->
+    <div id="linkIssuesModal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onclick="if (event.target === this) closeLinkIssuesModal()">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-6xl w-full max-h-[92vh] flex flex-col overflow-hidden border border-slate-200">
+            <!-- Modal Header -->
+            <div class="px-6 py-4 border-b border-slate-200 bg-slate-50/70 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                <div class="min-w-0">
+                    <h3 id="issuesModalTitle" class="text-lg font-bold text-slate-900 flex items-center gap-2 truncate">
+                        <i class="fa-solid fa-link-slash text-rose-600"></i> Incidències d'enllaços
+                    </h3>
+                    <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500 mt-1">
+                        <span id="issuesModalScannedAt">Última auditoria: -</span>
+                        <span id="issuesModalSummary" class="font-semibold text-slate-700"></span>
+                    </div>
+                </div>
+                <div class="flex flex-wrap items-center gap-2 shrink-0">
+                    <button id="btnIssuesModalRescan" type="button" onclick="rescanIssuesModalCollection()"
+                            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-slate-300 hover:border-rose-400 hover:text-rose-700 text-xs font-semibold text-slate-700 shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                        <i id="issuesModalRescanIcon" class="fa-solid fa-arrows-rotate"></i> Re-escanejar col·lecció
+                    </button>
+                    <a id="btnIssuesModalExportCsv" href="#" onclick="return openIssuesCsvExport(event)"
+                       class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-sm transition-all">
+                        <i class="fa-solid fa-file-csv"></i> Exportar CSV
+                    </a>
+                    <button type="button" onclick="closeLinkIssuesModal()"
+                            class="w-8 h-8 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-600 flex items-center justify-center transition-colors"
+                            title="Tancar">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Inline Active Scan Notice inside Modal -->
+            <div id="issuesModalJobNotice" class="hidden px-6 py-2 bg-amber-50 border-b border-amber-200 text-xs text-amber-900 flex items-center justify-between gap-3">
+                <span class="flex items-center gap-2">
+                    <i class="fa-solid fa-spinner fa-spin text-amber-600"></i>
+                    <span id="issuesModalJobNoticeText">Auditoria en curs...</span>
+                </span>
+                <button type="button" onclick="cancelLinkAudit()" class="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-semibold transition-colors">
+                    Cancel·lar
+                </button>
+            </div>
+
+            <!-- Filter Bar -->
+            <div class="px-6 py-3.5 border-b border-slate-200 bg-white flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                <div class="flex flex-wrap items-center gap-1.5">
+                    <button id="tabIssuesStatus_BROKEN" type="button" onclick="setIssuesStatusFilter('BROKEN')"
+                            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors bg-rose-600 text-white border-rose-600">
+                        <span>Rots confirmats</span>
+                        <span id="tabCountBroken" class="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-white/20">0</span>
+                    </button>
+                    <button id="tabIssuesStatus_BLOCKED" type="button" onclick="setIssuesStatusFilter('BLOCKED')"
+                            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors bg-white text-slate-700 border-slate-300 hover:bg-slate-50">
+                        <span>Bloquejats / dubtosos</span>
+                        <span id="tabCountBlocked" class="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">0</span>
+                    </button>
+                    <button id="tabIssuesStatus_ALL" type="button" onclick="setIssuesStatusFilter('ALL')"
+                            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors bg-white text-slate-700 border-slate-300 hover:bg-slate-50">
+                        <span>Tots</span>
+                        <span id="tabCountAll" class="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700">0</span>
+                    </button>
+                </div>
+
+                <div class="flex flex-wrap items-center gap-2">
+                    <select id="issuesFieldSelect" onchange="onIssuesFieldChange()"
+                            class="px-2.5 py-1.5 bg-white border border-slate-300 rounded-xl text-xs text-slate-700 focus:outline-none focus:border-emerald-500">
+                        <option value="ALL">Tots els camps</option>
+                    </select>
+
+                    <select id="issuesReasonSelect" onchange="onIssuesReasonChange()"
+                            class="px-2.5 py-1.5 bg-white border border-slate-300 rounded-xl text-xs text-slate-700 focus:outline-none focus:border-emerald-500">
+                        <option value="ALL">Tots els motius</option>
+                    </select>
+
+                    <div class="relative w-full sm:w-64">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[11px]"></i>
+                        <input type="text" id="issuesSearchInput" oninput="onIssuesSearchInput()"
+                               placeholder="Cercar per URL, títol o UUID..."
+                               class="w-full pl-8 pr-3 py-1.5 bg-white border border-slate-300 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modal Table Content -->
+            <div class="flex-1 overflow-auto">
+                <table class="w-full text-left text-xs border-collapse">
+                    <thead class="sticky top-0 z-10 bg-slate-100 text-slate-700 border-b border-slate-200 font-bold uppercase tracking-wider text-[11px]">
+                        <tr>
+                            <th class="py-2.5 px-4 w-1/4">Registre</th>
+                            <th class="py-2.5 px-4 w-44">Camp / Tipus</th>
+                            <th class="py-2.5 px-4">URL</th>
+                            <th class="py-2.5 px-4 w-52">Estat / Motiu</th>
+                            <th class="py-2.5 px-4 text-center w-32">Egreta</th>
+                        </tr>
+                    </thead>
+                    <tbody id="issuesTableBody" class="divide-y divide-slate-100 bg-white">
+                        <tr>
+                            <td colspan="5" class="py-10 text-center text-slate-400">
+                                Carregant incidències...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Modal Footer / Pagination -->
+            <div class="px-6 py-3 border-t border-slate-200 bg-slate-50 flex flex-col sm:flex-row items-center justify-between gap-3">
+                <span id="issuesPaginationInfo" class="text-xs text-slate-600 font-medium">0 incidències</span>
+                <div class="flex items-center gap-2">
+                    <button id="btnIssuesPrev" type="button" onclick="changeIssuesPage(-1)" disabled
+                            class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-white border border-slate-300 hover:bg-slate-100 text-xs font-semibold text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                        <i class="fa-solid fa-chevron-left text-[10px]"></i> Anterior
+                    </button>
+                    <span id="issuesPageBadge" class="text-xs font-semibold text-slate-700 px-2">Pàgina 0 de 0</span>
+                    <button id="btnIssuesNext" type="button" onclick="changeIssuesPage(1)" disabled
+                            class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-white border border-slate-300 hover:bg-slate-100 text-xs font-semibold text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                        Següent <i class="fa-solid fa-chevron-right text-[10px]"></i>
+                    </button>
+                    <button type="button" onclick="closeLinkIssuesModal()"
+                            class="ml-2 px-4 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-900 text-white text-xs font-semibold shadow-sm transition-all">
+                        Tancar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Scripts -->
     <script>
         let rawData = null;
         let currentSort = { column: 'totalBytes', asc: false };
         let expandedRows = new Set();
+
+        let linkAuditSummary = null;
+        let linkAuditByCollection = new Map();
+        let lastAuditJobState = null;
+        let linkAuditPollTimer = null;
+        let isPollingStatus = false;
+        let lastObservedJobId = null;
+        let lastObservedCompletedCount = -1;
+        let lastJobTerminalNotifiedId = null;
+        let lastRenderedActiveCollection = null;
+        let lastRenderedJobActive = false;
+        let summaryRequestSeq = 0;
+
+        let issuesModalState = {
+            open: false,
+            collection: null,
+            status: 'BROKEN',
+            field: 'ALL',
+            reason: 'ALL',
+            q: '',
+            page: 0,
+            size: 50,
+            totalPages: 0,
+            totalItems: 0
+        };
+        let issuesSearchDebounceTimer = null;
+        let issuesRequestSeq = 0;
+        let issuesAbortController = null;
+
+        const STANDARD_AUDIT_FIELDS = ['documents', 'links', 'electronicVersions'];
+
+        const FAILURE_REASON_LABELS = {
+            OK: 'Correcte',
+            HTTP_404: '404 No trobat',
+            HTTP_410: '410 Eliminat (Gone)',
+            HTTP_4XX: 'Error client 4xx',
+            HTTP_5XX: 'Error servidor 5xx',
+            HTTP_401: '401 No autoritzat',
+            HTTP_403: '403 Accés prohibit',
+            HTTP_429: '429 Massa peticions',
+            INVALID_SYNTAX: 'Sintaxi d\'URL invàlida',
+            DNS_ERROR: 'Error de resolució DNS',
+            TIMEOUT: 'Temps d\'espera exhaurit',
+            SSL_ERROR: 'Error SSL/TLS',
+            CONNECTION_ERROR: 'Error de connexió',
+            TOO_MANY_REDIRECTS: 'Massa redireccions'
+        };
 
         const PALETTE = [
             '#059669', // Emerald
@@ -322,6 +592,88 @@
             '#16a34a', // Green
             '#64748b'  // Slate
         ];
+
+        function isSafeHttpUrl(url) {
+            return /^\s*https?:\/\//i.test(String(url || ''));
+        }
+
+        function getCollectionAudit(colName) {
+            if (!colName) return null;
+            return linkAuditByCollection.get(colName) || null;
+        }
+
+        function isJobActive(job) {
+            return Boolean(job && (job.status === 'RUNNING' || job.status === 'CANCELLING'));
+        }
+
+        function formatDateTimeCa(isoStr) {
+            if (!isoStr) return '-';
+            const d = new Date(isoStr);
+            if (Number.isNaN(d.getTime())) return '-';
+            return d.toLocaleString('ca-ES', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+
+        function formatFailureReason(reason) {
+            if (!reason) return 'Desconegut';
+            return FAILURE_REASON_LABELS[reason] || String(reason);
+        }
+
+        function hasCollectionContent(item) {
+            if (!item) return false;
+            const audit = getCollectionAudit(item.collection);
+            return item.recordsWithDocuments > 0 || Boolean(audit && (audit.totalLinks || 0) > 0);
+        }
+
+        function updateWithContentBadge() {
+            const badge = document.getElementById('countWithDocsBadge');
+            if (!badge || !rawData || !rawData.collections) return;
+            const count = rawData.collections.filter(hasCollectionContent).length;
+            badge.textContent = count;
+        }
+
+        function showLinkAuditNotice(type, message) {
+            const notice = document.getElementById('linkAuditNotice');
+            const icon = document.getElementById('linkAuditNoticeIcon');
+            const text = document.getElementById('linkAuditNoticeText');
+            if (!notice || !icon || !text) return;
+
+            const styleMap = {
+                success: {
+                    box: 'bg-emerald-50 border-emerald-200 text-emerald-800',
+                    icon: 'fa-solid fa-circle-check text-emerald-600 shrink-0'
+                },
+                warning: {
+                    box: 'bg-amber-50 border-amber-200 text-amber-800',
+                    icon: 'fa-solid fa-triangle-exclamation text-amber-600 shrink-0'
+                },
+                error: {
+                    box: 'bg-rose-50 border-rose-200 text-rose-800',
+                    icon: 'fa-solid fa-circle-exclamation text-rose-600 shrink-0'
+                },
+                info: {
+                    box: 'bg-blue-50 border-blue-200 text-blue-800',
+                    icon: 'fa-solid fa-circle-info text-blue-600 shrink-0'
+                }
+            };
+            const style = styleMap[type] || styleMap.info;
+            notice.className = `flex items-center justify-between rounded-xl px-4 py-2.5 text-xs mb-4 border ${style.box}`;
+            icon.className = style.icon;
+            text.textContent = message || '';
+            text.title = message || '';
+        }
+
+        function hideLinkAuditNotice() {
+            const notice = document.getElementById('linkAuditNotice');
+            if (notice) {
+                notice.className = 'hidden items-center justify-between rounded-xl px-4 py-2.5 text-xs mb-4 border';
+            }
+        }
 
         async function loadStats(forceRefresh = false) {
             const btn = document.getElementById('btnRefresh');
@@ -353,7 +705,7 @@
                 console.error('Error fetching stats:', err);
                 tbody.innerHTML = `
                     <tr>
-                        <td colspan="10" class="py-8 text-center text-rose-600 bg-rose-50/50">
+                        <td colspan="11" class="py-8 text-center text-rose-600 bg-rose-50/50">
                             <i class="fa-solid fa-triangle-exclamation text-2xl mb-2"></i>
                             <p class="font-bold">Error en carregar les estadístiques</p>
                             <p class="text-xs text-rose-500 mt-1">${escapeHtml(err.message)}</p>
@@ -389,7 +741,7 @@
                 document.getElementById('kpiTopStorageDetail').textContent = `${topCol.totalMB.toLocaleString('ca-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MB (${topCol.totalGB.toFixed(2)} GB)`;
             }
 
-            document.getElementById('countWithDocsBadge').textContent = (data.collectionsWithDocumentsCount || 0);
+            updateWithContentBadge();
 
             // Render visual storage bar
             renderStorageBar(collections, data.totalBytes);
@@ -449,17 +801,38 @@
         function applyFilters() {
             if (!rawData || !rawData.collections) return;
 
+            updateWithContentBadge();
+
             const q = (document.getElementById('searchInput').value || '').toLowerCase().trim();
             const onlyWithDocs = document.getElementById('chkOnlyWithDocs').checked;
+            const onlyWithBroken = document.getElementById('chkOnlyWithBroken').checked;
 
             let list = rawData.collections.filter(item => {
+                const audit = getCollectionAudit(item.collection);
                 const matchesSearch = !q || item.collection.toLowerCase().includes(q) || (item.field || '').toLowerCase().includes(q);
-                const matchesDocs = !onlyWithDocs || item.recordsWithDocuments > 0;
-                return matchesSearch && matchesDocs;
+                const matchesDocs = !onlyWithDocs || item.recordsWithDocuments > 0 || Boolean(audit && (audit.totalLinks || 0) > 0);
+                const matchesBroken = !onlyWithBroken || Boolean(audit && (audit.brokenCount || 0) > 0);
+                return matchesSearch && matchesDocs && matchesBroken;
             });
 
             // Sort list
             list.sort((a, b) => {
+                if (currentSort.column === 'brokenCount') {
+                    const auditA = getCollectionAudit(a.collection);
+                    const auditB = getCollectionAudit(b.collection);
+                    const valA = auditA ? Number(auditA.brokenCount || 0) : -1;
+                    const valB = auditB ? Number(auditB.brokenCount || 0) : -1;
+                    if (valA !== valB) {
+                        return currentSort.asc ? valA - valB : valB - valA;
+                    }
+                    const blkA = auditA ? Number(auditA.blockedCount || 0) : -1;
+                    const blkB = auditB ? Number(auditB.blockedCount || 0) : -1;
+                    if (blkA !== blkB) {
+                        return currentSort.asc ? blkA - blkB : blkB - blkA;
+                    }
+                    return (a.collection || '').localeCompare(b.collection || '');
+                }
+
                 let valA = a[currentSort.column];
                 let valB = b[currentSort.column];
 
@@ -477,6 +850,89 @@
             renderTable(list);
         }
 
+        function renderAuditCell(item, audit) {
+            const colEsc = escapeHtml(item.collection);
+            const activeJob = isJobActive(lastAuditJobState);
+            const isScanningThis = activeJob && lastAuditJobState.currentCollection === item.collection;
+            const disabledAttr = activeJob ? 'disabled' : '';
+
+            const scanBtnIcon = isScanningThis
+                ? 'fa-solid fa-spinner fa-spin text-amber-600'
+                : (audit ? 'fa-solid fa-arrows-rotate' : 'fa-solid fa-play text-[10px]');
+            const scanBtnTitle = isScanningThis
+                ? 'Escanejant enllaços...'
+                : (audit ? 'Re-escanejar enllaços d\'aquesta col·lecció' : 'Auditar enllaços d\'aquesta col·lecció');
+
+            const scanBtn = `
+                <button type="button"
+                        data-collection="${colEsc}"
+                        onclick="startLinkAudit(this.dataset.collection)"
+                        ${disabledAttr}
+                        class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-rose-50 hover:text-rose-700 text-slate-600 inline-flex items-center justify-center transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+                        title="${escapeHtml(scanBtnTitle)}">
+                    <i class="${scanBtnIcon} text-[11px]"></i>
+                </button>
+            `;
+
+            if (!audit) {
+                return `
+                    <div class="inline-flex items-center justify-center gap-2">
+                        <span class="text-slate-400 text-[11px] italic">Sense auditar</span>
+                        ${scanBtn}
+                    </div>
+                `;
+            }
+
+            const broken = Number(audit.brokenCount || 0);
+            const blocked = Number(audit.blockedCount || 0);
+            const totalLinks = Number(audit.totalLinks || 0);
+            const scannedAtTxt = formatDateTimeCa(audit.scannedAt);
+            const okTooltip = `${totalLinks.toLocaleString('ca-ES')} enllaços comprovats · ${scannedAtTxt}`;
+
+            if (broken === 0 && blocked === 0) {
+                return `
+                    <div class="inline-flex items-center justify-center gap-1.5">
+                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold text-[11px]"
+                              title="${escapeHtml(okTooltip)}">
+                            <i class="fa-solid fa-check text-[9px]"></i> 0 rots
+                        </span>
+                        ${scanBtn}
+                    </div>
+                `;
+            }
+
+            const brokenBadge = broken > 0
+                ? `<button type="button"
+                           data-collection="${colEsc}"
+                           onclick="openLinkIssuesModal(this.dataset.collection, 'BROKEN')"
+                           class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-100 hover:bg-rose-200 text-rose-800 border border-rose-200 font-bold text-[11px] transition-colors cursor-pointer"
+                           title="Veure ${broken.toLocaleString('ca-ES')} enllaços rots (${escapeHtml(scannedAtTxt)})">
+                        ${broken.toLocaleString('ca-ES')} rots
+                   </button>`
+                : `<span class="inline-flex items-center px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-semibold text-[11px]"
+                         title="${escapeHtml(okTooltip)}">
+                        0 rots
+                   </span>`;
+
+            const blockedBadge = blocked > 0
+                ? `<button type="button"
+                           data-collection="${colEsc}"
+                           onclick="openLinkIssuesModal(this.dataset.collection, 'BLOCKED')"
+                           class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 hover:bg-amber-200 text-amber-800 border border-amber-300 font-bold text-[11px] transition-colors cursor-pointer"
+                           title="Veure ${blocked.toLocaleString('ca-ES')} enllaços bloquejats/dubtosos (${escapeHtml(scannedAtTxt)})">
+                        ${blocked.toLocaleString('ca-ES')} bloq.
+                   </button>`
+                : '';
+
+            return `
+                <div class="inline-flex items-center justify-center flex-wrap gap-1.5">
+                    ${brokenBadge}
+                    ${blockedBadge}
+                    ${scanBtn}
+                </div>
+            `;
+        }
+
         function renderTable(list) {
             const tbody = document.getElementById('tableBody');
             document.getElementById('filteredCount').textContent = list.length;
@@ -484,12 +940,13 @@
             if (list.length === 0) {
                 tbody.innerHTML = `
                     <tr>
-                        <td colspan="10" class="py-8 text-center text-slate-400">
+                        <td colspan="11" class="py-8 text-center text-slate-400">
                             <i class="fa-solid fa-folder-minus text-2xl mb-1 text-slate-300"></i>
                             <p>No s'han trobat col·leccions amb aquests criteris.</p>
                         </td>
                     </tr>
                 `;
+                document.getElementById('footerTotals').textContent = '';
                 return;
             }
 
@@ -500,19 +957,20 @@
                 const pctStorage = item.pctOfTotalStorage || 0;
                 const recTypes = item.recordTypes || [];
                 const topRecType = recTypes.length > 0 ? recTypes[0] : null;
+                const audit = getCollectionAudit(item.collection);
 
                 html += `
                     <tr class="hover:bg-slate-50/80 transition-colors">
                         <td class="py-3 px-3 text-center">
                             ${hasDocs ? `
-                                <button onclick="openModalForCollection('${escapeHtml(item.collection)}')"
+                                <button data-collection="${escapeHtml(item.collection)}" onclick="openModalForCollection(this.dataset.collection)"
                                         class="w-7 h-7 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 flex items-center justify-center transition-colors shadow-sm"
                                         title="Veure quantitat per tipus de document">
                                     <i class="fa-solid fa-chart-column text-xs"></i>
                                 </button>
                             ` : `<span class="text-slate-300">-</span>`}
                         </td>
-                        <td class="py-3 px-4 font-bold text-slate-900 cursor-pointer" onclick="openModalForCollection('${escapeHtml(item.collection)}')">
+                        <td class="py-3 px-4 font-bold text-slate-900 cursor-pointer" data-collection="${escapeHtml(item.collection)}" onclick="openModalForCollection(this.dataset.collection)">
                             <div class="flex items-center gap-2">
                                 <span class="w-6 h-6 rounded-md ${hasDocs ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-400'} flex items-center justify-center text-xs">
                                     <i class="fa-solid ${hasDocs ? 'fa-folder' : 'fa-folder-open'}"></i>
@@ -555,13 +1013,16 @@
                         </td>
                         <td class="py-3 px-4 text-center">
                             ${hasDocs && topRecType ? `
-                                <button onclick="openModalForCollection('${escapeHtml(item.collection)}')"
+                                <button data-collection="${escapeHtml(item.collection)}" onclick="openModalForCollection(this.dataset.collection)"
                                         class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-emerald-50 hover:text-emerald-800 text-slate-700 font-medium transition-colors text-[11px]">
                                     <span class="truncate max-w-[130px] font-semibold">${escapeHtml(topRecType.typeName)}</span>
                                     <span class="text-slate-400 font-mono text-[10px]">(${topRecType.count.toLocaleString('ca-ES')})</span>
                                     <i class="fa-solid fa-arrow-up-right-from-square text-[9px] text-slate-400 ml-0.5"></i>
                                 </button>
                             ` : `<span class="text-slate-400 text-[11px]">-</span>`}
+                        </td>
+                        <td class="py-3 px-4 text-center whitespace-nowrap">
+                            ${renderAuditCell(item, audit)}
                         </td>
                     </tr>
                 `;
@@ -587,7 +1048,7 @@
             }
 
             // Update header icons
-            document.querySelectorAll('th i').forEach(icon => {
+            document.querySelectorAll('th i[id^="sort_"]').forEach(icon => {
                 icon.className = 'fa-solid fa-sort text-slate-400 ml-1';
             });
             const activeIcon = document.getElementById(`sort_${col}`);
@@ -689,39 +1150,861 @@
             document.getElementById('typeModal').classList.add('hidden');
         }
 
+        // --- Link Audit Summary, Scan & Polling ---
+
+        function applySummaryPayload(summary) {
+            linkAuditSummary = summary || null;
+            linkAuditByCollection = new Map();
+            if (summary && Array.isArray(summary.collections)) {
+                summary.collections.forEach(colSum => {
+                    if (colSum && colSum.collection) {
+                        linkAuditByCollection.set(colSum.collection, colSum);
+                    }
+                });
+            }
+            updateAuditKpis(summary);
+            if (rawData && rawData.collections) {
+                applyFilters();
+            }
+        }
+
+        function updateAuditKpis(summary) {
+            const kpiEl = document.getElementById('kpiBrokenLinks');
+            const subEl = document.getElementById('kpiBrokenSub');
+            if (!kpiEl || !subEl) return;
+
+            if (!summary || !summary.collectionsAudited) {
+                kpiEl.textContent = '-';
+                subEl.textContent = 'Encara no auditat';
+                return;
+            }
+
+            const broken = Number(summary.totalBroken || 0);
+            const blocked = Number(summary.totalBlocked || 0);
+            const checked = Number(summary.totalLinksChecked || 0);
+
+            kpiEl.textContent = broken.toLocaleString('ca-ES');
+            subEl.textContent = `${blocked.toLocaleString('ca-ES')} bloquejats · ${checked.toLocaleString('ca-ES')} comprovats`;
+        }
+
+        function updateAuditJobUI(job) {
+            lastAuditJobState = job || null;
+            const active = isJobActive(job);
+            const banner = document.getElementById('linkAuditBanner');
+            const btnScanAll = document.getElementById('btnScanAllLinks');
+            const scanAllIcon = document.getElementById('scanAllIcon');
+            const btnCancel = document.getElementById('btnCancelLinkAudit');
+            const btnModalRescan = document.getElementById('btnIssuesModalRescan');
+            const modalRescanIcon = document.getElementById('issuesModalRescanIcon');
+            const modalJobNotice = document.getElementById('issuesModalJobNotice');
+            const modalJobNoticeText = document.getElementById('issuesModalJobNoticeText');
+
+            if (btnScanAll) {
+                btnScanAll.disabled = active;
+            }
+            if (scanAllIcon) {
+                scanAllIcon.className = active ? 'fa-solid fa-spinner fa-spin' : 'fa-solid fa-link-slash';
+            }
+            if (btnModalRescan) {
+                btnModalRescan.disabled = active;
+            }
+            if (modalRescanIcon) {
+                modalRescanIcon.className = active ? 'fa-solid fa-spinner fa-spin' : 'fa-solid fa-arrows-rotate';
+            }
+
+            if (active && job) {
+                const isCancelling = job.status === 'CANCELLING';
+                const colTotal = Number(job.collectionsTotal || 0);
+                const colCompleted = Number(job.collectionsCompleted || 0);
+                const colPct = colTotal > 0 ? Math.min(100, Math.round((colCompleted / colTotal) * 100)) : 0;
+
+                const uniqueUrls = Number(job.currentCollectionUniqueUrls || 0);
+                const checkedUrls = Number(job.currentCollectionCheckedUrls || 0);
+                const urlPct = uniqueUrls > 0 ? Math.min(100, Math.round((checkedUrls / uniqueUrls) * 100)) : 0;
+
+                const currentColLabel = job.currentCollection || '-';
+                const scopeLabel = job.scope && job.scope !== 'ALL'
+                    ? `Àmbit: ${job.scope}`
+                    : 'Àmbit: Totes les col·leccions';
+
+                document.getElementById('auditBannerStatusText').textContent = isCancelling
+                    ? 'Cancel·lant auditoria...'
+                    : 'Auditoria d\'enllaços en curs';
+                document.getElementById('auditBannerCurrentCol').textContent = currentColLabel;
+                document.getElementById('auditBannerScope').textContent = scopeLabel;
+                document.getElementById('auditBannerColProgressText').textContent = `${colCompleted.toLocaleString('ca-ES')} / ${colTotal.toLocaleString('ca-ES')}`;
+                document.getElementById('auditBannerColProgressBar').style.width = `${colPct}%`;
+                document.getElementById('auditBannerUrlProgressText').textContent = `${checkedUrls.toLocaleString('ca-ES')} / ${uniqueUrls.toLocaleString('ca-ES')}`;
+                document.getElementById('auditBannerUrlProgressBar').style.width = `${urlPct}%`;
+                document.getElementById('auditBannerTotalChecked').textContent = Number(job.totalUrlsChecked || 0).toLocaleString('ca-ES');
+                document.getElementById('auditBannerBroken').textContent = Number(job.brokenFound || 0).toLocaleString('ca-ES');
+                document.getElementById('auditBannerBlocked').textContent = Number(job.blockedFound || 0).toLocaleString('ca-ES');
+
+                if (btnCancel) {
+                    btnCancel.disabled = isCancelling;
+                    btnCancel.innerHTML = isCancelling
+                        ? '<i class="fa-solid fa-spinner fa-spin"></i> Cancel·lant...'
+                        : '<i class="fa-solid fa-stop"></i> Cancel·lar';
+                }
+
+                if (banner) {
+                    banner.classList.remove('hidden');
+                }
+
+                if (modalJobNotice && modalJobNoticeText) {
+                    if (issuesModalState.open) {
+                        modalJobNotice.classList.remove('hidden');
+                        modalJobNoticeText.textContent = isCancelling
+                            ? 'Cancel·lant auditoria...'
+                            : `Auditoria en curs (${currentColLabel}): ${checkedUrls.toLocaleString('ca-ES')} / ${uniqueUrls.toLocaleString('ca-ES')} URLs úniques`;
+                    } else {
+                        modalJobNotice.classList.add('hidden');
+                    }
+                }
+            } else {
+                if (banner) {
+                    banner.classList.add('hidden');
+                }
+                if (modalJobNotice) {
+                    modalJobNotice.classList.add('hidden');
+                }
+            }
+
+            const currentCol = active && job ? job.currentCollection : null;
+            if (rawData && rawData.collections && (active !== lastRenderedJobActive || currentCol !== lastRenderedActiveCollection)) {
+                lastRenderedJobActive = active;
+                lastRenderedActiveCollection = currentCol;
+                applyFilters();
+            } else {
+                lastRenderedJobActive = active;
+                lastRenderedActiveCollection = currentCol;
+            }
+        }
+
+        async function refreshLinkAuditSummaryOnly() {
+            const reqSeq = ++summaryRequestSeq;
+            const res = await window.apiFetch('/mongo/collections/link-audit/summary');
+            if (!res.ok) {
+                throw new Error(`HTTP Error: ${res.status}`);
+            }
+            const summary = await res.json();
+            if (reqSeq !== summaryRequestSeq) {
+                return null;
+            }
+            applySummaryPayload(summary);
+            return summary;
+        }
+
+        async function loadLinkAuditSummary() {
+            try {
+                const summary = await refreshLinkAuditSummaryOnly();
+                if (!summary) return;
+
+                if (isJobActive(summary.job)) {
+                    lastObservedJobId = summary.job.jobId || null;
+                    lastObservedCompletedCount = Number(summary.job.collectionsCompleted || 0);
+                    updateAuditJobUI(summary.job);
+                    startLinkAuditPolling();
+                } else {
+                    stopLinkAuditPolling();
+                    updateAuditJobUI(summary.job || null);
+                }
+            } catch (err) {
+                console.error('Error fetching link audit summary:', err);
+                const subEl = document.getElementById('kpiBrokenSub');
+                if (subEl && !linkAuditSummary) {
+                    subEl.textContent = 'No disponible';
+                }
+            }
+        }
+
+        function startLinkAuditPolling() {
+            if (linkAuditPollTimer !== null) return;
+            linkAuditPollTimer = setInterval(pollLinkAuditStatus, 2000);
+        }
+
+        function stopLinkAuditPolling() {
+            if (linkAuditPollTimer !== null) {
+                clearInterval(linkAuditPollTimer);
+                linkAuditPollTimer = null;
+            }
+        }
+
+        async function pollLinkAuditStatus() {
+            if (isPollingStatus) return;
+            isPollingStatus = true;
+            try {
+                const res = await window.apiFetch('/mongo/collections/link-audit/status');
+                if (!res.ok) {
+                    throw new Error(`HTTP Error: ${res.status}`);
+                }
+                const job = await res.json();
+
+                if (job && job.jobId !== lastObservedJobId) {
+                    lastObservedJobId = job.jobId || null;
+                    lastObservedCompletedCount = Number(job.collectionsCompleted || 0);
+                }
+
+                const completedNow = Number((job && job.collectionsCompleted) || 0);
+                const progressAdvanced = completedNow > lastObservedCompletedCount;
+                if (progressAdvanced) {
+                    lastObservedCompletedCount = completedNow;
+                }
+
+                updateAuditJobUI(job);
+
+                if (!isJobActive(job)) {
+                    stopLinkAuditPolling();
+                    try {
+                        await refreshLinkAuditSummaryOnly();
+                    } catch (sumErr) {
+                        console.error('Error refreshing link audit summary:', sumErr);
+                    }
+
+                    if (job && job.jobId && job.jobId !== lastJobTerminalNotifiedId) {
+                        lastJobTerminalNotifiedId = job.jobId;
+                        notifyTerminalJobStatus(job);
+                    }
+
+                    if (issuesModalState.open && job && (job.scope === 'ALL' || job.scope === issuesModalState.collection)) {
+                        loadLinkIssues();
+                    }
+                } else if (progressAdvanced) {
+                    try {
+                        await refreshLinkAuditSummaryOnly();
+                    } catch (sumErr) {
+                        console.error('Error refreshing intermediate link audit summary:', sumErr);
+                    }
+                }
+            } catch (err) {
+                console.error('Error polling link audit status:', err);
+            } finally {
+                isPollingStatus = false;
+            }
+        }
+
+        function notifyTerminalJobStatus(job) {
+            if (!job) return;
+            const scopeTxt = job.scope && job.scope !== 'ALL'
+                ? `per a "${job.scope}"`
+                : 'global';
+            if (job.status === 'COMPLETED') {
+                if (job.lastError) {
+                    showLinkAuditNotice('warning', `Auditoria ${scopeTxt} completada amb incidències parcials: ${job.lastError}`);
+                } else {
+                    showLinkAuditNotice('success', `Auditoria d'enllaços ${scopeTxt} completada (${Number(job.brokenFound || 0).toLocaleString('ca-ES')} rots, ${Number(job.blockedFound || 0).toLocaleString('ca-ES')} bloquejats).`);
+                }
+            } else if (job.status === 'CANCELLED') {
+                showLinkAuditNotice('warning', `Auditoria d'enllaços ${scopeTxt} cancel·lada. S'han preservat les col·leccions ja completades.`);
+            } else if (job.status === 'FAILED') {
+                showLinkAuditNotice('error', `L'auditoria d'enllaços ${scopeTxt} ha fallat${job.lastError ? ': ' + job.lastError : '.'}`);
+            }
+        }
+
+        async function startLinkAudit(collection) {
+            if (isJobActive(lastAuditJobState)) {
+                showLinkAuditNotice('warning', 'Ja hi ha una auditoria d\'enllaços en curs.');
+                return;
+            }
+            hideLinkAuditNotice();
+
+            const btnScanAll = document.getElementById('btnScanAllLinks');
+            if (btnScanAll) btnScanAll.disabled = true;
+
+            try {
+                const payload = collection ? { collection } : {};
+                const res = await window.apiFetch('/mongo/collections/link-audit/scan', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (res.status === 409) {
+                    const activeJob = await res.json();
+                    lastObservedJobId = activeJob.jobId || null;
+                    lastObservedCompletedCount = Number(activeJob.collectionsCompleted || 0);
+                    updateAuditJobUI(activeJob);
+                    startLinkAuditPolling();
+                    showLinkAuditNotice('warning', 'Ja hi havia una auditoria en curs. S\'ha reconnectat al seguiment en viu.');
+                    return;
+                }
+
+                if (!res.ok) {
+                    let errMsg = `Error HTTP ${res.status}`;
+                    try {
+                        const errBody = await res.json();
+                        if (errBody && errBody.message) {
+                            errMsg = errBody.message;
+                        }
+                    } catch (_) {
+                        // ignore non-JSON body
+                    }
+                    throw new Error(errMsg);
+                }
+
+                const job = await res.json();
+                lastObservedJobId = job.jobId || null;
+                lastObservedCompletedCount = Number(job.collectionsCompleted || 0);
+                lastJobTerminalNotifiedId = null;
+                updateAuditJobUI(job);
+                if (isJobActive(job)) {
+                    startLinkAuditPolling();
+                } else {
+                    await refreshLinkAuditSummaryOnly();
+                    notifyTerminalJobStatus(job);
+                    if (issuesModalState.open && (job.scope === 'ALL' || job.scope === issuesModalState.collection)) {
+                        loadLinkIssues();
+                    }
+                }
+            } catch (err) {
+                console.error('Error starting link audit:', err);
+                showLinkAuditNotice('error', `No s'ha pogut iniciar l'auditoria d'enllaços: ${err.message}`);
+                updateAuditJobUI(lastAuditJobState);
+            }
+        }
+
+        async function cancelLinkAudit() {
+            const btnCancel = document.getElementById('btnCancelLinkAudit');
+            if (btnCancel) {
+                btnCancel.disabled = true;
+                btnCancel.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Cancel·lant...';
+            }
+
+            try {
+                const res = await window.apiFetch('/mongo/collections/link-audit/cancel', {
+                    method: 'POST'
+                });
+                if (!res.ok) {
+                    throw new Error(`HTTP Error: ${res.status}`);
+                }
+                const job = await res.json();
+                updateAuditJobUI(job);
+            } catch (err) {
+                console.error('Error cancelling link audit:', err);
+                showLinkAuditNotice('error', `No s'ha pogut cancel·lar l'auditoria: ${err.message}`);
+                if (btnCancel) {
+                    btnCancel.disabled = false;
+                    btnCancel.innerHTML = '<i class="fa-solid fa-stop"></i> Cancel·lar';
+                }
+            }
+        }
+
+        // --- Link Issues Modal ---
+
+        function openLinkIssuesModal(collection, initialStatus = 'BROKEN') {
+            if (!collection) return;
+
+            if (issuesSearchDebounceTimer) {
+                clearTimeout(issuesSearchDebounceTimer);
+                issuesSearchDebounceTimer = null;
+            }
+            if (issuesAbortController) {
+                issuesAbortController.abort();
+                issuesAbortController = null;
+            }
+
+            issuesModalState = {
+                open: true,
+                collection,
+                status: initialStatus || 'BROKEN',
+                field: 'ALL',
+                reason: 'ALL',
+                q: '',
+                page: 0,
+                size: 50,
+                totalPages: 0,
+                totalItems: 0
+            };
+
+            document.getElementById('issuesSearchInput').value = '';
+            document.getElementById('issuesFieldSelect').innerHTML = '<option value="ALL">Tots els camps</option>';
+            document.getElementById('issuesReasonSelect').innerHTML = '<option value="ALL">Tots els motius</option>';
+            document.getElementById('tabCountBroken').textContent = '0';
+            document.getElementById('tabCountBlocked').textContent = '0';
+            document.getElementById('tabCountAll').textContent = '0';
+
+            document.getElementById('issuesModalTitle').innerHTML = `
+                <i class="fa-solid fa-link-slash text-rose-600"></i>
+                <span>Incidències d'enllaços:</span>
+                <span class="text-rose-700">${escapeHtml(collection)}</span>
+            `;
+
+            updateIssuesHeaderSummary(null);
+            updateIssuesStatusTabsUI();
+            updateIssuesExportLink();
+            updateAuditJobUI(lastAuditJobState);
+
+            document.getElementById('linkIssuesModal').classList.remove('hidden');
+            loadLinkIssues();
+        }
+
+        function closeLinkIssuesModal() {
+            issuesModalState.open = false;
+            if (issuesSearchDebounceTimer) {
+                clearTimeout(issuesSearchDebounceTimer);
+                issuesSearchDebounceTimer = null;
+            }
+            if (issuesAbortController) {
+                issuesAbortController.abort();
+                issuesAbortController = null;
+            }
+            document.getElementById('linkIssuesModal').classList.add('hidden');
+        }
+
+        function rescanIssuesModalCollection() {
+            if (!issuesModalState.collection) return;
+            startLinkAudit(issuesModalState.collection);
+        }
+
+        function updateIssuesHeaderSummary(pageData) {
+            const colAudit = getCollectionAudit(issuesModalState.collection);
+            const countsByStatus = (pageData && pageData.countsByStatus) || {};
+            const broken = colAudit ? Number(colAudit.brokenCount || 0) : Number(countsByStatus.BROKEN || 0);
+            const blocked = colAudit ? Number(colAudit.blockedCount || 0) : Number(countsByStatus.BLOCKED || 0);
+            const checkedTxt = colAudit ? ` · ${Number(colAudit.totalLinks || 0).toLocaleString('ca-ES')} comprovats` : '';
+
+            const scannedAt = (pageData && pageData.scannedAt) || (colAudit && colAudit.scannedAt);
+            document.getElementById('issuesModalScannedAt').textContent = scannedAt
+                ? `Última auditoria: ${formatDateTimeCa(scannedAt)}`
+                : 'Sense auditoria registrada';
+            document.getElementById('issuesModalSummary').textContent =
+                `${broken.toLocaleString('ca-ES')} rots · ${blocked.toLocaleString('ca-ES')} bloquejats${checkedTxt}`;
+        }
+
+        function updateIssuesStatusTabsUI() {
+            const statuses = ['BROKEN', 'BLOCKED', 'ALL'];
+            statuses.forEach(st => {
+                const btn = document.getElementById(`tabIssuesStatus_${st}`);
+                if (!btn) return;
+                const active = issuesModalState.status === st;
+                const base = 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors';
+                if (active) {
+                    if (st === 'BROKEN') {
+                        btn.className = `${base} bg-rose-600 text-white border-rose-600`;
+                    } else if (st === 'BLOCKED') {
+                        btn.className = `${base} bg-amber-500 text-white border-amber-500`;
+                    } else {
+                        btn.className = `${base} bg-slate-800 text-white border-slate-800`;
+                    }
+                } else {
+                    btn.className = `${base} bg-white text-slate-700 border-slate-300 hover:bg-slate-50`;
+                }
+            });
+        }
+
+        function setIssuesStatusFilter(status) {
+            if (!status || issuesModalState.status === status) return;
+            issuesModalState.status = status;
+            issuesModalState.page = 0;
+            updateIssuesStatusTabsUI();
+            updateIssuesExportLink();
+            loadLinkIssues();
+        }
+
+        function onIssuesFieldChange() {
+            issuesModalState.field = document.getElementById('issuesFieldSelect').value || 'ALL';
+            issuesModalState.page = 0;
+            updateIssuesExportLink();
+            loadLinkIssues();
+        }
+
+        function onIssuesReasonChange() {
+            issuesModalState.reason = document.getElementById('issuesReasonSelect').value || 'ALL';
+            issuesModalState.page = 0;
+            updateIssuesExportLink();
+            loadLinkIssues();
+        }
+
+        function onIssuesSearchInput() {
+            const value = (document.getElementById('issuesSearchInput').value || '').trim();
+            if (issuesSearchDebounceTimer) {
+                clearTimeout(issuesSearchDebounceTimer);
+            }
+            issuesSearchDebounceTimer = setTimeout(() => {
+                issuesSearchDebounceTimer = null;
+                issuesModalState.q = value;
+                issuesModalState.page = 0;
+                updateIssuesExportLink();
+                loadLinkIssues();
+            }, 300);
+        }
+
+        function changeIssuesPage(delta) {
+            const nextPage = issuesModalState.page + delta;
+            if (nextPage < 0 || (issuesModalState.totalPages > 0 && nextPage >= issuesModalState.totalPages)) {
+                return;
+            }
+            issuesModalState.page = nextPage;
+            loadLinkIssues();
+        }
+
+        function buildIssuesExportUrl() {
+            const col = issuesModalState.collection;
+            if (!col) return '#';
+            const params = new URLSearchParams();
+            params.set('status', issuesModalState.status || 'ALL');
+            if (issuesModalState.field && issuesModalState.field !== 'ALL') {
+                params.set('field', issuesModalState.field);
+            }
+            if (issuesModalState.reason && issuesModalState.reason !== 'ALL') {
+                params.set('reason', issuesModalState.reason);
+            }
+            if (issuesModalState.q) {
+                params.set('q', issuesModalState.q);
+            }
+            return window.apiUrl(`/mongo/collections/link-audit/${encodeURIComponent(col)}/issues/export?${params.toString()}`);
+        }
+
+        function updateIssuesExportLink() {
+            const link = document.getElementById('btnIssuesModalExportCsv');
+            if (!link) return;
+            link.href = buildIssuesExportUrl();
+        }
+
+        function openIssuesCsvExport(event) {
+            if (!issuesModalState.collection) {
+                if (event) event.preventDefault();
+                return false;
+            }
+            const url = buildIssuesExportUrl();
+            const link = document.getElementById('btnIssuesModalExportCsv');
+            if (link) {
+                link.href = url;
+            }
+            return true;
+        }
+
+        async function loadLinkIssues() {
+            if (!issuesModalState.open || !issuesModalState.collection) return;
+
+            const reqSeq = ++issuesRequestSeq;
+            const targetCollection = issuesModalState.collection;
+
+            if (issuesAbortController) {
+                issuesAbortController.abort();
+            }
+            issuesAbortController = new AbortController();
+
+            const tbody = document.getElementById('issuesTableBody');
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="5" class="py-10 text-center text-slate-400">
+                        <i class="fa-solid fa-spinner fa-spin text-xl text-emerald-600 mb-2"></i>
+                        <p>Carregant incidències...</p>
+                    </td>
+                </tr>
+            `;
+
+            const params = new URLSearchParams();
+            params.set('status', issuesModalState.status || 'BROKEN');
+            if (issuesModalState.field && issuesModalState.field !== 'ALL') {
+                params.set('field', issuesModalState.field);
+            }
+            if (issuesModalState.reason && issuesModalState.reason !== 'ALL') {
+                params.set('reason', issuesModalState.reason);
+            }
+            if (issuesModalState.q) {
+                params.set('q', issuesModalState.q);
+            }
+            params.set('page', String(issuesModalState.page));
+            params.set('size', String(issuesModalState.size));
+
+            try {
+                const endpoint = `/mongo/collections/link-audit/${encodeURIComponent(targetCollection)}/issues?${params.toString()}`;
+                const res = await window.apiFetch(endpoint, { signal: issuesAbortController.signal });
+                if (!res.ok) {
+                    throw new Error(`HTTP Error: ${res.status}`);
+                }
+                const data = await res.json();
+
+                if (reqSeq !== issuesRequestSeq || !issuesModalState.open || issuesModalState.collection !== targetCollection) {
+                    return;
+                }
+
+                issuesModalState.totalItems = Number(data.totalItems || 0);
+                issuesModalState.totalPages = Number(data.totalPages || 0);
+                issuesModalState.page = Number(data.page || 0);
+
+                updateIssuesHeaderSummary(data);
+                renderIssuesFacets(data);
+                renderIssuesTable(data);
+                renderIssuesPagination(data);
+                updateIssuesExportLink();
+            } catch (err) {
+                if (err && err.name === 'AbortError') {
+                    return;
+                }
+                if (reqSeq !== issuesRequestSeq || !issuesModalState.open || issuesModalState.collection !== targetCollection) {
+                    return;
+                }
+                console.error('Error loading link issues:', err);
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="5" class="py-8 text-center text-rose-600 bg-rose-50/50">
+                            <i class="fa-solid fa-triangle-exclamation text-xl mb-2"></i>
+                            <p class="font-bold">Error en carregar les incidències</p>
+                            <p class="text-xs text-rose-500 mt-1">${escapeHtml(err.message)}</p>
+                            <button type="button" onclick="loadLinkIssues()" class="mt-3 px-3 py-1.5 rounded-lg bg-rose-600 text-white font-semibold text-xs hover:bg-rose-700">
+                                Reintentar
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }
+        }
+
+        function renderIssuesFacets(data) {
+            const countsByStatus = (data && data.countsByStatus) || {};
+            const brokenCount = Number(countsByStatus.BROKEN || 0);
+            const blockedCount = Number(countsByStatus.BLOCKED || 0);
+
+            document.getElementById('tabCountBroken').textContent = brokenCount.toLocaleString('ca-ES');
+            document.getElementById('tabCountBlocked').textContent = blockedCount.toLocaleString('ca-ES');
+            document.getElementById('tabCountAll').textContent = (brokenCount + blockedCount).toLocaleString('ca-ES');
+
+            const countsByField = (data && data.countsByField) || {};
+            const fieldSelect = document.getElementById('issuesFieldSelect');
+            const selectedField = issuesModalState.field || 'ALL';
+            fieldSelect.innerHTML = '';
+
+            const allFieldOpt = document.createElement('option');
+            allFieldOpt.value = 'ALL';
+            allFieldOpt.textContent = 'Tots els camps';
+            fieldSelect.appendChild(allFieldOpt);
+
+            const fieldKeys = Array.from(new Set([
+                ...STANDARD_AUDIT_FIELDS,
+                ...Object.keys(countsByField)
+            ]));
+            fieldKeys.forEach(fieldKey => {
+                const opt = document.createElement('option');
+                opt.value = fieldKey;
+                const count = Number(countsByField[fieldKey] || 0);
+                opt.textContent = `${fieldKey} (${count.toLocaleString('ca-ES')})`;
+                fieldSelect.appendChild(opt);
+            });
+            fieldSelect.value = selectedField;
+
+            const countsByReason = (data && data.countsByReason) || {};
+            const reasonSelect = document.getElementById('issuesReasonSelect');
+            const selectedReason = issuesModalState.reason || 'ALL';
+            reasonSelect.innerHTML = '';
+
+            const allReasonOpt = document.createElement('option');
+            allReasonOpt.value = 'ALL';
+            allReasonOpt.textContent = 'Tots els motius';
+            reasonSelect.appendChild(allReasonOpt);
+
+            const reasonEntries = Object.entries(countsByReason);
+            if (selectedReason !== 'ALL' && !Object.prototype.hasOwnProperty.call(countsByReason, selectedReason)) {
+                reasonEntries.push([selectedReason, 0]);
+            }
+            reasonEntries.forEach(([reasonKey, count]) => {
+                const opt = document.createElement('option');
+                opt.value = reasonKey;
+                opt.textContent = `${formatFailureReason(reasonKey)} (${Number(count || 0).toLocaleString('ca-ES')})`;
+                reasonSelect.appendChild(opt);
+            });
+            reasonSelect.value = selectedReason;
+        }
+
+        function renderIssuesUrlHtml(rawUrl, forcePlainCode = false) {
+            if (!rawUrl) {
+                return '<span class="text-slate-400">-</span>';
+            }
+            if (!forcePlainCode && isSafeHttpUrl(rawUrl)) {
+                const safeHref = escapeHtml(String(rawUrl).trim());
+                return `
+                    <a href="${safeHref}" target="_blank" rel="noopener noreferrer"
+                       title="${escapeHtml(rawUrl)}"
+                       class="text-blue-700 hover:text-blue-900 hover:underline font-mono text-[11px] break-all line-clamp-2">
+                        ${escapeHtml(rawUrl)}
+                    </a>
+                `;
+            }
+            return `<code title="${escapeHtml(rawUrl)}" class="font-mono text-[11px] text-rose-700 bg-rose-50 px-1.5 py-0.5 rounded break-all">${escapeHtml(rawUrl)}</code>`;
+        }
+
+        function renderIssuesTable(data) {
+            const tbody = document.getElementById('issuesTableBody');
+            const items = (data && Array.isArray(data.items)) ? data.items : [];
+
+            if (items.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="5" class="py-10 text-center text-slate-400">
+                            <i class="fa-solid fa-circle-check text-2xl mb-2 text-emerald-400"></i>
+                            <p>No s'han trobat incidències amb els filtres seleccionats.</p>
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            let html = '';
+            items.forEach(issue => {
+                const titleText = issue.recordTitle || issue.recordUuid || issue.recordId || '(Sense títol)';
+                const recTypeText = issue.recordType || 'Sense especificar';
+                const uuidText = issue.recordUuid || issue.recordId || '';
+
+                const fieldClass = issue.sourceField === 'links'
+                    ? 'bg-blue-50 text-blue-700 border-blue-200'
+                    : (issue.sourceField === 'electronicVersions'
+                        ? 'bg-purple-50 text-purple-700 border-purple-200'
+                        : 'bg-slate-100 text-slate-700 border-slate-200');
+
+                const isBlocked = issue.status === 'BLOCKED';
+                const statusBadge = isBlocked
+                    ? '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">Bloquejat</span>'
+                    : '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200">Rot</span>';
+
+                const httpBadge = issue.httpStatus !== null && issue.httpStatus !== undefined
+                    ? `<span class="inline-flex items-center px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 font-mono text-[10px] font-bold">HTTP ${escapeHtml(issue.httpStatus)}</span>`
+                    : '';
+
+                const urlInvalidSyntax = issue.reason === 'INVALID_SYNTAX';
+                const mainUrlHtml = renderIssuesUrlHtml(issue.url, urlInvalidSyntax);
+                const finalUrlHtml = (issue.finalUrl && issue.finalUrl !== issue.url)
+                    ? `<div class="mt-1 text-[10px] text-slate-500 flex items-start gap-1">
+                           <span class="shrink-0 font-semibold">Final:</span>
+                           <div class="min-w-0">${renderIssuesUrlHtml(issue.finalUrl, false)}</div>
+                       </div>`
+                    : '';
+
+                let egretaCell = '<span class="text-slate-400 text-[11px]">-</span>';
+                if (issue.egretaUrl) {
+                    if (isSafeHttpUrl(issue.egretaUrl)) {
+                        egretaCell = `
+                            <a href="${escapeHtml(String(issue.egretaUrl).trim())}" target="_blank" rel="noopener noreferrer"
+                               class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 font-semibold text-[11px] transition-colors whitespace-nowrap">
+                                Obrir a Egreta <i class="fa-solid fa-arrow-up-right-from-square text-[9px]"></i>
+                            </a>
+                        `;
+                    } else {
+                        egretaCell = `<code class="font-mono text-[10px] text-slate-500 break-all">${escapeHtml(issue.egretaUrl)}</code>`;
+                    }
+                }
+
+                html += `
+                    <tr class="hover:bg-slate-50/80 transition-colors align-top">
+                        <td class="py-3 px-4">
+                            <div class="font-semibold text-slate-900 line-clamp-2" title="${escapeHtml(titleText)}">${escapeHtml(titleText)}</div>
+                            <div class="text-[11px] text-slate-500 mt-0.5">${escapeHtml(recTypeText)}</div>
+                            ${uuidText ? `<div class="font-mono text-[10px] text-slate-400 mt-0.5 break-all">${escapeHtml(uuidText)}</div>` : ''}
+                        </td>
+                        <td class="py-3 px-4">
+                            <span class="inline-block px-2 py-0.5 rounded border text-[10px] font-mono font-semibold ${fieldClass}">
+                                ${escapeHtml(issue.sourceField || '-')}
+                            </span>
+                            ${issue.subType ? `<div class="text-[11px] text-slate-700 font-medium mt-1">${escapeHtml(issue.subType)}</div>` : ''}
+                            ${issue.linkLabel ? `<div class="text-[10px] text-slate-400 mt-0.5 line-clamp-2" title="${escapeHtml(issue.linkLabel)}">${escapeHtml(issue.linkLabel)}</div>` : ''}
+                        </td>
+                        <td class="py-3 px-4 max-w-xs md:max-w-sm">
+                            ${mainUrlHtml}
+                            ${finalUrlHtml}
+                        </td>
+                        <td class="py-3 px-4">
+                            <div class="flex flex-wrap items-center gap-1.5">
+                                ${statusBadge}
+                                ${httpBadge}
+                            </div>
+                            <div class="text-[11px] font-semibold text-slate-700 mt-1">${escapeHtml(formatFailureReason(issue.reason))}</div>
+                            ${issue.errorMessage ? `<div class="text-[10px] text-slate-500 mt-0.5 line-clamp-2" title="${escapeHtml(issue.errorMessage)}">${escapeHtml(issue.errorMessage)}</div>` : ''}
+                        </td>
+                        <td class="py-3 px-4 text-center">
+                            ${egretaCell}
+                        </td>
+                    </tr>
+                `;
+            });
+
+            tbody.innerHTML = html;
+        }
+
+        function renderIssuesPagination(data) {
+            const totalItems = Number((data && data.totalItems) || 0);
+            const totalPages = Number((data && data.totalPages) || 0);
+            const page = Number((data && data.page) || 0);
+            const size = Number((data && data.size) || issuesModalState.size);
+
+            const infoEl = document.getElementById('issuesPaginationInfo');
+            const badgeEl = document.getElementById('issuesPageBadge');
+            const prevBtn = document.getElementById('btnIssuesPrev');
+            const nextBtn = document.getElementById('btnIssuesNext');
+
+            if (totalItems === 0 || totalPages === 0) {
+                infoEl.textContent = '0 incidències';
+                badgeEl.textContent = 'Pàgina 0 de 0';
+                prevBtn.disabled = true;
+                nextBtn.disabled = true;
+                return;
+            }
+
+            const startIdx = page * size + 1;
+            const endIdx = Math.min(totalItems, (page + 1) * size);
+            infoEl.textContent = `Mostrant ${startIdx.toLocaleString('ca-ES')}-${endIdx.toLocaleString('ca-ES')} de ${totalItems.toLocaleString('ca-ES')} incidències`;
+            badgeEl.textContent = `Pàgina ${(page + 1).toLocaleString('ca-ES')} de ${totalPages.toLocaleString('ca-ES')}`;
+            prevBtn.disabled = page <= 0;
+            nextBtn.disabled = page + 1 >= totalPages;
+        }
+
         // Close on ESC
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') closeModal();
+            if (e.key === 'Escape') {
+                const issuesModal = document.getElementById('linkIssuesModal');
+                if (issuesModal && !issuesModal.classList.contains('hidden')) {
+                    closeLinkIssuesModal();
+                    return;
+                }
+                closeModal();
+            }
         });
+
+        function csvCell(val) {
+            if (val === null || val === undefined) return '""';
+            return `"${String(val).replace(/"/g, '""')}"`;
+        }
 
         function exportToCsv() {
             if (!rawData || !rawData.collections) return;
 
-            const headers = ['Col·leccio', 'Camp', 'Total Registres', 'Registres amb Contingut', '% Cobertura', 'Total MB', 'Total GB', '% Espai Total', 'Tipus Majoritari', 'Quantitat Tipus'];
+            const headers = [
+                'Col·leccio', 'Camp', 'Total Registres', 'Registres amb Contingut',
+                '% Cobertura', 'Total MB', 'Total GB', '% Espai Total',
+                'Tipus Majoritari', 'Quantitat Tipus',
+                'Enllacos_Comprovats', 'Enllacos_Rots', 'Enllacos_Bloquejats', 'Data_Auditoria'
+            ];
             const rows = rawData.collections.map(c => {
                 const topT = c.recordTypes && c.recordTypes.length > 0 ? c.recordTypes[0] : null;
+                const audit = getCollectionAudit(c.collection);
                 return [
-                    `"${c.collection}"`,
-                    `"${c.field}"`,
+                    csvCell(c.collection),
+                    csvCell(c.field),
                     c.totalRecords,
                     c.recordsWithDocuments,
                     c.pctRecordsWithDocuments,
                     c.totalMB,
                     c.totalGB,
                     c.pctOfTotalStorage,
-                    `"${topT ? topT.typeName : '-'}"`,
-                    topT ? topT.count : 0
+                    csvCell(topT ? topT.typeName : '-'),
+                    topT ? topT.count : 0,
+                    audit ? (audit.totalLinks ?? 0) : '',
+                    audit ? (audit.brokenCount ?? 0) : '',
+                    audit ? (audit.blockedCount ?? 0) : '',
+                    csvCell(audit && audit.scannedAt ? audit.scannedAt : '')
                 ];
             });
 
-            const csvContent = 'data:text/csv;charset=utf-8,\uFEFF' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
-            const encodedUri = encodeURI(csvContent);
+            const csvText = '\uFEFF' + [headers.join(','), ...rows.map(e => e.join(','))].join('\r\n');
+            const blob = new Blob([csvText], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
             const link = document.createElement('a');
-            link.setAttribute('href', encodedUri);
+            link.setAttribute('href', url);
             link.setAttribute('download', `documents_i_tipus_per_colleccio_${new Date().toISOString().slice(0, 10)}.csv`);
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
         }
 
         function escapeHtml(str) {
@@ -737,6 +2020,7 @@
         // Initialize on load
         document.addEventListener('DOMContentLoaded', () => {
             loadStats(false);
+            loadLinkAuditSummary();
         });
     </script>
 </body>
