@@ -10,6 +10,9 @@
     <link rel="stylesheet" href="uab-theme.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
+        body {
+            zoom: 0.95;
+        }
         .progress-bar-segment {
             transition: width 0.4s ease-in-out;
         }
@@ -124,7 +127,7 @@
                     </span>
                     <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-rose-100 border border-rose-200 text-xs font-bold text-rose-800">
                         <i class="fa-solid fa-circle-xmark"></i>
-                        <span id="auditBannerBroken">0</span> rots
+                        <span id="auditBannerBroken">0</span> trencats
                     </span>
                     <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-100 border border-amber-300 text-xs font-bold text-amber-900">
                         <i class="fa-solid fa-shield-halved"></i>
@@ -199,17 +202,17 @@
                 <p class="text-xs text-amber-700 font-semibold mt-1">amb documents/links actius</p>
             </div>
 
-            <!-- Card 5: Enllaços Rots -->
+            <!-- Card 5: Enllaços Trencats -->
             <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
                 <div class="flex items-center justify-between text-slate-400 mb-2">
-                    <span class="text-xs font-semibold uppercase tracking-wider">Enllaços Rots</span>
+                    <span class="text-xs font-semibold uppercase tracking-wider">Enllaços Trencats</span>
                     <span class="w-8 h-8 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center text-sm">
                         <i class="fa-solid fa-link-slash"></i>
                     </span>
                 </div>
                 <div class="flex items-baseline gap-2">
                     <span id="kpiBrokenLinks" class="text-2xl font-black text-rose-600">-</span>
-                    <span class="text-xs text-slate-500 font-medium">rots</span>
+                    <span class="text-xs text-slate-500 font-medium">trencats</span>
                 </div>
                 <p id="kpiBrokenSub" class="text-xs text-slate-500 mt-1">Encara no auditat</p>
             </div>
@@ -255,7 +258,7 @@
                     <label class="inline-flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700 select-none">
                         <input type="checkbox" id="chkOnlyWithBroken" onchange="applyFilters()"
                                class="w-4 h-4 rounded text-rose-600 border-slate-300 focus:ring-rose-500 cursor-pointer">
-                        <span>Només amb enllaços rots</span>
+                        <span>Només amb enllaços trencats</span>
                     </label>
 
                     <div class="text-xs text-slate-500 border-l border-slate-300 pl-4">
@@ -300,7 +303,7 @@
                                 Tipus de Document
                             </th>
                             <th scope="col" class="py-3 px-4 text-center cursor-pointer hover:bg-slate-200/70 transition-colors whitespace-nowrap" onclick="sortBy('brokenCount')">
-                                Enllaços Rots <i id="sort_brokenCount" class="fa-solid fa-sort text-slate-400 ml-1"></i>
+                                Enllaços Trencats <i id="sort_brokenCount" class="fa-solid fa-sort text-slate-400 ml-1"></i>
                             </th>
                         </tr>
                     </thead>
@@ -459,7 +462,7 @@
                 <div class="flex flex-wrap items-center gap-1.5">
                     <button id="tabIssuesStatus_BROKEN" type="button" onclick="setIssuesStatusFilter('BROKEN')"
                             class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors bg-rose-600 text-white border-rose-600">
-                        <span>Rots confirmats</span>
+                        <span>Trencats confirmats</span>
                         <span id="tabCountBroken" class="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-white/20">0</span>
                     </button>
                     <button id="tabIssuesStatus_BLOCKED" type="button" onclick="setIssuesStatusFilter('BLOCKED')"
@@ -583,6 +586,7 @@
             HTTP_401: '401 No autoritzat',
             HTTP_403: '403 Accés prohibit',
             HTTP_429: '429 Massa peticions',
+            CLOUDFLARE_CHALLENGE: 'Protegit per Cloudflare (no verificable)',
             INVALID_SYNTAX: 'Sintaxi d\'URL invàlida',
             DNS_ERROR: 'Error de resolució DNS',
             TIMEOUT: 'Temps d\'espera exhaurit',
@@ -935,7 +939,7 @@
                     <div class="inline-flex items-center justify-center gap-1.5">
                         <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold text-[11px]"
                               title="${escapeHtml(okTooltip)}">
-                            <i class="fa-solid fa-check text-[9px]"></i> 0 rots
+                            <i class="fa-solid fa-check text-[9px]"></i> 0 trencats
                         </span>
                         ${scanBtn}
                     </div>
@@ -947,12 +951,12 @@
                            data-collection="${colEsc}"
                            onclick="openLinkIssuesModal(this.dataset.collection, 'BROKEN')"
                            class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-100 hover:bg-rose-200 text-rose-800 border border-rose-200 font-bold text-[11px] transition-colors cursor-pointer"
-                           title="Veure ${broken.toLocaleString('ca-ES')} enllaços rots (${escapeHtml(scannedAtTxt)})">
-                        ${broken.toLocaleString('ca-ES')} rots
+                           title="Veure ${broken.toLocaleString('ca-ES')} enllaços trencats (${escapeHtml(scannedAtTxt)})">
+                        ${broken.toLocaleString('ca-ES')} trencats
                    </button>`
                 : `<span class="inline-flex items-center px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-semibold text-[11px]"
                          title="${escapeHtml(okTooltip)}">
-                        0 rots
+                        0 trencats
                    </span>`;
 
             const blockedBadge = blocked > 0
@@ -1444,7 +1448,7 @@
                 if (job.lastError) {
                     showLinkAuditNotice('warning', `Auditoria ${scopeTxt} completada amb incidències parcials: ${job.lastError}`);
                 } else {
-                    showLinkAuditNotice('success', `Auditoria d'enllaços ${scopeTxt} completada (${Number(job.brokenFound || 0).toLocaleString('ca-ES')} rots, ${Number(job.blockedFound || 0).toLocaleString('ca-ES')} bloquejats).`);
+                    showLinkAuditNotice('success', `Auditoria d'enllaços ${scopeTxt} completada (${Number(job.brokenFound || 0).toLocaleString('ca-ES')} trencats, ${Number(job.blockedFound || 0).toLocaleString('ca-ES')} bloquejats).`);
                 }
             } else if (job.status === 'CANCELLED') {
                 showLinkAuditNotice('warning', `Auditoria d'enllaços ${scopeTxt} cancel·lada. S'han preservat les col·leccions ja completades.`);
@@ -1619,7 +1623,7 @@
                 ? `Última auditoria: ${formatDateTimeCa(scannedAt)}`
                 : 'Sense auditoria registrada';
             document.getElementById('issuesModalSummary').textContent =
-                `${broken.toLocaleString('ca-ES')} rots · ${blocked.toLocaleString('ca-ES')} bloquejats${checkedTxt}`;
+                `${broken.toLocaleString('ca-ES')} trencats · ${blocked.toLocaleString('ca-ES')} bloquejats${checkedTxt}`;
         }
 
         function updateIssuesStatusTabsUI() {
@@ -1912,7 +1916,7 @@
                 const isBlocked = issue.status === 'BLOCKED';
                 const statusBadge = isBlocked
                     ? '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">Bloquejat</span>'
-                    : '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200">Rot</span>';
+                    : '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200">trencat</span>';
 
                 const httpBadge = issue.httpStatus !== null && issue.httpStatus !== undefined
                     ? `<span class="inline-flex items-center px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 font-mono text-[10px] font-bold">HTTP ${escapeHtml(issue.httpStatus)}</span>`
@@ -2028,7 +2032,7 @@
                 'Col·leccio', 'Camp', 'Total Registres', 'Registres amb Contingut',
                 '% Cobertura', 'Total MB', 'Total GB', '% Espai Total',
                 'Tipus Majoritari', 'Quantitat Tipus',
-                'Enllacos_Comprovats', 'Enllacos_Rots', 'Enllacos_Bloquejats', 'Data_Auditoria'
+                'Enllacos_Comprovats', 'Enllacos_Trencats', 'Enllacos_Bloquejats', 'Data_Auditoria'
             ];
             const rows = rawData.collections.map(c => {
                 const topT = c.recordTypes && c.recordTypes.length > 0 ? c.recordTypes[0] : null;
