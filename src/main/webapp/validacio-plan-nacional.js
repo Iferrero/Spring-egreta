@@ -35,7 +35,9 @@
         selectedId: null,
         kpiStatusFilter: 'ALL',
         nextId: 1,
-        rulesCache: null
+        rulesCache: null,
+        calls: [],
+        selectedCall: null
     };
 
     const STATUS_RANK = { NO_OK: 0, AVIS: 1, EXTERN: 2, OK: 3, ERROR: 4 };
@@ -67,6 +69,7 @@
 
     function cacheElements() {
         const ids = [
+            'selectCall', 'callSearchInput', 'callDatesInfo',
             'inputReferenceDate', 'selectDefaultDuration', 'btnRecalculateBatch', 'btnOpenRulesModal', 'btnExportExcel',
             'dropZone', 'pdfFileInput', 'btnSelectFiles', 'btnClearBatch',
             'progressContainer', 'progressBar', 'progressText', 'progressPercent',
@@ -94,7 +97,73 @@
         }
     }
 
+    // ---- Convocatòria: les seves dates fixen la data de referència ----
+    let callSearchTimer = null;
+
+    async function loadCalls(query) {
+        try {
+            const qs = query ? '?buscar=' + encodeURIComponent(query) : '';
+            const resp = await global.apiFetch('/plan-nacional/convocatories' + qs);
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            state.calls = await resp.json();
+        } catch (_) {
+            state.calls = [];
+        }
+        renderCallOptions();
+    }
+
+    function renderCallOptions() {
+        const keep = state.selectedCall;
+        const list = state.calls.slice();
+        if (keep && !list.some(c => c.uuid === keep.uuid)) {
+            list.unshift(keep);
+        }
+        el.selectCall.innerHTML = '<option value="">Cap (data manual)</option>'
+            + list.map(c => {
+                const label = (c.title || c.uuid) + ' — ' + (c.deadline || c.openingDate || '');
+                return '<option value="' + escapeHtml(c.uuid) + '">' + escapeHtml(label) + '</option>';
+            }).join('');
+        el.selectCall.value = keep ? keep.uuid : '';
+    }
+
+    function renderCallInfo() {
+        const c = state.selectedCall;
+        if (!c) {
+            el.callDatesInfo.classList.add('hidden');
+            el.inputReferenceDate.readOnly = false;
+            el.inputReferenceDate.classList.remove('opacity-70');
+            return;
+        }
+        el.callDatesInfo.classList.remove('hidden');
+        el.callDatesInfo.textContent = 'Obertura: ' + (c.openingDate || '—')
+            + ' · Tancament: ' + (c.deadline || '—')
+            + ' → data de referència: ' + c.referenceDate
+            + (c.deadline ? ' (tancament del termini)' : ' (només consta l\'obertura)');
+        el.inputReferenceDate.readOnly = true;
+        el.inputReferenceDate.classList.add('opacity-70');
+    }
+
+    async function onCallChange() {
+        const uuid = el.selectCall.value;
+        state.selectedCall = uuid ? (state.calls.find(c => c.uuid === uuid) || null) : null;
+        if (state.selectedCall) {
+            el.inputReferenceDate.value = state.selectedCall.referenceDate;
+        } else {
+            el.inputReferenceDate.value = new Date().toISOString().slice(0, 10);
+        }
+        renderCallInfo();
+        if (state.projects.some(p => p.response)) {
+            await recalculateBatch();
+        }
+    }
+
     function bindEvents() {
+        el.selectCall.addEventListener('change', onCallChange);
+        el.callSearchInput.addEventListener('input', () => {
+            clearTimeout(callSearchTimer);
+            callSearchTimer = setTimeout(() => loadCalls(el.callSearchInput.value.trim()), 300);
+        });
+
         el.btnSelectFiles.addEventListener('click', (e) => {
             e.stopPropagation();
             el.pdfFileInput.click();
@@ -430,6 +499,13 @@
             return hay.includes(search);
         });
 
+        // Ordre estable: severitat del semàfor i després nom de fitxer
+        filtered.sort((a, b) => {
+            const d = (STATUS_RANK[getProjectStatus(a)] ?? 9) - (STATUS_RANK[getProjectStatus(b)] ?? 9);
+            if (d !== 0) return d;
+            return String(a.fileName || '').localeCompare(String(b.fileName || ''), 'ca', { numeric: true });
+        });
+
         el.projectListCount.textContent = String(filtered.length);
 
         if (filtered.length === 0) {
@@ -682,8 +758,14 @@
                 + '<div id="' + extraId + '" class="hidden mt-1.5 space-y-1 text-[11px] text-slate-600 bg-slate-50 p-2 rounded-lg">' + items + '</div>';
         }
 
+        const affiliationOnlyHtml = (m.primaryContract && m.primaryContract.researchAffiliationOnly)
+            ? '<div class="mt-1"><span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 border border-amber-200 text-amber-800 text-[10px] font-bold">'
+              + '<i class="fa-solid fa-triangle-exclamation"></i> Només adscripció a recerca</span></div>'
+            : '';
+
         return '<div>'
             + '<div class="font-bold text-slate-800">' + escapeHtml(m.matchedFullName || '--') + '</div>'
+            + affiliationOnlyHtml
             + contractBlock
             + extraHtml
             + '</div>';
@@ -707,12 +789,27 @@
 
     function renderRulesModal(catalog) {
         const rulesHtml = (catalog.rules || []).map(r =>
-            '<tr class="border-b border-slate-100">'
-            + '<td class="py-2 px-3 font-bold text-slate-800">' + escapeHtml(r.title) + '</td>'
+            '<tr class="border-b border-slate-100 align-top">'
+            + '<td class="py-2 px-3 font-bold text-slate-800">' + escapeHtml(r.title)
+            + (r.code ? '<div class="font-mono text-[10px] font-normal text-slate-400">' + escapeHtml(r.code) + '</div>' : '')
+            + '</td>'
             + '<td class="py-2 px-3">' + escapeHtml(r.ipRule) + '</td>'
             + '<td class="py-2 px-3">' + escapeHtml(r.eiRule) + '</td>'
             + '<td class="py-2 px-3">' + escapeHtml(r.etRule) + '</td>'
+            + '<td class="py-2 px-3 text-slate-500">' + escapeHtml(r.notes || '') + '</td>'
             + '</tr>'
+        ).join('');
+
+        const catsHtml = (catalog.categoryDefinitions || []).map(c =>
+            '<div class="border border-slate-200 rounded-xl p-3 space-y-1">'
+            + '<div class="font-bold text-slate-800">' + escapeHtml(c.label)
+            + ' <span class="font-mono text-[10px] font-normal text-slate-400">' + escapeHtml(c.category) + '</span></div>'
+            + '<div class="text-slate-600">' + escapeHtml(c.description) + '</div>'
+            + ((c.examples || []).length > 0
+                ? '<ul class="list-disc pl-4 text-slate-500">'
+                  + c.examples.map(ex => '<li>' + escapeHtml(ex) + '</li>').join('') + '</ul>'
+                : '')
+            + '</div>'
         ).join('');
 
         el.rulesModalContent.innerHTML =
@@ -723,8 +820,10 @@
             + '<div class="overflow-x-auto border border-slate-200 rounded-xl">'
             + '<table class="w-full text-left border-collapse text-xs">'
             + '<thead><tr class="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold">'
-            + '<th class="py-2 px-3">Categoria / Situació</th><th class="py-2 px-3">IP</th><th class="py-2 px-3">Equip Inv. (EI)</th><th class="py-2 px-3">Equip Treball (ET)</th>'
-            + '</tr></thead><tbody>' + rulesHtml + '</tbody></table></div>';
+            + '<th class="py-2 px-3">Categoria / Situació</th><th class="py-2 px-3">IP</th><th class="py-2 px-3">Equip Inv. (EI)</th><th class="py-2 px-3">Equip Treball (ET)</th><th class="py-2 px-3">Notes</th>'
+            + '</tr></thead><tbody>' + rulesHtml + '</tbody></table></div>'
+            + '<h4 class="text-xs font-extrabold uppercase tracking-wider text-slate-600 pt-2">Categories laborals</h4>'
+            + '<div class="grid grid-cols-1 md:grid-cols-2 gap-3">' + catsHtml + '</div>';
     }
 
     function closeRulesModal() {
@@ -835,5 +934,6 @@
         initDefaults();
         bindEvents();
         renderAll();
+        loadCalls('');
     });
 })(typeof window !== 'undefined' ? window : globalThis);

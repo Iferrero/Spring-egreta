@@ -246,7 +246,19 @@ public class PlanNacionalEligibilityEngine {
                         "Mostra el darrer contracte històric registrat a Egreta."),
                 new RuleDescription("EXTERNAL_ENTITY", "Personal extern (entitat diferent de la UAB al PDF)",
                         "EXTERN", "EXTERN", "EXTERN",
-                        "Si consta extern al PDF però té contracte actiu a la UAB, es marca AVÍS (o manté NO OK) per discrepància.")
+                        "Si consta extern al PDF però té contracte actiu a la UAB, es marca AVÍS (o manté NO OK) per discrepància."),
+                new RuleDescription("PERSON_NOT_FOUND", "Persona no trobada a Egreta (entitat UAB o sense entitat)",
+                        "AVÍS", "AVÍS", "AVÍS",
+                        "No hi ha cap coincidència a la col·lecció Persons per NIF ni per nom; cal revisar manualment."),
+                new RuleDescription("AMBIGUOUS_PERSON_MATCH", "Coincidència ambigua (múltiples candidats)",
+                        "AVÍS", "AVÍS", "AVÍS",
+                        "Mai es tria un homònim a l'atzar; es mostren fins a 5 candidats per revisar."),
+                new RuleDescription("ONLY_RESEARCH_AFFILIATION", "Només consta 'Adscripció a recerca'",
+                        "AVÍS", "AVÍS", "AVÍS",
+                        "No hi ha contracte laboral vigent; reviseu el contracte principal a Egreta."),
+                new RuleDescription("UNKNOWN_CATEGORY", "Categoria laboral no classificada",
+                        "AVÍS", "AVÍS", "AVÍS",
+                        "Mai s'assumeix OK en silenci quan la categoria no es reconeix.")
         );
 
         List<CategoryDefinition> categories = List.of(
