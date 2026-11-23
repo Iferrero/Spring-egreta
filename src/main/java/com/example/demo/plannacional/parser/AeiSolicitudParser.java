@@ -13,6 +13,8 @@ import java.time.format.DateTimeParseException;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Parser determinista per a formularis oficials de sol·licitud de l'AEI / MICIU.
@@ -24,7 +26,7 @@ public class AeiSolicitudParser {
     private static final Pattern COMBINING_MARKS = Pattern.compile("\\p{M}+");
 
     private static final Pattern PROJECT_CODE_LABEL = Pattern.compile(
-            "(?im)^(?:Referencia|C[óo]digo(?:\\s+de\\s+solicitud)?|Expediente|Codi(?:\\s+de\\s+sol[·.]licitud)?)\\s*[:\\-]\\s*([A-Z0-9][A-Z0-9\\-/]{4,})");
+            "(?im)^(?:Referencia(?:\\s+administrativa)?|C[óo]digo(?:\\s+de\\s+solicitud)?|Expediente|Codi(?:\\s+de\\s+sol[·.]licitud)?)\\s*[:\\-]\\s*([A-Z0-9][A-Z0-9\\-/]{4,})");
     private static final Pattern PROJECT_CODE_INLINE = Pattern.compile(
             "\\b((?:PID|CNS|TED|PDC|PCI|RED|CPP)\\d{4}-[A-Z0-9-]+)\\b");
     private static final Pattern ACRONYM_PATTERN = Pattern.compile(
@@ -34,7 +36,7 @@ public class AeiSolicitudParser {
     private static final Pattern APPLICANT_ENTITY_PATTERN = Pattern.compile(
             "(?im)^(?:Entidad\\s+solicitante|Entitat\\s+sol[·.]licitant|Organismo\\s+solicitante)\\s*[:\\-]\\s*(.+)$");
     private static final Pattern DURATION_PATTERN = Pattern.compile(
-            "(?i)(?:Duraci[óo]n(?:\\s+del\\s+proyecto)?|Durada|Plazo\\s+de\\s+ejecuci[óo]n)\\s*[:\\-]?\\s*(\\d{1,2})\\s*(a[ñn]os?|anys?|meses|mesos)");
+            "(?i)(?:Duraci[óo]n(?:\\s+del\\s+proyecto)?|Durada|Plazo\\s+de\\s+ejecuci[óo]n)\\s*(?:\\((a[ñn]os?|anys?|meses|mesos)\\))?\\s*[:\\-]?\\s*(\\d{1,2})\\s*(a[ñn]os?|anys?|meses|mesos)?");
     private static final Pattern START_DATE_PATTERN = Pattern.compile(
             "(?im)^(?:Fecha\\s+(?:de\\s+)?inicio(?:\\s+prevista)?|Data\\s+d['’]?inici(?:\\s+prevista)?)\\s*[:\\-]\\s*(\\d{2}[/-]\\d{2}[/-]\\d{4}|\\d{4}-\\d{2}-\\d{2})");
     private static final Pattern END_DATE_PATTERN = Pattern.compile(
@@ -55,6 +57,9 @@ public class AeiSolicitudParser {
         String acronym = extractFirstGroup(ACRONYM_PATTERN, safeText);
         String title = extractFirstGroup(TITLE_PATTERN, safeText);
         String applicantEntity = extractFirstGroup(APPLICANT_ENTITY_PATTERN, safeText);
+        if (applicantEntity == null) {
+            applicantEntity = extractFirstGroup(Pattern.compile("(?im)^\\s*Entidad\\s*:\\s*(.+)$"), safeText);
+        }
         Integer durationYears = extractDurationYears(safeText);
         LocalDate expectedStart = extractDate(START_DATE_PATTERN, safeText);
         LocalDate expectedEnd = extractDate(END_DATE_PATTERN, safeText);
@@ -85,7 +90,140 @@ public class AeiSolicitudParser {
         );
     }
 
+    // ---- Format oficial del formulari de la seu electrònica (seccions numerades 6/7/8) ----
+    private static final Pattern OFFICIAL_ROLE_HEADING = Pattern.compile(
+            "^(\\d{1,2})\\.\\s+(Investigador(?:/a|a|es)?\\s+Principal(?:es)?|Equipo\\s+de\\s+investigaci[óo]n|Equipo\\s+de\\s+trabajo)\\s*$",
+            Pattern.CASE_INSENSITIVE);
+    private static final Pattern OFFICIAL_ANY_HEADING = Pattern.compile("^(\\d{1,2})\\.\\s+\\S.{0,80}$");
+    private static final Pattern OFFICIAL_NAME_LINE = Pattern.compile(
+            "^Nombre\\s*:\\s*(.+?)\\s+Apellidos\\s*:?\\s*(.+)$", Pattern.CASE_INSENSITIVE);
+    private static final Pattern OFFICIAL_DOC_LINE = Pattern.compile(
+            "Documento\\s*:\\s*([A-Za-z0-9*.\\-]+)\\s*$", Pattern.CASE_INSENSITIVE);
+    private static final Pattern OFFICIAL_ENTITY_LINE = Pattern.compile(
+            "^Entidad\\s*:\\s*(.+)$", Pattern.CASE_INSENSITIVE);
+
+    /**
+     * Parser del formulari oficial: cada persona és un bloc amb «Nombre: X Apellidos: Y»,
+     * «Tipo de documento: NIF Documento: Z» i «Entidad: …» (aquesta darrera pot anar abans del nom).
+     * Les línies «Firma del/de la investigador/a» i les pàgines de CV no tanquen la secció.
+     */
+    private List<ExtractedMember> extractOfficialFormMembers(String text) {
+        Map<String, ExtractedMember> result = new LinkedHashMap<>();
+        MemberRole role = null;
+        int sectionNumber = -1;
+        OfficialRecord rec = new OfficialRecord();
+
+        for (String rawLine : text.split("\n")) {
+            String line = rawLine.trim().replaceAll("\\s+", " ");
+            if (line.isEmpty() || PAGE_NOISE_LINE.matcher(line).matches()
+                    || line.contains("Página ") && line.matches(".*Página \\d+ de \\d+.*")) {
+                continue;
+            }
+
+            Matcher heading = OFFICIAL_ROLE_HEADING.matcher(line);
+            if (heading.matches()) {
+                flushOfficial(rec, role, result);
+                sectionNumber = Integer.parseInt(heading.group(1));
+                String h = normalizeUpper(heading.group(2));
+                role = h.startsWith("INVESTIGADOR") ? MemberRole.IP
+                        : h.contains("INVESTIGACION") ? MemberRole.EQUIPO_INVESTIGACION
+                        : MemberRole.EQUIPO_TRABAJO;
+                continue;
+            }
+            if (role != null) {
+                Matcher any = OFFICIAL_ANY_HEADING.matcher(line);
+                if (any.matches() && Integer.parseInt(any.group(1)) == sectionNumber + 1) {
+                    flushOfficial(rec, role, result);
+                    role = null;
+                    continue;
+                }
+            }
+            if (role == null) {
+                continue;
+            }
+
+            String upper = normalizeUpper(line);
+            if (upper.startsWith("ENTIDAD A LA QUE PERTENECE") || upper.startsWith("MIEMBRO DEL EQUIPO")) {
+                if (rec.hasName()) {
+                    flushOfficial(rec, role, result);
+                }
+                continue;
+            }
+
+            Matcher nm = OFFICIAL_NAME_LINE.matcher(line);
+            if (nm.find()) {
+                if (rec.hasName()) {
+                    flushOfficial(rec, role, result);
+                }
+                rec.firstName = nm.group(1).trim();
+                rec.lastName = nm.group(2).trim();
+                rec.raw.add(line);
+                continue;
+            }
+            Matcher doc = OFFICIAL_DOC_LINE.matcher(line);
+            if (doc.find() && rec.nif == null && upper.contains("DOCUMENTO")) {
+                rec.nif = cleanNif(doc.group(1));
+                rec.raw.add(line);
+                continue;
+            }
+            Matcher ent = OFFICIAL_ENTITY_LINE.matcher(line);
+            if (ent.matches() && rec.entity == null) {
+                rec.entity = ent.group(1).trim();
+                rec.raw.add(line);
+                continue;
+            }
+            if (upper.startsWith("CATEGORIA PROFESIONAL") && line.contains(":") ) {
+                rec.category = line.substring(line.indexOf(':') + 1).trim();
+            } else if (upper.startsWith("CATEGORIA PROFESIONAL")) {
+                rec.category = line.substring("Categoría profesional".length()).trim();
+            } else if (line.contains("presentarla en solicitud)")) {
+                String v = line.substring(line.indexOf("presentarla en solicitud)") + "presentarla en solicitud)".length());
+                rec.linkage = v.replaceFirst("^\\s*:?\\s*", "").trim();
+            }
+        }
+        flushOfficial(rec, role, result);
+        return new ArrayList<>(result.values());
+    }
+
+    private void flushOfficial(OfficialRecord rec, MemberRole role, Map<String, ExtractedMember> result) {
+        if (role != null && rec.hasName()) {
+            NameParts np = splitName(null, rec.firstName, rec.lastName);
+            String linkage = Stream.of(rec.category, rec.linkage)
+                    .filter(s -> s != null && !s.isBlank()).collect(Collectors.joining(" · "));
+            addDeduplicated(result, new ExtractedMember(role, np.fullName(), np.firstName(), np.lastName(),
+                    rec.nif, rec.entity, linkage.isEmpty() ? null : linkage, String.join(" | ", rec.raw)));
+        }
+        rec.reset();
+    }
+
+    private static final class OfficialRecord {
+        String firstName;
+        String lastName;
+        String nif;
+        String entity;
+        String category;
+        String linkage;
+        final List<String> raw = new ArrayList<>();
+
+        boolean hasName() {
+            return firstName != null && lastName != null;
+        }
+
+        void reset() {
+            firstName = lastName = nif = entity = category = linkage = null;
+            raw.clear();
+        }
+    }
+
     private List<ExtractedMember> extractMembers(String text) {
+        List<ExtractedMember> official = extractOfficialFormMembers(text);
+        if (!official.isEmpty()) {
+            return official;
+        }
+        return extractGenericMembers(text);
+    }
+
+    private List<ExtractedMember> extractGenericMembers(String text) {
         Map<String, ExtractedMember> deduplicated = new LinkedHashMap<>();
         MemberRole currentRole = null;
         MemberBlockBuilder block = new MemberBlockBuilder();
@@ -427,8 +565,9 @@ public class AeiSolicitudParser {
         if (!m.find()) {
             return null;
         }
-        int qty = Integer.parseInt(m.group(1));
-        String unit = normalizeUpper(m.group(2));
+        int qty = Integer.parseInt(m.group(2));
+        String unitRaw = m.group(3) != null ? m.group(3) : (m.group(1) != null ? m.group(1) : "años");
+        String unit = normalizeUpper(unitRaw);
         if (unit.startsWith("MES")) {
             return qty >= 12 ? Math.max(1, Math.round(qty / 12.0f)) : 1;
         }

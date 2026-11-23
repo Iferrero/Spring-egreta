@@ -277,6 +277,79 @@ class AeiSolicitudParserTest {
     }
 
     @Test
+    void parseOfficialSeuElectronicaFormWithFirmaLinesBetweenMembers() {
+        String text = """
+                Referencia administrativa: PID2024-000001NB-I00
+                1. Datos de la Entidad Solicitante
+                Entidad: UNIVERSIDAD AUTONOMA DE BARCELONA
+                2. Datos del Proyecto
+                Título: Projecte de prova
+                Acrónimo: PROVA
+                Duración (años): 4
+                6. Investigador/a Principal
+                Datos personales
+                Nombre:   Anna   Apellidos:   Vila   Mas
+                Tipo de Documento:   NIF      Documento:   11111111H
+                Entidad del/de la investigador/a principal
+                   Entidad: UNIVERSIDAD AUTONOMA DE BARCELONA
+                Categoría profesional: Catedrático de Universidad
+                25/01/2025 20:46:52               Página 9 de 35
+                7. Equipo de investigación
+                MIEMBRO DEL EQUIPO DE INVESTIGACIÓN:
+                Pere  Soler Prat
+                Entidad a la que pertenece
+                Rol: Personal de otra entidad
+                Entidad: UNIVERSIDAD DE SEVILLA
+                Datos personales
+                Nombre:   Pere          Apellidos   Soler   Prat
+                Tipo de documento:   NIF      Documento:   22222222J
+                Firma del/de la investigador/a : Pere  Soler Prat
+                8. Equipo de Trabajo
+                Entidad a la que pertenece
+                Entidad: UNIVERSIDAD AUTONOMA DE BARCELONA
+                Datos personales
+                Nombre:   Jose Luis         Apellidos   Ucha   Serrano
+                Tipo de documento:   NIF      Documento:   33333333P
+                Firma del/de la investigador/a : Jose Luis Ucha Serrano
+                Entidad a la que pertenece
+                ¿Es entidad extranjera? Sí
+                Entidad: UNIVERSIDAD ERFURT
+                Nombre:   Holger         Apellidos   Zaborowski
+                Tipo de documento:   Pasaporte      Documento:   L2T89FGG2
+                Firma del/de la investigador/a : Holger Zaborowski
+                Entidad a la que pertenece
+                Entidad: UNIVERSIDAD DE TOKIO
+                Nombre:   Manuela         Apellidos   Massa
+                Tipo de documento:   Pasaporte      Documento:   YB1702394
+                9. Gastos de Ejecución
+                Nombre:   Fals   Apellidos   Positiu
+                """;
+        ExtractedProposal p = parser.parse("oficial.pdf", text);
+
+        assertEquals("PID2024-000001NB-I00", p.projectCode());
+        assertEquals("PROVA", p.acronym());
+        assertEquals(4, p.durationYears());
+        assertEquals("UNIVERSIDAD AUTONOMA DE BARCELONA", p.applicantEntity());
+        assertEquals(5, p.members().size());
+
+        ExtractedMember ip = p.members().get(0);
+        assertEquals(MemberRole.IP, ip.role());
+        assertEquals("11111111H", ip.nif());
+        assertEquals("Vila Mas, Anna", ip.fullName());
+        assertEquals("UNIVERSIDAD AUTONOMA DE BARCELONA", ip.entity());
+
+        ExtractedMember ei = p.members().get(1);
+        assertEquals(MemberRole.EQUIPO_INVESTIGACION, ei.role());
+        assertEquals("22222222J", ei.nif());
+        assertEquals("UNIVERSIDAD DE SEVILLA", ei.entity());
+
+        assertEquals(3, p.members().stream().filter(m -> m.role() == MemberRole.EQUIPO_TRABAJO).count());
+        ExtractedMember last = p.members().get(4);
+        assertEquals("YB1702394", last.nif());
+        assertEquals("UNIVERSIDAD DE TOKIO", last.entity());
+    }
+
+    @Test
     void vllmFallbackParsesStructuredJsonResponseAndFlagsMethod() {
         VllmProposalFallbackParser fallback = new VllmProposalFallbackParser(true, "https://localhost:9999/v1/chat/completions", "test-model", "", 1000);
         String openAiResponse = """
