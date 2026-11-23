@@ -383,16 +383,30 @@ public class PersonPdiLookupService {
             return List.of();
         }
 
-        boolean hasComma = safeString(member.fullName()).contains(",");
-        List<String> preferredSurnameTokens = hasComma
-                ? tokenize(safeString(member.fullName()).split(",", 2)[0], true)
-                : memberCore;
+        List<String> memberSurnames;
+        List<String> memberGiven;
+        String full = safeString(member.fullName());
+        if (member.firstName() != null && !member.firstName().isBlank()
+                && member.lastName() != null && !member.lastName().isBlank()) {
+            memberSurnames = tokenize(member.lastName(), true);
+            memberGiven = tokenize(member.firstName(), true);
+        } else if (full.contains(",")) {
+            String[] parts = full.split(",", 2);
+            memberSurnames = tokenize(parts[0], true);
+            memberGiven = tokenize(parts[1], true);
+        } else {
+            memberGiven = List.of(memberCore.get(0));
+            memberSurnames = memberCore.subList(1, memberCore.size());
+        }
+        if (memberSurnames.isEmpty() || memberGiven.isEmpty()) {
+            return List.of();
+        }
 
         List<ScoredPerson> hits = new ArrayList<>();
         for (IndexedPerson person : allPersons) {
             double bestScore = 0.0;
             for (NameVariant variant : person.nameVariants) {
-                double score = scoreVariant(memberCore, preferredSurnameTokens, hasComma, member, variant);
+                double score = scoreVariant(memberSurnames, memberGiven, variant);
                 if (score > bestScore) {
                     bestScore = score;
                 }
@@ -406,61 +420,58 @@ public class PersonPdiLookupService {
         return hits;
     }
 
-    private double scoreVariant(
-            List<String> memberCore,
-            List<String> preferredSurnameTokens,
-            boolean hasComma,
-            ExtractedMember member,
-            NameVariant variant) {
+    /**
+     * Compara cognoms i nom de manera estricta: els (fins a 2) cognoms han de coincidir tots
+     * (en qualsevol ordre) i cada paraula del nom ha de coincidir o ser inicial.
+     * Un únic cognom comú ja no és suficient per proposar una persona.
+     */
+    private double scoreVariant(List<String> memberSurnames, List<String> memberGiven, NameVariant variant) {
         if (variant.lastCoreTokens.isEmpty() || variant.firstCoreTokens.isEmpty()) {
             return 0.0;
         }
+        if (!surnamesCompatible(memberSurnames, variant.lastCoreTokens)) {
+            return 0.0;
+        }
+        return givenNamesScore(memberGiven, variant.firstCoreTokens);
+    }
 
-        Set<String> surnamePool = new LinkedHashSet<>(preferredSurnameTokens);
-        List<String> matchedSurnames = new ArrayList<>();
-        for (String lt : variant.lastCoreTokens) {
-            if (surnamePool.contains(lt)) {
-                matchedSurnames.add(lt);
+    static boolean surnamesCompatible(List<String> memberSurnames, List<String> personSurnames) {
+        List<String> a = new ArrayList<>(memberSurnames.subList(0, Math.min(2, memberSurnames.size())));
+        List<String> b = new ArrayList<>(personSurnames.subList(0, Math.min(2, personSurnames.size())));
+        if (a.isEmpty() || b.isEmpty()) {
+            return false;
+        }
+        if (a.size() == b.size()) {
+            Collections.sort(a);
+            Collections.sort(b);
+            return a.equals(b);
+        }
+        // Un dels dos només té un cognom: ha de ser el primer cognom de l'altre
+        List<String> shorter = a.size() < b.size() ? memberSurnames : personSurnames;
+        List<String> longer = a.size() < b.size() ? personSurnames : memberSurnames;
+        return shorter.get(0).equals(longer.get(0));
+    }
+
+    /** @return 0 si hi ha conflicte; 1.0 si coincideix exactament; 0.9 si hi ha inicials o noms compostos parcials. */
+    static double givenNamesScore(List<String> memberGiven, List<String> personGiven) {
+        int common = Math.min(memberGiven.size(), personGiven.size());
+        if (common == 0) {
+            return 0.0;
+        }
+        boolean exact = memberGiven.size() == personGiven.size();
+        for (int i = 0; i < common; i++) {
+            String m = memberGiven.get(i);
+            String p = personGiven.get(i);
+            if (m.equals(p)) {
+                continue;
             }
-        }
-        if (matchedSurnames.isEmpty()) {
-            return 0.0;
-        }
-        double surnameRatio = (double) matchedSurnames.size() / variant.lastCoreTokens.size();
-        if (variant.lastCoreTokens.size() >= 2 && surnameRatio < 0.5) {
-            return 0.0;
-        }
-
-        // Extreu els tokens restants del membre que NO corresponen al cognom aparellat
-        List<String> remainingForFirst;
-        if (hasComma && member.firstName() != null && !member.firstName().isBlank()) {
-            remainingForFirst = tokenize(member.firstName(), true);
-        } else {
-            remainingForFirst = new ArrayList<>(memberCore);
-            for (String s : matchedSurnames) {
-                remainingForFirst.remove(s);
+            boolean initial = (m.length() == 1 && p.startsWith(m)) || (p.length() == 1 && m.startsWith(p));
+            if (!initial) {
+                return 0.0;
             }
+            exact = false;
         }
-        if (remainingForFirst.isEmpty()) {
-            return 0.0;
-        }
-
-        int firstMatches = 0;
-        for (String r : remainingForFirst) {
-            boolean matchesFirst = variant.firstCoreTokens.stream().anyMatch(ft ->
-                    ft.equals(r)
-                            || (r.length() == 1 && ft.startsWith(r))
-                            || (ft.length() == 1 && r.startsWith(ft)));
-            if (matchesFirst) {
-                firstMatches++;
-            }
-        }
-        if (firstMatches == 0) {
-            return 0.0;
-        }
-
-        double firstRatio = (double) firstMatches / Math.max(remainingForFirst.size(), variant.firstCoreTokens.size());
-        return 0.60 * surnameRatio + 0.40 * Math.max(firstRatio, 0.70);
+        return exact ? 1.0 : 0.9;
     }
 
     private PersonLookupMatch toMatch(IndexedPerson person, MatchConfidence confidence, LocalDate referenceDate) {
