@@ -65,6 +65,27 @@ class HttpLinkVerifierTest {
     }
 
     @Test
+    void verifyTreatsEgretaUabCatLinksAsOkWithoutProbing() {
+        // Si es sondegés, l'amfitrió real fallaria o trigaria; ha de tornar OK immediatament
+        HttpLinkVerifier verifier = new HttpLinkVerifier(defaultProps(), Map.of());
+        for (String u : List.of(
+                "https://egreta.uab.cat/admin/workspace.xhtml?uuid=abc",
+                "HTTPS://Egreta.UAB.cat/file/1.pdf",
+                "https://egreta.uab.cat:8443/ws/api/documents/x")) {
+            LinkCheckResult r = verifier.verify(u);
+            assertEquals(LinkStatus.OK, r.status(), u);
+            assertEquals(FailureReason.OK, r.reason(), u);
+            assertNull(r.httpStatus(), u);
+        }
+    }
+
+    @Test
+    void verifyStillRejectsInvalidEgretaSyntax() {
+        HttpLinkVerifier verifier = new HttpLinkVerifier(defaultProps(), Map.of());
+        assertEquals(LinkStatus.BROKEN, verifier.verify("https://egreta.uab.cat:99999/x").status());
+    }
+
+    @Test
     void linkAuditPropertiesExposeExpectedDefaults() {
         LinkAuditProperties props = new LinkAuditProperties();
         assertEquals(24, props.getGlobalConcurrency());
@@ -190,6 +211,29 @@ class HttpLinkVerifierTest {
         assertStatus(verifier.verify(url(server, "127.0.0.1", "/status-401")), LinkStatus.BLOCKED, FailureReason.HTTP_401, 401);
         assertStatus(verifier.verify(url(server, "127.0.0.1", "/status-403")), LinkStatus.BLOCKED, FailureReason.HTTP_403, 403);
         assertStatus(verifier.verify(url(server, "127.0.0.1", "/status-429")), LinkStatus.BLOCKED, FailureReason.HTTP_429, 429);
+    }
+
+    @Test
+    void verifyClassifiesCloudflareChallengeAsBlockedWithOwnReason() throws Exception {
+        HttpServer server = startLoopbackServer();
+        server.createContext("/cf", exchange -> {
+            exchange.getResponseHeaders().add("Cf-Mitigated", "challenge");
+            exchange.getResponseHeaders().add("Server", "cloudflare");
+            exchange.sendResponseHeaders(403, -1);
+            exchange.close();
+        });
+        server.createContext("/plain403", exchange -> {
+            exchange.getResponseHeaders().add("Server", "cloudflare");
+            exchange.sendResponseHeaders(403, -1);
+            exchange.close();
+        });
+        HttpLinkVerifier verifier = new HttpLinkVerifier(defaultProps(), Map.of());
+
+        assertStatus(verifier.verify(url(server, "127.0.0.1", "/cf")),
+                LinkStatus.BLOCKED, FailureReason.CLOUDFLARE_CHALLENGE, 403);
+        // Un 403 normal (sense desafiament) conserva el motiu HTTP_403
+        assertStatus(verifier.verify(url(server, "127.0.0.1", "/plain403")),
+                LinkStatus.BLOCKED, FailureReason.HTTP_403, 403);
     }
 
     @Test

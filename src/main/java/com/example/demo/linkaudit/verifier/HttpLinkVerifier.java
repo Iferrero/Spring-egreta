@@ -40,6 +40,8 @@ import java.util.Set;
 public class HttpLinkVerifier implements LinkVerifier {
 
     private static final String DEFAULT_USER_AGENT = "Mozilla/5.0 (compatible; UAB-Egreta-LinkAudit/1.0)";
+    /** Hosts d'Egreta els enllaços dels quals apunten a documents pujats: sempre correctes. */
+    private static final Set<String> TRUSTED_INTERNAL_HOSTS = Set.of("egreta.uab.cat");
     private static final Set<Integer> REDIRECT_STATUSES = Set.of(301, 302, 303, 307, 308);
     private static final Set<Integer> HEAD_FALLBACK_STATUSES = Set.of(400, 405, 501);
 
@@ -96,6 +98,11 @@ public class HttpLinkVerifier implements LinkVerifier {
         }
 
         URI currentUri = initialValidation.uri();
+        if (isTrustedInternalHost(currentUri)) {
+            // Enllaços interns a documents pujats a Egreta: es consideren correctes sense sondejar-los
+            return result(rawUrl, normalizedUrl, currentUri.toString(),
+                    LinkStatus.OK, FailureReason.OK, null, "Enllaç intern d'Egreta (document pujat): no es verifica");
+        }
         int redirects = 0;
 
         while (true) {
@@ -116,6 +123,11 @@ public class HttpLinkVerifier implements LinkVerifier {
             }
 
             int statusCode = response.statusCode();
+            if (response.cloudflareChallenge()) {
+                return result(rawUrl, normalizedUrl, currentUri.toString(),
+                        LinkStatus.BLOCKED, FailureReason.CLOUDFLARE_CHALLENGE, statusCode,
+                        "Protegit per Cloudflare (desafiament anti-bot): no verificable automàticament");
+            }
             if (REDIRECT_STATUSES.contains(statusCode)) {
                 if (redirects >= maxRedirects) {
                     return result(rawUrl, normalizedUrl, currentUri.toString(),
@@ -157,8 +169,16 @@ public class HttpLinkVerifier implements LinkVerifier {
         }
         return new HttpProbeResponse(
                 headResponse.statusCode(),
-                headResponse.headers().firstValue("Location").orElse(null)
+                headResponse.headers().firstValue("Location").orElse(null),
+                isCloudflareChallenge(headResponse.headers())
         );
+    }
+
+    /** Cloudflare marca els desafiaments anti-bot amb «cf-mitigated: challenge»; un bot no els pot superar. */
+    private static boolean isCloudflareChallenge(java.net.http.HttpHeaders headers) {
+        return headers.firstValue("cf-mitigated")
+                .map(v -> v.trim().equalsIgnoreCase("challenge"))
+                .orElse(false);
     }
 
     private HttpProbeResponse sendLightweightGet(URI uri) throws IOException, InterruptedException {
@@ -167,9 +187,15 @@ public class HttpLinkVerifier implements LinkVerifier {
         try (InputStream ignored = getResponse.body()) {
             return new HttpProbeResponse(
                     getResponse.statusCode(),
-                    getResponse.headers().firstValue("Location").orElse(null)
+                    getResponse.headers().firstValue("Location").orElse(null),
+                    isCloudflareChallenge(getResponse.headers())
             );
         }
+    }
+
+    private static boolean isTrustedInternalHost(URI uri) {
+        String host = uri.getHost();
+        return host != null && TRUSTED_INTERNAL_HOSTS.contains(host.toLowerCase(Locale.ROOT));
     }
 
     private boolean isConfiguredEgretaHost(URI uri) {
@@ -371,7 +397,7 @@ public class HttpLinkVerifier implements LinkVerifier {
         return new LinkCheckResult(rawUrl, normalizedUrl, finalUrl, status, reason, httpStatus, errorMessage, Instant.now());
     }
 
-    private record HttpProbeResponse(int statusCode, String location) {
+    private record HttpProbeResponse(int statusCode, String location, boolean cloudflareChallenge) {
     }
 
     private record UriValidation(URI uri, String errorMessage) {

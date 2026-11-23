@@ -9,6 +9,7 @@ public enum FailureReason {
     HTTP_401,
     HTTP_403,
     HTTP_429,
+    CLOUDFLARE_CHALLENGE,
     INVALID_SYNTAX,
     DNS_ERROR,
     TIMEOUT,
